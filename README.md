@@ -59,6 +59,36 @@ pnpm build
 
 The packaged app will be in the `dist/` folder.
 
+### Testing
+
+Run the Playwright E2E tests (window is hidden):
+
+```bash
+pnpm test
+```
+
+Run tests with visible window (useful for debugging):
+
+```bash
+pnpm test:headed
+```
+
+Tests (23 total) cover:
+- UI components (app title, session list, status indicators)
+- Terminal integration (xterm rendering, command execution)
+- Panel toggles (Files, Terminal) and button states
+- Session switching between multiple sessions
+- File panel content (Tree/Diff buttons, file listing)
+- E2E shell integration with test markers
+
+### Troubleshooting
+
+If you encounter "posix_spawnp failed" errors with the terminal, rebuild native modules:
+
+```bash
+npx @electron/rebuild
+```
+
 ## Usage
 
 ### Creating a New Session

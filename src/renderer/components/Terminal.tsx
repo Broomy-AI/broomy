@@ -14,9 +14,13 @@ export default function Terminal({ sessionId, cwd, command }: TerminalProps) {
   const terminalRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
   const [ptyId, setPtyId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!containerRef.current || !sessionId) return
+
+    // Reset error state
+    setError(null)
 
     // Create terminal
     const terminal = new XTerm({
@@ -62,30 +66,37 @@ export default function Terminal({ sessionId, cwd, command }: TerminalProps) {
 
     // Create PTY
     const id = `${sessionId}-${Date.now()}`
-    window.pty.create({ id, cwd, command }).then(() => {
-      setPtyId(id)
+    window.pty.create({ id, cwd, command })
+      .then(() => {
+        setPtyId(id)
 
-      // Connect terminal input to PTY
-      terminal.onData((data) => {
-        window.pty.write(id, data)
+        // Connect terminal input to PTY
+        terminal.onData((data) => {
+          window.pty.write(id, data)
+        })
+
+        // Connect PTY output to terminal
+        const removeDataListener = window.pty.onData(id, (data) => {
+          terminal.write(data)
+        })
+
+        // Handle PTY exit
+        const removeExitListener = window.pty.onExit(id, (exitCode) => {
+          terminal.write(`\r\n[Process exited with code ${exitCode}]\r\n`)
+        })
+
+        // Store cleanup functions
+        terminal.onDispose = () => {
+          removeDataListener()
+          removeExitListener()
+        }
       })
-
-      // Connect PTY output to terminal
-      const removeDataListener = window.pty.onData(id, (data) => {
-        terminal.write(data)
+      .catch((err) => {
+        console.error('Failed to create PTY:', err)
+        setError(`Failed to start terminal: ${err.message || err}`)
+        terminal.write(`\r\n\x1b[31mError: Failed to start terminal\x1b[0m\r\n`)
+        terminal.write(`\x1b[33m${err.message || err}\x1b[0m\r\n`)
       })
-
-      // Handle PTY exit
-      const removeExitListener = window.pty.onExit(id, (exitCode) => {
-        terminal.write(`\r\n[Process exited with code ${exitCode}]\r\n`)
-      })
-
-      // Store cleanup functions
-      terminal.onDispose = () => {
-        removeDataListener()
-        removeExitListener()
-      }
-    })
 
     // Handle resize
     const resizeObserver = new ResizeObserver(() => {

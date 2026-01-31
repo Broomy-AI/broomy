@@ -14,11 +14,11 @@ export interface Session {
   status: SessionStatus
 }
 
-// Demo sessions for initial UI
+// Demo sessions for initial UI - use /tmp which exists on all systems
 const demoSessions: Session[] = [
-  { id: '1', name: 'agent-manager', directory: '/Users/demo/agent-manager', branch: 'main', status: 'working' },
-  { id: '2', name: 'backend-api', directory: '/Users/demo/backend-api', branch: 'feature/auth', status: 'waiting' },
-  { id: '3', name: 'docs-site', directory: '/Users/demo/docs-site', branch: 'main', status: 'idle' },
+  { id: '1', name: 'agent-manager', directory: '/tmp', branch: 'main', status: 'working' },
+  { id: '2', name: 'backend-api', directory: '/tmp', branch: 'feature/auth', status: 'waiting' },
+  { id: '3', name: 'docs-site', directory: '/tmp', branch: 'main', status: 'idle' },
 ]
 
 function App() {

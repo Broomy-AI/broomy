@@ -5,6 +5,15 @@ import * as pty from 'node-pty'
 // Check if we're in development mode
 const isDev = process.env.ELECTRON_RENDERER_URL !== undefined
 
+// Check if we're in E2E test mode
+const isE2ETest = process.env.E2E_TEST === 'true'
+
+// Check if we should hide the window (headless mode)
+const isHeadless = process.env.E2E_HEADLESS !== 'false'
+
+// Mock shell for E2E tests - predictable, non-interactive output
+const E2E_MOCK_SHELL = process.env.E2E_MOCK_SHELL
+
 // PTY instances map
 const ptyProcesses = new Map<string, pty.IPty>()
 let mainWindow: BrowserWindow | null = null
@@ -18,6 +27,8 @@ function createWindow(): void {
     backgroundColor: '#1a1a1a',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 15, y: 10 },
+    // Hide window in E2E test mode for headless-like behavior (unless E2E_HEADLESS=false)
+    show: !(isE2ETest && isHeadless),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -36,8 +47,27 @@ function createWindow(): void {
 
 // PTY IPC handlers
 ipcMain.handle('pty:create', (_event, options: { id: string; cwd: string; command?: string }) => {
-  const shell = process.env.SHELL || '/bin/zsh'
-  const ptyProcess = pty.spawn(shell, [], {
+  // In E2E test mode, use a controlled shell that won't run real commands
+  let shell: string
+  let shellArgs: string[] = []
+  let initialCommand: string | undefined = options.command
+
+  if (isE2ETest) {
+    // In E2E mode, always use a regular shell but prefix with a test marker
+    shell = '/bin/bash'
+    shellArgs = []
+    // Override any command with a safe echo
+    initialCommand = 'echo "E2E_TEST_SHELL_READY"; PS1="test-shell$ "'
+  } else if (E2E_MOCK_SHELL) {
+    // Run the mock shell script via bash (external script mode)
+    shell = '/bin/bash'
+    shellArgs = [E2E_MOCK_SHELL]
+  } else {
+    shell = process.env.SHELL || '/bin/zsh'
+    shellArgs = []
+  }
+
+  const ptyProcess = pty.spawn(shell, shellArgs, {
     name: 'xterm-256color',
     cols: 80,
     rows: 30,
@@ -57,10 +87,10 @@ ipcMain.handle('pty:create', (_event, options: { id: string; cwd: string; comman
     ptyProcesses.delete(options.id)
   })
 
-  // If a command was specified, run it after shell starts
-  if (options.command) {
+  // If a command was specified (or in E2E test mode), run it after shell starts
+  if (initialCommand) {
     setTimeout(() => {
-      ptyProcess.write(options.command + '\r')
+      ptyProcess.write(initialCommand + '\r')
     }, 100)
   }
 

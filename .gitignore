@@ -29,3 +29,8 @@ pnpm-debug.log*
 # Cache
 .cache/
 .turbo/
+
+# Test artifacts
+test-results/
+playwright-report/
+*.png

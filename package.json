@@ -5,22 +5,29 @@
   "type": "module",
   "main": "out/main/index.js",
   "pnpm": {
-    "onlyBuiltDependencies": ["electron", "esbuild", "node-pty"]
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild",
+      "node-pty"
+    ]
   },
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
+    "test": "playwright test",
+    "test:headed": "E2E_HEADLESS=false playwright test",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
-    "@xterm/xterm": "^5.5.0",
     "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
     "node-pty": "^1.0.0",
     "simple-git": "^3.22.0",
     "zustand": "^4.4.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.1",
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",
@@ -29,6 +36,7 @@
     "electron": "^28.1.0",
     "electron-builder": "^24.9.1",
     "electron-vite": "^2.0.0",
+    "playwright": "^1.58.1",
     "postcss": "^8.4.32",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
