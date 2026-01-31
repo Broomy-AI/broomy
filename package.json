@@ -4,6 +4,9 @@
   "description": "Multi-agent session manager for AI coding assistants",
   "type": "module",
   "main": "out/main/index.js",
+  "pnpm": {
+    "onlyBuiltDependencies": ["electron", "esbuild", "node-pty"]
+  },
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
