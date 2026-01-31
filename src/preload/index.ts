@@ -18,15 +18,28 @@ export type GitApi = {
   isGitRepo: (path: string) => Promise<boolean>
 }
 
-export type ConfigApi = {
-  load: () => Promise<{ sessions: SessionData[] }>
-  save: (config: { sessions: SessionData[] }) => Promise<{ success: boolean; error?: string }>
+export type AgentData = {
+  id: string
+  name: string
+  command: string
+  color?: string
 }
 
 export type SessionData = {
   id: string
   name: string
   directory: string
+  agentId?: string | null
+}
+
+export type ConfigData = {
+  agents: AgentData[]
+  sessions: SessionData[]
+}
+
+export type ConfigApi = {
+  load: () => Promise<ConfigData>
+  save: (config: ConfigData) => Promise<{ success: boolean; error?: string }>
 }
 
 const ptyApi: PtyApi = {

@@ -126,11 +126,17 @@ ipcMain.handle('pty:kill', (_event, id: string) => {
 const CONFIG_DIR = join(homedir(), '.agent-manager')
 const CONFIG_FILE = join(CONFIG_DIR, 'config.json')
 
+// Default agents
+const DEFAULT_AGENTS = [
+  { id: 'claude', name: 'Claude Code', command: 'claude' },
+  { id: 'aider', name: 'Aider', command: 'aider' },
+]
+
 // Demo sessions for E2E tests (each needs a unique directory for branch tracking)
 const E2E_DEMO_SESSIONS = [
-  { id: '1', name: 'agent-manager', directory: '/tmp/e2e-agent-manager' },
-  { id: '2', name: 'backend-api', directory: '/tmp/e2e-backend-api' },
-  { id: '3', name: 'docs-site', directory: '/tmp/e2e-docs-site' },
+  { id: '1', name: 'agent-manager', directory: '/tmp/e2e-agent-manager', agentId: 'claude' },
+  { id: '2', name: 'backend-api', directory: '/tmp/e2e-backend-api', agentId: 'aider' },
+  { id: '3', name: 'docs-site', directory: '/tmp/e2e-docs-site', agentId: null },
 ]
 
 // Create E2E test directories if in E2E mode
@@ -146,26 +152,36 @@ if (isE2ETest) {
 ipcMain.handle('config:load', async () => {
   // In E2E test mode, return demo sessions for consistent testing
   if (isE2ETest) {
-    return { sessions: E2E_DEMO_SESSIONS }
+    return { agents: DEFAULT_AGENTS, sessions: E2E_DEMO_SESSIONS }
   }
 
   try {
     if (!existsSync(CONFIG_FILE)) {
-      return { sessions: [] }
+      return { agents: DEFAULT_AGENTS, sessions: [] }
     }
     const data = readFileSync(CONFIG_FILE, 'utf-8')
-    return JSON.parse(data)
+    const config = JSON.parse(data)
+    // Ensure agents array exists with defaults
+    if (!config.agents || config.agents.length === 0) {
+      config.agents = DEFAULT_AGENTS
+    }
+    return config
   } catch {
-    return { sessions: [] }
+    return { agents: DEFAULT_AGENTS, sessions: [] }
   }
 })
 
-ipcMain.handle('config:save', async (_event, config: { sessions: unknown[] }) => {
+ipcMain.handle('config:save', async (_event, config: { agents?: unknown[]; sessions: unknown[] }) => {
   try {
     if (!existsSync(CONFIG_DIR)) {
       mkdirSync(CONFIG_DIR, { recursive: true })
     }
-    writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2))
+    // Ensure agents array exists
+    const configToSave = {
+      agents: config.agents || DEFAULT_AGENTS,
+      sessions: config.sessions,
+    }
+    writeFileSync(CONFIG_FILE, JSON.stringify(configToSave, null, 2))
     return { success: true }
   } catch (error) {
     return { success: false, error: String(error) }

@@ -9,6 +9,7 @@ export interface Session {
   directory: string
   branch: string
   status: SessionStatus
+  agentId: string | null
 }
 
 interface SessionStore {
@@ -18,7 +19,7 @@ interface SessionStore {
 
   // Actions
   loadSessions: () => Promise<void>
-  addSession: (directory: string) => Promise<void>
+  addSession: (directory: string, agentId: string | null) => Promise<void>
   removeSession: (id: string) => Promise<void>
   setActiveSession: (id: string | null) => void
   updateSessionBranch: (id: string, branch: string) => void
@@ -45,6 +46,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           directory: sessionData.directory,
           branch,
           status: 'idle',
+          agentId: sessionData.agentId ?? null,
         })
       }
 
@@ -58,7 +60,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  addSession: async (directory: string) => {
+  addSession: async (directory: string, agentId: string | null) => {
     const isGitRepo = await window.git.isGitRepo(directory)
     if (!isGitRepo) {
       throw new Error('Selected directory is not a git repository')
@@ -74,6 +76,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       directory,
       branch,
       status: 'idle',
+      agentId,
     }
 
     const { sessions } = get()
@@ -84,12 +87,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       activeSessionId: id,
     })
 
-    // Persist to config
+    // Persist to config - need to load existing config to preserve agents
+    const config = await window.config.load()
     await window.config.save({
+      agents: config.agents,
       sessions: updatedSessions.map((s) => ({
         id: s.id,
         name: s.name,
         directory: s.directory,
+        agentId: s.agentId,
       })),
     })
   },
@@ -109,12 +115,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       activeSessionId: newActiveId,
     })
 
-    // Persist to config
+    // Persist to config - need to load existing config to preserve agents
+    const config = await window.config.load()
     await window.config.save({
+      agents: config.agents,
       sessions: updatedSessions.map((s) => ({
         id: s.id,
         name: s.name,
         directory: s.directory,
+        agentId: s.agentId,
       })),
     })
   },
