@@ -234,9 +234,8 @@ test.describe('Layout', () => {
 })
 
 test.describe('Explorer Panel', () => {
-  test('should toggle Explorer and Diff panels independently', async () => {
+  test('should toggle Explorer panel', async () => {
     const explorerButton = page.locator('button:has-text("Explorer")')
-    const diffButton = page.locator('button:has-text("Diff")')
 
     // Open the Explorer panel
     await explorerButton.click()
@@ -246,18 +245,13 @@ test.describe('Explorer Panel', () => {
     const explorerHeader = page.locator('text=Explorer').nth(1) // Second instance is the panel header
     await expect(explorerHeader).toBeVisible()
 
-    // Open Diff panel as well
-    await diffButton.click()
-    await page.waitForTimeout(300)
-
-    // Diff panel should be visible - check for "Changes" header in the panel
-    const diffHeader = page.locator('text=Changes').first()
-    await expect(diffHeader).toBeVisible()
-
-    // Close both panels
+    // Close the panel
     await explorerButton.click()
-    await diffButton.click()
     await page.waitForTimeout(300)
+
+    // Panel should be closed - only one Explorer text visible (the button)
+    const explorerCount = await page.locator('text=Explorer').count()
+    expect(explorerCount).toBe(1)
   })
 
   test('should show file tree placeholder items', async () => {

@@ -1,13 +1,14 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { FileEntry, GitFileStatus } from '../../preload/index'
-
-type FileFilter = 'all' | 'changed'
+import type { ExplorerFilter } from '../store/sessions'
 
 interface ExplorerProps {
   directory?: string
-  onFileSelect?: (filePath: string) => void
+  onFileSelect?: (filePath: string, openInDiffMode: boolean) => void
   selectedFilePath?: string | null
   gitStatus?: GitFileStatus[] // Git status passed from parent (refreshes on save)
+  filter: ExplorerFilter
+  onFilterChange: (filter: ExplorerFilter) => void
 }
 
 interface TreeNode extends FileEntry {
@@ -15,11 +16,25 @@ interface TreeNode extends FileEntry {
   isExpanded?: boolean
 }
 
-export default function Explorer({ directory, onFileSelect, selectedFilePath, gitStatus = [] }: ExplorerProps) {
+export default function Explorer({ directory, onFileSelect, selectedFilePath, gitStatus = [], filter, onFilterChange }: ExplorerProps) {
   const [tree, setTree] = useState<TreeNode[]>([])
-  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set())
+  const [allModeExpandedPaths, setAllModeExpandedPaths] = useState<Set<string>>(new Set())
   const [isLoading, setIsLoading] = useState(false)
-  const [filter, setFilter] = useState<FileFilter>('all')
+
+  // Build a set of paths that have changes (for quick lookup)
+  const changedPaths = useMemo(() => {
+    const paths = new Set<string>()
+    for (const status of gitStatus) {
+      // Add the file path
+      paths.add(status.path)
+      // Add all parent directories
+      const parts = status.path.split('/')
+      for (let i = 1; i < parts.length; i++) {
+        paths.add(parts.slice(0, i).join('/'))
+      }
+    }
+    return paths
+  }, [gitStatus])
 
   // Load directory contents
   const loadDirectory = useCallback(async (dirPath: string): Promise<TreeNode[]> => {
@@ -48,22 +63,81 @@ export default function Explorer({ directory, onFileSelect, selectedFilePath, gi
     })
   }, [directory, loadDirectory])
 
-  // Toggle directory expansion
+  // Auto-expand directories with changes in "changed" mode
+  useEffect(() => {
+    if (filter !== 'changed' || !directory || gitStatus.length === 0) return
+
+    const expandChangedDirs = async () => {
+      // Get all directory paths that contain changes
+      const dirsToExpand = new Set<string>()
+      for (const status of gitStatus) {
+        const parts = status.path.split('/')
+        let currentPath = directory
+        for (let i = 0; i < parts.length - 1; i++) {
+          currentPath = `${currentPath}/${parts[i]}`
+          dirsToExpand.add(currentPath)
+        }
+      }
+
+      // Load children for all directories that need expansion
+      const loadChildrenRecursive = async (nodes: TreeNode[]): Promise<TreeNode[]> => {
+        const result: TreeNode[] = []
+        for (const node of nodes) {
+          if (node.isDirectory && dirsToExpand.has(node.path)) {
+            const children = node.children || await loadDirectory(node.path)
+            const loadedChildren = await loadChildrenRecursive(children)
+            result.push({ ...node, children: loadedChildren })
+          } else {
+            result.push(node)
+          }
+        }
+        return result
+      }
+
+      if (tree.length > 0) {
+        const expandedTree = await loadChildrenRecursive(tree)
+        setTree(expandedTree)
+      }
+    }
+
+    expandChangedDirs()
+  }, [filter, directory, gitStatus, tree.length > 0])
+
+  // Check if a path should be expanded
+  const isExpanded = useCallback((path: string): boolean => {
+    if (filter === 'changed') {
+      // In changed mode, expand if this directory contains changes
+      const relativePath = directory ? path.replace(directory + '/', '') : path
+      return changedPaths.has(relativePath)
+    }
+    // In all mode, use remembered expansion state
+    return allModeExpandedPaths.has(path)
+  }, [filter, directory, changedPaths, allModeExpandedPaths])
+
+  // Toggle directory expansion (only affects "all" mode)
   const toggleExpand = async (node: TreeNode) => {
     if (!node.isDirectory) return
 
-    const newExpanded = new Set(expandedPaths)
-    if (expandedPaths.has(node.path)) {
-      newExpanded.delete(node.path)
+    if (filter === 'all') {
+      const newExpanded = new Set(allModeExpandedPaths)
+      if (allModeExpandedPaths.has(node.path)) {
+        newExpanded.delete(node.path)
+      } else {
+        newExpanded.add(node.path)
+        // Load children if not already loaded
+        if (!node.children) {
+          const children = await loadDirectory(node.path)
+          setTree((prevTree) => updateTreeNode(prevTree, node.path, { children }))
+        }
+      }
+      setAllModeExpandedPaths(newExpanded)
     } else {
-      newExpanded.add(node.path)
-      // Load children if not already loaded
+      // In changed mode, just load children if needed
       if (!node.children) {
         const children = await loadDirectory(node.path)
         setTree((prevTree) => updateTreeNode(prevTree, node.path, { children }))
       }
     }
-    setExpandedPaths(newExpanded)
   }
 
   // Handle file click
@@ -71,7 +145,9 @@ export default function Explorer({ directory, onFileSelect, selectedFilePath, gi
     if (node.isDirectory) {
       toggleExpand(node)
     } else if (onFileSelect) {
-      onFileSelect(node.path)
+      // Open in diff mode if clicked from "changed" filter
+      const openInDiffMode = filter === 'changed'
+      onFileSelect(node.path, openInDiffMode)
     }
   }
 
@@ -116,13 +192,13 @@ export default function Explorer({ directory, onFileSelect, selectedFilePath, gi
 
   // Check if a node or any of its children have changes
   const hasChanges = (node: TreeNode): boolean => {
-    if (getFileStatus(node.path)) return true
+    const relativePath = directory ? node.path.replace(directory + '/', '') : node.path
+    if (changedPaths.has(relativePath)) return true
     if (node.children) {
       return node.children.some(hasChanges)
     }
     // For unexpanded directories, check if any git status paths start with this directory
     if (node.isDirectory && !node.children) {
-      const relativePath = directory ? node.path.replace(directory + '/', '') : node.path
       return gitStatus.some(s => s.path.startsWith(relativePath + '/'))
     }
     return false
@@ -131,7 +207,7 @@ export default function Explorer({ directory, onFileSelect, selectedFilePath, gi
 
   // Render a tree node
   const renderNode = (node: TreeNode, depth: number = 0): JSX.Element => {
-    const isExpanded = expandedPaths.has(node.path)
+    const nodeIsExpanded = isExpanded(node.path)
     const status = getFileStatus(node.path)
     const statusColor = getStatusColor(status?.status)
     const isSelected = !node.isDirectory && node.path === selectedFilePath
@@ -147,7 +223,7 @@ export default function Explorer({ directory, onFileSelect, selectedFilePath, gi
         >
           {node.isDirectory ? (
             <span className="text-text-secondary w-4 text-center">
-              {isExpanded ? '▼' : '▶'}
+              {nodeIsExpanded ? '▼' : '▶'}
             </span>
           ) : (
             <span className="w-4" />
@@ -162,7 +238,7 @@ export default function Explorer({ directory, onFileSelect, selectedFilePath, gi
             </span>
           )}
         </div>
-        {node.isDirectory && isExpanded && node.children && (
+        {node.isDirectory && nodeIsExpanded && node.children && (
           <div>
             {node.children.map((child) => renderNode(child, depth + 1))}
           </div>
@@ -209,7 +285,7 @@ export default function Explorer({ directory, onFileSelect, selectedFilePath, gi
         {/* Filter selector */}
         <div className="flex items-center gap-1">
           <button
-            onClick={() => setFilter('all')}
+            onClick={() => onFilterChange('all')}
             className={`px-2 py-0.5 text-xs rounded transition-colors ${
               filter === 'all'
                 ? 'bg-accent text-white'
@@ -219,7 +295,7 @@ export default function Explorer({ directory, onFileSelect, selectedFilePath, gi
             All
           </button>
           <button
-            onClick={() => setFilter('changed')}
+            onClick={() => onFilterChange('changed')}
             className={`px-2 py-0.5 text-xs rounded transition-colors ${
               filter === 'changed'
                 ? 'bg-accent text-white'

@@ -37,6 +37,7 @@ export type GitApi = {
   isGitRepo: (path: string) => Promise<boolean>
   status: (path: string) => Promise<GitFileStatus[]>
   diff: (repoPath: string, filePath?: string) => Promise<string>
+  show: (repoPath: string, filePath: string, ref?: string) => Promise<string>
 }
 
 export type AgentData = {
@@ -65,6 +66,7 @@ export type SessionData = {
   showDiff?: boolean
   fileViewerPosition?: 'top' | 'left'
   layoutSizes?: LayoutSizesData
+  explorerFilter?: 'all' | 'changed'
 }
 
 export type ConfigData = {
@@ -113,6 +115,7 @@ const gitApi: GitApi = {
   isGitRepo: (path) => ipcRenderer.invoke('git:isGitRepo', path),
   status: (path) => ipcRenderer.invoke('git:status', path),
   diff: (repoPath, filePath) => ipcRenderer.invoke('git:diff', repoPath, filePath),
+  show: (repoPath, filePath, ref) => ipcRenderer.invoke('git:show', repoPath, filePath, ref),
 }
 
 const configApi: ConfigApi = {

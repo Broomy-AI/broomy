@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { basename } from 'path-browserify'
 import { getViewersForFile, isTextContent } from './fileViewers'
+import MonacoDiffViewer from './fileViewers/MonacoDiffViewer'
 import type { FileViewerPlugin } from './fileViewers'
 
 export type FileViewerPosition = 'top' | 'left'
@@ -15,9 +16,10 @@ interface FileViewerProps {
   fileStatus?: FileStatus // The git status of the file (null if unchanged)
   directory?: string // For getting git diff
   onSaveComplete?: () => void // Called after a successful save
+  initialViewMode?: ViewMode // Initial view mode when opening a file
 }
 
-export default function FileViewer({ filePath, position = 'top', onPositionChange, onClose, fileStatus, directory, onSaveComplete }: FileViewerProps) {
+export default function FileViewer({ filePath, position = 'top', onPositionChange, onClose, fileStatus, directory, onSaveComplete, initialViewMode = 'latest' }: FileViewerProps) {
   // Only show diff for modified files (not added/deleted)
   const canShowDiff = fileStatus === 'modified'
   const [content, setContent] = useState<string>('')
@@ -29,7 +31,8 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
   const [editedContent, setEditedContent] = useState<string>('')
   const [isSaving, setIsSaving] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('latest')
-  const [diffContent, setDiffContent] = useState<string>('')
+  const [originalContent, setOriginalContent] = useState<string>('')
+  const [diffSideBySide, setDiffSideBySide] = useState(true)
 
   useEffect(() => {
     if (!filePath) {
@@ -108,34 +111,36 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
     }
   }, [filePath])
 
-  // Load diff content when in diff mode
+  // Load original content from git when in diff mode
   useEffect(() => {
     if (!filePath || !directory || !canShowDiff || viewMode !== 'diff') {
-      setDiffContent('')
+      setOriginalContent('')
       return
     }
 
-    const loadDiff = async () => {
+    const loadOriginal = async () => {
       try {
-        // Convert absolute path to relative path for git diff
+        // Convert absolute path to relative path for git show
         const relativePath = filePath.startsWith(directory + '/')
           ? filePath.slice(directory.length + 1)
           : filePath
-        const diff = await window.git.diff(directory, relativePath)
-        setDiffContent(diff)
+        const original = await window.git.show(directory, relativePath)
+        setOriginalContent(original)
       } catch {
-        setDiffContent('Failed to load diff')
+        setOriginalContent('')
       }
     }
 
-    loadDiff()
+    loadOriginal()
   }, [filePath, directory, canShowDiff, viewMode])
 
-  // Reset dirty state when file changes
+  // Reset dirty state and set initial view mode when file changes
   useEffect(() => {
     setIsDirty(false)
-    setViewMode('latest')
-  }, [filePath])
+    // Use diff mode if requested and the file supports it
+    const shouldUseDiffMode = initialViewMode === 'diff' && canShowDiff
+    setViewMode(shouldUseDiffMode ? 'diff' : 'latest')
+  }, [filePath, initialViewMode, canShowDiff])
 
   // Save handler (called by editor on Cmd+S)
   const handleSave = useCallback(async (newContent: string) => {
@@ -227,6 +232,24 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
           <span className="text-xs text-text-secondary truncate">{filePath}</span>
         </div>
         <div className="flex items-center gap-2">
+          {/* Side-by-side toggle - only show in diff mode */}
+          {viewMode === 'diff' && (
+            <button
+              onClick={() => setDiffSideBySide(!diffSideBySide)}
+              className={`p-1.5 rounded transition-colors ${
+                diffSideBySide
+                  ? 'bg-accent text-white'
+                  : 'bg-bg-tertiary text-text-secondary hover:text-text-primary'
+              }`}
+              title={diffSideBySide ? 'Switch to inline view' : 'Switch to side-by-side view'}
+            >
+              {/* Side by side icon */}
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="8" height="18" rx="1" />
+                <rect x="13" y="3" width="8" height="18" rx="1" />
+              </svg>
+            </button>
+          )}
           {/* Viewer selector icons - includes Diff as a view mode for modified text files */}
           {(availableViewers.length > 1 || canShowDiff) && (
             <div className="flex items-center gap-1 mr-2">
@@ -352,7 +375,12 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
       </div>
       <div className="flex-1 min-h-0">
         {viewMode === 'diff' ? (
-          <DiffViewer diff={diffContent} />
+          <MonacoDiffViewer
+            filePath={filePath}
+            originalContent={originalContent}
+            modifiedContent={content}
+            sideBySide={diffSideBySide}
+          />
         ) : (
           <ViewerComponent
             filePath={filePath}
@@ -362,41 +390,6 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
           />
         )}
       </div>
-    </div>
-  )
-}
-
-// Simple diff viewer component
-function DiffViewer({ diff }: { diff: string }) {
-  if (!diff) {
-    return (
-      <div className="h-full flex items-center justify-center text-text-secondary text-sm">
-        No changes
-      </div>
-    )
-  }
-
-  const lines = diff.split('\n')
-
-  return (
-    <div className="h-full overflow-auto p-4 font-mono text-sm">
-      {lines.map((line, i) => {
-        let className = 'text-text-secondary'
-        if (line.startsWith('+') && !line.startsWith('+++')) {
-          className = 'text-green-400 bg-green-400/10'
-        } else if (line.startsWith('-') && !line.startsWith('---')) {
-          className = 'text-red-400 bg-red-400/10'
-        } else if (line.startsWith('@@')) {
-          className = 'text-cyan-400'
-        } else if (line.startsWith('diff') || line.startsWith('index')) {
-          className = 'text-text-secondary opacity-60'
-        }
-        return (
-          <div key={i} className={`${className} whitespace-pre`}>
-            {line}
-          </div>
-        )
-      })}
     </div>
   )
 }

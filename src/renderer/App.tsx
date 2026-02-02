@@ -5,7 +5,6 @@ import SessionList from './components/SessionList'
 import Terminal from './components/Terminal'
 import Explorer from './components/Explorer'
 import FileViewer from './components/FileViewer'
-import DiffPanel from './components/DiffPanel'
 import AgentSettings from './components/AgentSettings'
 import NewSessionDialog from './components/NewSessionDialog'
 import { useSessionStore, type Session, type SessionStatus, type LayoutSizes } from './store/sessions'
@@ -41,8 +40,8 @@ function App() {
     toggleUserTerminal,
     toggleExplorer,
     toggleFileViewer,
-    toggleDiff,
     selectFile,
+    setExplorerFilter,
     setFileViewerPosition,
     updateLayoutSize,
   } = useSessionStore()
@@ -54,6 +53,7 @@ function App() {
   const [pendingFolderPath, setPendingFolderPath] = useState<string | null>(null)
   const [gitStatusBySession, setGitStatusBySession] = useState<Record<string, GitFileStatus[]>>({})
   const [directoryExists, setDirectoryExists] = useState<Record<string, boolean>>({})
+  const [openFileInDiffMode, setOpenFileInDiffMode] = useState(false)
 
   const activeSession = sessions.find((s) => s.id === activeSessionId)
   const activeDirectoryExists = activeSession ? (directoryExists[activeSession.id] ?? true) : true
@@ -181,7 +181,6 @@ function App() {
         showFileViewer={activeSession?.showFileViewer ?? false}
         showAgentTerminal={activeSession?.showAgentTerminal ?? true}
         showUserTerminal={activeSession?.showUserTerminal ?? false}
-        showDiff={activeSession?.showDiff ?? false}
         showSettings={showSettings}
         fileViewerPosition={activeSession?.fileViewerPosition ?? 'top'}
         sidebarWidth={sidebarWidth}
@@ -238,9 +237,16 @@ function App() {
           activeSession?.showExplorer ? (
             <Explorer
               directory={activeSession?.directory}
-              onFileSelect={(filePath) => activeSessionId && selectFile(activeSessionId, filePath)}
+              onFileSelect={(filePath, openInDiffMode) => {
+                if (activeSessionId) {
+                  setOpenFileInDiffMode(openInDiffMode)
+                  selectFile(activeSessionId, filePath)
+                }
+              }}
               selectedFilePath={activeSession?.selectedFilePath}
               gitStatus={activeSessionGitStatus}
+              filter={activeSession?.explorerFilter ?? 'all'}
+              onFilterChange={(filter) => activeSessionId && setExplorerFilter(activeSessionId, filter)}
             />
           ) : null
         }
@@ -254,12 +260,8 @@ function App() {
               fileStatus={selectedFileStatus}
               directory={activeSession?.directory}
               onSaveComplete={fetchGitStatus}
+              initialViewMode={openFileInDiffMode ? 'diff' : 'latest'}
             />
-          ) : null
-        }
-        diffPanel={
-          activeSession?.showDiff ? (
-            <DiffPanel directory={activeSession?.directory} />
           ) : null
         }
         settingsPanel={showSettings ? <AgentSettings onClose={() => setShowSettings(false)} /> : null}
@@ -268,7 +270,6 @@ function App() {
         onToggleFileViewer={() => activeSessionId && toggleFileViewer(activeSessionId)}
         onToggleAgentTerminal={() => activeSessionId && toggleAgentTerminal(activeSessionId)}
         onToggleUserTerminal={() => activeSessionId && toggleUserTerminal(activeSessionId)}
-        onToggleDiff={() => activeSessionId && toggleDiff(activeSessionId)}
         onToggleSettings={() => setShowSettings(!showSettings)}
       />
 

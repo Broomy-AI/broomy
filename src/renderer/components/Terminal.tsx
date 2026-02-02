@@ -62,9 +62,9 @@ export default function Terminal({ sessionId, cwd, command }: TerminalProps) {
 
     // Intercept keyboard shortcuts - dispatch custom event for Layout to handle
     terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
-      // Let Cmd/Ctrl + 1/2/3/4/5/6/7 pass through to the app
+      // Let Cmd/Ctrl + 1/2/3/4/5/6 pass through to the app
       if (e.metaKey || e.ctrlKey) {
-        if (['1', '2', '3', '4', '5', '6', '7'].includes(e.key)) {
+        if (['1', '2', '3', '4', '5', '6'].includes(e.key)) {
           // Dispatch custom event for Layout to handle (xterm may block normal bubbling)
           window.dispatchEvent(new CustomEvent('app:toggle-panel', {
             detail: { key: e.key }

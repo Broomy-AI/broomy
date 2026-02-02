@@ -11,6 +11,8 @@ export interface LayoutSizes {
   diffPanelWidth: number
 }
 
+export type ExplorerFilter = 'all' | 'changed'
+
 export interface Session {
   id: string
   name: string
@@ -27,6 +29,7 @@ export interface Session {
   selectedFilePath: string | null
   fileViewerPosition: FileViewerPosition
   layoutSizes: LayoutSizes
+  explorerFilter: ExplorerFilter
 }
 
 // Default layout sizes
@@ -60,10 +63,10 @@ interface SessionStore {
   toggleUserTerminal: (id: string) => void
   toggleExplorer: (id: string) => void
   toggleFileViewer: (id: string) => void
-  toggleDiff: (id: string) => void
-  selectFile: (id: string, filePath: string) => void
+  selectFile: (id: string, filePath: string, openInDiffMode?: boolean) => void
   setFileViewerPosition: (id: string, position: FileViewerPosition) => void
   updateLayoutSize: (id: string, key: keyof LayoutSizes, value: number) => void
+  setExplorerFilter: (id: string, filter: ExplorerFilter) => void
 }
 
 const generateId = () => `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
@@ -88,6 +91,7 @@ const debouncedSave = async (sessions: Session[], showSidebar: boolean, sidebarW
         showDiff: s.showDiff,
         fileViewerPosition: s.fileViewerPosition,
         layoutSizes: s.layoutSizes,
+        explorerFilter: s.explorerFilter,
       })),
       showSidebar,
       sidebarWidth,
@@ -125,6 +129,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           selectedFilePath: null,
           fileViewerPosition: sessionData.fileViewerPosition ?? 'top',
           layoutSizes: sessionData.layoutSizes ?? { ...DEFAULT_LAYOUT_SIZES },
+          explorerFilter: sessionData.explorerFilter ?? 'all',
         })
       }
 
@@ -165,6 +170,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       selectedFilePath: null,
       fileViewerPosition: 'top',
       layoutSizes: { ...DEFAULT_LAYOUT_SIZES },
+      explorerFilter: 'all',
     }
 
     const { sessions, showSidebar, sidebarWidth } = get()
@@ -265,15 +271,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     debouncedSave(updatedSessions, showSidebar, sidebarWidth)
   },
 
-  toggleDiff: (id: string) => {
-    const { sessions, showSidebar, sidebarWidth } = get()
-    const updatedSessions = sessions.map((s) =>
-      s.id === id ? { ...s, showDiff: !s.showDiff } : s
-    )
-    set({ sessions: updatedSessions })
-    debouncedSave(updatedSessions, showSidebar, sidebarWidth)
-  },
-
   selectFile: (id: string, filePath: string) => {
     const { sessions, showSidebar, sidebarWidth } = get()
     const updatedSessions = sessions.map((s) =>
@@ -296,6 +293,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const { sessions, showSidebar, sidebarWidth } = get()
     const updatedSessions = sessions.map((s) =>
       s.id === id ? { ...s, layoutSizes: { ...s.layoutSizes, [key]: value } } : s
+    )
+    set({ sessions: updatedSessions })
+    debouncedSave(updatedSessions, showSidebar, sidebarWidth)
+  },
+
+  setExplorerFilter: (id: string, filter: ExplorerFilter) => {
+    const { sessions, showSidebar, sidebarWidth } = get()
+    const updatedSessions = sessions.map((s) =>
+      s.id === id ? { ...s, explorerFilter: filter } : s
     )
     set({ sessions: updatedSessions })
     debouncedSave(updatedSessions, showSidebar, sidebarWidth)

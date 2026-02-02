@@ -11,14 +11,12 @@ interface LayoutProps {
   userTerminal: ReactNode
   explorer: ReactNode | null
   fileViewer: ReactNode | null
-  diffPanel: ReactNode | null
   settingsPanel: ReactNode | null
   showSidebar: boolean
   showExplorer: boolean
   showFileViewer: boolean
   showAgentTerminal: boolean
   showUserTerminal: boolean
-  showDiff: boolean
   showSettings: boolean
   fileViewerPosition: FileViewerPosition
   sidebarWidth: number
@@ -31,7 +29,6 @@ interface LayoutProps {
   onToggleFileViewer: () => void
   onToggleAgentTerminal: () => void
   onToggleUserTerminal: () => void
-  onToggleDiff: () => void
   onToggleSettings: () => void
 }
 
@@ -41,7 +38,7 @@ const formatShortcut = (key: string) => {
   return `${modifier}${key}`
 }
 
-type DividerType = 'sidebar' | 'explorer' | 'fileViewer' | 'userTerminal' | 'diff' | null
+type DividerType = 'sidebar' | 'explorer' | 'fileViewer' | 'userTerminal' | null
 
 export default function Layout({
   sidebar,
@@ -49,14 +46,12 @@ export default function Layout({
   userTerminal,
   explorer,
   fileViewer,
-  diffPanel,
   settingsPanel,
   showSidebar,
   showExplorer,
   showFileViewer,
   showAgentTerminal,
   showUserTerminal,
-  showDiff,
   showSettings,
   fileViewerPosition,
   sidebarWidth,
@@ -69,7 +64,6 @@ export default function Layout({
   onToggleFileViewer,
   onToggleAgentTerminal,
   onToggleUserTerminal,
-  onToggleDiff,
   onToggleSettings,
 }: LayoutProps) {
   const [draggingDivider, setDraggingDivider] = useState<DividerType>(null)
@@ -122,12 +116,6 @@ export default function Layout({
           onLayoutSizeChange('userTerminalHeight', Math.max(100, Math.min(newHeight, 500)))
           break
         }
-        case 'diff': {
-          if (!mainRect) return
-          const newWidth = mainRect.right - e.clientX
-          onLayoutSizeChange('diffPanelWidth', Math.max(200, Math.min(newWidth, 600)))
-          break
-        }
       }
     }
 
@@ -163,13 +151,10 @@ export default function Layout({
         onToggleUserTerminal()
         break
       case '6':
-        onToggleDiff()
-        break
-      case '7':
         onToggleSettings()
         break
     }
-  }, [onToggleSidebar, onToggleExplorer, onToggleFileViewer, onToggleAgentTerminal, onToggleUserTerminal, onToggleDiff, onToggleSettings])
+  }, [onToggleSidebar, onToggleExplorer, onToggleFileViewer, onToggleAgentTerminal, onToggleUserTerminal, onToggleSettings])
 
   // Keyboard shortcuts - use capture phase to intercept before terminal gets them
   useEffect(() => {
@@ -180,7 +165,7 @@ export default function Layout({
         return
       }
 
-      if (['1', '2', '3', '4', '5', '6', '7'].includes(e.key)) {
+      if (['1', '2', '3', '4', '5', '6'].includes(e.key)) {
         e.preventDefault()
         e.stopPropagation()
         handleToggleByKey(e.key)
@@ -293,17 +278,6 @@ export default function Layout({
           >
             Terminal
           </button>
-          <button
-            onClick={onToggleDiff}
-            className={`px-3 py-1 text-xs rounded transition-colors ${
-              showDiff
-                ? 'bg-accent text-white'
-                : 'bg-bg-tertiary text-text-secondary hover:text-text-primary'
-            }`}
-            title={`Git Changes (${formatShortcut('6')})`}
-          >
-            Diff
-          </button>
           <ErrorIndicator />
           <button
             onClick={onToggleSettings}
@@ -312,7 +286,7 @@ export default function Layout({
                 ? 'bg-accent text-white'
                 : 'bg-bg-tertiary text-text-secondary hover:text-text-primary'
             }`}
-            title={`Settings (${formatShortcut('7')})`}
+            title={`Settings (${formatShortcut('6')})`}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -497,18 +471,6 @@ export default function Layout({
               )}
             </div>
 
-                {/* Right side panels (Diff) */}
-                {diffPanel && (
-                  <>
-                    <Divider type="diff" direction="vertical" />
-                    <div
-                      className="flex-shrink-0 bg-bg-secondary overflow-y-auto"
-                      style={{ width: layoutSizes.diffPanelWidth }}
-                    >
-                      {diffPanel}
-                    </div>
-                  </>
-                )}
               </>
             )}
           </div>

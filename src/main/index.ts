@@ -302,6 +302,26 @@ ipcMain.handle('git:diff', async (_event, repoPath: string, filePath?: string) =
   }
 })
 
+ipcMain.handle('git:show', async (_event, repoPath: string, filePath: string, ref: string = 'HEAD') => {
+  // In E2E test mode, return mock original content
+  if (isE2ETest) {
+    return `export function main() {
+  console.log('Hello')
+}`
+  }
+
+  try {
+    const git = simpleGit(repoPath)
+    // Use raw command to get file content at the specified ref
+    const result = await git.raw(['show', `${ref}:${filePath}`])
+    return result
+  } catch (error) {
+    // File might not exist in the ref (new file), return empty
+    console.error('git show error:', error)
+    return ''
+  }
+})
+
 // Filesystem IPC handlers
 ipcMain.handle('fs:readDir', async (_event, dirPath: string) => {
   // In E2E test mode, return mock directory listing
@@ -316,7 +336,7 @@ ipcMain.handle('fs:readDir', async (_event, dirPath: string) => {
   try {
     const entries = readdirSync(dirPath, { withFileTypes: true })
     return entries
-      .filter((entry) => !entry.name.startsWith('.')) // Hide hidden files
+      .filter((entry) => entry.name !== '.git') // Only hide .git directory
       .map((entry) => ({
         name: entry.name,
         path: join(dirPath, entry.name),
