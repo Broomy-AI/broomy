@@ -26,6 +26,8 @@ export default function Terminal({ sessionId, cwd, command, isAgentTerminal = fa
   const updateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const idleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [ptyId, setPtyId] = useState<string | null>(null)
+  // Track if user has scrolled up (disable auto-scroll)
+  const isFollowingRef = useRef(true)
   const { addError } = useErrorStore()
   const updateAgentMonitor = useSessionStore((state) => state.updateAgentMonitor)
 
@@ -150,6 +152,20 @@ export default function Terminal({ sessionId, cwd, command, isAgentTerminal = fa
       return true // Handle normally in terminal
     })
 
+    // Track scroll position to implement follow mode
+    // When user scrolls up, disable auto-scroll; when they scroll to bottom, re-enable
+    const checkIfAtBottom = () => {
+      const buffer = terminal.buffer.active
+      // We're at bottom if viewport is at or very close to the base (within 2 rows)
+      const atBottom = buffer.viewportY >= buffer.baseY - 2
+      isFollowingRef.current = atBottom
+    }
+
+    // Listen for scroll events
+    terminal.onScroll(() => {
+      checkIfAtBottom()
+    })
+
     terminalRef.current = terminal
     fitAddonRef.current = fitAddon
 
@@ -167,6 +183,11 @@ export default function Terminal({ sessionId, cwd, command, isAgentTerminal = fa
         // Connect PTY output to terminal
         const removeDataListener = window.pty.onData(id, (data) => {
           terminal.write(data)
+
+          // Auto-scroll to bottom if in follow mode
+          if (isFollowingRef.current) {
+            terminal.scrollToBottom()
+          }
 
           // Parse output for agent terminals
           if (isAgentTerminal && parserRef.current) {
@@ -282,12 +303,13 @@ export default function Terminal({ sessionId, cwd, command, isAgentTerminal = fa
     return () => window.removeEventListener('resize', handleResize)
   }, [ptyId])
 
-  // Scroll to bottom when terminal becomes active
+  // Scroll to bottom when terminal becomes active (and reset to follow mode)
   useEffect(() => {
     if (isActive && terminalRef.current) {
       // Small delay to ensure terminal is visible and rendered
       const timeout = setTimeout(() => {
         terminalRef.current?.scrollToBottom()
+        isFollowingRef.current = true
       }, 50)
       return () => clearTimeout(timeout)
     }
