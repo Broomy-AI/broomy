@@ -372,55 +372,40 @@ test.describe('Session Terminal Persistence', () => {
 })
 
 test.describe('E2E Shell Integration', () => {
-  test('should display E2E test ready marker', async () => {
+  test('should display agent terminal with fake claude', async () => {
     // Wait for terminal to initialize and display content
     await page.waitForTimeout(1500)
 
-    // The E2E shell should display the ready marker
+    // The agent terminal should display the fake claude
     const xtermViewport = page.locator('.xterm-screen').first()
     await expect(xtermViewport).toBeVisible()
 
-    // Get terminal content from the first (main) terminal
+    // Get terminal content from the agent terminal
     const terminalText = await page.evaluate(() => {
       const viewport = document.querySelector('.xterm-rows')
       return viewport?.textContent || ''
     })
 
-    // Verify E2E test marker is displayed
-    expect(terminalText).toContain('E2E_TEST_SHELL_READY')
+    // Agent terminal shows FAKE_CLAUDE_READY (it runs the fake claude script)
+    expect(terminalText).toContain('FAKE_CLAUDE_READY')
   })
 
-  test('should execute echo commands correctly', async () => {
-    // Focus on the first (main) terminal
-    const terminal = page.locator('.xterm-helper-textarea').first()
-    await terminal.focus()
-
-    // Type a test command
-    await page.keyboard.type('echo hello_e2e_test')
-    await page.keyboard.press('Enter')
-
-    // Wait for command to be processed
-    await page.waitForTimeout(500)
-
-    // Check that the command output is visible
-    const terminalText = await page.evaluate(() => {
-      const viewport = document.querySelector('.xterm-rows')
-      return viewport?.textContent || ''
-    })
-
-    // The echo command should output the text
-    expect(terminalText).toContain('hello_e2e_test')
-  })
-
-  test('should show test shell prompt', async () => {
-    await page.waitForTimeout(500)
+  test('should show user terminal when toggled', async () => {
+    // Toggle the user terminal to be visible
+    const terminalButton = page.locator('button:has-text("Terminal")').first()
+    await terminalButton.click()
+    await page.waitForTimeout(1500)  // Wait for terminal to initialize
 
     const terminalText = await page.evaluate(() => {
-      const viewport = document.querySelector('.xterm-rows')
-      return viewport?.textContent || ''
+      const viewports = document.querySelectorAll('.xterm-rows')
+      return Array.from(viewports).map(v => v.textContent || '').join('\n')
     })
 
-    // The test shell uses "test-shell$" as its prompt
+    // The user terminal shell uses "test-shell$" as its prompt
     expect(terminalText).toContain('test-shell$')
+
+    // Toggle it back off to restore state
+    await terminalButton.click()
+    await page.waitForTimeout(300)
   })
 })

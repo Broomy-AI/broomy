@@ -1,12 +1,39 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
 export type PtyApi = {
-  create: (options: { id: string; cwd: string; command?: string }) => Promise<{ id: string }>
+  create: (options: { id: string; cwd: string; command?: string; sessionId?: string; env?: Record<string, string> }) => Promise<{ id: string }>
   write: (id: string, data: string) => Promise<void>
   resize: (id: string, cols: number, rows: number) => Promise<void>
   kill: (id: string) => Promise<void>
   onData: (id: string, callback: (data: string) => void) => () => void
   onExit: (id: string, callback: (exitCode: number) => void) => () => void
+}
+
+export type HookEvent = {
+  type: 'PreToolUse' | 'PostToolUse' | 'PermissionRequest' | 'Stop' | 'Notification' | string
+  timestamp: number
+  sessionId: string
+  data?: {
+    tool?: string
+    message?: string
+    [key: string]: unknown
+  }
+}
+
+export type HooksSetupStatus = {
+  configured: boolean
+  reason?: 'no-claude-settings' | 'no-hooks-section' | 'hooks-incomplete' | 'error'
+  error?: string
+  configDir?: string
+}
+
+export type HooksApi = {
+  watch: (sessionId: string) => Promise<{ success: boolean; error?: string }>
+  unwatch: (sessionId: string) => Promise<{ success: boolean }>
+  clear: (sessionId: string) => Promise<{ success: boolean }>
+  onEvent: (sessionId: string, callback: (event: HookEvent) => void) => () => void
+  checkSetup: (configDir?: string) => Promise<HooksSetupStatus>
+  configure: (configDir?: string) => Promise<{ success: boolean; error?: string; backupPath?: string }>
 }
 
 export type DialogApi = {
@@ -28,6 +55,7 @@ export type FsApi = {
   readDir: (path: string) => Promise<FileEntry[]>
   readFile: (path: string) => Promise<string>
   writeFile: (path: string, content: string) => Promise<{ success: boolean; error?: string }>
+  appendFile: (path: string, content: string) => Promise<{ success: boolean; error?: string }>
   readFileBase64: (path: string) => Promise<string>
   exists: (path: string) => Promise<boolean>
   watch: (id: string, path: string) => Promise<{ success: boolean; error?: string }>
@@ -48,6 +76,7 @@ export type AgentData = {
   name: string
   command: string
   color?: string
+  env?: Record<string, string>  // Environment variables for this agent
 }
 
 export type LayoutSizesData = {
@@ -115,6 +144,7 @@ const fsApi: FsApi = {
   readDir: (path) => ipcRenderer.invoke('fs:readDir', path),
   readFile: (path) => ipcRenderer.invoke('fs:readFile', path),
   writeFile: (path, content) => ipcRenderer.invoke('fs:writeFile', path, content),
+  appendFile: (path, content) => ipcRenderer.invoke('fs:appendFile', path, content),
   readFileBase64: (path) => ipcRenderer.invoke('fs:readFileBase64', path),
   exists: (path) => ipcRenderer.invoke('fs:exists', path),
   watch: (id, path) => ipcRenderer.invoke('fs:watch', id, path),
@@ -147,12 +177,26 @@ const appApi: AppApi = {
   isDev: () => ipcRenderer.invoke('app:isDev'),
 }
 
+const hooksApi: HooksApi = {
+  watch: (sessionId) => ipcRenderer.invoke('hooks:watch', sessionId),
+  unwatch: (sessionId) => ipcRenderer.invoke('hooks:unwatch', sessionId),
+  clear: (sessionId) => ipcRenderer.invoke('hooks:clear', sessionId),
+  onEvent: (sessionId, callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: HookEvent) => callback(data)
+    ipcRenderer.on(`hooks:event:${sessionId}`, handler)
+    return () => ipcRenderer.removeListener(`hooks:event:${sessionId}`, handler)
+  },
+  checkSetup: (configDir) => ipcRenderer.invoke('hooks:checkSetup', configDir),
+  configure: (configDir) => ipcRenderer.invoke('hooks:configure', configDir),
+}
+
 contextBridge.exposeInMainWorld('pty', ptyApi)
 contextBridge.exposeInMainWorld('dialog', dialogApi)
 contextBridge.exposeInMainWorld('fs', fsApi)
 contextBridge.exposeInMainWorld('git', gitApi)
 contextBridge.exposeInMainWorld('config', configApi)
 contextBridge.exposeInMainWorld('app', appApi)
+contextBridge.exposeInMainWorld('hooks', hooksApi)
 
 declare global {
   interface Window {
@@ -162,5 +206,6 @@ declare global {
     git: GitApi
     config: ConfigApi
     app: AppApi
+    hooks: HooksApi
   }
 }

@@ -109,17 +109,25 @@ const STATUS_LINE_PATTERNS = [
   /^\s*Vibing…/i,
   /^\s*Thinking…/i,
   /^\s*Burrowing/i,
+  /^\s*Bloviating/i,  // Another Claude thinking indicator
   /^\d+[ms]\s*·/,  // Time indicators like "2m 6s ·"
   /^↓\s*[\d.]+k?\s*tokens/i,  // Token counters
   /^\s*\.\.\.\s*$/,  // Just dots
   /^\s*[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]+\s*$/,  // Just spinners
-  /ctrl\+[a-z]\s+to/i,  // Keyboard hints
+  /ctrl\+[a-z](\s+to|\s*$)/i,  // Keyboard hints like "ctrl+e to explain" or "ctrl+b"
+  /^\s*esc\s+to/i,  // "esc to cancel", "esc to interrupt"
+  /^\s*tab\s+to/i,  // "tab to amend"
   /^\s*\+\d+\s+lines/i,  // "+20 lines" collapsed indicator
+  /^\s*\+\d+\s+more\s+tool/i,  // "+63 more tool uses"
   /^\s*\d+\s+files?\s+[+-]\d+\s+[+-]\d+/i,  // Git status like "2 files +0 -0"
   /^\s*[─━═]+\s*$/,  // Horizontal line separators
   /^\s*❯\s*$/,  // Empty prompt line
+  /^\s*❯\s+\d+\./,  // Menu selector line "❯ 1. Yes"
+  /^\s*\d+\.\s*(Yes|No)\s*$/,  // Numbered menu options
   /MCP server/i,  // MCP server messages
   /needs auth/i,  // Auth messages
+  /Waiting…/i,  // "Waiting..." status
+  /Running\s+\w+\s+hook/i,  // "Running PreToolUse hook..."
 ]
 
 // Action patterns - these are what we WANT to show

@@ -9,6 +9,11 @@ files:
   - '!{.eslintignore,.eslintrc.js,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asar: false
+extraResources:
+  - from: scripts
+    to: scripts
+    filter:
+      - '**/*'
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:

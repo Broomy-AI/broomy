@@ -4,7 +4,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { useErrorStore } from '../store/errors'
 import { useSessionStore } from '../store/sessions'
-import { ClaudeOutputParser } from '../utils/claudeOutputParser'
+import { ClaudeHooksStateTracker, type HookEvent } from '../utils/claudeHooksState'
 import { terminalBufferRegistry } from '../utils/terminalBufferRegistry'
 import '@xterm/xterm/css/xterm.css'
 
@@ -12,19 +12,25 @@ interface TerminalProps {
   sessionId?: string
   cwd: string
   command?: string
+  env?: Record<string, string>
   isAgentTerminal?: boolean
   isActive?: boolean
 }
 
-export default function Terminal({ sessionId, cwd, command, isAgentTerminal = false, isActive = false }: TerminalProps) {
+export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal = false, isActive = false }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
   const serializeAddonRef = useRef<SerializeAddon | null>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
-  const parserRef = useRef<ClaudeOutputParser | null>(null)
+  const hooksTrackerRef = useRef<ClaudeHooksStateTracker | null>(null)
   const updateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const idleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hooksCleanupRef = useRef<(() => void) | null>(null)
+  const lastStatusRef = useRef<'working' | 'waiting' | 'idle'>('idle')
+  const lastUserInputRef = useRef<number>(0)  // Track when user last typed
+  const lastInteractionRef = useRef<number>(0)  // Track focus/session changes
+  const lastHooksUpdateRef = useRef<number>(0)  // Track when hooks last provided an update
   const [ptyId, setPtyId] = useState<string | null>(null)
   // Track if user has scrolled up (disable auto-scroll)
   const isFollowingRef = useRef(true)
@@ -58,19 +64,62 @@ export default function Terminal({ sessionId, cwd, command, isAgentTerminal = fa
       ...update,
     }
 
-    // Clear existing timeout and schedule new one
+    // Clear existing timeout
     if (updateTimeoutRef.current) {
       clearTimeout(updateTimeoutRef.current)
     }
-    updateTimeoutRef.current = setTimeout(flushUpdate, 300)
+
+    // Flush immediately for status changes to 'working' (responsive feedback)
+    // Debounce for idle transitions (avoid flicker when activity resumes quickly)
+    if (update.status === 'working') {
+      flushUpdate()
+    } else {
+      updateTimeoutRef.current = setTimeout(flushUpdate, 300)
+    }
   }, [flushUpdate])
 
   useEffect(() => {
     if (!containerRef.current || !sessionId) return
 
-    // Create parser for agent terminals
+    // Create hooks tracker for agent terminals
+    // Status detection is handled entirely by hooks (PreToolUse, PostToolUse, PermissionRequest, Stop)
     if (isAgentTerminal) {
-      parserRef.current = new ClaudeOutputParser()
+      hooksTrackerRef.current = new ClaudeHooksStateTracker()
+
+      // Start watching for hook events
+      window.hooks.clear(sessionId).then(() => {
+        window.hooks.watch(sessionId)
+      })
+
+      // Listen for hook events
+      const removeHooksListener = window.hooks.onEvent(sessionId, (event: HookEvent) => {
+        if (!hooksTrackerRef.current) return
+
+        const state = hooksTrackerRef.current.processEvent(event)
+
+        // Hook events are authoritative - update immediately
+        const update: { status?: 'working' | 'waiting' | 'idle' | 'error'; lastMessage?: string; waitingType?: 'tool' | 'question' | 'prompt' | null } = {}
+
+        if (state.status) {
+          update.status = state.status
+        }
+        if (state.lastMessage) {
+          update.lastMessage = state.lastMessage
+        }
+        if (state.waitingType !== undefined) {
+          update.waitingType = state.waitingType
+        }
+
+        // Mark that hooks provided this update - prevent terminal parsing from overwriting for 2 seconds
+        lastHooksUpdateRef.current = Date.now()
+
+        scheduleUpdate(update)
+      })
+
+      hooksCleanupRef.current = () => {
+        removeHooksListener()
+        window.hooks.unwatch(sessionId)
+      }
     }
 
     // Create terminal
@@ -169,14 +218,15 @@ export default function Terminal({ sessionId, cwd, command, isAgentTerminal = fa
     terminalRef.current = terminal
     fitAddonRef.current = fitAddon
 
-    // Create PTY
+    // Create PTY (pass sessionId for hooks integration and agent env vars)
     const id = `${sessionId}-${Date.now()}`
-    window.pty.create({ id, cwd, command })
+    window.pty.create({ id, cwd, command, sessionId, env })
       .then(() => {
         setPtyId(id)
 
         // Connect terminal input to PTY
         terminal.onData((data) => {
+          lastUserInputRef.current = Date.now()  // Track user typing
           window.pty.write(id, data)
         })
 
@@ -189,38 +239,43 @@ export default function Terminal({ sessionId, cwd, command, isAgentTerminal = fa
             terminal.scrollToBottom()
           }
 
-          // Parse output for agent terminals
-          if (isAgentTerminal && parserRef.current) {
-            const result = parserRef.current.processData(data)
+          // Simple activity detection: any terminal output = working
+          // Just pause briefly after user interaction to avoid false positives
+          if (isAgentTerminal && data.length > 0) {
+            const now = Date.now()
+            const timeSinceInput = now - lastUserInputRef.current
+            const timeSinceInteraction = now - lastInteractionRef.current
+            const isPaused = timeSinceInput < 200 || timeSinceInteraction < 200
 
-            // Clear idle timeout since we got data
+            // During pause: don't update status to working, but still set idle timeout
+            // This handles the case where user presses Escape to stop Claude -
+            // we don't want to show "working" for the stop message, but we do want
+            // to eventually show "idle" if nothing else happens
+            if (isPaused) {
+              // Clear and reset idle timeout - if no non-paused activity for 1 second, go idle
+              if (idleTimeoutRef.current) {
+                clearTimeout(idleTimeoutRef.current)
+              }
+              idleTimeoutRef.current = setTimeout(() => {
+                lastStatusRef.current = 'idle'
+                scheduleUpdate({ status: 'idle', waitingType: null })
+              }, 1000)
+              return
+            }
+
+            // Clear idle timeout since we got activity
             if (idleTimeoutRef.current) {
               clearTimeout(idleTimeoutRef.current)
             }
 
-            // Schedule update if we detected changes
-            // Only include fields that have actual values to avoid overwriting good data with undefined
-            if (result.status || result.message) {
-              const update: { status?: 'working' | 'waiting' | 'idle' | 'error'; lastMessage?: string; waitingType?: 'tool' | 'question' | 'prompt' | null } = {}
-              if (result.status) {
-                update.status = result.status
-              }
-              if (result.message) {
-                update.lastMessage = result.message
-              }
-              if (result.waitingType !== undefined) {
-                update.waitingType = result.waitingType
-              }
-              scheduleUpdate(update)
-            }
+            lastStatusRef.current = 'working'
+            scheduleUpdate({ status: 'working' })
 
-            // Set idle timeout - if no data for 2 seconds and not waiting, might be idle
+            // Set idle timeout - if no activity for 1 second, mark as idle
             idleTimeoutRef.current = setTimeout(() => {
-              const idleResult = parserRef.current?.checkIdle()
-              if (idleResult && idleResult.status === 'idle') {
-                scheduleUpdate({ status: 'idle', waitingType: null })
-              }
-            }, 2000)
+              lastStatusRef.current = 'idle'
+              scheduleUpdate({ status: 'idle', waitingType: null })
+            }, 1000)
           }
         })
 
@@ -264,12 +319,13 @@ export default function Terminal({ sessionId, cwd, command, isAgentTerminal = fa
     return () => {
       resizeObserver.disconnect()
       cleanupRef.current?.()
+      hooksCleanupRef.current?.()
       if (ptyId) {
         window.pty.kill(ptyId)
       }
       terminal.dispose()
-      // Clean up parser and timeouts
-      parserRef.current?.reset()
+      // Clean up hooks tracker and timeouts
+      hooksTrackerRef.current?.reset()
       if (updateTimeoutRef.current) {
         clearTimeout(updateTimeoutRef.current)
       }
@@ -282,7 +338,8 @@ export default function Terminal({ sessionId, cwd, command, isAgentTerminal = fa
       }
     }
     // Note: scheduleUpdate is stable (uses refs internally) so not needed in deps
-  }, [sessionId, cwd, command, isAgentTerminal, addError])
+  // Note: env is included to recreate PTY if env changes, but this is rare
+  }, [sessionId, cwd, command, env, isAgentTerminal, addError])
 
   // Handle window resize
   useEffect(() => {
@@ -304,7 +361,9 @@ export default function Terminal({ sessionId, cwd, command, isAgentTerminal = fa
   }, [ptyId])
 
   // Scroll to bottom when terminal becomes active (and reset to follow mode)
+  // Also track session changes to suppress activity detection briefly
   useEffect(() => {
+    lastInteractionRef.current = Date.now()  // Session switched
     if (isActive && terminalRef.current) {
       // Small delay to ensure terminal is visible and rendered
       const timeout = setTimeout(() => {
@@ -314,6 +373,19 @@ export default function Terminal({ sessionId, cwd, command, isAgentTerminal = fa
       return () => clearTimeout(timeout)
     }
   }, [isActive])
+
+  // Track window focus/blur to suppress activity detection briefly
+  useEffect(() => {
+    const handleFocusChange = () => {
+      lastInteractionRef.current = Date.now()
+    }
+    window.addEventListener('focus', handleFocusChange)
+    window.addEventListener('blur', handleFocusChange)
+    return () => {
+      window.removeEventListener('focus', handleFocusChange)
+      window.removeEventListener('blur', handleFocusChange)
+    }
+  }, [])
 
   if (!sessionId) {
     return (
