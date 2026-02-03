@@ -301,5 +301,5 @@ export default function Terminal({ sessionId, cwd, command, isAgentTerminal = fa
     )
   }
 
-  return <div ref={containerRef} className="h-full w-full" />
+  return <div ref={containerRef} className="h-full w-full p-2" />
 }

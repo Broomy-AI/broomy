@@ -34,6 +34,9 @@ export function getDefaultViewer(filePath: string): FileViewerPlugin | null {
  * Used by Monaco viewer to handle unknown file types
  */
 export function isTextContent(content: string): boolean {
+  // Empty content is valid text
+  if (!content || content.length === 0) return true
+
   // Check for null bytes which indicate binary content
   if (content.includes('\0')) return false
 

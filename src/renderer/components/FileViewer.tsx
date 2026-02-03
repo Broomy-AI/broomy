@@ -81,9 +81,9 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
       viewers = viewers.filter(viewer => {
         // Image viewer doesn't need text content
         if (viewer.id === 'image') return true
-        // Monaco viewer needs text content
+        // Monaco viewer can handle any text content (including empty files)
         if (viewer.id === 'monaco') {
-          return data && isTextContent(data)
+          return isTextContent(data)
         }
         // Other viewers need content
         return !!data
