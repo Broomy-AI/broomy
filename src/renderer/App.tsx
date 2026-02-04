@@ -3,6 +3,7 @@ import type { GitFileStatus } from '../preload/index'
 import Layout from './components/Layout'
 import SessionList from './components/SessionList'
 import Terminal from './components/Terminal'
+import TabbedTerminal from './components/TabbedTerminal'
 import Explorer from './components/Explorer'
 import FileViewer from './components/FileViewer'
 import AgentSettings from './components/AgentSettings'
@@ -355,8 +356,8 @@ function AppContent() {
           key={`user-${session.id}`}
           className={`absolute inset-0 ${session.id === activeSessionId ? '' : 'hidden'}`}
         >
-          <Terminal
-            sessionId={`user-${session.id}`}
+          <TabbedTerminal
+            sessionId={session.id}
             cwd={session.directory}
             isActive={session.id === activeSessionId}
           />

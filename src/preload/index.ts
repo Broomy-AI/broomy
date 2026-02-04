@@ -173,8 +173,23 @@ export type AppApi = {
   isDev: () => Promise<boolean>
 }
 
+export type MenuItemDef = {
+  id: string
+  label: string
+  enabled?: boolean
+  type?: 'separator'
+}
+
+export type MenuApi = {
+  popup: (items: MenuItemDef[]) => Promise<string | null>
+}
+
 const appApi: AppApi = {
   isDev: () => ipcRenderer.invoke('app:isDev'),
+}
+
+const menuApi: MenuApi = {
+  popup: (items) => ipcRenderer.invoke('menu:popup', items),
 }
 
 const hooksApi: HooksApi = {
@@ -197,6 +212,7 @@ contextBridge.exposeInMainWorld('git', gitApi)
 contextBridge.exposeInMainWorld('config', configApi)
 contextBridge.exposeInMainWorld('app', appApi)
 contextBridge.exposeInMainWorld('hooks', hooksApi)
+contextBridge.exposeInMainWorld('menu', menuApi)
 
 declare global {
   interface Window {
@@ -207,5 +223,6 @@ declare global {
     config: ConfigApi
     app: AppApi
     hooks: HooksApi
+    menu: MenuApi
   }
 }

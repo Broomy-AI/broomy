@@ -6,6 +6,17 @@ export type SessionStatus = 'working' | 'waiting' | 'idle' | 'error'
 export type FileViewerPosition = 'top' | 'left'
 export type WaitingType = 'tool' | 'question' | 'prompt' | null
 
+// Terminal tab types
+export interface TerminalTab {
+  id: string
+  name: string
+}
+
+export interface TerminalTabsState {
+  tabs: TerminalTab[]
+  activeTabId: string | null
+}
+
 export interface LayoutSizes {
   explorerWidth: number
   fileViewerSize: number // height when top, width when left
@@ -42,6 +53,8 @@ export interface Session {
   lastMessageTime: number | null
   waitingType: WaitingType
   isUnread: boolean
+  // User terminal tabs (persisted)
+  terminalTabs: TerminalTabsState
 }
 
 // Default layout sizes
@@ -53,6 +66,15 @@ const DEFAULT_LAYOUT_SIZES: LayoutSizes = {
 }
 
 const DEFAULT_SIDEBAR_WIDTH = 224 // 14rem = 224px
+
+// Default terminal tabs - starts with one tab
+const createDefaultTerminalTabs = (): TerminalTabsState => {
+  const id = `tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  return {
+    tabs: [{ id, name: 'Terminal' }],
+    activeTabId: id,
+  }
+}
 
 // Default panel visibility for new sessions
 const DEFAULT_PANEL_VISIBILITY: PanelVisibility = {
@@ -105,6 +127,14 @@ interface SessionStore {
   // Agent monitoring actions
   updateAgentMonitor: (id: string, update: { status?: SessionStatus; lastMessage?: string; waitingType?: WaitingType }) => void
   markSessionRead: (id: string) => void
+  // Terminal tab actions
+  addTerminalTab: (sessionId: string, name?: string) => string
+  removeTerminalTab: (sessionId: string, tabId: string) => void
+  renameTerminalTab: (sessionId: string, tabId: string, name: string) => void
+  reorderTerminalTabs: (sessionId: string, tabs: TerminalTab[]) => void
+  setActiveTerminalTab: (sessionId: string, tabId: string) => void
+  closeOtherTerminalTabs: (sessionId: string, tabId: string) => void
+  closeTerminalTabsToRight: (sessionId: string, tabId: string) => void
 }
 
 const generateId = () => `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
@@ -170,6 +200,7 @@ const debouncedSave = async (
         fileViewerPosition: s.fileViewerPosition,
         layoutSizes: s.layoutSizes,
         explorerFilter: s.explorerFilter,
+        terminalTabs: s.terminalTabs,
       })),
       // Global state
       showSidebar: globalPanelVisibility[PANEL_IDS.SIDEBAR] ?? true,
@@ -222,6 +253,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           lastMessageTime: null,
           waitingType: null,
           isUnread: false,
+          // Terminal tabs
+          terminalTabs: sessionData.terminalTabs ?? createDefaultTerminalTabs(),
         }
         sessions.push(session)
       }
@@ -278,6 +311,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       lastMessageTime: null,
       waitingType: null,
       isUnread: false,
+      // Terminal tabs
+      terminalTabs: createDefaultTerminalTabs(),
     }
 
     const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
@@ -490,5 +525,148 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     )
     set({ sessions: updatedSessions })
     // Don't persist runtime monitoring state
+  },
+
+  // Terminal tab actions
+  addTerminalTab: (sessionId: string, name?: string) => {
+    const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
+    const tabId = `tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    const session = sessions.find((s) => s.id === sessionId)
+    const tabNumber = session ? session.terminalTabs.tabs.length + 1 : 1
+    const tabName = name || `Terminal ${tabNumber}`
+
+    const updatedSessions = sessions.map((s) => {
+      if (s.id !== sessionId) return s
+      return {
+        ...s,
+        terminalTabs: {
+          tabs: [...s.terminalTabs.tabs, { id: tabId, name: tabName }],
+          activeTabId: tabId,
+        },
+      }
+    })
+    set({ sessions: updatedSessions })
+    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
+    return tabId
+  },
+
+  removeTerminalTab: (sessionId: string, tabId: string) => {
+    const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
+    const updatedSessions = sessions.map((s) => {
+      if (s.id !== sessionId) return s
+      const tabIndex = s.terminalTabs.tabs.findIndex((t) => t.id === tabId)
+      const newTabs = s.terminalTabs.tabs.filter((t) => t.id !== tabId)
+
+      // Don't allow closing the last tab
+      if (newTabs.length === 0) return s
+
+      // If closing the active tab, select an adjacent one
+      let newActiveId = s.terminalTabs.activeTabId
+      if (s.terminalTabs.activeTabId === tabId) {
+        // Prefer the tab to the right, or the one to the left if closing the rightmost
+        const newIndex = Math.min(tabIndex, newTabs.length - 1)
+        newActiveId = newTabs[newIndex].id
+      }
+
+      return {
+        ...s,
+        terminalTabs: {
+          tabs: newTabs,
+          activeTabId: newActiveId,
+        },
+      }
+    })
+    set({ sessions: updatedSessions })
+    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
+  },
+
+  renameTerminalTab: (sessionId: string, tabId: string, name: string) => {
+    const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
+    const updatedSessions = sessions.map((s) => {
+      if (s.id !== sessionId) return s
+      return {
+        ...s,
+        terminalTabs: {
+          ...s.terminalTabs,
+          tabs: s.terminalTabs.tabs.map((t) =>
+            t.id === tabId ? { ...t, name } : t
+          ),
+        },
+      }
+    })
+    set({ sessions: updatedSessions })
+    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
+  },
+
+  reorderTerminalTabs: (sessionId: string, tabs: TerminalTab[]) => {
+    const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
+    const updatedSessions = sessions.map((s) => {
+      if (s.id !== sessionId) return s
+      return {
+        ...s,
+        terminalTabs: {
+          ...s.terminalTabs,
+          tabs,
+        },
+      }
+    })
+    set({ sessions: updatedSessions })
+    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
+  },
+
+  setActiveTerminalTab: (sessionId: string, tabId: string) => {
+    const { sessions } = get()
+    const updatedSessions = sessions.map((s) => {
+      if (s.id !== sessionId) return s
+      return {
+        ...s,
+        terminalTabs: {
+          ...s.terminalTabs,
+          activeTabId: tabId,
+        },
+      }
+    })
+    set({ sessions: updatedSessions })
+    // Don't persist active tab - it's runtime state
+  },
+
+  closeOtherTerminalTabs: (sessionId: string, tabId: string) => {
+    const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
+    const updatedSessions = sessions.map((s) => {
+      if (s.id !== sessionId) return s
+      const tab = s.terminalTabs.tabs.find((t) => t.id === tabId)
+      if (!tab) return s
+      return {
+        ...s,
+        terminalTabs: {
+          tabs: [tab],
+          activeTabId: tabId,
+        },
+      }
+    })
+    set({ sessions: updatedSessions })
+    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
+  },
+
+  closeTerminalTabsToRight: (sessionId: string, tabId: string) => {
+    const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
+    const updatedSessions = sessions.map((s) => {
+      if (s.id !== sessionId) return s
+      const tabIndex = s.terminalTabs.tabs.findIndex((t) => t.id === tabId)
+      if (tabIndex === -1) return s
+      const newTabs = s.terminalTabs.tabs.slice(0, tabIndex + 1)
+      // If active tab was to the right, select the clicked tab
+      const activeIndex = s.terminalTabs.tabs.findIndex((t) => t.id === s.terminalTabs.activeTabId)
+      const newActiveId = activeIndex > tabIndex ? tabId : s.terminalTabs.activeTabId
+      return {
+        ...s,
+        terminalTabs: {
+          tabs: newTabs,
+          activeTabId: newActiveId,
+        },
+      }
+    })
+    set({ sessions: updatedSessions })
+    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
   },
 }))

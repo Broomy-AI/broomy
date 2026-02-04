@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron'
 import { join } from 'path'
 import { homedir } from 'os'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, watch, FSWatcher, appendFileSync, openSync, closeSync } from 'fs'
@@ -59,10 +59,12 @@ function createWindow(): void {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  // Ensure window shows once ready
-  mainWindow.once('ready-to-show', () => {
-    mainWindow?.show()
-  })
+  // Ensure window shows once ready (but not in headless E2E mode)
+  if (!(isE2ETest && isHeadless)) {
+    mainWindow.once('ready-to-show', () => {
+      mainWindow?.show()
+    })
+  }
 
   // Log renderer errors
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
@@ -808,6 +810,31 @@ ipcMain.handle('fs:unwatch', async (_event, id: string) => {
     fileWatchers.delete(id)
   }
   return { success: true }
+})
+
+// Native context menu IPC handler
+ipcMain.handle('menu:popup', async (_event, items: Array<{ id: string; label: string; enabled?: boolean; type?: 'separator' }>) => {
+  return new Promise<string | null>((resolve) => {
+    const template = items.map((item) => {
+      if (item.type === 'separator') {
+        return { type: 'separator' as const }
+      }
+      return {
+        label: item.label,
+        enabled: item.enabled !== false,
+        click: () => resolve(item.id),
+      }
+    })
+
+    const menu = Menu.buildFromTemplate(template)
+    menu.popup({
+      window: mainWindow!,
+      callback: () => {
+        // Menu closed without selection
+        resolve(null)
+      },
+    })
+  })
 })
 
 // App lifecycle
