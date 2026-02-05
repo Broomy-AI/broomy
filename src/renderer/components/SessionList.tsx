@@ -118,7 +118,7 @@ export default function SessionList({
                 <span className={`text-sm truncate flex-1 text-text-primary ${
                   isUnread ? 'font-bold' : 'font-medium'
                 }`}>
-                  {session.name}
+                  {session.branch}
                 </span>
                 <button
                   onClick={(e) => handleDelete(e, session.id)}
@@ -142,7 +142,7 @@ export default function SessionList({
                 </button>
               </div>
               <div className="flex items-center gap-2 text-xs text-text-secondary">
-                <span className="truncate">{session.branch}</span>
+                <span className="truncate">{session.name}</span>
               </div>
               {/* Last message preview */}
               {session.lastMessage ? (
