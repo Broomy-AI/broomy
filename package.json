@@ -27,6 +27,13 @@
     "simple-git": "^3.22.0",
     "zustand": "^4.4.7"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild",
+      "node-pty"
+    ]
+  },
   "devDependencies": {
     "@playwright/test": "^1.58.1",
     "@types/node": "^20.10.0",

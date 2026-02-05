@@ -2,14 +2,20 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Setup
+
+```bash
+pnpm install         # Install dependencies (use pnpm, not npm)
+```
+
 ## Build Commands
 
 ```bash
-npm run dev          # Development with hot reload
-npm run build        # Build without packaging
-npm test             # Run E2E tests (headless)
-npm run test:headed  # Run E2E tests with visible window
-npm run dist         # Build and package for macOS
+pnpm dev             # Development with hot reload
+pnpm build           # Build without packaging
+pnpm test            # Run E2E tests (headless)
+pnpm test:headed     # Run E2E tests with visible window
+pnpm dist            # Build and package for macOS
 ```
 
 If you encounter "posix_spawnp failed" terminal errors, run: `npx @electron/rebuild`
