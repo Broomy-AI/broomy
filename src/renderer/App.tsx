@@ -9,9 +9,11 @@ import FileViewer from './components/FileViewer'
 import AgentSettings from './components/AgentSettings'
 import NewSessionDialog from './components/NewSessionDialog'
 import PanelPicker from './components/PanelPicker'
+import ProfileChip from './components/ProfileChip'
 import { useSessionStore, type Session, type SessionStatus, type LayoutSizes } from './store/sessions'
 import { useAgentStore } from './store/agents'
 import { useRepoStore } from './store/repos'
+import { useProfileStore } from './store/profiles'
 import { useErrorStore } from './store/errors'
 import { PanelProvider, PANEL_IDS } from './panels'
 import { terminalBufferRegistry } from './utils/terminalBufferRegistry'
@@ -55,7 +57,9 @@ function AppContent() {
 
   const { agents, loadAgents } = useAgentStore()
   const { loadRepos, checkGhAvailability } = useRepoStore()
+  const { currentProfileId, profiles, loadProfiles, switchProfile } = useProfileStore()
   const { addError } = useErrorStore()
+  const currentProfile = profiles.find((p) => p.id === currentProfileId)
 
   const [showNewSessionDialog, setShowNewSessionDialog] = useState(false)
   const [gitStatusBySession, setGitStatusBySession] = useState<Record<string, GitStatusResult>>({})
@@ -156,18 +160,26 @@ function AppContent() {
   const activeSessionGitStatusResult = activeSession ? (gitStatusBySession[activeSession.id] || null) : null
   const activeSessionGitStatus = activeSessionGitStatusResult?.files || []
 
-  // Load sessions, agents, and repos on mount
+  // Load profiles, then sessions/agents/repos for the current profile
   useEffect(() => {
-    loadSessions()
-    loadAgents()
-    loadRepos()
-    checkGhAvailability()
-  }, [loadSessions, loadAgents, loadRepos, checkGhAvailability])
+    loadProfiles().then(() => {
+      loadSessions(currentProfileId)
+      loadAgents(currentProfileId)
+      loadRepos(currentProfileId)
+      checkGhAvailability()
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Update window title to show active session name
+  // Handle profile switching: open the profile in a new window
+  const handleSwitchProfile = useCallback(async (profileId: string) => {
+    await switchProfile(profileId)
+  }, [switchProfile])
+
+  // Update window title to show active session name and profile
   useEffect(() => {
-    document.title = activeSession ? `${activeSession.name} — Broomer` : 'Broomer'
-  }, [activeSession?.name, activeSession?.id])
+    const profileLabel = currentProfile && profiles.length > 1 ? ` [${currentProfile.name}]` : ''
+    document.title = activeSession ? `${activeSession.name}${profileLabel} — Broomer` : `Broomer${profileLabel}`
+  }, [activeSession?.name, activeSession?.id, currentProfile?.name, profiles.length])
 
   // Mark session as read when it becomes active, and focus agent terminal
   useEffect(() => {
@@ -421,6 +433,7 @@ function AppContent() {
         onLayoutSizeChange={handleLayoutSizeChange}
         errorMessage={activeSession && !activeDirectoryExists ? `Folder not found: ${activeSession.directory}` : null}
         title={activeSession ? activeSession.name : undefined}
+        profileChip={<ProfileChip onSwitchProfile={handleSwitchProfile} />}
         onTogglePanel={handleTogglePanel}
         onToggleGlobalPanel={toggleGlobalPanel}
         onOpenPanelPicker={() => setShowPanelPicker(true)}

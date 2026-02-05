@@ -108,7 +108,7 @@ interface SessionStore {
   globalPanelVisibility: PanelVisibility
 
   // Actions
-  loadSessions: () => Promise<void>
+  loadSessions: (profileId?: string) => Promise<void>
   addSession: (directory: string, agentId: string | null, extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; name?: string }) => Promise<void>
   removeSession: (id: string) => Promise<void>
   setActiveSession: (id: string | null) => void
@@ -180,6 +180,9 @@ function createPanelVisibilityFromLegacy(data: {
   }
 }
 
+// Current profile ID for saves - set by loadSessions
+let currentProfileId: string | undefined
+
 // Debounced save to avoid too many writes during dragging
 let saveTimeout: ReturnType<typeof setTimeout> | null = null
 const debouncedSave = async (
@@ -190,8 +193,9 @@ const debouncedSave = async (
 ) => {
   if (saveTimeout) clearTimeout(saveTimeout)
   saveTimeout = setTimeout(async () => {
-    const config = await window.config.load()
+    const config = await window.config.load(currentProfileId)
     await window.config.save({
+      profileId: currentProfileId,
       agents: config.agents,
       sessions: sessions.map((s) => ({
         id: s.id,
@@ -235,9 +239,12 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   toolbarPanels: [...DEFAULT_TOOLBAR_PANELS],
   globalPanelVisibility: { ...DEFAULT_GLOBAL_PANEL_VISIBILITY },
 
-  loadSessions: async () => {
+  loadSessions: async (profileId?: string) => {
+    if (profileId !== undefined) {
+      currentProfileId = profileId
+    }
     try {
-      const config = await window.config.load()
+      const config = await window.config.load(currentProfileId)
       const sessions: Session[] = []
 
       for (const sessionData of config.sessions) {

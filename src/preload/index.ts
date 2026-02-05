@@ -137,8 +137,8 @@ export type GhApi = {
 }
 
 export type ReposApi = {
-  getInitScript: (repoId: string) => Promise<string | null>
-  saveInitScript: (repoId: string, script: string) => Promise<{ success: boolean; error?: string }>
+  getInitScript: (repoId: string, profileId?: string) => Promise<string | null>
+  saveInitScript: (repoId: string, script: string, profileId?: string) => Promise<{ success: boolean; error?: string }>
 }
 
 export type ShellApi = {
@@ -195,11 +195,30 @@ export type ConfigData = {
   toolbarPanels?: string[]
   repos?: ManagedRepo[]
   defaultCloneDir?: string
+  profileId?: string
 }
 
 export type ConfigApi = {
-  load: () => Promise<ConfigData>
+  load: (profileId?: string) => Promise<ConfigData>
   save: (config: ConfigData) => Promise<{ success: boolean; error?: string }>
+}
+
+export type ProfileData = {
+  id: string
+  name: string
+  color: string
+}
+
+export type ProfilesData = {
+  profiles: ProfileData[]
+  lastProfileId: string
+}
+
+export type ProfilesApi = {
+  list: () => Promise<ProfilesData>
+  save: (data: ProfilesData) => Promise<{ success: boolean; error?: string }>
+  openWindow: (profileId: string) => Promise<{ success: boolean; alreadyOpen: boolean }>
+  getOpenProfiles: () => Promise<string[]>
 }
 
 const ptyApi: PtyApi = {
@@ -278,8 +297,8 @@ const ghApi: GhApi = {
 }
 
 const reposApi: ReposApi = {
-  getInitScript: (repoId) => ipcRenderer.invoke('repos:getInitScript', repoId),
-  saveInitScript: (repoId, script) => ipcRenderer.invoke('repos:saveInitScript', repoId, script),
+  getInitScript: (repoId, profileId?) => ipcRenderer.invoke('repos:getInitScript', repoId, profileId),
+  saveInitScript: (repoId, script, profileId?) => ipcRenderer.invoke('repos:saveInitScript', repoId, script, profileId),
 }
 
 const shellApi: ShellApi = {
@@ -287,8 +306,15 @@ const shellApi: ShellApi = {
 }
 
 const configApi: ConfigApi = {
-  load: () => ipcRenderer.invoke('config:load'),
+  load: (profileId?) => ipcRenderer.invoke('config:load', profileId),
   save: (config) => ipcRenderer.invoke('config:save', config),
+}
+
+const profilesApi: ProfilesApi = {
+  list: () => ipcRenderer.invoke('profiles:list'),
+  save: (data) => ipcRenderer.invoke('profiles:save', data),
+  openWindow: (profileId) => ipcRenderer.invoke('profiles:openWindow', profileId),
+  getOpenProfiles: () => ipcRenderer.invoke('profiles:getOpenProfiles'),
 }
 
 export type AppApi = {
@@ -328,6 +354,7 @@ contextBridge.exposeInMainWorld('menu', menuApi)
 contextBridge.exposeInMainWorld('gh', ghApi)
 contextBridge.exposeInMainWorld('repos', reposApi)
 contextBridge.exposeInMainWorld('shell', shellApi)
+contextBridge.exposeInMainWorld('profiles', profilesApi)
 
 declare global {
   interface Window {
@@ -342,5 +369,6 @@ declare global {
     gh: GhApi
     repos: ReposApi
     shell: ShellApi
+    profiles: ProfilesApi
   }
 }

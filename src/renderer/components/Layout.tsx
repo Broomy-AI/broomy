@@ -19,6 +19,7 @@ interface LayoutProps {
   layoutSizes: LayoutSizes
   errorMessage?: string | null
   title?: string
+  profileChip?: ReactNode
   // Callbacks
   onSidebarWidthChange: (width: number) => void
   onLayoutSizeChange: (key: keyof LayoutSizes, value: number) => void
@@ -44,6 +45,7 @@ export default function Layout({
   layoutSizes,
   errorMessage,
   title,
+  profileChip,
   onSidebarWidthChange,
   onLayoutSizeChange,
   onTogglePanel,
@@ -358,13 +360,17 @@ export default function Layout({
         className="h-10 flex items-center justify-between px-4 bg-bg-secondary border-b border-border"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
-        <div className="flex items-center gap-2 pl-16">
-          <span className="text-sm font-medium text-text-primary">{title || 'Broomer'}</span>
+        <div
+          className="flex items-center gap-2 pl-16"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >
+          <span className="text-sm font-medium text-text-primary" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>{title || 'Broomer'}</span>
           {isDev && (
             <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
               DEV
             </span>
           )}
+          {profileChip}
         </div>
         <div
           className="flex items-center gap-2"

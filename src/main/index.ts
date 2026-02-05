@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron'
 import { join } from 'path'
 import { homedir } from 'os'
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, watch, FSWatcher, appendFileSync, chmodSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, watch, FSWatcher, appendFileSync, chmodSync, copyFileSync } from 'fs'
 import * as pty from 'node-pty'
 import simpleGit from 'simple-git'
 import { exec, execSync } from 'child_process'
@@ -22,10 +22,12 @@ const E2E_MOCK_SHELL = process.env.E2E_MOCK_SHELL
 const ptyProcesses = new Map<string, pty.IPty>()
 // File watchers map
 const fileWatchers = new Map<string, FSWatcher>()
+// Track windows by profileId
+const profileWindows = new Map<string, BrowserWindow>()
 let mainWindow: BrowserWindow | null = null
 
-function createWindow(): void {
-  mainWindow = new BrowserWindow({
+function createWindow(profileId?: string): BrowserWindow {
+  const window = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 800,
@@ -42,32 +44,50 @@ function createWindow(): void {
     },
   })
 
-  // Load the renderer
+  // Track the first window as mainWindow for backwards compat
+  if (!mainWindow) {
+    mainWindow = window
+  }
+
+  // Track window by profileId
+  if (profileId) {
+    profileWindows.set(profileId, window)
+  }
+
+  // Load the renderer with profileId as query parameter
+  const profileParam = profileId ? `?profile=${encodeURIComponent(profileId)}` : ''
   if (isDev && process.env.ELECTRON_RENDERER_URL) {
-    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
-    mainWindow.webContents.openDevTools()
+    window.loadURL(`${process.env.ELECTRON_RENDERER_URL}${profileParam}`)
+    window.webContents.openDevTools()
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    window.loadFile(join(__dirname, '../renderer/index.html'), {
+      search: profileId ? `profile=${encodeURIComponent(profileId)}` : undefined,
+    })
   }
 
   // Ensure window shows once ready (but not in headless E2E mode)
   if (!(isE2ETest && isHeadless)) {
-    mainWindow.once('ready-to-show', () => {
-      mainWindow?.show()
+    window.once('ready-to-show', () => {
+      window?.show()
     })
   }
 
   // Log renderer errors
-  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+  window.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
     console.error('Failed to load:', errorCode, errorDescription)
   })
 
-  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+  window.webContents.on('render-process-gone', (_event, details) => {
     console.error('Render process gone:', details)
   })
 
-  // Kill all PTY processes and file watchers when window is closing
-  mainWindow.on('close', () => {
+  // Cleanup when window is closing
+  window.on('close', () => {
+    // Remove from profileWindows tracking
+    if (profileId) {
+      profileWindows.delete(profileId)
+    }
+    // Kill PTY processes belonging to this window
     for (const [id, ptyProcess] of ptyProcesses) {
       ptyProcess.kill()
       ptyProcesses.delete(id)
@@ -76,11 +96,21 @@ function createWindow(): void {
       watcher.close()
       fileWatchers.delete(id)
     }
+    if (window === mainWindow) {
+      mainWindow = null
+    }
   })
+
+  return window
 }
+
+// Track which window owns each PTY
+const ptyOwnerWindows = new Map<string, BrowserWindow>()
 
 // PTY IPC handlers
 ipcMain.handle('pty:create', (_event, options: { id: string; cwd: string; command?: string; sessionId?: string; env?: Record<string, string> }) => {
+  // Find the sender window
+  const senderWindow = BrowserWindow.fromWebContents(_event.sender)
   // In E2E test mode, use a controlled shell that won't run real commands
   let shell: string
   let shellArgs: string[] = []
@@ -154,19 +184,25 @@ ipcMain.handle('pty:create', (_event, options: { id: string; cwd: string; comman
   })
 
   ptyProcesses.set(options.id, ptyProcess)
+  if (senderWindow) {
+    ptyOwnerWindows.set(options.id, senderWindow)
+  }
 
-  // Forward data to renderer (check window is not destroyed)
+  // Forward data to the window that created this PTY
   ptyProcess.onData((data) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(`pty:data:${options.id}`, data)
+    const ownerWindow = ptyOwnerWindows.get(options.id) || mainWindow
+    if (ownerWindow && !ownerWindow.isDestroyed()) {
+      ownerWindow.webContents.send(`pty:data:${options.id}`, data)
     }
   })
 
   ptyProcess.onExit(({ exitCode }) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(`pty:exit:${options.id}`, exitCode)
+    const ownerWindow = ptyOwnerWindows.get(options.id) || mainWindow
+    if (ownerWindow && !ownerWindow.isDestroyed()) {
+      ownerWindow.webContents.send(`pty:exit:${options.id}`, exitCode)
     }
     ptyProcesses.delete(options.id)
+    ptyOwnerWindows.delete(options.id)
   })
 
   // If a command was specified (or in E2E test mode), run it after shell starts
@@ -203,13 +239,71 @@ ipcMain.handle('pty:kill', (_event, id: string) => {
 
 // Config directory and file - use different config for dev mode
 const CONFIG_DIR = join(homedir(), '.broomer')
-const CONFIG_FILE = join(CONFIG_DIR, isDev ? 'config.dev.json' : 'config.json')
+const PROFILES_DIR = join(CONFIG_DIR, 'profiles')
+const PROFILES_FILE = join(CONFIG_DIR, 'profiles.json')
+const CONFIG_FILE_NAME = isDev ? 'config.dev.json' : 'config.json'
+// Legacy config file (pre-profiles)
+const LEGACY_CONFIG_FILE = join(CONFIG_DIR, CONFIG_FILE_NAME)
 
 // Default agents
 const DEFAULT_AGENTS = [
   { id: 'claude', name: 'Claude Code', command: 'claude' },
   { id: 'aider', name: 'Aider', command: 'aider' },
 ]
+
+// Default profiles
+const DEFAULT_PROFILES = {
+  profiles: [{ id: 'default', name: 'Default', color: '#3b82f6' }],
+  lastProfileId: 'default',
+}
+
+// Resolve config file path for a profile
+function getProfileConfigFile(profileId: string): string {
+  return join(PROFILES_DIR, profileId, CONFIG_FILE_NAME)
+}
+
+// Resolve init-scripts dir for a profile
+function getProfileInitScriptsDir(profileId: string): string {
+  return join(PROFILES_DIR, profileId, 'init-scripts')
+}
+
+// Migrate legacy config to default profile (one-time migration)
+function migrateToProfiles(): void {
+  if (isE2ETest) return
+
+  // Already migrated if profiles.json exists
+  if (existsSync(PROFILES_FILE)) return
+
+  // Create profiles directory
+  const defaultProfileDir = join(PROFILES_DIR, 'default')
+  mkdirSync(defaultProfileDir, { recursive: true })
+
+  // Move legacy config if it exists
+  if (existsSync(LEGACY_CONFIG_FILE)) {
+    copyFileSync(LEGACY_CONFIG_FILE, join(defaultProfileDir, CONFIG_FILE_NAME))
+  }
+
+  // Move legacy init-scripts if they exist
+  const legacyInitScriptsDir = join(CONFIG_DIR, 'init-scripts')
+  if (existsSync(legacyInitScriptsDir)) {
+    const profileInitScriptsDir = join(defaultProfileDir, 'init-scripts')
+    mkdirSync(profileInitScriptsDir, { recursive: true })
+    try {
+      const scripts = readdirSync(legacyInitScriptsDir)
+      for (const script of scripts) {
+        copyFileSync(join(legacyInitScriptsDir, script), join(profileInitScriptsDir, script))
+      }
+    } catch {
+      // ignore migration errors for init scripts
+    }
+  }
+
+  // Write profiles.json
+  writeFileSync(PROFILES_FILE, JSON.stringify(DEFAULT_PROFILES, null, 2))
+}
+
+// Run migration at startup
+migrateToProfiles()
 
 // Demo sessions for E2E tests (each needs a unique directory for branch tracking)
 const E2E_DEMO_SESSIONS = [
@@ -232,21 +326,72 @@ const E2E_DEMO_REPOS = [
   { id: 'repo-1', name: 'demo-project', remoteUrl: 'git@github.com:user/demo-project.git', rootDir: '/tmp/e2e-repos/demo-project', defaultBranch: 'main' },
 ]
 
-// Init scripts directory
-const INIT_SCRIPTS_DIR = join(homedir(), '.broomer', 'init-scripts')
+// Profiles IPC handlers
+ipcMain.handle('profiles:list', async () => {
+  if (isE2ETest) {
+    return DEFAULT_PROFILES
+  }
 
-// Config IPC handlers
-ipcMain.handle('config:load', async () => {
+  try {
+    if (!existsSync(PROFILES_FILE)) {
+      return DEFAULT_PROFILES
+    }
+    const data = readFileSync(PROFILES_FILE, 'utf-8')
+    return JSON.parse(data)
+  } catch {
+    return DEFAULT_PROFILES
+  }
+})
+
+ipcMain.handle('profiles:save', async (_event, data: { profiles: Array<{ id: string; name: string; color: string }>; lastProfileId: string }) => {
+  if (isE2ETest) {
+    return { success: true }
+  }
+
+  try {
+    mkdirSync(CONFIG_DIR, { recursive: true })
+    writeFileSync(PROFILES_FILE, JSON.stringify(data, null, 2))
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('profiles:openWindow', async (_event, profileId: string) => {
+  // Check if a window is already open for this profile
+  const existing = profileWindows.get(profileId)
+  if (existing && !existing.isDestroyed()) {
+    existing.focus()
+    return { success: true, alreadyOpen: true }
+  }
+
+  createWindow(profileId)
+  return { success: true, alreadyOpen: false }
+})
+
+ipcMain.handle('profiles:getOpenProfiles', async () => {
+  const openProfiles: string[] = []
+  for (const [profileId, window] of profileWindows) {
+    if (!window.isDestroyed()) {
+      openProfiles.push(profileId)
+    }
+  }
+  return openProfiles
+})
+
+// Config IPC handlers - now profile-aware
+ipcMain.handle('config:load', async (_event, profileId?: string) => {
   // In E2E test mode, return demo sessions for consistent testing
   if (isE2ETest) {
     return { agents: DEFAULT_AGENTS, sessions: E2E_DEMO_SESSIONS, repos: E2E_DEMO_REPOS, defaultCloneDir: '/tmp/e2e-repos' }
   }
 
+  const configFile = profileId ? getProfileConfigFile(profileId) : LEGACY_CONFIG_FILE
   try {
-    if (!existsSync(CONFIG_FILE)) {
+    if (!existsSync(configFile)) {
       return { agents: DEFAULT_AGENTS, sessions: [] }
     }
-    const data = readFileSync(CONFIG_FILE, 'utf-8')
+    const data = readFileSync(configFile, 'utf-8')
     const config = JSON.parse(data)
     // Ensure agents array exists with defaults
     if (!config.agents || config.agents.length === 0) {
@@ -258,21 +403,24 @@ ipcMain.handle('config:load', async () => {
   }
 })
 
-ipcMain.handle('config:save', async (_event, config: { agents?: unknown[]; sessions: unknown[]; repos?: unknown[]; defaultCloneDir?: string; showSidebar?: boolean; sidebarWidth?: number; toolbarPanels?: string[] }) => {
+ipcMain.handle('config:save', async (_event, config: { profileId?: string; agents?: unknown[]; sessions: unknown[]; repos?: unknown[]; defaultCloneDir?: string; showSidebar?: boolean; sidebarWidth?: number; toolbarPanels?: string[] }) => {
   // Don't save config during E2E tests to avoid polluting real config
   if (isE2ETest) {
     return { success: true }
   }
 
+  const configFile = config.profileId ? getProfileConfigFile(config.profileId) : LEGACY_CONFIG_FILE
+  const configDir = config.profileId ? join(PROFILES_DIR, config.profileId) : CONFIG_DIR
+
   try {
-    if (!existsSync(CONFIG_DIR)) {
-      mkdirSync(CONFIG_DIR, { recursive: true })
+    if (!existsSync(configDir)) {
+      mkdirSync(configDir, { recursive: true })
     }
     // Read existing config to preserve fields we don't explicitly set
     let existingConfig: Record<string, unknown> = {}
-    if (existsSync(CONFIG_FILE)) {
+    if (existsSync(configFile)) {
       try {
-        existingConfig = JSON.parse(readFileSync(CONFIG_FILE, 'utf-8'))
+        existingConfig = JSON.parse(readFileSync(configFile, 'utf-8'))
       } catch {
         // ignore
       }
@@ -288,7 +436,7 @@ ipcMain.handle('config:save', async (_event, config: { agents?: unknown[]; sessi
     if (config.showSidebar !== undefined) configToSave.showSidebar = config.showSidebar
     if (config.sidebarWidth !== undefined) configToSave.sidebarWidth = config.sidebarWidth
     if (config.toolbarPanels !== undefined) configToSave.toolbarPanels = config.toolbarPanels
-    writeFileSync(CONFIG_FILE, JSON.stringify(configToSave, null, 2))
+    writeFileSync(configFile, JSON.stringify(configToSave, null, 2))
     return { success: true }
   } catch (error) {
     return { success: false, error: String(error) }
@@ -1268,14 +1416,15 @@ ipcMain.handle('gh:replyToComment', async (_event, repoDir: string, prNumber: nu
   }
 })
 
-// Init script handlers
-ipcMain.handle('repos:getInitScript', async (_event, repoId: string) => {
+// Init script handlers - profile-aware
+ipcMain.handle('repos:getInitScript', async (_event, repoId: string, profileId?: string) => {
   if (isE2ETest) {
     return '#!/bin/bash\necho "init script for E2E"'
   }
 
   try {
-    const scriptPath = join(INIT_SCRIPTS_DIR, `${repoId}.sh`)
+    const initScriptsDir = profileId ? getProfileInitScriptsDir(profileId) : join(CONFIG_DIR, 'init-scripts')
+    const scriptPath = join(initScriptsDir, `${repoId}.sh`)
     if (!existsSync(scriptPath)) return null
     return readFileSync(scriptPath, 'utf-8')
   } catch {
@@ -1283,16 +1432,17 @@ ipcMain.handle('repos:getInitScript', async (_event, repoId: string) => {
   }
 })
 
-ipcMain.handle('repos:saveInitScript', async (_event, repoId: string, script: string) => {
+ipcMain.handle('repos:saveInitScript', async (_event, repoId: string, script: string, profileId?: string) => {
   if (isE2ETest) {
     return { success: true }
   }
 
   try {
-    if (!existsSync(INIT_SCRIPTS_DIR)) {
-      mkdirSync(INIT_SCRIPTS_DIR, { recursive: true })
+    const initScriptsDir = profileId ? getProfileInitScriptsDir(profileId) : join(CONFIG_DIR, 'init-scripts')
+    if (!existsSync(initScriptsDir)) {
+      mkdirSync(initScriptsDir, { recursive: true })
     }
-    const scriptPath = join(INIT_SCRIPTS_DIR, `${repoId}.sh`)
+    const scriptPath = join(initScriptsDir, `${repoId}.sh`)
     writeFileSync(scriptPath, script, 'utf-8')
     chmodSync(scriptPath, 0o755)
     return { success: true }
@@ -1321,8 +1471,9 @@ ipcMain.handle('shell:exec', async (_event, command: string, cwd: string) => {
 })
 
 // Dialog IPC handlers
-ipcMain.handle('dialog:openFolder', async () => {
-  const result = await dialog.showOpenDialog(mainWindow!, {
+ipcMain.handle('dialog:openFolder', async (_event) => {
+  const senderWindow = BrowserWindow.fromWebContents(_event.sender) || mainWindow
+  const result = await dialog.showOpenDialog(senderWindow!, {
     properties: ['openDirectory'],
     title: 'Select a Git Repository',
   })
@@ -1332,6 +1483,9 @@ ipcMain.handle('dialog:openFolder', async () => {
   return result.filePaths[0]
 })
 
+// Track which window owns each file watcher
+const watcherOwnerWindows = new Map<string, BrowserWindow>()
+
 // File watching IPC handlers
 ipcMain.handle('fs:watch', async (_event, id: string, dirPath: string) => {
   // Don't watch in E2E test mode
@@ -1339,10 +1493,16 @@ ipcMain.handle('fs:watch', async (_event, id: string, dirPath: string) => {
     return { success: true }
   }
 
+  const senderWindow = BrowserWindow.fromWebContents(_event.sender)
+
   // Stop existing watcher for this id if any
   const existingWatcher = fileWatchers.get(id)
   if (existingWatcher) {
     existingWatcher.close()
+  }
+
+  if (senderWindow) {
+    watcherOwnerWindows.set(id, senderWindow)
   }
 
   try {
@@ -1351,8 +1511,9 @@ ipcMain.handle('fs:watch', async (_event, id: string, dirPath: string) => {
       // Skip .git directory changes
       if (filename && filename.startsWith('.git')) return
 
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(`fs:change:${id}`, { eventType, filename })
+      const ownerWindow = watcherOwnerWindows.get(id) || mainWindow
+      if (ownerWindow && !ownerWindow.isDestroyed()) {
+        ownerWindow.webContents.send(`fs:change:${id}`, { eventType, filename })
       }
     })
 
@@ -1381,6 +1542,7 @@ ipcMain.handle('fs:unwatch', async (_event, id: string) => {
 
 // Native context menu IPC handler
 ipcMain.handle('menu:popup', async (_event, items: Array<{ id: string; label: string; enabled?: boolean; type?: 'separator' }>) => {
+  const senderWindow = BrowserWindow.fromWebContents(_event.sender) || mainWindow
   return new Promise<string | null>((resolve) => {
     const template = items.map((item) => {
       if (item.type === 'separator') {
@@ -1395,7 +1557,7 @@ ipcMain.handle('menu:popup', async (_event, items: Array<{ id: string; label: st
 
     const menu = Menu.buildFromTemplate(template)
     menu.popup({
-      window: mainWindow!,
+      window: senderWindow!,
       callback: () => {
         // Menu closed without selection
         resolve(null)
@@ -1406,11 +1568,26 @@ ipcMain.handle('menu:popup', async (_event, items: Array<{ id: string; label: st
 
 // App lifecycle
 app.whenReady().then(() => {
-  createWindow()
+  // Determine the initial profile to open
+  let initialProfileId = 'default'
+  if (!isE2ETest) {
+    try {
+      if (existsSync(PROFILES_FILE)) {
+        const profilesData = JSON.parse(readFileSync(PROFILES_FILE, 'utf-8'))
+        if (profilesData.lastProfileId) {
+          initialProfileId = profilesData.lastProfileId
+        }
+      }
+    } catch {
+      // ignore, use default
+    }
+  }
+
+  createWindow(initialProfileId)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
+      createWindow(initialProfileId)
     }
   })
 })

@@ -6,9 +6,10 @@ export type AgentConfig = AgentData
 interface AgentStore {
   agents: AgentConfig[]
   isLoading: boolean
+  profileId?: string
 
   // Actions
-  loadAgents: () => Promise<void>
+  loadAgents: (profileId?: string) => Promise<void>
   addAgent: (agent: Omit<AgentConfig, 'id'>) => Promise<void>
   updateAgent: (id: string, updates: Partial<Omit<AgentConfig, 'id'>>) => Promise<void>
   removeAgent: (id: string) => Promise<void>
@@ -20,10 +21,14 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
   agents: [],
   isLoading: true,
 
-  loadAgents: async () => {
+  loadAgents: async (profileId?: string) => {
+    if (profileId !== undefined) {
+      set({ profileId })
+    }
+    const pid = profileId ?? get().profileId
     try {
-      const config = await window.config.load()
-      set({ agents: config.agents || [], isLoading: false })
+      const config = await window.config.load(pid)
+      set({ agents: config.agents || [], isLoading: false, profileId: pid })
     } catch {
       set({ agents: [], isLoading: false })
     }
@@ -35,42 +40,45 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
       ...agentData,
     }
 
-    const { agents } = get()
+    const { agents, profileId } = get()
     const updatedAgents = [...agents, agent]
     set({ agents: updatedAgents })
 
     // Persist to config
-    const config = await window.config.load()
+    const config = await window.config.load(profileId)
     await window.config.save({
       ...config,
+      profileId,
       agents: updatedAgents,
     })
   },
 
   updateAgent: async (id, updates) => {
-    const { agents } = get()
+    const { agents, profileId } = get()
     const updatedAgents = agents.map((a) =>
       a.id === id ? { ...a, ...updates } : a
     )
     set({ agents: updatedAgents })
 
     // Persist to config
-    const config = await window.config.load()
+    const config = await window.config.load(profileId)
     await window.config.save({
       ...config,
+      profileId,
       agents: updatedAgents,
     })
   },
 
   removeAgent: async (id) => {
-    const { agents } = get()
+    const { agents, profileId } = get()
     const updatedAgents = agents.filter((a) => a.id !== id)
     set({ agents: updatedAgents })
 
     // Persist to config
-    const config = await window.config.load()
+    const config = await window.config.load(profileId)
     await window.config.save({
       ...config,
+      profileId,
       agents: updatedAgents,
     })
   },
