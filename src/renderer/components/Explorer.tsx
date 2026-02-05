@@ -298,7 +298,8 @@ export default function Explorer({
     fetchPrInfo()
 
     return () => { cancelled = true }
-  }, [filter, directory, syncStatus]) // Re-fetch when git status changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, directory, syncStatus?.ahead, syncStatus?.behind]) // Re-fetch when commits ahead/behind change
 
   // Fetch PR comments when comments view is active
   useEffect(() => {
