@@ -66,9 +66,11 @@ export default function SessionList({
   onNewSession,
   onDeleteSession,
 }: SessionListProps) {
-  const handleDelete = (e: React.MouseEvent, sessionId: string) => {
+  const handleDelete = (e: React.MouseEvent, session: Session) => {
     e.stopPropagation()
-    onDeleteSession(sessionId)
+    if (window.confirm(`Close session "${session.name}"?`)) {
+      onDeleteSession(session.id)
+    }
   }
 
   return (
@@ -105,7 +107,9 @@ export default function SessionList({
                   const prev = (e.currentTarget as HTMLElement).previousElementSibling as HTMLElement
                   if (prev?.tabIndex >= 0) prev.focus()
                 } else if (e.key === 'Delete' || e.key === 'Backspace') {
-                  onDeleteSession(session.id)
+                  if (window.confirm(`Close session "${session.name}"?`)) {
+                    onDeleteSession(session.id)
+                  }
                 }
               }}
               className={`group relative w-full text-left p-3 rounded mb-1 transition-all cursor-pointer outline-none focus:ring-1 focus:ring-accent/50 ${
@@ -121,7 +125,7 @@ export default function SessionList({
                   {session.branch}
                 </span>
                 <button
-                  onClick={(e) => handleDelete(e, session.id)}
+                  onClick={(e) => handleDelete(e, session)}
                   className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-text-secondary hover:text-status-error transition-opacity p-1"
                   title="Delete session"
                 >

@@ -40,6 +40,23 @@ body {
   background: #4a4a4a;
 }
 
+/* Subtle focus indicator for panels */
+[data-panel-id] {
+  position: relative;
+}
+[data-panel-id]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid transparent;
+  pointer-events: none;
+  z-index: 20;
+  transition: border-color 0.15s ease;
+}
+[data-panel-id]:focus-within::after {
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
 /* Draggable region for window */
 .titlebar-drag-region {
   -webkit-app-region: drag;

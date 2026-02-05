@@ -871,6 +871,20 @@ ipcMain.handle('git:remoteUrl', async (_event, repoPath: string) => {
   }
 })
 
+ipcMain.handle('git:headCommit', async (_event, repoPath: string) => {
+  if (isE2ETest) {
+    return 'abc1234567890'
+  }
+
+  try {
+    const git = simpleGit(expandHomePath(repoPath))
+    const log = await git.log({ maxCount: 1 })
+    return log.latest?.hash || null
+  } catch {
+    return null
+  }
+})
+
 ipcMain.handle('git:branchChanges', async (_event, repoPath: string, baseBranch?: string) => {
   if (isE2ETest) {
     return {
@@ -989,6 +1003,232 @@ ipcMain.handle('gh:repoSlug', async (_event, repoDir: string) => {
     return result.trim() || null
   } catch {
     return null
+  }
+})
+
+ipcMain.handle('gh:prStatus', async (_event, repoDir: string) => {
+  if (isE2ETest) {
+    // Return mock PR for feature branches, null for main
+    const branch = E2E_MOCK_BRANCHES[repoDir]
+    if (branch && branch !== 'main') {
+      return {
+        number: 123,
+        title: 'Test PR',
+        state: 'OPEN',
+        url: 'https://github.com/user/demo-project/pull/123',
+        headRefName: branch,
+        baseRefName: 'main',
+      }
+    }
+    return null
+  }
+
+  try {
+    const result = execSync('gh pr view --json number,title,state,url,headRefName,baseRefName 2>/dev/null', {
+      cwd: expandHomePath(repoDir),
+      encoding: 'utf-8',
+      timeout: 15000,
+    })
+    const pr = JSON.parse(result)
+    return {
+      number: pr.number,
+      title: pr.title,
+      state: pr.state,
+      url: pr.url,
+      headRefName: pr.headRefName,
+      baseRefName: pr.baseRefName,
+    }
+  } catch {
+    // No PR exists for this branch
+    return null
+  }
+})
+
+ipcMain.handle('gh:hasWriteAccess', async (_event, repoDir: string) => {
+  if (isE2ETest) {
+    return true
+  }
+
+  try {
+    // Get repo info including viewer permissions
+    const result = execSync('gh repo view --json viewerPermission --jq .viewerPermission', {
+      cwd: expandHomePath(repoDir),
+      encoding: 'utf-8',
+      timeout: 15000,
+    })
+    const permission = result.trim()
+    // ADMIN, MAINTAIN, and WRITE permissions allow pushing to main
+    return ['ADMIN', 'MAINTAIN', 'WRITE'].includes(permission)
+  } catch {
+    return false
+  }
+})
+
+ipcMain.handle('gh:mergeBranchToMain', async (_event, repoDir: string) => {
+  if (isE2ETest) {
+    return { success: true }
+  }
+
+  try {
+    const git = simpleGit(expandHomePath(repoDir))
+
+    // Get current branch name
+    const status = await git.status()
+    const currentBranch = status.current
+    if (!currentBranch) {
+      return { success: false, error: 'Could not determine current branch' }
+    }
+
+    // Get the default branch
+    let defaultBranch = 'main'
+    try {
+      const ref = await git.raw(['symbolic-ref', 'refs/remotes/origin/HEAD'])
+      defaultBranch = ref.trim().replace('refs/remotes/origin/', '')
+    } catch {
+      // Try to detect main vs master
+      try {
+        await git.raw(['rev-parse', '--verify', 'origin/main'])
+        defaultBranch = 'main'
+      } catch {
+        defaultBranch = 'master'
+      }
+    }
+
+    // Push current branch changes to remote first (if there are any)
+    await git.push()
+
+    // Checkout main, pull latest, fast-forward merge the branch, and push
+    await git.checkout(defaultBranch)
+    await git.pull()
+    await git.merge([currentBranch, '--ff-only'])
+    await git.push()
+
+    // Switch back to the original branch
+    await git.checkout(currentBranch)
+
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('gh:getPrCreateUrl', async (_event, repoDir: string) => {
+  if (isE2ETest) {
+    return 'https://github.com/user/demo-project/compare/main...feature/auth?expand=1'
+  }
+
+  try {
+    const git = simpleGit(expandHomePath(repoDir))
+
+    // Get current branch
+    const status = await git.status()
+    const currentBranch = status.current
+    if (!currentBranch) return null
+
+    // Get repo slug
+    const repoSlug = execSync('gh repo view --json nameWithOwner --jq .nameWithOwner', {
+      cwd: expandHomePath(repoDir),
+      encoding: 'utf-8',
+      timeout: 15000,
+    }).trim()
+
+    if (!repoSlug) return null
+
+    // Get default branch
+    let defaultBranch = 'main'
+    try {
+      const ref = await git.raw(['symbolic-ref', 'refs/remotes/origin/HEAD'])
+      defaultBranch = ref.trim().replace('refs/remotes/origin/', '')
+    } catch {
+      try {
+        await git.raw(['rev-parse', '--verify', 'origin/main'])
+        defaultBranch = 'main'
+      } catch {
+        defaultBranch = 'master'
+      }
+    }
+
+    return `https://github.com/${repoSlug}/compare/${defaultBranch}...${currentBranch}?expand=1`
+  } catch {
+    return null
+  }
+})
+
+ipcMain.handle('gh:prComments', async (_event, repoDir: string, prNumber: number) => {
+  if (isE2ETest) {
+    return [
+      {
+        id: 1,
+        body: 'This looks good, but could you add a comment explaining this logic?',
+        path: 'src/index.ts',
+        line: 10,
+        side: 'RIGHT',
+        author: 'reviewer',
+        createdAt: '2024-01-15T10:30:00Z',
+        url: 'https://github.com/user/demo-project/pull/123#discussion_r1',
+      },
+      {
+        id: 2,
+        body: 'Consider using a more descriptive variable name here.',
+        path: 'src/utils.ts',
+        line: 25,
+        side: 'RIGHT',
+        author: 'reviewer',
+        createdAt: '2024-01-15T11:00:00Z',
+        url: 'https://github.com/user/demo-project/pull/123#discussion_r2',
+      },
+    ]
+  }
+
+  try {
+    // Fetch review comments (comments on specific lines of code)
+    const result = execSync(
+      `gh api repos/{owner}/{repo}/pulls/${prNumber}/comments --jq '.[] | {id: .id, body: .body, path: .path, line: .line, side: .side, author: .user.login, createdAt: .created_at, url: .html_url, inReplyToId: .in_reply_to_id}'`,
+      {
+        cwd: expandHomePath(repoDir),
+        encoding: 'utf-8',
+        timeout: 30000,
+      }
+    )
+
+    // Parse the JSON lines output
+    const comments = result
+      .trim()
+      .split('\n')
+      .filter(line => line.trim())
+      .map(line => {
+        try {
+          return JSON.parse(line)
+        } catch {
+          return null
+        }
+      })
+      .filter(c => c !== null)
+
+    return comments
+  } catch {
+    return []
+  }
+})
+
+ipcMain.handle('gh:replyToComment', async (_event, repoDir: string, prNumber: number, commentId: number, body: string) => {
+  if (isE2ETest) {
+    return { success: true }
+  }
+
+  try {
+    // Reply to a review comment
+    execSync(
+      `gh api repos/{owner}/{repo}/pulls/${prNumber}/comments -f body='${body.replace(/'/g, "'\\''")}' -f in_reply_to=${commentId}`,
+      {
+        cwd: expandHomePath(repoDir),
+        encoding: 'utf-8',
+        timeout: 30000,
+      }
+    )
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
   }
 })
 

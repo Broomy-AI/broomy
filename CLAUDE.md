@@ -18,7 +18,13 @@ pnpm test:headed     # Run E2E tests with visible window
 pnpm dist            # Build and package for macOS
 ```
 
-If you encounter "posix_spawnp failed" terminal errors, run: `npx @electron/rebuild`
+## Troubleshooting
+
+**"Electron uninstall" error**: Run `rm -rf node_modules && pnpm install` to clean reinstall.
+
+**"posix_spawnp failed" terminal errors**: Run `npx @electron/rebuild`
+
+**Important**: This project uses pnpm. Do not use npm or yarn - it will cause dependency issues.
 
 ## Architecture
 

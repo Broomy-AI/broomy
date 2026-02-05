@@ -1,6 +1,19 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import type { FileEntry, GitFileStatus, GitStatusResult, SearchResult } from '../../preload/index'
+import type { FileEntry, GitFileStatus, GitStatusResult, SearchResult, GitHubPrStatus } from '../../preload/index'
 import type { ExplorerFilter } from '../store/sessions'
+
+// PR comment type from GitHub API
+type PrComment = {
+  id: number
+  body: string
+  path: string
+  line: number | null
+  side: 'LEFT' | 'RIGHT'
+  author: string
+  createdAt: string
+  url: string
+  inReplyToId?: number
+}
 
 interface ExplorerProps {
   directory?: string
@@ -12,6 +25,12 @@ interface ExplorerProps {
   onFilterChange: (filter: ExplorerFilter) => void
   onGitStatusRefresh?: () => void
   recentFiles?: string[]
+  // Push to main tracking
+  sessionId?: string
+  pushedToMainAt?: number
+  pushedToMainCommit?: string
+  onRecordPushToMain?: (commitHash: string) => void
+  onClearPushToMain?: () => void
 }
 
 interface TreeNode extends FileEntry {
@@ -101,6 +120,11 @@ export default function Explorer({
   onFilterChange,
   onGitStatusRefresh,
   recentFiles = [],
+  sessionId: _sessionId,
+  pushedToMainAt,
+  pushedToMainCommit,
+  onRecordPushToMain,
+  onClearPushToMain,
 }: ExplorerProps) {
   const [tree, setTree] = useState<TreeNode[]>([])
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set())
@@ -115,10 +139,23 @@ export default function Explorer({
   const [commitMessage, setCommitMessage] = useState('')
   const [isCommitting, setIsCommitting] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
-  const [scView, setScView] = useState<'working' | 'branch'>('working')
+  const [scView, setScView] = useState<'working' | 'branch' | 'comments'>('working')
   const [branchChanges, setBranchChanges] = useState<{ path: string; status: string }[]>([])
   const [branchBaseName, setBranchBaseName] = useState<string>('main')
   const [isBranchLoading, setIsBranchLoading] = useState(false)
+
+  // PR status state
+  const [prStatus, setPrStatus] = useState<GitHubPrStatus>(null)
+  const [isPrLoading, setIsPrLoading] = useState(false)
+  const [hasWriteAccess, setHasWriteAccess] = useState(false)
+  const [isPushingToMain, setIsPushingToMain] = useState(false)
+  const [currentHeadCommit, setCurrentHeadCommit] = useState<string | null>(null)
+
+  // PR comments state
+  const [prComments, setPrComments] = useState<PrComment[]>([])
+  const [isCommentsLoading, setIsCommentsLoading] = useState(false)
+  const [replyText, setReplyText] = useState<Record<number, string>>({})
+  const [isSubmittingReply, setIsSubmittingReply] = useState<number | null>(null)
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('')
@@ -231,6 +268,62 @@ export default function Explorer({
 
     return () => { cancelled = true }
   }, [filter, scView, directory])
+
+  // Fetch PR status and write access when source control is active
+  useEffect(() => {
+    if (filter !== 'source-control' || !directory) return
+
+    let cancelled = false
+    setIsPrLoading(true)
+
+    const fetchPrInfo = async () => {
+      try {
+        const [prResult, writeAccess, headCommit] = await Promise.all([
+          window.gh.prStatus(directory),
+          window.gh.hasWriteAccess(directory),
+          window.git.headCommit(directory),
+        ])
+        if (cancelled) return
+        setPrStatus(prResult)
+        setHasWriteAccess(writeAccess)
+        setCurrentHeadCommit(headCommit)
+      } catch {
+        if (cancelled) return
+        setPrStatus(null)
+        setHasWriteAccess(false)
+      }
+      setIsPrLoading(false)
+    }
+
+    fetchPrInfo()
+
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, directory, syncStatus?.ahead, syncStatus?.behind]) // Re-fetch when commits ahead/behind change
+
+  // Fetch PR comments when comments view is active
+  useEffect(() => {
+    if (filter !== 'source-control' || scView !== 'comments' || !directory || !prStatus) return
+
+    let cancelled = false
+    setIsCommentsLoading(true)
+
+    const fetchComments = async () => {
+      try {
+        const result = await window.gh.prComments(directory, prStatus.number)
+        if (cancelled) return
+        setPrComments(result)
+      } catch {
+        if (cancelled) return
+        setPrComments([])
+      }
+      setIsCommentsLoading(false)
+    }
+
+    fetchComments()
+
+    return () => { cancelled = true }
+  }, [filter, scView, directory, prStatus])
 
   // Search debounce
   useEffect(() => {
@@ -465,6 +558,48 @@ export default function Explorer({
     }
   }
 
+  const handlePushToMain = async () => {
+    if (!directory) return
+    setIsPushingToMain(true)
+    try {
+      const result = await window.gh.mergeBranchToMain(directory)
+      if (result.success) {
+        // Record the push with current HEAD commit
+        const headCommit = await window.git.headCommit(directory)
+        if (headCommit && onRecordPushToMain) {
+          onRecordPushToMain(headCommit)
+        }
+        onGitStatusRefresh?.()
+      }
+    } finally {
+      setIsPushingToMain(false)
+    }
+  }
+
+  const handleCreatePr = async () => {
+    if (!directory) return
+    const url = await window.gh.getPrCreateUrl(directory)
+    if (url) {
+      window.open(url, '_blank')
+    }
+  }
+
+  const handleReplyToComment = async (commentId: number) => {
+    if (!directory || !prStatus || !replyText[commentId]?.trim()) return
+    setIsSubmittingReply(commentId)
+    try {
+      const result = await window.gh.replyToComment(directory, prStatus.number, commentId, replyText[commentId])
+      if (result.success) {
+        setReplyText(prev => ({ ...prev, [commentId]: '' }))
+        // Refresh comments
+        const comments = await window.gh.prComments(directory, prStatus.number)
+        setPrComments(comments)
+      }
+    } finally {
+      setIsSubmittingReply(null)
+    }
+  }
+
   // Render inline input at a given depth
   const renderInlineInput = (parentPath: string, depth: number) => {
     if (!inlineInput || inlineInput.parentPath !== parentPath) return null
@@ -600,11 +735,24 @@ export default function Explorer({
     )
   }
 
+  // Check if there are changes since last push to main
+  const hasChangesSincePush = useMemo(() => {
+    if (!pushedToMainCommit || !currentHeadCommit) return true
+    return pushedToMainCommit !== currentHeadCommit
+  }, [pushedToMainCommit, currentHeadCommit])
+
+  // Clear pushed status if there are new changes
+  useEffect(() => {
+    if (pushedToMainAt && hasChangesSincePush && onClearPushToMain) {
+      onClearPushToMain()
+    }
+  }, [pushedToMainAt, hasChangesSincePush, onClearPushToMain])
+
   // Render source control tab
   const renderSourceControl = () => {
     if (!directory) return null
 
-    // View toggle (Working / Branch)
+    // View toggle (Working / Branch / Comments)
     const viewToggle = (
       <div className="px-3 py-1.5 border-b border-border flex items-center gap-1">
         <button
@@ -613,7 +761,7 @@ export default function Explorer({
             scView === 'working' ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
           }`}
         >
-          Working
+          Uncommitted
         </button>
         <button
           onClick={() => setScView('branch')}
@@ -623,14 +771,165 @@ export default function Explorer({
         >
           Branch
         </button>
+        {prStatus && (
+          <button
+            onClick={() => setScView('comments')}
+            className={`px-2 py-1 text-xs rounded transition-colors ${
+              scView === 'comments' ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
+            }`}
+          >
+            Comments
+          </button>
+        )}
       </div>
     )
+
+    // PR Status banner
+    const prStatusBanner = (
+      <div className="px-3 py-2 border-b border-border bg-bg-secondary">
+        {isPrLoading ? (
+          <div className="text-xs text-text-secondary">Loading PR status...</div>
+        ) : prStatus ? (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                prStatus.state === 'OPEN' ? 'bg-green-500/20 text-green-400' :
+                prStatus.state === 'MERGED' ? 'bg-purple-500/20 text-purple-400' :
+                'bg-red-500/20 text-red-400'
+              }`}>
+                {prStatus.state}
+              </span>
+              <a
+                href={prStatus.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-accent hover:underline truncate flex-1"
+              >
+                #{prStatus.number}: {prStatus.title}
+              </a>
+            </div>
+          </div>
+        ) : pushedToMainAt && !hasChangesSincePush ? (
+          <div className="flex items-center gap-2">
+            <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-green-500/20 text-green-400">
+              PUSHED
+            </span>
+            <span className="text-xs text-text-secondary">
+              Branch merged to {branchBaseName}
+            </span>
+          </div>
+        ) : syncStatus?.current && syncStatus.current !== branchBaseName ? (
+          <div className="flex flex-col gap-2">
+            <div className="text-xs text-text-secondary">
+              No PR for this branch
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCreatePr}
+                className="px-2 py-1 text-xs rounded bg-accent text-white hover:bg-accent/80"
+              >
+                Create PR
+              </button>
+              {hasWriteAccess && (
+                <button
+                  onClick={handlePushToMain}
+                  disabled={isPushingToMain}
+                  className="px-2 py-1 text-xs rounded bg-bg-tertiary text-text-primary hover:bg-bg-secondary disabled:opacity-50"
+                >
+                  {isPushingToMain ? 'Pushing...' : `Push to ${branchBaseName}`}
+                </button>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    )
+
+    // Comments view
+    if (scView === 'comments') {
+      return (
+        <div className="flex flex-col h-full">
+          {viewToggle}
+          {prStatusBanner}
+          {isCommentsLoading ? (
+            <div className="flex-1 flex items-center justify-center text-text-secondary text-xs">Loading comments...</div>
+          ) : prComments.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center text-text-secondary text-xs">
+              No review comments
+            </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto text-sm">
+              {prComments.filter(c => !c.inReplyToId).map((comment) => {
+                const replies = prComments.filter(c => c.inReplyToId === comment.id)
+                return (
+                  <div key={comment.id} className="border-b border-border">
+                    <div
+                      className="px-3 py-2 hover:bg-bg-tertiary cursor-pointer"
+                      onClick={() => {
+                        if (onFileSelect && directory && comment.path) {
+                          onFileSelect(`${directory}/${comment.path}`, true)
+                        }
+                      }}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-medium text-text-primary">{comment.author}</span>
+                        <span className="text-xs text-text-secondary">
+                          {new Date(comment.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="text-xs text-accent mb-1">
+                        {comment.path}{comment.line ? `:${comment.line}` : ''}
+                      </div>
+                      <div className="text-xs text-text-primary whitespace-pre-wrap">
+                        {comment.body}
+                      </div>
+                    </div>
+                    {/* Replies */}
+                    {replies.map(reply => (
+                      <div key={reply.id} className="px-3 py-2 pl-6 bg-bg-secondary/50">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-medium text-text-primary">{reply.author}</span>
+                          <span className="text-xs text-text-secondary">
+                            {new Date(reply.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div className="text-xs text-text-primary whitespace-pre-wrap">
+                          {reply.body}
+                        </div>
+                      </div>
+                    ))}
+                    {/* Reply input */}
+                    <div className="px-3 py-2 pl-6 bg-bg-tertiary/30">
+                      <textarea
+                        value={replyText[comment.id] || ''}
+                        onChange={(e) => setReplyText(prev => ({ ...prev, [comment.id]: e.target.value }))}
+                        placeholder="Write a reply..."
+                        className="w-full bg-bg-tertiary border border-border rounded px-2 py-1 text-xs text-text-primary outline-none focus:border-accent resize-none"
+                        rows={2}
+                      />
+                      <button
+                        onClick={() => handleReplyToComment(comment.id)}
+                        disabled={isSubmittingReply === comment.id || !replyText[comment.id]?.trim()}
+                        className="mt-1 px-2 py-1 text-xs rounded bg-accent text-white hover:bg-accent/80 disabled:opacity-50"
+                      >
+                        {isSubmittingReply === comment.id ? 'Sending...' : 'Reply'}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )
+    }
 
     // Branch changes view
     if (scView === 'branch') {
       return (
         <div className="flex flex-col h-full">
           {viewToggle}
+          {prStatusBanner}
           {isBranchLoading ? (
             <div className="flex-1 flex items-center justify-center text-text-secondary text-xs">Loading...</div>
           ) : branchChanges.length === 0 ? (
@@ -677,6 +976,7 @@ export default function Explorer({
       return (
         <div className="flex flex-col h-full">
           {viewToggle}
+          {prStatusBanner}
           <div className="flex-1 flex flex-col items-center justify-center gap-4 p-4">
             {syncStatus?.tracking && (
               <div className="text-xs text-text-secondary text-center">
@@ -725,6 +1025,7 @@ export default function Explorer({
     return (
       <div className="flex flex-col h-full">
         {viewToggle}
+        {prStatusBanner}
         {/* Commit area */}
         <div className="px-3 py-2 border-b border-border">
           <div className="flex items-center gap-1">

@@ -58,6 +58,9 @@ export interface Session {
   recentFiles: string[]
   // User terminal tabs (persisted)
   terminalTabs: TerminalTabsState
+  // Direct push to main tracking (persisted)
+  pushedToMainAt?: number  // Timestamp when branch was pushed to main
+  pushedToMainCommit?: string  // The HEAD commit when pushed (to detect new changes)
 }
 
 // Default layout sizes
@@ -138,6 +141,9 @@ interface SessionStore {
   setActiveTerminalTab: (sessionId: string, tabId: string) => void
   closeOtherTerminalTabs: (sessionId: string, tabId: string) => void
   closeTerminalTabsToRight: (sessionId: string, tabId: string) => void
+  // Direct push to main tracking
+  recordPushToMain: (sessionId: string, commitHash: string) => void
+  clearPushToMain: (sessionId: string) => void
 }
 
 const generateId = () => `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
@@ -207,6 +213,9 @@ const debouncedSave = async (
         layoutSizes: s.layoutSizes,
         explorerFilter: s.explorerFilter,
         terminalTabs: s.terminalTabs,
+        // Push to main tracking
+        pushedToMainAt: s.pushedToMainAt,
+        pushedToMainCommit: s.pushedToMainCommit,
       })),
       // Global state
       showSidebar: globalPanelVisibility[PANEL_IDS.SIDEBAR] ?? true,
@@ -267,6 +276,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           recentFiles: [],
           // Terminal tabs
           terminalTabs: sessionData.terminalTabs ?? createDefaultTerminalTabs(),
+          // Push to main tracking
+          pushedToMainAt: sessionData.pushedToMainAt,
+          pushedToMainCommit: sessionData.pushedToMainCommit,
         }
         sessions.push(session)
       }
@@ -681,6 +693,28 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         },
       }
     })
+    set({ sessions: updatedSessions })
+    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
+  },
+
+  recordPushToMain: (sessionId: string, commitHash: string) => {
+    const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
+    const updatedSessions = sessions.map((s) =>
+      s.id === sessionId
+        ? { ...s, pushedToMainAt: Date.now(), pushedToMainCommit: commitHash }
+        : s
+    )
+    set({ sessions: updatedSessions })
+    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
+  },
+
+  clearPushToMain: (sessionId: string) => {
+    const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
+    const updatedSessions = sessions.map((s) =>
+      s.id === sessionId
+        ? { ...s, pushedToMainAt: undefined, pushedToMainCommit: undefined }
+        : s
+    )
     set({ sessions: updatedSessions })
     debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
   },
