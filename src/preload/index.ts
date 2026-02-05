@@ -73,6 +73,27 @@ export type GitHubIssue = {
   url: string
 }
 
+export type GitHubPrStatus = {
+  number: number
+  title: string
+  state: 'OPEN' | 'MERGED' | 'CLOSED'
+  url: string
+  headRefName: string
+  baseRefName: string
+} | null
+
+export type GitHubPrComment = {
+  id: number
+  body: string
+  path: string
+  line: number | null
+  side: 'LEFT' | 'RIGHT'
+  author: string
+  createdAt: string
+  url: string
+  inReplyToId?: number
+}
+
 export type WorktreeInfo = {
   path: string
   branch: string
@@ -98,12 +119,19 @@ export type GitApi = {
   defaultBranch: (repoPath: string) => Promise<string>
   remoteUrl: (repoPath: string) => Promise<string | null>
   branchChanges: (repoPath: string, baseBranch?: string) => Promise<{ files: { path: string; status: string }[]; baseBranch: string }>
+  headCommit: (repoPath: string) => Promise<string | null>
 }
 
 export type GhApi = {
   isInstalled: () => Promise<boolean>
   issues: (repoDir: string) => Promise<GitHubIssue[]>
   repoSlug: (repoDir: string) => Promise<string | null>
+  prStatus: (repoDir: string) => Promise<GitHubPrStatus>
+  hasWriteAccess: (repoDir: string) => Promise<boolean>
+  mergeBranchToMain: (repoDir: string) => Promise<{ success: boolean; error?: string }>
+  getPrCreateUrl: (repoDir: string) => Promise<string | null>
+  prComments: (repoDir: string, prNumber: number) => Promise<GitHubPrComment[]>
+  replyToComment: (repoDir: string, prNumber: number, commentId: number, body: string) => Promise<{ success: boolean; error?: string }>
 }
 
 export type ReposApi = {
@@ -150,8 +178,11 @@ export type SessionData = {
   showDiff?: boolean
   fileViewerPosition?: 'top' | 'left'
   layoutSizes?: LayoutSizesData
-  explorerFilter?: 'all' | 'changed' | 'files' | 'source-control' | 'search'
+  explorerFilter?: 'all' | 'changed' | 'files' | 'source-control' | 'search' | 'recent'
   terminalTabs?: unknown
+  // Push to main tracking
+  pushedToMainAt?: number
+  pushedToMainCommit?: string
 }
 
 export type ConfigData = {
@@ -228,12 +259,19 @@ const gitApi: GitApi = {
   defaultBranch: (repoPath) => ipcRenderer.invoke('git:defaultBranch', repoPath),
   remoteUrl: (repoPath) => ipcRenderer.invoke('git:remoteUrl', repoPath),
   branchChanges: (repoPath, baseBranch) => ipcRenderer.invoke('git:branchChanges', repoPath, baseBranch),
+  headCommit: (repoPath) => ipcRenderer.invoke('git:headCommit', repoPath),
 }
 
 const ghApi: GhApi = {
   isInstalled: () => ipcRenderer.invoke('gh:isInstalled'),
   issues: (repoDir) => ipcRenderer.invoke('gh:issues', repoDir),
   repoSlug: (repoDir) => ipcRenderer.invoke('gh:repoSlug', repoDir),
+  prStatus: (repoDir) => ipcRenderer.invoke('gh:prStatus', repoDir),
+  hasWriteAccess: (repoDir) => ipcRenderer.invoke('gh:hasWriteAccess', repoDir),
+  mergeBranchToMain: (repoDir) => ipcRenderer.invoke('gh:mergeBranchToMain', repoDir),
+  getPrCreateUrl: (repoDir) => ipcRenderer.invoke('gh:getPrCreateUrl', repoDir),
+  prComments: (repoDir, prNumber) => ipcRenderer.invoke('gh:prComments', repoDir, prNumber),
+  replyToComment: (repoDir, prNumber, commentId, body) => ipcRenderer.invoke('gh:replyToComment', repoDir, prNumber, commentId, body),
 }
 
 const reposApi: ReposApi = {

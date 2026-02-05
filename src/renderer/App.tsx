@@ -49,6 +49,8 @@ function AppContent() {
     setFileViewerPosition,
     updateLayoutSize,
     markSessionRead,
+    recordPushToMain,
+    clearPushToMain,
   } = useSessionStore()
 
   const { agents, loadAgents } = useAgentStore()
@@ -361,6 +363,11 @@ function AppContent() {
         onFilterChange={(filter) => activeSessionId && setExplorerFilter(activeSessionId, filter)}
         onGitStatusRefresh={fetchGitStatus}
         recentFiles={activeSession?.recentFiles}
+        sessionId={activeSessionId ?? undefined}
+        pushedToMainAt={activeSession?.pushedToMainAt}
+        pushedToMainCommit={activeSession?.pushedToMainCommit}
+        onRecordPushToMain={(commitHash) => activeSessionId && recordPushToMain(activeSessionId, commitHash)}
+        onClearPushToMain={() => activeSessionId && clearPushToMain(activeSessionId)}
       />
     ) : null,
     [PANEL_IDS.FILE_VIEWER]: activeSession?.showFileViewer ? (
