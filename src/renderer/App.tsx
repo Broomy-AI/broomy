@@ -175,10 +175,18 @@ function AppContent() {
     checkGhAvailability()
   }, [loadSessions, loadAgents, loadRepos, checkGhAvailability])
 
-  // Mark session as read when it becomes active
+  // Mark session as read when it becomes active, and focus agent terminal
   useEffect(() => {
     if (activeSessionId) {
       markSessionRead(activeSessionId)
+      // Focus the agent terminal after a short delay to let it render
+      const timeout = setTimeout(() => {
+        const container = document.querySelector(`[data-panel-id="${PANEL_IDS.AGENT_TERMINAL}"]`)
+        if (!container) return
+        const xtermTextarea = container.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null
+        if (xtermTextarea) xtermTextarea.focus()
+      }, 100)
+      return () => clearTimeout(timeout)
     }
   }, [activeSessionId, markSessionRead])
 

@@ -415,6 +415,12 @@ export default function Explorer({
     onGitStatusRefresh?.()
   }
 
+  const handleStageAll = async () => {
+    if (!directory) return
+    await window.git.stageAll(directory)
+    onGitStatusRefresh?.()
+  }
+
   const handleUnstage = async (filePath: string) => {
     if (!directory) return
     await window.git.unstage(directory, filePath)
@@ -422,7 +428,19 @@ export default function Explorer({
   }
 
   const handleCommit = async () => {
-    if (!directory || !commitMessage.trim() || stagedFiles.length === 0) return
+    if (!directory || !commitMessage.trim()) return
+
+    // If nothing staged but there are unstaged changes, offer to stage all
+    if (stagedFiles.length === 0 && unstagedFiles.length > 0) {
+      const action = await window.menu.popup([
+        { id: 'stage-all-commit', label: `Stage All ${unstagedFiles.length} File${unstagedFiles.length !== 1 ? 's' : ''} & Commit` },
+      ])
+      if (action !== 'stage-all-commit') return
+      await window.git.stageAll(directory)
+    } else if (stagedFiles.length === 0) {
+      return
+    }
+
     setIsCommitting(true)
     try {
       const result = await window.git.commit(directory, commitMessage.trim())
@@ -722,10 +740,23 @@ export default function Explorer({
             />
             <button
               onClick={handleCommit}
-              disabled={isCommitting || stagedFiles.length === 0 || !commitMessage.trim()}
+              disabled={isCommitting || gitStatus.length === 0 || !commitMessage.trim()}
               className="px-2 py-1 text-xs rounded bg-accent text-white hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
             >
               {isCommitting ? '...' : 'Commit'}
+            </button>
+            <button
+              onClick={async () => {
+                const action = await window.menu.popup([
+                  { id: 'stage-all', label: 'Stage All Changes' },
+                ])
+                if (action === 'stage-all') handleStageAll()
+              }}
+              disabled={unstagedFiles.length === 0}
+              className="px-1 py-1 text-xs rounded text-text-secondary hover:text-text-primary hover:bg-bg-tertiary disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+              title="More actions"
+            >
+              &#x22EF;
             </button>
           </div>
         </div>
@@ -768,7 +799,17 @@ export default function Explorer({
           )}
 
           {/* Changes */}
-          <div className="px-3 py-1.5 text-xs font-medium text-text-secondary uppercase tracking-wide bg-bg-secondary mt-1">
+          <div
+            className="px-3 py-1.5 text-xs font-medium text-text-secondary uppercase tracking-wide bg-bg-secondary mt-1 cursor-default"
+            onContextMenu={async (e) => {
+              e.preventDefault()
+              if (unstagedFiles.length === 0) return
+              const action = await window.menu.popup([
+                { id: 'stage-all', label: 'Stage All Changes' },
+              ])
+              if (action === 'stage-all') handleStageAll()
+            }}
+          >
             Changes ({unstagedFiles.length})
           </div>
           {unstagedFiles.length === 0 ? (

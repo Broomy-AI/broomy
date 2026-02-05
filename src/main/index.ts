@@ -508,6 +508,20 @@ ipcMain.handle('git:stage', async (_event, repoPath: string, filePath: string) =
   }
 })
 
+ipcMain.handle('git:stageAll', async (_event, repoPath: string) => {
+  if (isE2ETest) {
+    return { success: true }
+  }
+
+  try {
+    const git = simpleGit(repoPath)
+    await git.add('.')
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
 ipcMain.handle('git:unstage', async (_event, repoPath: string, filePath: string) => {
   if (isE2ETest) {
     return { success: true }
