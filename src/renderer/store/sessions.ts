@@ -24,7 +24,7 @@ export interface LayoutSizes {
   diffPanelWidth: number
 }
 
-export type ExplorerFilter = 'files' | 'source-control' | 'search'
+export type ExplorerFilter = 'files' | 'source-control' | 'search' | 'recent'
 
 // Panel visibility map type
 export type PanelVisibility = Record<string, boolean>
@@ -56,6 +56,8 @@ export interface Session {
   lastMessageTime: number | null
   waitingType: WaitingType
   isUnread: boolean
+  // Recently opened files (runtime, most recent first)
+  recentFiles: string[]
   // User terminal tabs (persisted)
   terminalTabs: TerminalTabsState
 }
@@ -264,6 +266,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           lastMessageTime: null,
           waitingType: null,
           isUnread: false,
+          // Recent files
+          recentFiles: [],
           // Terminal tabs
           terminalTabs: sessionData.terminalTabs ?? createDefaultTerminalTabs(),
         }
@@ -323,6 +327,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       lastMessageTime: null,
       waitingType: null,
       isUnread: false,
+      // Recent files
+      recentFiles: [],
       // Terminal tabs
       terminalTabs: createDefaultTerminalTabs(),
     }
@@ -468,10 +474,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         ...s.panelVisibility,
         [PANEL_IDS.FILE_VIEWER]: true,
       }
+      // Track in recent files (move to front, cap at 50)
+      const recentFiles = [filePath, ...(s.recentFiles || []).filter(f => f !== filePath)].slice(0, 50)
       return syncLegacyFields({
         ...s,
         selectedFilePath: filePath,
         panelVisibility: newVisibility,
+        recentFiles,
       })
     })
     set({ sessions: updatedSessions })
@@ -522,6 +531,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       }
       // Mark as unread if status changes to waiting and this isn't the active session
       if (update.status === 'waiting' && id !== activeSessionId) {
+        changes.isUnread = true
+      }
+      // Mark as unread when transitioning from working to idle (for all sessions, including active)
+      // This signals "agent finished doing something" so the user knows to check results
+      if (update.status === 'idle' && s.status === 'working') {
         changes.isUnread = true
       }
       return { ...s, ...changes }

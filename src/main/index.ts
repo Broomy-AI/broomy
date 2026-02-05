@@ -1098,6 +1098,70 @@ ipcMain.handle('git:remoteUrl', async (_event, repoPath: string) => {
   }
 })
 
+ipcMain.handle('git:branchChanges', async (_event, repoPath: string, baseBranch?: string) => {
+  if (isE2ETest) {
+    return {
+      files: [
+        { path: 'src/index.ts', status: 'modified' },
+        { path: 'src/new-feature.ts', status: 'added' },
+      ],
+      baseBranch: 'main',
+    }
+  }
+
+  try {
+    const git = simpleGit(expandHomePath(repoPath))
+
+    // Auto-detect base branch if not provided
+    if (!baseBranch) {
+      try {
+        const ref = await git.raw(['symbolic-ref', 'refs/remotes/origin/HEAD'])
+        baseBranch = ref.trim().replace('refs/remotes/origin/', '')
+      } catch {
+        try {
+          await git.raw(['rev-parse', '--verify', 'origin/main'])
+          baseBranch = 'main'
+        } catch {
+          try {
+            await git.raw(['rev-parse', '--verify', 'origin/master'])
+            baseBranch = 'master'
+          } catch {
+            baseBranch = 'main'
+          }
+        }
+      }
+    }
+
+    // Get all changed files on this branch vs base
+    const diffOutput = await git.raw(['diff', '--name-status', `origin/${baseBranch}...HEAD`])
+
+    const files: { path: string; status: string }[] = []
+    for (const line of diffOutput.trim().split('\n')) {
+      if (!line.trim()) continue
+      const parts = line.split('\t')
+      const statusChar = parts[0]
+      const filePath = parts.length > 2 ? parts[2] : parts[1] // Handle renames (R100\told\tnew)
+
+      let status = 'modified'
+      switch (statusChar.charAt(0)) {
+        case 'M': status = 'modified'; break
+        case 'A': status = 'added'; break
+        case 'D': status = 'deleted'; break
+        case 'R': status = 'renamed'; break
+        case 'C': status = 'added'; break
+      }
+
+      if (filePath) {
+        files.push({ path: filePath, status })
+      }
+    }
+
+    return { files, baseBranch }
+  } catch {
+    return { files: [], baseBranch: baseBranch || 'main' }
+  }
+})
+
 // GitHub CLI handlers
 ipcMain.handle('gh:isInstalled', async () => {
   if (isE2ETest) {

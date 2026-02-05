@@ -440,6 +440,7 @@ function AppContent() {
         filter={activeSession?.explorerFilter ?? 'files'}
         onFilterChange={(filter) => activeSessionId && setExplorerFilter(activeSessionId, filter)}
         onGitStatusRefresh={fetchGitStatus}
+        recentFiles={activeSession?.recentFiles}
       />
     ) : null,
     [PANEL_IDS.FILE_VIEWER]: activeSession?.showFileViewer ? (

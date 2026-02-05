@@ -225,59 +225,54 @@ export default function TabbedTerminal({ sessionId, cwd, isActive }: TabbedTermi
 
   return (
     <div className="h-full w-full flex flex-col">
-      {/* Tab bar */}
-      <div className="flex items-center bg-bg-secondary h-8 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+      {/* Tab bar — minimal: name only, selected = white + blue underline, others = grey */}
+      <div className="flex items-center h-6 flex-shrink-0 bg-bg-primary">
         {/* Tabs container */}
-        <div ref={tabsContainerRef} className="flex-1 flex items-center overflow-x-auto scrollbar-thin min-w-0">
-          {tabs.map((tab, index) => (
-            <div key={tab.id} className="flex items-center h-8 flex-shrink-0">
-              <div
-                className={`
-                  group flex items-center gap-1 px-3 h-8 cursor-pointer
-                  transition-colors duration-100 select-none min-w-0
-                  ${tab.id === activeTabId
-                    ? 'bg-bg-primary text-text-primary'
-                    : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
-                  }
-                  ${dragOverTabId === tab.id ? 'border-l-2 border-l-blue-500' : ''}
-                `}
-                draggable={editingTabId !== tab.id}
-                onClick={() => handleTabClick(tab.id)}
-                onContextMenu={(e) => handleContextMenu(e, tab.id)}
-                onDoubleClick={() => handleDoubleClick(tab.id)}
-                onDragStart={(e) => handleDragStart(e, tab.id)}
-                onDragEnd={handleDragEnd}
-                onDragOver={(e) => handleDragOver(e, tab.id)}
-                onDragLeave={handleDragLeave}
-                onDrop={(e) => handleDrop(e, tab.id)}
-              >
-                {editingTabId === tab.id ? (
-                  <input
-                    ref={editInputRef}
-                    type="text"
-                    value={editingName}
-                    onChange={(e) => setEditingName(e.target.value)}
-                    onBlur={handleRenameSubmit}
-                    onKeyDown={handleRenameKeyDown}
-                    className="bg-bg-primary text-text-primary px-1 py-0.5 text-xs w-24 border border-border-primary rounded outline-none focus:border-blue-500"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                ) : (
-                  <span className="text-xs truncate max-w-32">{tab.name}</span>
-                )}
-                {tabs.length > 1 && editingTabId !== tab.id && (
-                  <button
-                    className="opacity-0 group-hover:opacity-100 hover:bg-bg-tertiary rounded p-0.5 transition-opacity"
-                    onClick={(e) => handleCloseTab(e, tab.id)}
-                    title="Close tab"
-                  >
-                    <XIcon />
-                  </button>
-                )}
-              </div>
-              {/* Half-height faint divider */}
-              {index < tabs.length - 1 && (
-                <div className="h-3.5 flex-shrink-0" style={{ width: '1px', backgroundColor: 'rgba(255,255,255,0.08)' }} />
+        <div ref={tabsContainerRef} className="flex-1 flex items-center overflow-x-auto scrollbar-thin min-w-0 gap-1 px-1">
+          {tabs.map((tab) => (
+            <div
+              key={tab.id}
+              className={`
+                group flex items-center gap-1 px-2 h-6 cursor-pointer
+                transition-colors duration-100 select-none min-w-0 text-xs
+                ${tab.id === activeTabId
+                  ? 'text-text-primary'
+                  : 'text-text-secondary hover:text-text-primary'
+                }
+                ${dragOverTabId === tab.id ? 'border-l-2 border-l-accent' : ''}
+              `}
+              draggable={editingTabId !== tab.id}
+              onClick={() => handleTabClick(tab.id)}
+              onContextMenu={(e) => handleContextMenu(e, tab.id)}
+              onDoubleClick={() => handleDoubleClick(tab.id)}
+              onDragStart={(e) => handleDragStart(e, tab.id)}
+              onDragEnd={handleDragEnd}
+              onDragOver={(e) => handleDragOver(e, tab.id)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, tab.id)}
+            >
+              {editingTabId === tab.id ? (
+                <input
+                  ref={editInputRef}
+                  type="text"
+                  value={editingName}
+                  onChange={(e) => setEditingName(e.target.value)}
+                  onBlur={handleRenameSubmit}
+                  onKeyDown={handleRenameKeyDown}
+                  className="bg-bg-tertiary text-text-primary px-1 text-xs w-24 border border-border rounded outline-none focus:border-accent"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <span className={`truncate max-w-32 ${tab.id === activeTabId ? 'border-b-2 border-accent pb-0.5' : ''}`}>{tab.name}</span>
+              )}
+              {tabs.length > 1 && editingTabId !== tab.id && (
+                <button
+                  className="opacity-0 group-hover:opacity-100 hover:text-text-primary rounded transition-opacity"
+                  onClick={(e) => handleCloseTab(e, tab.id)}
+                  title="Close tab"
+                >
+                  <XIcon />
+                </button>
               )}
             </div>
           ))}
@@ -285,7 +280,7 @@ export default function TabbedTerminal({ sessionId, cwd, isActive }: TabbedTermi
 
         {/* Add tab button */}
         <button
-          className="flex items-center justify-center w-7 h-8 hover:bg-bg-tertiary transition-colors text-text-secondary flex-shrink-0"
+          className="flex items-center justify-center w-6 h-6 hover:text-text-primary transition-colors text-text-secondary flex-shrink-0"
           onClick={handleAddTab}
           title="New terminal tab"
         >
@@ -296,7 +291,7 @@ export default function TabbedTerminal({ sessionId, cwd, isActive }: TabbedTermi
         {isOverflowing && (
           <div className="relative flex-shrink-0" ref={dropdownRef}>
             <button
-              className="flex items-center justify-center w-7 h-8 hover:bg-bg-tertiary transition-colors text-text-secondary"
+              className="flex items-center justify-center w-6 h-6 hover:text-text-primary transition-colors text-text-secondary"
               onClick={() => setShowDropdown(!showDropdown)}
               title="Show all tabs"
             >
@@ -305,7 +300,7 @@ export default function TabbedTerminal({ sessionId, cwd, isActive }: TabbedTermi
 
             {/* Dropdown menu */}
             {showDropdown && (
-              <div className="absolute right-0 top-full mt-1 bg-bg-secondary border border-border-primary rounded shadow-lg z-50 min-w-48 max-h-64 overflow-y-auto">
+              <div className="absolute right-0 top-full mt-1 bg-bg-secondary border border-border rounded shadow-lg z-50 min-w-48 max-h-64 overflow-y-auto">
                 {tabs.map((tab) => (
                   <button
                     key={tab.id}

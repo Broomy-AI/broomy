@@ -20,8 +20,8 @@ interface FileViewerProps {
 }
 
 export default function FileViewer({ filePath, position = 'top', onPositionChange, onClose, fileStatus, directory, onSaveComplete, initialViewMode = 'latest' }: FileViewerProps) {
-  // Only show diff for modified files (not added/deleted)
-  const canShowDiff = fileStatus === 'modified'
+  // Show diff for modified and deleted files
+  const canShowDiff = fileStatus === 'modified' || fileStatus === 'deleted'
   const [content, setContent] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -59,11 +59,26 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
       let data = ''
       let readError: Error | null = null
 
-      // Try to read as text (may fail for binary files)
+      // Try to read as text (may fail for binary or deleted files)
       try {
         data = await window.fs.readFile(filePath)
       } catch (err) {
         readError = err instanceof Error ? err : new Error('Failed to read file')
+      }
+
+      if (cancelled) return
+
+      // If file doesn't exist and is deleted, load the old version from git
+      if (readError && fileStatus === 'deleted' && directory) {
+        try {
+          const relativePath = filePath.startsWith(directory + '/')
+            ? filePath.slice(directory.length + 1)
+            : filePath
+          data = await window.git.show(directory, relativePath)
+          readError = null
+        } catch {
+          // Still failed
+        }
       }
 
       if (cancelled) return
@@ -378,7 +393,7 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
           <MonacoDiffViewer
             filePath={filePath}
             originalContent={originalContent}
-            modifiedContent={content}
+            modifiedContent={fileStatus === 'deleted' ? '' : content}
             sideBySide={diffSideBySide}
           />
         ) : (

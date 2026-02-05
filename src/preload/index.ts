@@ -123,6 +123,7 @@ export type GitApi = {
   pushNewBranch: (repoPath: string, branchName: string) => Promise<{ success: boolean; error?: string }>
   defaultBranch: (repoPath: string) => Promise<string>
   remoteUrl: (repoPath: string) => Promise<string | null>
+  branchChanges: (repoPath: string, baseBranch?: string) => Promise<{ files: { path: string; status: string }[]; baseBranch: string }>
 }
 
 export type GhApi = {
@@ -251,6 +252,7 @@ const gitApi: GitApi = {
   pushNewBranch: (repoPath, branchName) => ipcRenderer.invoke('git:pushNewBranch', repoPath, branchName),
   defaultBranch: (repoPath) => ipcRenderer.invoke('git:defaultBranch', repoPath),
   remoteUrl: (repoPath) => ipcRenderer.invoke('git:remoteUrl', repoPath),
+  branchChanges: (repoPath, baseBranch) => ipcRenderer.invoke('git:branchChanges', repoPath, baseBranch),
 }
 
 const ghApi: GhApi = {

@@ -54,6 +54,9 @@ export default function Layout({
   const mainContentRef = useRef<HTMLDivElement>(null)
   const { registry, toolbarPanels, getShortcutKey } = usePanelContext()
 
+  const [flashedPanel, setFlashedPanel] = useState<string | null>(null)
+  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // Check if we're in dev mode on mount
   useEffect(() => {
     window.app.isDev().then(setIsDev)
@@ -150,6 +153,80 @@ export default function Layout({
     }
   }, [draggingDivider, fileViewerPosition, sidebarWidth, showSidebar, onSidebarWidthChange, onLayoutSizeChange])
 
+  // Panel navigation helpers
+  const focusPanel = useCallback((panelId: string) => {
+    const container = document.querySelector(`[data-panel-id="${panelId}"]`)
+    if (!container) return
+
+    // For terminals: focus the xterm helper textarea
+    const xtermTextarea = container.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null
+    if (xtermTextarea) {
+      xtermTextarea.focus()
+      return
+    }
+
+    // For Monaco editor: focus the editor textarea
+    const monacoTextarea = container.querySelector('textarea.inputarea') as HTMLTextAreaElement | null
+    if (monacoTextarea) {
+      monacoTextarea.focus()
+      return
+    }
+
+    // Fallback: focus any focusable element inside
+    const focusable = container.querySelector('input, textarea, button, [tabindex]') as HTMLElement | null
+    if (focusable) {
+      focusable.focus()
+      return
+    }
+
+    // Last resort: focus the container itself (needs tabIndex={-1})
+    ;(container as HTMLElement).focus()
+  }, [])
+
+  const getCurrentPanel = useCallback((): string | null => {
+    const activeEl = document.activeElement
+    if (!activeEl) return null
+    const panelEl = activeEl.closest('[data-panel-id]')
+    return panelEl?.getAttribute('data-panel-id') ?? null
+  }, [])
+
+  // Track last cycle position so cycling always advances even if focus detection fails
+  const lastCyclePanelRef = useRef<string | null>(null)
+
+  // Cycle through visible toolbar panels in order (Ctrl+Tab / Ctrl+Shift+Tab)
+  const handleCyclePanel = useCallback((reverse: boolean) => {
+    // Get visible toolbar panels in order (skip settings since it replaces content)
+    const visiblePanels = toolbarPanels.filter(id => {
+      if (!isPanelVisible(id)) return false
+      if (id === PANEL_IDS.SETTINGS) return false
+      return !!panels[id]
+    })
+
+    if (visiblePanels.length === 0) return
+
+    // Try to determine current position: first from activeElement, then from last cycle
+    const current = getCurrentPanel() || lastCyclePanelRef.current
+    const currentIndex = current ? visiblePanels.indexOf(current) : -1
+
+    let nextIndex: number
+    if (currentIndex === -1) {
+      nextIndex = reverse ? visiblePanels.length - 1 : 0
+    } else if (reverse) {
+      nextIndex = (currentIndex - 1 + visiblePanels.length) % visiblePanels.length
+    } else {
+      nextIndex = (currentIndex + 1) % visiblePanels.length
+    }
+
+    const targetPanel = visiblePanels[nextIndex]
+    lastCyclePanelRef.current = targetPanel
+    focusPanel(targetPanel)
+
+    // Brief flash overlay
+    setFlashedPanel(targetPanel)
+    if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current)
+    flashTimeoutRef.current = setTimeout(() => setFlashedPanel(null), 250)
+  }, [toolbarPanels, isPanelVisible, panels, getCurrentPanel, focusPanel])
+
   // Handle panel toggle by key (1-6 for toolbar panels)
   const handleToggleByKey = useCallback((key: string) => {
     const index = parseInt(key, 10) - 1
@@ -162,6 +239,14 @@ export default function Layout({
   // Keyboard shortcuts - use capture phase to intercept before terminal gets them
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+Tab cycles panels — handle before textarea check since it's app-wide
+      if (e.ctrlKey && e.key === 'Tab') {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        handleCyclePanel(e.shiftKey)
+        return
+      }
+
       if (!(e.metaKey || e.ctrlKey)) return
 
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
@@ -187,7 +272,7 @@ export default function Layout({
       window.removeEventListener('keydown', handleKeyDown, true)
       window.removeEventListener('app:toggle-panel', handleCustomToggle)
     }
-  }, [handleToggleByKey])
+  }, [handleToggleByKey, handleCyclePanel])
 
   // Get toolbar panels info with visibility status
   const toolbarPanelInfo = useMemo(() => {
@@ -246,6 +331,12 @@ export default function Layout({
       </button>
     )
   }
+
+  // Brief flash overlay shown when cycling panels with Ctrl+Tab
+  const FlashOverlay = ({ panelId }: { panelId: string }) =>
+    flashedPanel === panelId ? (
+      <div className="absolute inset-0 bg-white/10 pointer-events-none z-10" />
+    ) : null
 
   // Get panel content
   const sidebar = panels[PANEL_IDS.SIDEBAR]
@@ -315,9 +406,12 @@ export default function Layout({
         {showSidebar && (
           <>
             <div
-              className="flex-shrink-0 bg-bg-secondary overflow-y-auto"
+              data-panel-id={PANEL_IDS.SIDEBAR}
+              tabIndex={-1}
+              className="relative flex-shrink-0 bg-bg-secondary overflow-y-auto outline-none"
               style={{ width: sidebarWidth }}
             >
+              <FlashOverlay panelId={PANEL_IDS.SIDEBAR} />
               {sidebar}
             </div>
             <Divider type="sidebar" direction="vertical" />
@@ -341,9 +435,12 @@ export default function Layout({
                 {showExplorer && explorer && (
                   <>
                     <div
-                      className="flex-shrink-0 bg-bg-secondary overflow-y-auto"
+                      data-panel-id={PANEL_IDS.EXPLORER}
+                      tabIndex={-1}
+                      className="relative flex-shrink-0 bg-bg-secondary overflow-y-auto outline-none"
                       style={{ width: layoutSizes.explorerWidth }}
                     >
+                      <FlashOverlay panelId={PANEL_IDS.EXPLORER} />
                       {explorer}
                     </div>
                     <Divider type="explorer" direction="vertical" />
@@ -351,36 +448,46 @@ export default function Layout({
                 )}
 
                 {/* Center: file viewer + terminals or settings */}
-                <div ref={containerRef} className={`flex-1 min-w-0 ${fileViewerPosition === 'left' && showFileViewer && fileViewer ? 'flex' : 'flex flex-col'}`}>
+                <div ref={containerRef} className={`flex-1 min-w-0 flex ${
+                  showSettings && settingsPanel ? 'flex-col' :
+                  fileViewerPosition === 'left' && showFileViewer && fileViewer ? 'flex-row' : 'flex-col'
+                }`}>
                   {showSettings && settingsPanel ? (
-                    <div className="flex-1 min-w-0 bg-bg-secondary overflow-y-auto">
+                    <div data-panel-id={PANEL_IDS.SETTINGS} tabIndex={-1} className="flex-1 min-w-0 bg-bg-secondary overflow-y-auto outline-none">
                       {settingsPanel}
                     </div>
-                  ) : fileViewerPosition === 'left' ? (
-                    /* Left position: file viewer on left, terminals on right */
+                  ) : (
                     <>
-                      {/* File viewer - left side */}
+                      {/* File viewer */}
                       {showFileViewer && fileViewer && (
                         <div
-                          className="flex-shrink-0 bg-bg-secondary min-h-0"
-                          style={{
-                            width: terminalsVisible ? layoutSizes.fileViewerSize : undefined,
-                            flex: terminalsVisible ? undefined : 1,
-                          }}
+                          data-panel-id={PANEL_IDS.FILE_VIEWER}
+                          tabIndex={-1}
+                          className="relative flex-shrink-0 bg-bg-secondary min-h-0 outline-none"
+                          style={fileViewerPosition === 'left'
+                            ? { width: terminalsVisible ? layoutSizes.fileViewerSize : undefined, flex: terminalsVisible ? undefined : 1 }
+                            : { height: terminalsVisible ? layoutSizes.fileViewerSize : undefined, flex: terminalsVisible ? undefined : 1 }
+                          }
                         >
+                          <FlashOverlay panelId={PANEL_IDS.FILE_VIEWER} />
                           {fileViewer}
                         </div>
                       )}
 
-                      {/* Draggable divider (vertical) */}
+                      {/* Draggable divider between file viewer and terminals */}
                       {showFileViewer && fileViewer && terminalsVisible && (
-                        <Divider type="fileViewer" direction="vertical" />
+                        <Divider type="fileViewer" direction={fileViewerPosition === 'left' ? 'vertical' : 'horizontal'} />
                       )}
 
-                      {/* Terminals container - always mounted, hidden when not visible */}
-                      <div className={`flex-1 flex flex-col min-w-0 ${showFileViewer && fileViewer ? 'border-l border-[#4a4a4a]' : ''} ${!terminalsVisible ? 'hidden' : ''}`}>
-                        {/* Agent terminal - always mounted */}
-                        <div className={`min-w-0 bg-bg-primary ${showUserTerminal ? 'border-b border-[#4a4a4a]' : ''} ${showAgentTerminal ? 'flex-1' : 'hidden'}`}>
+                      {/* Terminals container - stable DOM position regardless of file viewer position */}
+                      <div className={`flex flex-col min-w-0 min-h-0 ${terminalsVisible ? 'flex-1' : 'hidden'}`}>
+                        {/* Agent terminal */}
+                        <div
+                          data-panel-id={PANEL_IDS.AGENT_TERMINAL}
+                          tabIndex={-1}
+                          className={`relative min-w-0 min-h-0 bg-bg-primary outline-none ${showAgentTerminal ? 'flex-1' : 'hidden'}`}
+                        >
+                          <FlashOverlay panelId={PANEL_IDS.AGENT_TERMINAL} />
                           {agentTerminal}
                         </div>
 
@@ -389,68 +496,20 @@ export default function Layout({
                           <Divider type="userTerminal" direction="horizontal" />
                         )}
 
-                        {/* User terminal - always mounted */}
+                        {/* User terminal */}
                         <div
-                          className={`bg-bg-primary ${showAgentTerminal ? 'flex-shrink-0' : 'flex-1'} ${!showUserTerminal ? 'hidden' : ''}`}
+                          data-panel-id={PANEL_IDS.USER_TERMINAL}
+                          tabIndex={-1}
+                          className={`relative bg-bg-primary outline-none ${showAgentTerminal ? 'flex-shrink-0' : 'flex-1'} ${!showUserTerminal ? 'hidden' : ''}`}
                           style={showAgentTerminal && showUserTerminal ? { height: layoutSizes.userTerminalHeight } : undefined}
                         >
+                          <FlashOverlay panelId={PANEL_IDS.USER_TERMINAL} />
                           {userTerminal}
                         </div>
                       </div>
 
                       {/* Show placeholder if nothing visible */}
                       {!terminalsVisible && !showFileViewer && (
-                        <div className="flex-1 flex items-center justify-center bg-bg-primary text-text-secondary">
-                          <div className="text-center">
-                            <p>No panels visible</p>
-                            <p className="text-sm mt-2">
-                              Press {formatShortcut('4')} for Agent or {formatShortcut('5')} for Terminal
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    /* Top position: file viewer on top, terminals below */
-                    <>
-                      {/* File viewer - top */}
-                      {showFileViewer && fileViewer && (
-                        <div
-                          className="flex-shrink-0 bg-bg-secondary min-h-0"
-                          style={{
-                            height: terminalsVisible ? layoutSizes.fileViewerSize : undefined,
-                            flex: terminalsVisible ? undefined : 1,
-                          }}
-                        >
-                          {fileViewer}
-                        </div>
-                      )}
-
-                      {/* Draggable divider (horizontal) */}
-                      {showFileViewer && fileViewer && terminalsVisible && (
-                        <Divider type="fileViewer" direction="horizontal" />
-                      )}
-
-                      {/* Agent terminal - always mounted, hidden when not visible */}
-                      <div className={`min-w-0 bg-bg-primary ${showFileViewer && fileViewer ? 'border-t border-[#4a4a4a]' : ''} ${showUserTerminal ? 'border-b border-[#4a4a4a]' : ''} ${showAgentTerminal ? 'flex-1' : 'hidden'}`}>
-                        {agentTerminal}
-                      </div>
-
-                      {/* User terminal divider */}
-                      {showAgentTerminal && showUserTerminal && (
-                        <Divider type="userTerminal" direction="horizontal" />
-                      )}
-
-                      {/* User terminal - always mounted, hidden when not visible */}
-                      <div
-                        className={`bg-bg-primary ${showAgentTerminal ? 'flex-shrink-0' : ''} ${!showAgentTerminal && showUserTerminal ? 'flex-1' : ''} ${!showAgentTerminal && showFileViewer && fileViewer ? 'border-t border-[#4a4a4a]' : ''} ${!showUserTerminal ? 'hidden' : ''}`}
-                        style={showAgentTerminal && showUserTerminal ? { height: layoutSizes.userTerminalHeight } : undefined}
-                      >
-                        {userTerminal}
-                      </div>
-
-                      {/* Show placeholder if no panels are visible */}
-                      {!showFileViewer && !terminalsVisible && (
                         <div className="flex-1 flex items-center justify-center bg-bg-primary text-text-secondary">
                           <div className="text-center">
                             <p>No panels visible</p>

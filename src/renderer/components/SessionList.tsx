@@ -77,6 +77,11 @@ function StatusIndicator({ status, isUnread }: { status: SessionStatus; isUnread
   }
 
   // idle
+  if (isUnread) {
+    return (
+      <span className="w-3 h-3 rounded-full bg-green-400 shadow-[0_0_6px_1px_rgba(74,222,128,0.5)]" />
+    )
+  }
   return <span className="w-2 h-2 rounded-full bg-status-idle" />
 }
 
@@ -184,25 +189,43 @@ export default function SessionList({
       {/* Session list */}
       <div className="flex-1 overflow-y-auto p-2">
         {sessions.map((session) => {
-          const isUnread = session.isUnread && session.id !== activeSessionId
+          const isUnread = session.isUnread === true
           const waitingInfo = session.waitingType ? waitingTypeIcons[session.waitingType] : null
           const needsAttention = session.status === 'waiting' && isUnread
+          const hasUpdate = session.status === 'idle' && isUnread
 
           return (
             <div
               key={session.id}
+              tabIndex={0}
               onClick={() => onSelectSession(session.id)}
-              className={`group relative w-full text-left p-3 rounded mb-1 transition-all cursor-pointer ${
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  onSelectSession(session.id)
+                } else if (e.key === 'ArrowDown') {
+                  e.preventDefault()
+                  const next = (e.currentTarget as HTMLElement).nextElementSibling as HTMLElement
+                  if (next?.tabIndex >= 0) next.focus()
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault()
+                  const prev = (e.currentTarget as HTMLElement).previousElementSibling as HTMLElement
+                  if (prev?.tabIndex >= 0) prev.focus()
+                } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                  onDeleteSession(session.id)
+                }
+              }}
+              className={`group relative w-full text-left p-3 rounded mb-1 transition-all cursor-pointer outline-none focus:bg-accent/15 ${
                 session.id === activeSessionId ? 'bg-bg-tertiary' : 'hover:bg-bg-tertiary/50'
               } ${needsAttention ? 'bg-status-waiting/10 border-l-2 border-status-waiting' : ''} ${
-                isUnread && !needsAttention ? 'border-l-2 border-status-waiting/50' : ''
-              }`}
+                hasUpdate ? 'bg-green-400/10 border-l-2 border-green-400' : ''
+              } ${isUnread && !needsAttention && !hasUpdate ? 'border-l-2 border-status-waiting/50' : ''}`}
             >
               <div className="flex items-center gap-2 mb-1">
                 {/* Status indicator */}
                 <StatusIndicator status={session.status} isUnread={isUnread} />
                 <span className={`font-medium text-sm truncate flex-1 ${
                   needsAttention ? 'text-status-waiting font-semibold' :
+                  hasUpdate ? 'text-green-400 font-semibold' :
                   isUnread ? 'text-text-primary font-semibold' : 'text-text-primary'
                 }`}>
                   {session.name}
@@ -248,6 +271,7 @@ export default function SessionList({
               {session.lastMessage ? (
                 <div className={`text-xs mt-1 truncate ${
                   needsAttention ? 'text-status-waiting/80' :
+                  hasUpdate ? 'text-green-400/70' :
                   isUnread ? 'text-text-secondary' : 'text-text-secondary/60'
                 }`}>
                   "{session.lastMessage}"
