@@ -1083,6 +1083,20 @@ ipcMain.handle('git:fetchBranch', async (_event, repoPath: string, branchName: s
   }
 })
 
+ipcMain.handle('git:isMergedInto', async (_event, repoPath: string, ref: string) => {
+  if (isE2ETest) {
+    return false
+  }
+
+  try {
+    const git = simpleGit(expandHomePath(repoPath))
+    await git.raw(['merge-base', '--is-ancestor', 'HEAD', `origin/${ref}`])
+    return true
+  } catch {
+    return false
+  }
+})
+
 ipcMain.handle('git:branchChanges', async (_event, repoPath: string, baseBranch?: string) => {
   if (isE2ETest) {
     return {

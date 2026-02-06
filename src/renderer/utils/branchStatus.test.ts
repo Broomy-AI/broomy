@@ -7,9 +7,8 @@ function makeInput(overrides: Partial<BranchStatusInput> = {}): BranchStatusInpu
     ahead: 0,
     hasTrackingBranch: false,
     isOnMainBranch: false,
-    currentHeadCommit: 'abc123',
+    isMergedToMain: false,
     lastKnownPrState: undefined,
-    pushedToMainCommit: undefined,
     ...overrides,
   }
 }
@@ -49,18 +48,38 @@ describe('computeBranchStatus', () => {
     }))).toBe('in-progress')
   })
 
-  it('returns merged when pushedToMainCommit matches currentHeadCommit', () => {
+  it('returns merged when isMergedToMain is true', () => {
     expect(computeBranchStatus(makeInput({
-      pushedToMainCommit: 'abc123',
-      currentHeadCommit: 'abc123',
+      isMergedToMain: true,
     }))).toBe('merged')
   })
 
-  it('returns in-progress when pushedToMainCommit does not match (new changes)', () => {
-    // With no tracking branch and no PR state, falls through to default
+  it('returns merged when isMergedToMain is true with tracking branch', () => {
     expect(computeBranchStatus(makeInput({
-      pushedToMainCommit: 'abc123',
-      currentHeadCommit: 'def456',
+      isMergedToMain: true,
+      hasTrackingBranch: true,
+    }))).toBe('merged')
+  })
+
+  it('prioritizes isMergedToMain over PR state OPEN', () => {
+    expect(computeBranchStatus(makeInput({
+      isMergedToMain: true,
+      lastKnownPrState: 'OPEN',
+      hasTrackingBranch: true,
+    }))).toBe('merged')
+  })
+
+  it('returns in-progress when isMergedToMain but has uncommitted files', () => {
+    expect(computeBranchStatus(makeInput({
+      isMergedToMain: true,
+      uncommittedFiles: 1,
+    }))).toBe('in-progress')
+  })
+
+  it('returns in-progress when isMergedToMain but has commits ahead', () => {
+    expect(computeBranchStatus(makeInput({
+      isMergedToMain: true,
+      ahead: 1,
     }))).toBe('in-progress')
   })
 
@@ -103,27 +122,10 @@ describe('computeBranchStatus', () => {
     expect(computeBranchStatus(makeInput())).toBe('in-progress')
   })
 
-  it('prioritizes pushedToMainCommit match over PR state', () => {
-    expect(computeBranchStatus(makeInput({
-      pushedToMainCommit: 'abc123',
-      currentHeadCommit: 'abc123',
-      lastKnownPrState: 'OPEN',
-    }))).toBe('merged')
-  })
-
-  it('ignores pushedToMainCommit when currentHeadCommit is null', () => {
-    expect(computeBranchStatus(makeInput({
-      pushedToMainCommit: 'abc123',
-      currentHeadCommit: null,
-      hasTrackingBranch: true,
-    }))).toBe('pushed')
-  })
-
   it('uncommitted files override everything except main branch', () => {
     expect(computeBranchStatus(makeInput({
       uncommittedFiles: 1,
-      pushedToMainCommit: 'abc123',
-      currentHeadCommit: 'abc123',
+      isMergedToMain: true,
       lastKnownPrState: 'MERGED',
       hasTrackingBranch: true,
     }))).toBe('in-progress')
