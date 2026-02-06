@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import type { FileEntry, GitFileStatus, GitStatusResult, SearchResult, GitHubPrStatus } from '../../preload/index'
+import type { FileEntry, GitFileStatus, GitStatusResult, SearchResult, GitHubPrStatus, GitCommitInfo } from '../../preload/index'
 import type { ExplorerFilter, BranchStatus, PrState } from '../store/sessions'
 import { useRepoStore } from '../store/repos'
 import { statusLabel, getStatusColor, statusBadgeColor, prStateBadgeClass } from '../utils/explorerHelpers'
@@ -19,7 +19,7 @@ type PrComment = {
 
 interface ExplorerProps {
   directory?: string
-  onFileSelect?: (filePath: string, openInDiffMode: boolean, scrollToLine?: number, searchHighlight?: string, diffBaseRef?: string) => void
+  onFileSelect?: (filePath: string, openInDiffMode: boolean, scrollToLine?: number, searchHighlight?: string, diffBaseRef?: string, diffCurrentRef?: string, diffLabel?: string) => void
   selectedFilePath?: string | null
   gitStatus?: GitFileStatus[]
   syncStatus?: GitStatusResult | null
@@ -162,10 +162,17 @@ export default function Explorer({
   const [commitError, setCommitError] = useState<string | null>(null)
   const [commitErrorExpanded, setCommitErrorExpanded] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
-  const [scView, setScView] = useState<'working' | 'branch' | 'comments'>('working')
+  const [scView, setScView] = useState<'working' | 'branch' | 'commits' | 'comments'>('working')
   const [branchChanges, setBranchChanges] = useState<{ path: string; status: string }[]>([])
   const [branchBaseName, setBranchBaseName] = useState<string>('main')
   const [isBranchLoading, setIsBranchLoading] = useState(false)
+
+  // Commits state
+  const [branchCommits, setBranchCommits] = useState<GitCommitInfo[]>([])
+  const [isCommitsLoading, setIsCommitsLoading] = useState(false)
+  const [expandedCommits, setExpandedCommits] = useState<Set<string>>(new Set())
+  const [commitFilesByHash, setCommitFilesByHash] = useState<Record<string, { path: string; status: string }[]>>({})
+  const [loadingCommitFiles, setLoadingCommitFiles] = useState<Set<string>>(new Set())
 
   // PR status state
   const [prStatus, setPrStatus] = useState<GitHubPrStatus>(null)
@@ -198,6 +205,10 @@ export default function Explorer({
     setScView('working')
     setHasWriteAccess(false)
     setCommitError(null)
+    setBranchCommits([])
+    setExpandedCommits(new Set())
+    setCommitFilesByHash({})
+    setLoadingCommitFiles(new Set())
   }, [directory])
 
   // Load directory contents
@@ -300,6 +311,27 @@ export default function Explorer({
       if (cancelled) return
       setBranchChanges([])
       setIsBranchLoading(false)
+    })
+
+    return () => { cancelled = true }
+  }, [filter, scView, directory])
+
+  // Fetch branch commits when commits view is active
+  useEffect(() => {
+    if (filter !== 'source-control' || scView !== 'commits' || !directory) return
+
+    let cancelled = false
+    setIsCommitsLoading(true)
+
+    window.git.branchCommits(directory).then((result) => {
+      if (cancelled) return
+      setBranchCommits(result.commits)
+      setBranchBaseName(result.baseBranch)
+      setIsCommitsLoading(false)
+    }).catch(() => {
+      if (cancelled) return
+      setBranchCommits([])
+      setIsCommitsLoading(false)
     })
 
     return () => { cancelled = true }
@@ -641,6 +673,31 @@ export default function Explorer({
     }
   }
 
+  const handleToggleCommit = async (commitHash: string) => {
+    const newExpanded = new Set(expandedCommits)
+    if (newExpanded.has(commitHash)) {
+      newExpanded.delete(commitHash)
+    } else {
+      newExpanded.add(commitHash)
+      // Lazy-load files if not already loaded
+      if (!commitFilesByHash[commitHash] && directory) {
+        setLoadingCommitFiles(prev => new Set(prev).add(commitHash))
+        try {
+          const files = await window.git.commitFiles(directory, commitHash)
+          setCommitFilesByHash(prev => ({ ...prev, [commitHash]: files }))
+        } catch {
+          setCommitFilesByHash(prev => ({ ...prev, [commitHash]: [] }))
+        }
+        setLoadingCommitFiles(prev => {
+          const next = new Set(prev)
+          next.delete(commitHash)
+          return next
+        })
+      }
+    }
+    setExpandedCommits(newExpanded)
+  }
+
   const handleReplyToComment = async (commentId: number) => {
     if (!directory || !prStatus || !replyText[commentId]?.trim()) return
     setIsSubmittingReply(commentId)
@@ -828,6 +885,14 @@ export default function Explorer({
         >
           Branch
         </button>
+        <button
+          onClick={() => setScView('commits')}
+          className={`px-2 py-1 text-xs rounded transition-colors ${
+            scView === 'commits' ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
+          }`}
+        >
+          Commits
+        </button>
         {prStatus && (
           <button
             onClick={() => setScView('comments')}
@@ -975,6 +1040,84 @@ export default function Explorer({
       )
     }
 
+    // Commits view
+    if (scView === 'commits') {
+      return (
+        <div className="flex flex-col h-full">
+          {viewToggle}
+          {prStatusBanner}
+          {isCommitsLoading ? (
+            <div className="flex-1 flex items-center justify-center text-text-secondary text-xs">Loading...</div>
+          ) : branchCommits.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center text-text-secondary text-xs">
+              No commits ahead of {branchBaseName}
+            </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto text-sm">
+              <div className="px-3 py-1.5 text-xs font-medium text-text-secondary uppercase tracking-wide bg-bg-secondary">
+                Commits ({branchCommits.length})
+              </div>
+              {branchCommits.map((commit) => {
+                const isExpanded = expandedCommits.has(commit.hash)
+                const files = commitFilesByHash[commit.hash]
+                const isLoadingFiles = loadingCommitFiles.has(commit.hash)
+                return (
+                  <div key={commit.hash}>
+                    <div
+                      className="flex items-center gap-2 px-3 py-1.5 hover:bg-bg-tertiary cursor-pointer"
+                      onClick={() => handleToggleCommit(commit.hash)}
+                      title={`${commit.shortHash} — ${commit.message}\nby ${commit.author} on ${new Date(commit.date).toLocaleDateString()}`}
+                    >
+                      <span className="text-text-secondary w-3 text-center text-xs">
+                        {isExpanded ? '▼' : '▶'}
+                      </span>
+                      <span className="text-xs font-mono text-accent shrink-0">{commit.shortHash}</span>
+                      <span className="text-xs text-text-primary truncate flex-1">{commit.message}</span>
+                    </div>
+                    {isExpanded && (
+                      <div className="bg-bg-secondary/30">
+                        {isLoadingFiles ? (
+                          <div className="px-3 py-1 pl-8 text-xs text-text-secondary">Loading files...</div>
+                        ) : files && files.length > 0 ? (
+                          files.map((file) => (
+                            <div
+                              key={`${commit.hash}-${file.path}`}
+                              className="flex items-center gap-2 px-3 py-1 pl-8 hover:bg-bg-tertiary cursor-pointer"
+                              title={`${file.path} — ${statusLabel(file.status)}`}
+                              onClick={() => {
+                                if (onFileSelect && directory) {
+                                  onFileSelect(
+                                    `${directory}/${file.path}`,
+                                    true,
+                                    undefined,
+                                    undefined,
+                                    `${commit.hash}~1`,
+                                    commit.hash,
+                                    `${commit.shortHash}: ${commit.message}`
+                                  )
+                                }
+                              }}
+                            >
+                              <span className={`truncate flex-1 text-xs ${getStatusColor(file.status)}`}>
+                                {file.path}
+                              </span>
+                              <StatusBadge status={file.status} />
+                            </div>
+                          ))
+                        ) : (
+                          <div className="px-3 py-1 pl-8 text-xs text-text-secondary">No files changed</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )
+    }
+
     // Branch changes view
     if (scView === 'branch') {
       return (
@@ -999,7 +1142,7 @@ export default function Explorer({
                   title={`${file.path} — ${statusLabel(file.status)}`}
                   onClick={() => {
                     if (onFileSelect && directory) {
-                      onFileSelect(`${directory}/${file.path}`, true, undefined, undefined, `origin/${branchBaseName}`)
+                      onFileSelect(`${directory}/${file.path}`, true, undefined, undefined, `origin/${branchBaseName}`, undefined, `Branch vs ${branchBaseName}`)
                     }
                   }}
                 >

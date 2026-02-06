@@ -1147,6 +1147,107 @@ ipcMain.handle('git:branchChanges', async (_event, repoPath: string, baseBranch?
   }
 })
 
+ipcMain.handle('git:branchCommits', async (_event, repoPath: string, baseBranch?: string) => {
+  if (isE2ETest) {
+    return {
+      commits: [
+        { hash: 'abc1234567890', shortHash: 'abc1234', message: 'Add new feature', author: 'Test User', date: '2025-01-15T10:00:00Z' },
+        { hash: 'def5678901234', shortHash: 'def5678', message: 'Fix styling bug', author: 'Test User', date: '2025-01-14T09:00:00Z' },
+      ],
+      baseBranch: 'main',
+    }
+  }
+
+  try {
+    const git = simpleGit(expandHomePath(repoPath))
+
+    // Auto-detect base branch if not provided
+    if (!baseBranch) {
+      try {
+        const ref = await git.raw(['symbolic-ref', 'refs/remotes/origin/HEAD'])
+        baseBranch = ref.trim().replace('refs/remotes/origin/', '')
+      } catch {
+        try {
+          await git.raw(['rev-parse', '--verify', 'origin/main'])
+          baseBranch = 'main'
+        } catch {
+          try {
+            await git.raw(['rev-parse', '--verify', 'origin/master'])
+            baseBranch = 'master'
+          } catch {
+            baseBranch = 'main'
+          }
+        }
+      }
+    }
+
+    const SEP = '<<SEP>>'
+    const logOutput = await git.raw([
+      'log',
+      `origin/${baseBranch}..HEAD`,
+      `--pretty=format:%H${SEP}%h${SEP}%s${SEP}%an${SEP}%aI`,
+    ])
+
+    const commits: { hash: string; shortHash: string; message: string; author: string; date: string }[] = []
+    for (const line of logOutput.trim().split('\n')) {
+      if (!line.trim()) continue
+      const parts = line.split(SEP)
+      if (parts.length >= 5) {
+        commits.push({
+          hash: parts[0],
+          shortHash: parts[1],
+          message: parts[2],
+          author: parts[3],
+          date: parts[4],
+        })
+      }
+    }
+
+    return { commits, baseBranch }
+  } catch {
+    return { commits: [], baseBranch: baseBranch || 'main' }
+  }
+})
+
+ipcMain.handle('git:commitFiles', async (_event, repoPath: string, commitHash: string) => {
+  if (isE2ETest) {
+    return [
+      { path: 'src/index.ts', status: 'modified' },
+      { path: 'src/utils.ts', status: 'added' },
+    ]
+  }
+
+  try {
+    const git = simpleGit(expandHomePath(repoPath))
+    const output = await git.raw(['diff-tree', '--no-commit-id', '--name-status', '-r', commitHash])
+
+    const files: { path: string; status: string }[] = []
+    for (const line of output.trim().split('\n')) {
+      if (!line.trim()) continue
+      const parts = line.split('\t')
+      const statusChar = parts[0]
+      const filePath = parts.length > 2 ? parts[2] : parts[1]
+
+      let status = 'modified'
+      switch (statusChar.charAt(0)) {
+        case 'M': status = 'modified'; break
+        case 'A': status = 'added'; break
+        case 'D': status = 'deleted'; break
+        case 'R': status = 'renamed'; break
+        case 'C': status = 'added'; break
+      }
+
+      if (filePath) {
+        files.push({ path: filePath, status })
+      }
+    }
+
+    return files
+  } catch {
+    return []
+  }
+})
+
 // GitHub CLI handlers
 ipcMain.handle('gh:isInstalled', async () => {
   if (isE2ETest) {

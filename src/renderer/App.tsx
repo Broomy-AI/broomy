@@ -73,6 +73,8 @@ function AppContent() {
   const [scrollToLine, setScrollToLine] = useState<number | undefined>(undefined)
   const [searchHighlight, setSearchHighlight] = useState<string | undefined>(undefined)
   const [diffBaseRef, setDiffBaseRef] = useState<string | undefined>(undefined)
+  const [diffCurrentRef, setDiffCurrentRef] = useState<string | undefined>(undefined)
+  const [diffLabel, setDiffLabel] = useState<string | undefined>(undefined)
   const [showPanelPicker, setShowPanelPicker] = useState(false)
   const [isFileViewerDirty, setIsFileViewerDirty] = useState(false)
   const [pendingNavigation, setPendingNavigation] = useState<{
@@ -81,6 +83,8 @@ function AppContent() {
     scrollToLine?: number
     searchHighlight?: string
     diffBaseRef?: string
+    diffCurrentRef?: string
+    diffLabel?: string
   } | null>(null)
   const saveCurrentFileRef = React.useRef<(() => Promise<void>) | null>(null)
 
@@ -355,7 +359,7 @@ function AppContent() {
   }, [activeSessionId, togglePanel])
 
   // Navigate to a file, checking for unsaved changes first
-  const navigateToFile = useCallback((filePath: string, openInDiffMode: boolean, scrollToLine?: number, searchHighlight?: string, diffBaseRef?: string) => {
+  const navigateToFile = useCallback((filePath: string, openInDiffMode: boolean, scrollToLine?: number, searchHighlight?: string, diffBaseRef?: string, diffCurrentRef?: string, diffLabel?: string) => {
     if (!activeSessionId) return
     // If same file, just update scroll/highlight
     if (filePath === activeSession?.selectedFilePath) {
@@ -363,16 +367,20 @@ function AppContent() {
       setScrollToLine(scrollToLine)
       setSearchHighlight(searchHighlight)
       setDiffBaseRef(diffBaseRef)
+      setDiffCurrentRef(diffCurrentRef)
+      setDiffLabel(diffLabel)
       return
     }
     if (isFileViewerDirty) {
-      setPendingNavigation({ filePath, openInDiffMode, scrollToLine, searchHighlight, diffBaseRef })
+      setPendingNavigation({ filePath, openInDiffMode, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel })
       return
     }
     setOpenFileInDiffMode(openInDiffMode)
     setScrollToLine(scrollToLine)
     setSearchHighlight(searchHighlight)
     setDiffBaseRef(diffBaseRef)
+    setDiffCurrentRef(diffCurrentRef)
+    setDiffLabel(diffLabel)
     selectFile(activeSessionId, filePath)
   }, [activeSessionId, activeSession?.selectedFilePath, isFileViewerDirty, selectFile])
 
@@ -385,6 +393,8 @@ function AppContent() {
       setScrollToLine(pendingNavigation.scrollToLine)
       setSearchHighlight(pendingNavigation.searchHighlight)
       setDiffBaseRef(pendingNavigation.diffBaseRef)
+      setDiffCurrentRef(pendingNavigation.diffCurrentRef)
+      setDiffLabel(pendingNavigation.diffLabel)
       selectFile(activeSessionId, pendingNavigation.filePath)
     }
     setPendingNavigation(null)
@@ -397,6 +407,8 @@ function AppContent() {
       setScrollToLine(pendingNavigation.scrollToLine)
       setSearchHighlight(pendingNavigation.searchHighlight)
       setDiffBaseRef(pendingNavigation.diffBaseRef)
+      setDiffCurrentRef(pendingNavigation.diffCurrentRef)
+      setDiffLabel(pendingNavigation.diffLabel)
       setIsFileViewerDirty(false)
       selectFile(activeSessionId, pendingNavigation.filePath)
     }
@@ -471,8 +483,8 @@ function AppContent() {
     [PANEL_IDS.EXPLORER]: activeSession?.showExplorer ? (
       <Explorer
         directory={activeSession?.directory}
-        onFileSelect={(filePath, openInDiffMode, scrollToLine, searchHighlight, diffBaseRef) => {
-          navigateToFile(filePath, openInDiffMode, scrollToLine, searchHighlight, diffBaseRef)
+        onFileSelect={(filePath, openInDiffMode, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel) => {
+          navigateToFile(filePath, openInDiffMode, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel)
         }}
         selectedFilePath={activeSession?.selectedFilePath}
         gitStatus={activeSessionGitStatus}
@@ -506,6 +518,8 @@ function AppContent() {
         onDirtyStateChange={setIsFileViewerDirty}
         saveRef={saveCurrentFileRef}
         diffBaseRef={diffBaseRef}
+        diffCurrentRef={diffCurrentRef}
+        diffLabel={diffLabel}
         reviewContext={activeSession?.sessionType === 'review' ? {
           sessionDirectory: activeSession.directory,
           commentsFilePath: `${activeSession.directory}/.broomer-review/comments.json`,
@@ -537,6 +551,8 @@ function AppContent() {
     scrollToLine,
     searchHighlight,
     diffBaseRef,
+    diffCurrentRef,
+    diffLabel,
     globalPanelVisibility,
     fetchGitStatus,
     agentTerminalPanel,

@@ -107,6 +107,14 @@ export type GitHubPrForReview = {
   labels: string[]
 }
 
+export type GitCommitInfo = {
+  hash: string
+  shortHash: string
+  message: string
+  author: string
+  date: string
+}
+
 export type WorktreeInfo = {
   path: string
   branch: string
@@ -132,6 +140,8 @@ export type GitApi = {
   defaultBranch: (repoPath: string) => Promise<string>
   remoteUrl: (repoPath: string) => Promise<string | null>
   branchChanges: (repoPath: string, baseBranch?: string) => Promise<{ files: { path: string; status: string }[]; baseBranch: string }>
+  branchCommits: (repoPath: string, baseBranch?: string) => Promise<{ commits: GitCommitInfo[]; baseBranch: string }>
+  commitFiles: (repoPath: string, commitHash: string) => Promise<{ path: string; status: string }[]>
   headCommit: (repoPath: string) => Promise<string | null>
   listBranches: (repoPath: string) => Promise<{ name: string; isRemote: boolean; current: boolean }[]>
   fetchBranch: (repoPath: string, branchName: string) => Promise<{ success: boolean; error?: string }>
@@ -307,6 +317,8 @@ const gitApi: GitApi = {
   defaultBranch: (repoPath) => ipcRenderer.invoke('git:defaultBranch', repoPath),
   remoteUrl: (repoPath) => ipcRenderer.invoke('git:remoteUrl', repoPath),
   branchChanges: (repoPath, baseBranch) => ipcRenderer.invoke('git:branchChanges', repoPath, baseBranch),
+  branchCommits: (repoPath, baseBranch) => ipcRenderer.invoke('git:branchCommits', repoPath, baseBranch),
+  commitFiles: (repoPath, commitHash) => ipcRenderer.invoke('git:commitFiles', repoPath, commitHash),
   headCommit: (repoPath) => ipcRenderer.invoke('git:headCommit', repoPath),
   listBranches: (repoPath) => ipcRenderer.invoke('git:listBranches', repoPath),
   fetchBranch: (repoPath, branchName) => ipcRenderer.invoke('git:fetchBranch', repoPath, branchName),

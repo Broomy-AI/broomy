@@ -22,12 +22,14 @@ interface FileViewerProps {
   onDirtyStateChange?: (isDirty: boolean) => void // Report dirty state to parent
   saveRef?: React.MutableRefObject<(() => Promise<void>) | null> // Ref for parent to trigger save
   diffBaseRef?: string // Git ref to compare against (e.g. 'origin/main' for branch changes)
+  diffCurrentRef?: string // Git ref for the "modified" side (e.g. commit hash for commit diffs)
+  diffLabel?: string // Label to display in the header (e.g. "abc1234: commit message")
   reviewContext?: { sessionDirectory: string; commentsFilePath: string }
 }
 
-export default function FileViewer({ filePath, position = 'top', onPositionChange, onClose, fileStatus, directory, onSaveComplete, initialViewMode = 'latest', scrollToLine, searchHighlight, onDirtyStateChange, saveRef, diffBaseRef, reviewContext }: FileViewerProps) {
-  // Show diff for modified/deleted files, or when a base ref is provided (branch changes)
-  const canShowDiff = fileStatus === 'modified' || fileStatus === 'deleted' || !!diffBaseRef
+export default function FileViewer({ filePath, position = 'top', onPositionChange, onClose, fileStatus, directory, onSaveComplete, initialViewMode = 'latest', scrollToLine, searchHighlight, onDirtyStateChange, saveRef, diffBaseRef, diffCurrentRef, diffLabel, reviewContext }: FileViewerProps) {
+  // Show diff for modified/deleted files, or when a base ref is provided (branch changes), or when viewing a specific commit
+  const canShowDiff = fileStatus === 'modified' || fileStatus === 'deleted' || !!diffBaseRef || !!diffCurrentRef
   const [content, setContent] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -39,6 +41,7 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
   const [viewMode, setViewMode] = useState<ViewMode>('latest')
   const [originalContent, setOriginalContent] = useState<string>('')
   const [diffSideBySide, setDiffSideBySide] = useState(true)
+  const [diffModifiedContent, setDiffModifiedContent] = useState<string | null>(null)
   const [fileChangedOnDisk, setFileChangedOnDisk] = useState(false)
   const contentRef = useRef(content)
 
@@ -163,6 +166,30 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
 
     loadOriginal()
   }, [filePath, directory, canShowDiff, viewMode, diffBaseRef])
+
+  // Load modified content from git when diffCurrentRef is set (commit diffs)
+  useEffect(() => {
+    if (!filePath || !directory || !diffCurrentRef || viewMode !== 'diff') {
+      setDiffModifiedContent(null)
+      return
+    }
+
+    let cancelled = false
+    const loadModified = async () => {
+      try {
+        const relativePath = filePath.startsWith(directory + '/')
+          ? filePath.slice(directory.length + 1)
+          : filePath
+        const modified = await window.git.show(directory, relativePath, diffCurrentRef)
+        if (!cancelled) setDiffModifiedContent(modified)
+      } catch {
+        if (!cancelled) setDiffModifiedContent('')
+      }
+    }
+
+    loadModified()
+    return () => { cancelled = true }
+  }, [filePath, directory, diffCurrentRef, viewMode])
 
   // Keep contentRef in sync
   useEffect(() => {
@@ -366,6 +393,11 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
             </button>
           )}
           <span className="text-xs text-text-secondary truncate">{filePath}</span>
+          {diffLabel && viewMode === 'diff' && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-bg-tertiary text-text-secondary truncate shrink-0">
+              {diffLabel}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {/* Side-by-side toggle - only show in diff mode */}
@@ -514,16 +546,16 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
           <MonacoDiffViewer
             filePath={filePath}
             originalContent={originalContent}
-            modifiedContent={fileStatus === 'deleted' ? '' : content}
+            modifiedContent={diffModifiedContent !== null ? diffModifiedContent : (fileStatus === 'deleted' ? '' : content)}
             sideBySide={diffSideBySide}
             scrollToLine={scrollToLine}
           />
         ) : (
           <ViewerComponent
             filePath={filePath}
-            content={content}
-            onSave={handleSave}
-            onDirtyChange={handleDirtyChange}
+            content={diffCurrentRef ? (diffModifiedContent ?? content) : content}
+            onSave={diffCurrentRef ? undefined : handleSave}
+            onDirtyChange={diffCurrentRef ? undefined : handleDirtyChange}
             scrollToLine={scrollToLine}
             searchHighlight={searchHighlight}
             reviewContext={reviewContext}
