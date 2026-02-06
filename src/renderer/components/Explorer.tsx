@@ -927,7 +927,7 @@ export default function Explorer({
           </div>
         ) : branchStatus === 'merged' ? (
           <div className="flex items-center gap-2">
-            <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-green-500/20 text-green-400">
+            <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-purple-500/20 text-purple-400">
               MERGED
             </span>
             <span className="text-xs text-text-secondary">
