@@ -25,27 +25,24 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
   const updateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const idleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastStatusRef = useRef<'working' | 'idle'>('idle')
-  const lastUserInputRef = useRef<number>(0)  // Track when user last typed
-  const lastInteractionRef = useRef<number>(0)  // Track focus/session changes
-  const [ptyId, setPtyId] = useState<string | null>(null)
+  const lastUserInputRef = useRef<number>(0)
+  const lastInteractionRef = useRef<number>(0)
+  const ptyIdRef = useRef<string | null>(null)
+  const [showScrollButton, setShowScrollButton] = useState(false)
   const { addError } = useErrorStore()
   const updateAgentMonitor = useSessionStore((state) => state.updateAgentMonitor)
   const markSessionRead = useSessionStore((state) => state.markSessionRead)
 
-  // Use ref for updateAgentMonitor to avoid effect re-runs
   const updateAgentMonitorRef = useRef(updateAgentMonitor)
   updateAgentMonitorRef.current = updateAgentMonitor
   const markSessionReadRef = useRef(markSessionRead)
   markSessionReadRef.current = markSessionRead
 
-  // Use ref for sessionId to avoid effect re-runs
   const sessionIdRef = useRef(sessionId)
   sessionIdRef.current = sessionId
 
-  // Debounced update to avoid flicker - collects updates over 300ms
   const pendingUpdateRef = useRef<{ status?: 'working' | 'idle' | 'error'; lastMessage?: string } | null>(null)
 
-  // Stable flush function using refs
   const flushUpdate = useCallback(() => {
     if (pendingUpdateRef.current && sessionIdRef.current) {
       updateAgentMonitorRef.current(sessionIdRef.current, pendingUpdateRef.current)
@@ -53,21 +50,14 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
     }
   }, [])
 
-  // Stable schedule function
   const scheduleUpdate = useCallback((update: { status?: 'working' | 'idle' | 'error'; lastMessage?: string }) => {
-    // Merge with pending update
     pendingUpdateRef.current = {
       ...pendingUpdateRef.current,
       ...update,
     }
-
-    // Clear existing timeout
     if (updateTimeoutRef.current) {
       clearTimeout(updateTimeoutRef.current)
     }
-
-    // Flush immediately for status changes to 'working' (responsive feedback)
-    // Debounce for idle transitions (avoid flicker when activity resumes quickly)
     if (update.status === 'working') {
       flushUpdate()
     } else {
@@ -75,14 +65,16 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
     }
   }, [flushUpdate])
 
+  const handleScrollToBottom = useCallback(() => {
+    terminalRef.current?.scrollToBottom()
+    setShowScrollButton(false)
+  }, [])
+
   useEffect(() => {
     if (!containerRef.current || !sessionId) return
 
-    // Grace period: ignore status updates for 5 seconds after terminal creation
-    // to avoid false "needs attention" on startup when the agent does initial output
     const effectStartTime = Date.now()
 
-    // Create terminal
     const terminal = new XTerm({
       theme: {
         background: '#1a1a1a',
@@ -112,8 +104,9 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
       lineHeight: 1.2,
       cursorBlink: true,
       cursorStyle: 'bar',
-      scrollback: 10000,
+      scrollback: 5000,
       minimumContrastRatio: 7,
+      macOptionIsMeta: true,
     })
 
     const fitAddon = new FitAddon()
@@ -125,7 +118,6 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
 
     terminal.open(containerRef.current)
 
-    // Register buffer getter for copy functionality (agent terminals only)
     if (isAgentTerminal && sessionId) {
       terminalBufferRegistry.register(sessionId, () => {
         try {
@@ -136,84 +128,92 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
       })
     }
 
-    // Wait for next frame to ensure container has dimensions before fitting
+    const isAtBottom = () => {
+      const buffer = terminal.buffer.active
+      return buffer.viewportY >= buffer.baseY - 3
+    }
+
+    // Update "Go to End" button after every render — catches fit()-induced
+    // displacement, data writes, and user scrolls. No scroll enforcement.
+    terminal.onRender(() => {
+      setShowScrollButton(!isAtBottom() && terminal.buffer.active.baseY > 0)
+    })
+
+    // Initial fit
     requestAnimationFrame(() => {
       if (containerRef.current && containerRef.current.offsetWidth > 0 && containerRef.current.offsetHeight > 0) {
-        fitAndScroll()
+        try { fitAddon.fit() } catch { /* ignore */ }
       }
     })
 
-    // Intercept keyboard shortcuts - dispatch custom event for Layout to handle
+    // Keyboard shortcuts
     terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
-      // Let Cmd/Ctrl + 1/2/3/4/5/6 pass through to the app
+      if (e.ctrlKey && e.key === 'Tab') {
+        return false
+      }
+      if (e.shiftKey && e.key === 'Enter') {
+        if (e.type === 'keydown' && ptyIdRef.current) {
+          window.pty.write(ptyIdRef.current, '\x1b[13;2u')
+        }
+        return false
+      }
+      if (e.metaKey && e.key === 'ArrowLeft') {
+        if (e.type === 'keydown' && ptyIdRef.current) {
+          window.pty.write(ptyIdRef.current, '\x01')
+        }
+        return false
+      }
+      if (e.metaKey && e.key === 'ArrowRight') {
+        if (e.type === 'keydown' && ptyIdRef.current) {
+          window.pty.write(ptyIdRef.current, '\x05')
+        }
+        return false
+      }
+      if (e.type !== 'keydown') return true
+      if (e.metaKey && e.key === 'Backspace') {
+        if (ptyIdRef.current) {
+          window.pty.write(ptyIdRef.current, '\x15')
+        }
+        return false
+      }
       if (e.metaKey || e.ctrlKey) {
         if (['1', '2', '3', '4', '5', '6'].includes(e.key)) {
-          // Dispatch custom event for Layout to handle (xterm may block normal bubbling)
           window.dispatchEvent(new CustomEvent('app:toggle-panel', {
             detail: { key: e.key }
           }))
-          return false // Don't handle in terminal
+          return false
         }
       }
-      return true // Handle normally in terminal
+      return true
     })
-
-    // Helper: fit terminal, preserving scroll position. If viewport was at
-    // the bottom before fit, scroll back to bottom after (since fit can
-    // displace the viewport). xterm natively auto-scrolls on new content
-    // when at the bottom, so we don't need custom follow-mode tracking.
-    const fitAndScroll = () => {
-      try {
-        const buffer = terminal.buffer.active
-        const wasAtBottom = buffer.viewportY >= buffer.baseY - 3
-        fitAddon.fit()
-        if (wasAtBottom) {
-          terminal.scrollToBottom()
-        }
-      } catch (e) {
-        // Ignore fit errors
-      }
-    }
 
     terminalRef.current = terminal
     fitAddonRef.current = fitAddon
 
-    // Create PTY (pass sessionId and agent env vars)
     const id = `${sessionId}-${Date.now()}`
+    ptyIdRef.current = id
+
     window.pty.create({ id, cwd, command, sessionId, env })
       .then(() => {
-        setPtyId(id)
-
-        // Connect terminal input to PTY
         terminal.onData((data) => {
-          lastUserInputRef.current = Date.now()  // Track user typing
-          // Typing clears "needs attention" - if you're typing, you're paying attention
+          lastUserInputRef.current = Date.now()
           if (sessionIdRef.current) {
             markSessionReadRef.current(sessionIdRef.current)
           }
           window.pty.write(id, data)
         })
 
-        // Connect PTY output to terminal
-        // xterm natively auto-scrolls when viewport is at bottom - no manual scrollToBottom needed
         const removeDataListener = window.pty.onData(id, (data) => {
           terminal.write(data)
 
-          // Simple activity detection: any terminal output = working
-          // Just pause briefly after user interaction to avoid false positives
-          // Skip status updates during startup grace period to avoid false "needs attention"
+          // Activity detection for agent terminals
           if (isAgentTerminal && data.length > 0 && (Date.now() - effectStartTime >= 5000)) {
             const now = Date.now()
             const timeSinceInput = now - lastUserInputRef.current
             const timeSinceInteraction = now - lastInteractionRef.current
             const isPaused = timeSinceInput < 200 || timeSinceInteraction < 200
 
-            // During pause: don't update status to working, but still set idle timeout
-            // This handles the case where user presses Escape to stop Claude -
-            // we don't want to show "working" for the stop message, but we do want
-            // to eventually show "idle" if nothing else happens
             if (isPaused) {
-              // Clear and reset idle timeout - if no non-paused activity for 1 second, go idle
               if (idleTimeoutRef.current) {
                 clearTimeout(idleTimeoutRef.current)
               }
@@ -224,7 +224,6 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
               return
             }
 
-            // Clear idle timeout since we got activity
             if (idleTimeoutRef.current) {
               clearTimeout(idleTimeoutRef.current)
             }
@@ -232,7 +231,6 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
             lastStatusRef.current = 'working'
             scheduleUpdate({ status: 'working' })
 
-            // Set idle timeout - if no activity for 1 second, mark as idle
             idleTimeoutRef.current = setTimeout(() => {
               lastStatusRef.current = 'idle'
               scheduleUpdate({ status: 'idle' })
@@ -240,12 +238,14 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
           }
         })
 
-        // Handle PTY exit
         const removeExitListener = window.pty.onExit(id, (exitCode) => {
           terminal.write(`\r\n[Process exited with code ${exitCode}]\r\n`)
+          if (isAgentTerminal && sessionIdRef.current) {
+            lastStatusRef.current = 'idle'
+            scheduleUpdate({ status: 'idle' })
+          }
         })
 
-        // Store cleanup functions
         cleanupRef.current = () => {
           removeDataListener()
           removeExitListener()
@@ -258,82 +258,52 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
         terminal.write(`\x1b[33m${err.message || err}\x1b[0m\r\n`)
       })
 
-    // Handle resize - but don't resize when terminal is hidden (would send 0x0 to PTY)
+    // fit() immediately on every resize so the grid stays in sync with the container.
+    // Only debounce the PTY resize IPC (which triggers remote re-rendering).
+    let ptyResizeTimeout: ReturnType<typeof setTimeout> | null = null
     const resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0]
-      // Skip resize if container has no size (hidden)
       if (!entry || entry.contentRect.width === 0 || entry.contentRect.height === 0) {
         return
       }
-      fitAndScroll()
-      // Only resize PTY if we have valid dimensions
-      if (id && terminal.cols > 0 && terminal.rows > 0) {
-        window.pty.resize(id, terminal.cols, terminal.rows)
-      }
+      try { fitAddon.fit() } catch { /* ignore */ }
+      terminal.scrollToBottom()
+      if (ptyResizeTimeout) clearTimeout(ptyResizeTimeout)
+      ptyResizeTimeout = setTimeout(() => {
+        if (ptyIdRef.current && terminal.cols > 0 && terminal.rows > 0) {
+          window.pty.resize(ptyIdRef.current, terminal.cols, terminal.rows)
+        }
+      }, 100)
     })
     const containerEl = containerRef.current
     resizeObserver.observe(containerEl)
 
     return () => {
       resizeObserver.disconnect()
+      if (ptyResizeTimeout) clearTimeout(ptyResizeTimeout)
       cleanupRef.current?.()
-      if (ptyId) {
-        window.pty.kill(ptyId)
+      if (ptyIdRef.current) {
+        window.pty.kill(ptyIdRef.current)
+        ptyIdRef.current = null
       }
       terminal.dispose()
-      // Clean up timeouts
-      if (updateTimeoutRef.current) {
-        clearTimeout(updateTimeoutRef.current)
+      if (updateTimeoutRef.current) clearTimeout(updateTimeoutRef.current)
+      if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current)
+      if (isAgentTerminal && sessionIdRef.current && lastStatusRef.current === 'working') {
+        updateAgentMonitorRef.current(sessionIdRef.current, { status: 'idle' })
       }
-      if (idleTimeoutRef.current) {
-        clearTimeout(idleTimeoutRef.current)
-      }
-      // Unregister buffer getter
       if (isAgentTerminal && sessionId) {
         terminalBufferRegistry.unregister(sessionId)
       }
     }
-    // Note: scheduleUpdate is stable (uses refs internally) so not needed in deps
-  // Note: env is included to recreate PTY if env changes, but this is rare
   }, [sessionId, cwd, command, env, isAgentTerminal, addError])
 
-  // Handle window resize
+  // Fit when terminal becomes visible (e.g., tab switch)
   useEffect(() => {
-    const handleResize = () => {
-      if (fitAddonRef.current && terminalRef.current && ptyId) {
-        try {
-          const buffer = terminalRef.current.buffer.active
-          const wasAtBottom = buffer.viewportY >= buffer.baseY - 3
-          fitAddonRef.current.fit()
-          if (wasAtBottom) {
-            terminalRef.current.scrollToBottom()
-          }
-          if (terminalRef.current.cols > 0 && terminalRef.current.rows > 0) {
-            window.pty.resize(ptyId, terminalRef.current.cols, terminalRef.current.rows)
-          }
-        } catch (e) {
-          // Ignore fit errors
-        }
-      }
-    }
-
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [ptyId])
-
-  // Scroll to bottom when terminal becomes active
-  // Also track session changes to suppress activity detection briefly
-  useEffect(() => {
-    lastInteractionRef.current = Date.now()  // Session switched
-    if (isActive && terminalRef.current && fitAddonRef.current) {
-      // Use rAF to ensure the container is visible and has dimensions before fitting
+    lastInteractionRef.current = Date.now()
+    if (isActive && fitAddonRef.current) {
       requestAnimationFrame(() => {
-        try {
-          fitAddonRef.current?.fit()
-        } catch (e) {
-          // Ignore fit errors
-        }
-        terminalRef.current?.scrollToBottom()
+        try { fitAddonRef.current?.fit() } catch { /* ignore */ }
       })
     }
   }, [isActive])
@@ -360,8 +330,16 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
   }
 
   return (
-    <div className="h-full w-full p-2">
+    <div className="h-full w-full p-2 relative">
       <div ref={containerRef} className="h-full w-full" />
+      {showScrollButton && (
+        <button
+          onClick={handleScrollToBottom}
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 text-xs font-medium rounded-full bg-accent text-white hover:bg-accent/80 shadow-lg transition-colors z-10"
+        >
+          Go to End &#x2193;
+        </button>
+      )}
     </div>
   )
 }
