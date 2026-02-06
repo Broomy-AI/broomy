@@ -68,6 +68,7 @@ function AppContent() {
 
   const [showNewSessionDialog, setShowNewSessionDialog] = useState(false)
   const [gitStatusBySession, setGitStatusBySession] = useState<Record<string, GitStatusResult>>({})
+  const [isMergedBySession, setIsMergedBySession] = useState<Record<string, boolean>>({})
   const [directoryExists, setDirectoryExists] = useState<Record<string, boolean>>({})
   const [openFileInDiffMode, setOpenFileInDiffMode] = useState(false)
   const [scrollToLine, setScrollToLine] = useState<number | undefined>(undefined)
@@ -149,10 +150,27 @@ function AppContent() {
         ...prev,
         [activeSession.id]: normalized
       }))
+
+      // Check if branch is merged into the default branch
+      const isOnMain = normalized.current === 'main' || normalized.current === 'master'
+      if (!isOnMain && normalized.current) {
+        const repo = repos.find(r => r.id === activeSession.repoId)
+        const defaultBranch = repo?.defaultBranch || 'main'
+        const merged = await window.git.isMergedInto(activeSession.directory, defaultBranch)
+        setIsMergedBySession(prev => ({
+          ...prev,
+          [activeSession.id]: merged
+        }))
+      } else {
+        setIsMergedBySession(prev => ({
+          ...prev,
+          [activeSession.id]: false
+        }))
+      }
     } catch {
       // Ignore errors
     }
-  }, [activeSession?.id, activeSession?.directory, normalizeGitStatus])
+  }, [activeSession?.id, activeSession?.directory, activeSession?.repoId, repos, normalizeGitStatus])
 
   // Poll git status every 2 seconds
   useEffect(() => {
@@ -174,16 +192,15 @@ function AppContent() {
         ahead: gitStatus.ahead,
         hasTrackingBranch: !!gitStatus.tracking,
         isOnMainBranch: gitStatus.current === 'main' || gitStatus.current === 'master',
-        currentHeadCommit: null, // Not available from gitStatus, but not needed for most cases
+        isMergedToMain: isMergedBySession[session.id] ?? false,
         lastKnownPrState: session.lastKnownPrState,
-        pushedToMainCommit: session.pushedToMainCommit,
       })
 
       if (status !== session.branchStatus) {
         updateBranchStatus(session.id, status)
       }
     }
-  }, [gitStatusBySession, sessions, updateBranchStatus])
+  }, [gitStatusBySession, isMergedBySession, sessions, updateBranchStatus])
 
   // Get git status for the selected file
   const selectedFileStatus = React.useMemo(() => {

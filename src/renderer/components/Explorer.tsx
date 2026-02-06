@@ -860,10 +860,10 @@ export default function Explorer({
               </button>
             </div>
           </div>
-        ) : pushedToMainAt && !hasChangesSincePush ? (
+        ) : branchStatus === 'merged' ? (
           <div className="flex items-center gap-2">
             <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-green-500/20 text-green-400">
-              PUSHED
+              MERGED
             </span>
             <span className="text-xs text-text-secondary">
               Branch merged to {branchBaseName}
@@ -1056,7 +1056,7 @@ export default function Explorer({
               <div className="text-sm text-text-secondary">Up to date</div>
             )}
 
-            {syncStatus?.tracking && (
+            {syncStatus?.tracking && branchStatus !== 'merged' && (
               <button
                 onClick={handleSync}
                 disabled={isSyncing}

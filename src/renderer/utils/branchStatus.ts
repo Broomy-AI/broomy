@@ -8,11 +8,10 @@ export interface BranchStatusInput {
   ahead: number
   hasTrackingBranch: boolean
   isOnMainBranch: boolean
-  currentHeadCommit: string | null
+  // Git-native merge detection
+  isMergedToMain: boolean
   // Persisted PR state
   lastKnownPrState: PrState | undefined
-  // Direct push-to-main tracking
-  pushedToMainCommit: string | undefined
 }
 
 export function computeBranchStatus(input: BranchStatusInput): BranchStatus {
@@ -21,9 +20,8 @@ export function computeBranchStatus(input: BranchStatusInput): BranchStatus {
     ahead,
     hasTrackingBranch,
     isOnMainBranch,
-    currentHeadCommit,
+    isMergedToMain,
     lastKnownPrState,
-    pushedToMainCommit,
   } = input
 
   // 1. On main branch -> always in-progress
@@ -36,8 +34,8 @@ export function computeBranchStatus(input: BranchStatusInput): BranchStatus {
     return 'in-progress'
   }
 
-  // 3. Pushed to main and HEAD matches -> merged
-  if (pushedToMainCommit && currentHeadCommit && pushedToMainCommit === currentHeadCommit) {
+  // 3. Git-native merge check (works for UI push, terminal push, and GitHub PR merge)
+  if (isMergedToMain) {
     return 'merged'
   }
 

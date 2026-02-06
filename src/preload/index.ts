@@ -135,6 +135,7 @@ export type GitApi = {
   headCommit: (repoPath: string) => Promise<string | null>
   listBranches: (repoPath: string) => Promise<{ name: string; isRemote: boolean; current: boolean }[]>
   fetchBranch: (repoPath: string, branchName: string) => Promise<{ success: boolean; error?: string }>
+  isMergedInto: (repoPath: string, ref: string) => Promise<boolean>
 }
 
 export type GhApi = {
@@ -310,6 +311,7 @@ const gitApi: GitApi = {
   headCommit: (repoPath) => ipcRenderer.invoke('git:headCommit', repoPath),
   listBranches: (repoPath) => ipcRenderer.invoke('git:listBranches', repoPath),
   fetchBranch: (repoPath, branchName) => ipcRenderer.invoke('git:fetchBranch', repoPath, branchName),
+  isMergedInto: (repoPath, ref) => ipcRenderer.invoke('git:isMergedInto', repoPath, ref),
 }
 
 const ghApi: GhApi = {

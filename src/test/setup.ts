@@ -28,6 +28,7 @@ const mockGit = {
   branchChanges: vi.fn().mockResolvedValue({ files: [], baseBranch: 'main' }),
   headCommit: vi.fn().mockResolvedValue(null),
   listBranches: vi.fn().mockResolvedValue([]),
+  isMergedInto: vi.fn().mockResolvedValue(false),
 }
 
 // Mock window.app
