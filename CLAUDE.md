@@ -56,8 +56,37 @@ Config files at `~/.broomer/`:
 
 ## Testing
 
+**Always run tests before considering work done.** High test coverage is critical to this project. Any code change should be verified by running the relevant test suite, and new code should include tests that maintain or improve coverage.
+
+### Unit Tests
+
+Vitest unit tests co-located with source files (`src/**/*.test.ts`). Run with:
+
+```bash
+pnpm test:unit              # Run all unit tests
+pnpm test:unit:watch        # Run in watch mode during development
+pnpm test:unit:coverage     # Run with coverage report
+```
+
+The project maintains a 90% line coverage threshold on targeted source files. When adding or modifying code, write unit tests to cover the changes and verify coverage is maintained.
+
+### E2E Tests
+
 Playwright E2E tests in `tests/`. The test system uses:
 - Mock file system responses
 - Mock git data
 - `scripts/fake-claude.sh` for predictable Claude output
 - `E2E_HEADLESS` env var controls visibility
+
+```bash
+pnpm test                   # Run E2E tests (headless)
+pnpm test:headed            # Run E2E tests with visible window
+```
+
+### Workflow
+
+1. Make your code changes
+2. Write or update unit tests for any changed logic
+3. Run `pnpm test:unit` to verify all unit tests pass
+4. Run `pnpm test:unit:coverage` to confirm coverage stays above 90%
+5. Run `pnpm test` to verify E2E tests still pass
