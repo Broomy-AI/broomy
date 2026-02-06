@@ -132,7 +132,7 @@ const getLanguageFromPath = (filePath: string): string => {
   return languageMap[ext] || 'plaintext'
 }
 
-function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange }: FileViewerComponentProps) {
+function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, targetLine }: FileViewerComponentProps) {
   const language = getLanguageFromPath(filePath)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const originalContentRef = useRef(content)
@@ -142,6 +142,14 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange }: Fil
     originalContentRef.current = content
     onDirtyChange?.(false, content)
   }, [content, filePath])
+
+  // Scroll to target line when specified
+  useEffect(() => {
+    if (targetLine && editorRef.current) {
+      editorRef.current.revealLineInCenter(targetLine)
+      editorRef.current.setPosition({ lineNumber: targetLine, column: 1 })
+    }
+  }, [targetLine, filePath])
 
   const handleEditorDidMount = (editor: monaco.editor.IStandaloneCodeEditor, monacoInstance: Monaco) => {
     editorRef.current = editor

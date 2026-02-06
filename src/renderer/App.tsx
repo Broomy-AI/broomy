@@ -65,6 +65,7 @@ function AppContent() {
   const [gitStatusBySession, setGitStatusBySession] = useState<Record<string, GitStatusResult>>({})
   const [directoryExists, setDirectoryExists] = useState<Record<string, boolean>>({})
   const [openFileInDiffMode, setOpenFileInDiffMode] = useState(false)
+  const [targetLine, setTargetLine] = useState<number | undefined>(undefined)
   const [showPanelPicker, setShowPanelPicker] = useState(false)
 
   const activeSession = sessions.find((s) => s.id === activeSessionId)
@@ -362,9 +363,10 @@ function AppContent() {
     [PANEL_IDS.EXPLORER]: activeSession?.showExplorer ? (
       <Explorer
         directory={activeSession?.directory}
-        onFileSelect={(filePath, openInDiffMode) => {
+        onFileSelect={(filePath, openInDiffMode, line) => {
           if (activeSessionId) {
             setOpenFileInDiffMode(openInDiffMode)
+            setTargetLine(line)
             selectFile(activeSessionId, filePath)
           }
         }}
@@ -380,6 +382,7 @@ function AppContent() {
         pushedToMainCommit={activeSession?.pushedToMainCommit}
         onRecordPushToMain={(commitHash) => activeSessionId && recordPushToMain(activeSessionId, commitHash)}
         onClearPushToMain={() => activeSessionId && clearPushToMain(activeSessionId)}
+        repoId={activeSession?.repoId}
       />
     ) : null,
     [PANEL_IDS.FILE_VIEWER]: activeSession?.showFileViewer ? (
@@ -392,6 +395,7 @@ function AppContent() {
         directory={activeSession?.directory}
         onSaveComplete={fetchGitStatus}
         initialViewMode={openFileInDiffMode ? 'diff' : 'latest'}
+        targetLine={targetLine}
       />
     ) : null,
     [PANEL_IDS.SETTINGS]: globalPanelVisibility[PANEL_IDS.SETTINGS] ? (

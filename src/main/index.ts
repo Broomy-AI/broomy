@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron'
 import { join } from 'path'
 import { homedir } from 'os'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, watch, FSWatcher, appendFileSync, chmodSync, copyFileSync } from 'fs'
@@ -504,21 +504,30 @@ ipcMain.handle('git:status', async (_event, repoPath: string) => {
     for (const file of status.files) {
       const indexStatus = file.index || ' '
       const workingDirStatus = file.working_dir || ' '
-      const staged = indexStatus !== ' ' && indexStatus !== '?'
+      const hasIndexChange = indexStatus !== ' ' && indexStatus !== '?'
+      const hasWorkingDirChange = workingDirStatus !== ' ' && workingDirStatus !== '?'
 
-      let fileStatus = 'modified'
-      // Determine status from the most relevant field
-      const relevantChar = staged ? indexStatus : workingDirStatus
-      switch (relevantChar) {
-        case 'M': fileStatus = 'modified'; break
-        case 'A': fileStatus = 'added'; break
-        case 'D': fileStatus = 'deleted'; break
-        case 'R': fileStatus = 'renamed'; break
-        case '?': fileStatus = 'untracked'; break
-        default: fileStatus = 'modified'
+      const statusFromChar = (c: string) => {
+        switch (c) {
+          case 'M': return 'modified'
+          case 'A': return 'added'
+          case 'D': return 'deleted'
+          case 'R': return 'renamed'
+          case '?': return 'untracked'
+          default: return 'modified'
+        }
       }
 
-      files.push({ path: file.path, status: fileStatus, staged, indexStatus, workingDirStatus })
+      if (hasIndexChange) {
+        files.push({ path: file.path, status: statusFromChar(indexStatus), staged: true, indexStatus, workingDirStatus })
+      }
+
+      if (hasWorkingDirChange || (!hasIndexChange && workingDirStatus === '?')) {
+        files.push({ path: file.path, status: statusFromChar(workingDirStatus), staged: false, indexStatus, workingDirStatus })
+      } else if (!hasIndexChange && !hasWorkingDirChange) {
+        // Shouldn't happen, but handle gracefully
+        files.push({ path: file.path, status: 'modified', staged: false, indexStatus, workingDirStatus })
+      }
     }
 
     return {
@@ -1045,7 +1054,7 @@ ipcMain.handle('git:listBranches', async (_event, repoPath: string) => {
 
   try {
     const git = simpleGit(expandHomePath(repoPath))
-    const branchSummary = await git.branch(['-a'])
+    const branchSummary = await git.branch(['-a', '--sort=-committerdate'])
 
     const branches: { name: string; isRemote: boolean; current: boolean }[] = []
 
@@ -1332,7 +1341,7 @@ ipcMain.handle('gh:getPrCreateUrl', async (_event, repoDir: string) => {
       }
     }
 
-    return `https://github.com/${repoSlug}/compare/${defaultBranch}...${currentBranch}?expand=1`
+    return `https://github.com/${repoSlug}/compare/${encodeURIComponent(defaultBranch)}...${encodeURIComponent(currentBranch)}?expand=1`
   } catch {
     return null
   }
@@ -1468,6 +1477,11 @@ ipcMain.handle('shell:exec', async (_event, command: string, cwd: string) => {
       })
     })
   })
+})
+
+// Open external URL in system browser
+ipcMain.handle('shell:openExternal', async (_event, url: string) => {
+  await shell.openExternal(url)
 })
 
 // Dialog IPC handlers

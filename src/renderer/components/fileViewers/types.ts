@@ -22,6 +22,8 @@ export interface FileViewerComponentProps {
   onSave?: (content: string) => Promise<void>
   /** Callback when content is modified (for dirty tracking). Passes current content for external save button. */
   onDirtyChange?: (isDirty: boolean, currentContent?: string) => void
+  /** Line number to scroll to when file opens */
+  targetLine?: number
 }
 
 /** Get file extension from path */
