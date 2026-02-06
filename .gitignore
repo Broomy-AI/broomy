@@ -33,4 +33,5 @@ pnpm-debug.log*
 # Test artifacts
 test-results/
 playwright-report/
+coverage/
 *.png

@@ -54,6 +54,12 @@ Config files at `~/.broomer/`:
 - `config.json` (production) / `config.dev.json` (development)
 - Contains agents, sessions with panel visibility and layout sizes
 
+## External API Guidelines
+
+- **Never poll GitHub API on a timer.** Only call `gh` commands on explicit user action (button clicks, view changes).
+- **Prefer deriving state from local git data** (e.g. `git status`, ahead/behind counts, tracking branch) where possible.
+- **PR state is persisted** in session config as `lastKnownPrState` and refreshed only when the user clicks the refresh button or opens the source-control Explorer view.
+
 ## Testing
 
 **Always run tests before considering work done.** High test coverage is critical to this project. Any code change should be verified by running the relevant test suite, and new code should include tests that maintain or improve coverage.

@@ -141,6 +141,7 @@ function RepoSettingsEditor({
   onClose: () => void
 }) {
   const [defaultAgentId, setDefaultAgentId] = useState(repo.defaultAgentId || '')
+  const [allowPushToMain, setAllowPushToMain] = useState(repo.allowPushToMain ?? false)
   const [initScript, setInitScript] = useState('')
   const [loadingScript, setLoadingScript] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -162,7 +163,7 @@ function RepoSettingsEditor({
   const handleSave = async () => {
     setSaving(true)
     try {
-      await onUpdate({ defaultAgentId: defaultAgentId || undefined })
+      await onUpdate({ defaultAgentId: defaultAgentId || undefined, allowPushToMain })
       await window.repos.saveInitScript(repo.id, initScript)
       onClose()
     } catch (err) {
@@ -190,6 +191,18 @@ function RepoSettingsEditor({
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="space-y-2">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={allowPushToMain}
+            onChange={(e) => setAllowPushToMain(e.target.checked)}
+            className="accent-accent"
+          />
+          <span className="text-xs text-text-secondary">Allow push to main (bypass write-access check)</span>
+        </label>
       </div>
 
       <div className="space-y-2">

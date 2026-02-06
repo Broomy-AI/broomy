@@ -1,6 +1,9 @@
 import { create } from 'zustand'
 import { basename } from 'path-browserify'
 import { PANEL_IDS, DEFAULT_TOOLBAR_PANELS } from '../panels/types'
+import type { BranchStatus, PrState } from '../utils/branchStatus'
+
+export type { BranchStatus, PrState }
 
 export type SessionStatus = 'working' | 'idle' | 'error'
 export type FileViewerPosition = 'top' | 'left'
@@ -61,6 +64,12 @@ export interface Session {
   // Direct push to main tracking (persisted)
   pushedToMainAt?: number  // Timestamp when branch was pushed to main
   pushedToMainCommit?: string  // The HEAD commit when pushed (to detect new changes)
+  // Branch status (runtime, derived)
+  branchStatus: BranchStatus
+  // PR state tracking (persisted)
+  lastKnownPrState?: PrState
+  lastKnownPrNumber?: number
+  lastKnownPrUrl?: string
 }
 
 // Default layout sizes
@@ -144,6 +153,9 @@ interface SessionStore {
   // Direct push to main tracking
   recordPushToMain: (sessionId: string, commitHash: string) => void
   clearPushToMain: (sessionId: string) => void
+  // Branch status actions
+  updateBranchStatus: (sessionId: string, status: BranchStatus) => void
+  updatePrState: (sessionId: string, prState: PrState, prNumber?: number, prUrl?: string) => void
 }
 
 const generateId = () => `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
@@ -220,6 +232,10 @@ const debouncedSave = async (
         // Push to main tracking
         pushedToMainAt: s.pushedToMainAt,
         pushedToMainCommit: s.pushedToMainCommit,
+        // PR state tracking
+        lastKnownPrState: s.lastKnownPrState,
+        lastKnownPrNumber: s.lastKnownPrNumber,
+        lastKnownPrUrl: s.lastKnownPrUrl,
       })),
       // Global state
       showSidebar: globalPanelVisibility[PANEL_IDS.SIDEBAR] ?? true,
@@ -286,6 +302,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           // Push to main tracking
           pushedToMainAt: sessionData.pushedToMainAt,
           pushedToMainCommit: sessionData.pushedToMainCommit,
+          // Branch status
+          branchStatus: 'in-progress',
+          lastKnownPrState: sessionData.lastKnownPrState,
+          lastKnownPrNumber: sessionData.lastKnownPrNumber,
+          lastKnownPrUrl: sessionData.lastKnownPrUrl,
         }
         sessions.push(session)
       }
@@ -346,6 +367,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       recentFiles: [],
       // Terminal tabs
       terminalTabs: createDefaultTerminalTabs(),
+      // Branch status
+      branchStatus: 'in-progress',
     }
 
     const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
@@ -720,6 +743,31 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const updatedSessions = sessions.map((s) =>
       s.id === sessionId
         ? { ...s, pushedToMainAt: undefined, pushedToMainCommit: undefined }
+        : s
+    )
+    set({ sessions: updatedSessions })
+    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
+  },
+
+  updateBranchStatus: (sessionId: string, status: BranchStatus) => {
+    const { sessions } = get()
+    const updatedSessions = sessions.map((s) =>
+      s.id === sessionId ? { ...s, branchStatus: status } : s
+    )
+    set({ sessions: updatedSessions })
+    // Runtime only - don't persist
+  },
+
+  updatePrState: (sessionId: string, prState: PrState, prNumber?: number, prUrl?: string) => {
+    const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
+    const updatedSessions = sessions.map((s) =>
+      s.id === sessionId
+        ? {
+            ...s,
+            lastKnownPrState: prState,
+            lastKnownPrNumber: prNumber ?? s.lastKnownPrNumber,
+            lastKnownPrUrl: prUrl ?? s.lastKnownPrUrl,
+          }
         : s
     )
     set({ sessions: updatedSessions })

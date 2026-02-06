@@ -17,6 +17,7 @@ import { useProfileStore } from './store/profiles'
 import { useErrorStore } from './store/errors'
 import { PanelProvider, PANEL_IDS } from './panels'
 import { terminalBufferRegistry } from './utils/terminalBufferRegistry'
+import { computeBranchStatus } from './utils/branchStatus'
 
 // Re-export types for backwards compatibility
 export type { Session, SessionStatus }
@@ -53,10 +54,12 @@ function AppContent() {
     markSessionRead,
     recordPushToMain,
     clearPushToMain,
+    updateBranchStatus,
+    updatePrState,
   } = useSessionStore()
 
   const { agents, loadAgents } = useAgentStore()
-  const { loadRepos, checkGhAvailability } = useRepoStore()
+  const { repos, loadRepos, checkGhAvailability } = useRepoStore()
   const { currentProfileId, profiles, loadProfiles, switchProfile } = useProfileStore()
   const { addError } = useErrorStore()
   const currentProfile = profiles.find((p) => p.id === currentProfileId)
@@ -157,6 +160,28 @@ function AppContent() {
       return () => clearInterval(interval)
     }
   }, [activeSession?.id, fetchGitStatus])
+
+  // Compute branch status whenever git status changes
+  useEffect(() => {
+    for (const session of sessions) {
+      const gitStatus = gitStatusBySession[session.id]
+      if (!gitStatus) continue
+
+      const status = computeBranchStatus({
+        uncommittedFiles: gitStatus.files.length,
+        ahead: gitStatus.ahead,
+        hasTrackingBranch: !!gitStatus.tracking,
+        isOnMainBranch: gitStatus.current === 'main' || gitStatus.current === 'master',
+        currentHeadCommit: null, // Not available from gitStatus, but not needed for most cases
+        lastKnownPrState: session.lastKnownPrState,
+        pushedToMainCommit: session.pushedToMainCommit,
+      })
+
+      if (status !== session.branchStatus) {
+        updateBranchStatus(session.id, status)
+      }
+    }
+  }, [gitStatusBySession, sessions, updateBranchStatus])
 
   // Get git status for the selected file
   const selectedFileStatus = React.useMemo(() => {
@@ -272,6 +297,22 @@ function AppContent() {
   const handleCancelNewSession = () => {
     setShowNewSessionDialog(false)
   }
+
+  // Refresh PR status for all sessions
+  const refreshPrStatus = useCallback(async () => {
+    for (const session of sessions) {
+      try {
+        const prResult = await window.gh.prStatus(session.directory)
+        if (prResult) {
+          updatePrState(session.id, prResult.state, prResult.number, prResult.url)
+        } else {
+          updatePrState(session.id, null)
+        }
+      } catch {
+        // Ignore errors for individual sessions
+      }
+    }
+  }, [sessions, updatePrState])
 
   // Memoize getAgentCommand to ensure stable values
   const getAgentCommand = useCallback((session: Session) => {
@@ -420,6 +461,7 @@ function AppContent() {
         onSelectSession={setActiveSession}
         onNewSession={handleNewSession}
         onDeleteSession={removeSession}
+        onRefreshPrStatus={refreshPrStatus}
       />
     ),
     [PANEL_IDS.AGENT_TERMINAL]: agentTerminalPanel,
@@ -442,6 +484,9 @@ function AppContent() {
         pushedToMainCommit={activeSession?.pushedToMainCommit}
         onRecordPushToMain={(commitHash) => activeSessionId && recordPushToMain(activeSessionId, commitHash)}
         onClearPushToMain={() => activeSessionId && clearPushToMain(activeSessionId)}
+        branchStatus={activeSession?.branchStatus ?? 'in-progress'}
+        onUpdatePrState={(prState, prNumber, prUrl) => activeSessionId && updatePrState(activeSessionId, prState, prNumber, prUrl)}
+        allowPushToMain={activeSession?.repoId ? repos.find(r => r.id === activeSession.repoId)?.allowPushToMain : undefined}
       />
     ) : null,
     [PANEL_IDS.FILE_VIEWER]: activeSession?.showFileViewer ? (
@@ -480,6 +525,7 @@ function AppContent() {
     agentTerminalPanel,
     userTerminalPanel,
     handleToggleFileViewer,
+    repos,
   ])
 
   if (isLoading) {

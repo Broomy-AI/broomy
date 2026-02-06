@@ -65,6 +65,7 @@ export type ManagedRepo = {
   rootDir: string
   defaultBranch: string
   defaultAgentId?: string  // Default agent for sessions in this repo
+  allowPushToMain?: boolean  // Override write-access check for push-to-main button
 }
 
 export type GitHubIssue = {
@@ -185,6 +186,10 @@ export type SessionData = {
   // Push to main tracking
   pushedToMainAt?: number
   pushedToMainCommit?: string
+  // Branch status PR tracking
+  lastKnownPrState?: 'OPEN' | 'MERGED' | 'CLOSED' | null
+  lastKnownPrNumber?: number
+  lastKnownPrUrl?: string
 }
 
 export type ConfigData = {
