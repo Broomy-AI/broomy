@@ -512,7 +512,7 @@ function AppContent() {
         } : undefined}
       />
     ) : null,
-    [PANEL_IDS.REVIEW]: activeSession?.sessionType === 'review' && activeSession?.panelVisibility?.[PANEL_IDS.REVIEW] ? (
+    [PANEL_IDS.REVIEW]: activeSession ? (
       <ReviewPanel
         session={activeSession}
         repo={repos.find(r => r.id === activeSession.repoId)}
