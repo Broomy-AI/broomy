@@ -69,6 +69,12 @@ Session store debounces saves with 500ms delay. Runtime-only state (`status`, `i
 - Event streaming: `webContents.send()` / `ipcRenderer.on()` for PTY data and file watcher events
 - Events namespaced by ID: `pty:data:${id}`, `fs:change:${id}`
 
+## External API Guidelines
+
+- **Never poll GitHub API on a timer.** Only call `gh` commands on explicit user action (button clicks, view changes).
+- **Prefer deriving state from local git data** (e.g. `git status`, ahead/behind counts, tracking branch) where possible.
+- **PR state is persisted** in session config as `lastKnownPrState` and refreshed only when the user clicks the refresh button or opens the source-control Explorer view.
+
 ## Testing
 
 **Always run tests before considering work done.**

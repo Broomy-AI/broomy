@@ -1069,6 +1069,20 @@ ipcMain.handle('git:listBranches', async (_event, repoPath: string) => {
   }
 })
 
+ipcMain.handle('git:fetchBranch', async (_event, repoPath: string, branchName: string) => {
+  if (isE2ETest) {
+    return { success: true }
+  }
+
+  try {
+    const git = simpleGit(expandHomePath(repoPath))
+    await git.fetch('origin', branchName)
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
 ipcMain.handle('git:branchChanges', async (_event, repoPath: string, baseBranch?: string) => {
   if (isE2ETest) {
     return {
@@ -1411,6 +1425,64 @@ ipcMain.handle('gh:replyToComment', async (_event, repoDir: string, prNumber: nu
       }
     )
     return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('gh:prsToReview', async (_event, repoDir: string) => {
+  if (isE2ETest) {
+    return [
+      { number: 55, title: 'Add dark mode support', author: 'alice', url: 'https://github.com/user/demo-project/pull/55', headRefName: 'feature/dark-mode', baseRefName: 'main', labels: ['feature'] },
+      { number: 48, title: 'Fix memory leak in worker pool', author: 'bob', url: 'https://github.com/user/demo-project/pull/48', headRefName: 'fix/memory-leak', baseRefName: 'main', labels: ['bug', 'performance'] },
+    ]
+  }
+
+  try {
+    const result = execSync('gh pr list --search "review-requested:@me" --json number,title,author,url,headRefName,baseRefName,labels --limit 30', {
+      cwd: expandHomePath(repoDir),
+      encoding: 'utf-8',
+      timeout: 30000,
+    })
+    const prs = JSON.parse(result)
+    return prs.map((pr: { number: number; title: string; author: { login: string }; url: string; headRefName: string; baseRefName: string; labels: Array<{ name: string }> }) => ({
+      number: pr.number,
+      title: pr.title,
+      author: pr.author?.login || 'unknown',
+      url: pr.url,
+      headRefName: pr.headRefName,
+      baseRefName: pr.baseRefName,
+      labels: (pr.labels || []).map((l: { name: string }) => l.name),
+    }))
+  } catch (error) {
+    console.error('Failed to fetch PRs for review:', error)
+    return []
+  }
+})
+
+ipcMain.handle('gh:submitDraftReview', async (_event, repoDir: string, prNumber: number, comments: { path: string; line: number; body: string }[]) => {
+  if (isE2ETest) {
+    return { success: true, reviewId: 999 }
+  }
+
+  try {
+    const commentsJson = JSON.stringify(comments.map(c => ({
+      path: c.path,
+      line: c.line,
+      body: c.body,
+    })))
+
+    const result = execSync(
+      `gh api repos/{owner}/{repo}/pulls/${prNumber}/reviews -X POST -f event=PENDING -f body="" --input -`,
+      {
+        cwd: expandHomePath(repoDir),
+        encoding: 'utf-8',
+        timeout: 30000,
+        input: JSON.stringify({ event: 'PENDING', body: '', comments }),
+      }
+    )
+    const parsed = JSON.parse(result)
+    return { success: true, reviewId: parsed.id }
   } catch (error) {
     return { success: false, error: String(error) }
   }

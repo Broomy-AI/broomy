@@ -22,9 +22,10 @@ interface FileViewerProps {
   onDirtyStateChange?: (isDirty: boolean) => void // Report dirty state to parent
   saveRef?: React.MutableRefObject<(() => Promise<void>) | null> // Ref for parent to trigger save
   diffBaseRef?: string // Git ref to compare against (e.g. 'origin/main' for branch changes)
+  reviewContext?: { sessionDirectory: string; commentsFilePath: string }
 }
 
-export default function FileViewer({ filePath, position = 'top', onPositionChange, onClose, fileStatus, directory, onSaveComplete, initialViewMode = 'latest', scrollToLine, searchHighlight, onDirtyStateChange, saveRef, diffBaseRef }: FileViewerProps) {
+export default function FileViewer({ filePath, position = 'top', onPositionChange, onClose, fileStatus, directory, onSaveComplete, initialViewMode = 'latest', scrollToLine, searchHighlight, onDirtyStateChange, saveRef, diffBaseRef, reviewContext }: FileViewerProps) {
   // Show diff for modified/deleted files, or when a base ref is provided (branch changes)
   const canShowDiff = fileStatus === 'modified' || fileStatus === 'deleted' || !!diffBaseRef
   const [content, setContent] = useState<string>('')
@@ -525,6 +526,7 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
             onDirtyChange={handleDirtyChange}
             scrollToLine={scrollToLine}
             searchHighlight={searchHighlight}
+            reviewContext={reviewContext}
           />
         )}
       </div>

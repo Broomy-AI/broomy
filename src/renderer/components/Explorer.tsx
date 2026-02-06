@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { FileEntry, GitFileStatus, GitStatusResult, SearchResult, GitHubPrStatus } from '../../preload/index'
-import type { ExplorerFilter } from '../store/sessions'
+import type { ExplorerFilter, BranchStatus, PrState } from '../store/sessions'
 import { useRepoStore } from '../store/repos'
 import { statusLabel, getStatusColor, statusBadgeColor, prStateBadgeClass } from '../utils/explorerHelpers'
 
@@ -33,6 +33,9 @@ interface ExplorerProps {
   pushedToMainCommit?: string
   onRecordPushToMain?: (commitHash: string) => void
   onClearPushToMain?: () => void
+  // Branch status
+  branchStatus?: BranchStatus
+  onUpdatePrState?: (prState: PrState, prNumber?: number, prUrl?: string) => void
   repoId?: string
 }
 
@@ -88,6 +91,43 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 // getStatusColor imported from utils/explorerHelpers
 
+function BranchStatusCard({ status }: { status: BranchStatus }) {
+  const config: Record<string, { label: string; chipClasses: string; description: string }> = {
+    pushed: {
+      label: 'PUSHED',
+      chipClasses: 'bg-blue-500/20 text-blue-400',
+      description: 'Changes pushed to remote. Consider creating a PR.',
+    },
+    open: {
+      label: 'PR OPEN',
+      chipClasses: 'bg-green-500/20 text-green-400',
+      description: 'Pull request is open.',
+    },
+    merged: {
+      label: 'MERGED',
+      chipClasses: 'bg-purple-500/20 text-purple-400',
+      description: 'Merged into main.',
+    },
+    closed: {
+      label: 'CLOSED',
+      chipClasses: 'bg-red-500/20 text-red-400',
+      description: 'PR was closed.',
+    },
+  }
+
+  const c = config[status]
+  if (!c) return null
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <span className={`text-xs px-2 py-1 rounded font-medium ${c.chipClasses}`}>
+        {c.label}
+      </span>
+      <span className="text-xs text-text-secondary text-center">{c.description}</span>
+    </div>
+  )
+}
+
 export default function Explorer({
   directory,
   onFileSelect,
@@ -103,6 +143,8 @@ export default function Explorer({
   pushedToMainCommit,
   onRecordPushToMain,
   onClearPushToMain,
+  branchStatus,
+  onUpdatePrState,
   repoId,
 }: ExplorerProps) {
   const [tree, setTree] = useState<TreeNode[]>([])
@@ -294,6 +336,19 @@ export default function Explorer({
     return () => { cancelled = true }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, directory, syncStatus?.ahead, syncStatus?.behind]) // Re-fetch when commits ahead/behind change
+
+  // Update session PR state when Explorer fetches PR status
+  useEffect(() => {
+    if (!onUpdatePrState) return
+    if (isPrLoading) return
+    if (filter !== 'source-control') return
+
+    if (prStatus) {
+      onUpdatePrState(prStatus.state, prStatus.number, prStatus.url)
+    } else {
+      onUpdatePrState(null)
+    }
+  }, [prStatus, isPrLoading, filter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch PR comments when comments view is active
   useEffect(() => {
@@ -826,7 +881,7 @@ export default function Explorer({
               >
                 Create PR
               </button>
-              {hasWriteAccess && currentRepo?.allowPushToMain && (
+              {(hasWriteAccess || currentRepo?.allowPushToMain) && (
                 <button
                   onClick={handlePushToMain}
                   disabled={isPushingToMain}
@@ -995,6 +1050,8 @@ export default function Explorer({
                   </div>
                 )}
               </div>
+            ) : branchStatus && branchStatus !== 'in-progress' ? (
+              <BranchStatusCard status={branchStatus} />
             ) : (
               <div className="text-sm text-text-secondary">Up to date</div>
             )}

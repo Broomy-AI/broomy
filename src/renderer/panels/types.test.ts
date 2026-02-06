@@ -11,8 +11,8 @@ describe('PANEL_IDS', () => {
     expect(PANEL_IDS.SETTINGS).toBe('settings')
   })
 
-  it('has 6 panel IDs', () => {
-    expect(Object.keys(PANEL_IDS)).toHaveLength(6)
+  it('has 7 panel IDs', () => {
+    expect(Object.keys(PANEL_IDS)).toHaveLength(7)
   })
 })
 

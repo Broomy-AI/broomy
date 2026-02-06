@@ -30,6 +30,7 @@ export const PANEL_IDS = {
   SIDEBAR: 'sidebar',
   EXPLORER: 'explorer',
   FILE_VIEWER: 'fileViewer',
+  REVIEW: 'review',
   AGENT_TERMINAL: 'agentTerminal',
   USER_TERMINAL: 'userTerminal',
   SETTINGS: 'settings',

@@ -26,6 +26,11 @@ export interface FileViewerComponentProps {
   scrollToLine?: number
   /** Text to highlight in the file */
   searchHighlight?: string
+  /** Review context - present when viewing files in a review session */
+  reviewContext?: {
+    sessionDirectory: string
+    commentsFilePath: string
+  }
 }
 
 /** Get file extension from path */

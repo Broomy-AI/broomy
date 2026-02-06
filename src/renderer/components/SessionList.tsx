@@ -1,4 +1,5 @@
-import type { Session, SessionStatus } from '../store/sessions'
+import { useState } from 'react'
+import type { Session, SessionStatus, BranchStatus } from '../store/sessions'
 
 interface SessionListProps {
   sessions: Session[]
@@ -6,6 +7,7 @@ interface SessionListProps {
   onSelectSession: (id: string) => void
   onNewSession: () => void
   onDeleteSession: (id: string) => void
+  onRefreshPrStatus?: () => Promise<void>
 }
 
 const statusLabels: Record<SessionStatus, string> = {
@@ -59,13 +61,44 @@ function StatusIndicator({ status, isUnread }: { status: SessionStatus; isUnread
   return <span className="w-2 h-2 rounded-full bg-status-idle" />
 }
 
+function BranchStatusChip({ status }: { status: BranchStatus }) {
+  if (status === 'in-progress') return null
+
+  const config: Record<string, { label: string; classes: string }> = {
+    pushed: { label: 'PUSHED', classes: 'bg-blue-500/20 text-blue-400' },
+    open: { label: 'PR OPEN', classes: 'bg-green-500/20 text-green-400' },
+    merged: { label: 'MERGED', classes: 'bg-purple-500/20 text-purple-400' },
+    closed: { label: 'CLOSED', classes: 'bg-red-500/20 text-red-400' },
+  }
+
+  const { label, classes } = config[status]
+  return (
+    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium leading-none ${classes}`}>
+      {label}
+    </span>
+  )
+}
+
 export default function SessionList({
   sessions,
   activeSessionId,
   onSelectSession,
   onNewSession,
   onDeleteSession,
+  onRefreshPrStatus,
 }: SessionListProps) {
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const handleRefresh = async () => {
+    if (!onRefreshPrStatus || isRefreshing) return
+    setIsRefreshing(true)
+    try {
+      await onRefreshPrStatus()
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
   const handleDelete = (e: React.MouseEvent, session: Session) => {
     e.stopPropagation()
     if (window.confirm(`Close session "${session.name}"?`)) {
@@ -76,13 +109,36 @@ export default function SessionList({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="p-3 border-b border-border">
+      <div className="p-3 border-b border-border flex items-center gap-2">
         <button
           onClick={onNewSession}
-          className="w-full py-2 px-3 bg-accent hover:bg-accent/80 text-white text-sm font-medium rounded transition-colors"
+          className="flex-1 py-2 px-3 bg-accent hover:bg-accent/80 text-white text-sm font-medium rounded transition-colors"
         >
           + New Session
         </button>
+        {onRefreshPrStatus && (
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="p-2 rounded text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors disabled:opacity-50"
+            title="Refresh PR status for all sessions"
+          >
+            <svg
+              className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 2v6h-6" />
+              <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+              <path d="M3 22v-6h6" />
+              <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Session list */}
@@ -124,6 +180,12 @@ export default function SessionList({
                 }`}>
                   {session.branch}
                 </span>
+                <BranchStatusChip status={session.branchStatus} />
+                {session.sessionType === 'review' && (
+                  <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-purple-500/20 text-purple-400 flex-shrink-0">
+                    Review
+                  </span>
+                )}
                 <button
                   onClick={(e) => handleDelete(e, session)}
                   className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-text-secondary hover:text-status-error transition-opacity p-1"
@@ -147,6 +209,9 @@ export default function SessionList({
               </div>
               <div className="flex items-center gap-2 text-xs text-text-secondary">
                 <span className="truncate">{session.name}</span>
+                {session.prNumber && (
+                  <span className="text-purple-400 flex-shrink-0">PR #{session.prNumber}</span>
+                )}
               </div>
               {/* Last message preview */}
               {session.lastMessage ? (

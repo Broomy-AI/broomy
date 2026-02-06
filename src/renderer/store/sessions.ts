@@ -1,6 +1,9 @@
 import { create } from 'zustand'
 import { basename } from 'path-browserify'
 import { PANEL_IDS, DEFAULT_TOOLBAR_PANELS } from '../panels/types'
+import type { BranchStatus, PrState } from '../utils/branchStatus'
+
+export type { BranchStatus, PrState }
 
 export type SessionStatus = 'working' | 'idle' | 'error'
 export type FileViewerPosition = 'top' | 'left'
@@ -21,6 +24,7 @@ export interface LayoutSizes {
   fileViewerSize: number // height when top, width when left
   userTerminalHeight: number
   diffPanelWidth: number
+  reviewPanelWidth: number
 }
 
 export type ExplorerFilter = 'files' | 'source-control' | 'search' | 'recent'
@@ -38,6 +42,12 @@ export interface Session {
   repoId?: string
   issueNumber?: number
   issueTitle?: string
+  // Review session fields
+  sessionType?: 'default' | 'review'
+  prNumber?: number
+  prTitle?: string
+  prUrl?: string
+  prBaseBranch?: string
   // Per-session UI state (persisted) - generic panel visibility
   panelVisibility: PanelVisibility
   // Legacy fields kept for backwards compat - computed from panelVisibility
@@ -54,6 +64,8 @@ export interface Session {
   lastMessage: string | null
   lastMessageTime: number | null
   isUnread: boolean
+  // Agent PTY ID (runtime only, set by Terminal.tsx)
+  agentPtyId?: string
   // Recently opened files (runtime, most recent first)
   recentFiles: string[]
   // User terminal tabs (persisted)
@@ -61,6 +73,12 @@ export interface Session {
   // Direct push to main tracking (persisted)
   pushedToMainAt?: number  // Timestamp when branch was pushed to main
   pushedToMainCommit?: string  // The HEAD commit when pushed (to detect new changes)
+  // Branch status (runtime, derived)
+  branchStatus: BranchStatus
+  // PR state tracking (persisted)
+  lastKnownPrState?: PrState
+  lastKnownPrNumber?: number
+  lastKnownPrUrl?: string
 }
 
 // Default layout sizes
@@ -69,6 +87,7 @@ const DEFAULT_LAYOUT_SIZES: LayoutSizes = {
   fileViewerSize: 300,
   userTerminalHeight: 192, // 12rem = 192px
   diffPanelWidth: 320, // 20rem = 320px
+  reviewPanelWidth: 320,
 }
 
 const DEFAULT_SIDEBAR_WIDTH = 224 // 14rem = 224px
@@ -109,7 +128,7 @@ interface SessionStore {
 
   // Actions
   loadSessions: (profileId?: string) => Promise<void>
-  addSession: (directory: string, agentId: string | null, extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; name?: string }) => Promise<void>
+  addSession: (directory: string, agentId: string | null, extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; name?: string; sessionType?: 'default' | 'review'; prNumber?: number; prTitle?: string; prUrl?: string; prBaseBranch?: string }) => Promise<void>
   removeSession: (id: string) => Promise<void>
   setActiveSession: (id: string | null) => void
   updateSessionBranch: (id: string, branch: string) => void
@@ -141,9 +160,14 @@ interface SessionStore {
   setActiveTerminalTab: (sessionId: string, tabId: string) => void
   closeOtherTerminalTabs: (sessionId: string, tabId: string) => void
   closeTerminalTabsToRight: (sessionId: string, tabId: string) => void
+  // Agent PTY tracking (runtime only)
+  setAgentPtyId: (sessionId: string, ptyId: string) => void
   // Direct push to main tracking
   recordPushToMain: (sessionId: string, commitHash: string) => void
   clearPushToMain: (sessionId: string) => void
+  // Branch status actions
+  updateBranchStatus: (sessionId: string, status: BranchStatus) => void
+  updatePrState: (sessionId: string, prState: PrState, prNumber?: number, prUrl?: string) => void
 }
 
 const generateId = () => `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
@@ -207,6 +231,12 @@ const debouncedSave = async (
         issueTitle: s.issueTitle,
         // Save new panelVisibility format
         panelVisibility: s.panelVisibility,
+        // Review session fields
+        sessionType: s.sessionType,
+        prNumber: s.prNumber,
+        prTitle: s.prTitle,
+        prUrl: s.prUrl,
+        prBaseBranch: s.prBaseBranch,
         // Also save legacy fields for backwards compat
         showAgentTerminal: s.showAgentTerminal,
         showUserTerminal: s.showUserTerminal,
@@ -220,6 +250,10 @@ const debouncedSave = async (
         // Push to main tracking
         pushedToMainAt: s.pushedToMainAt,
         pushedToMainCommit: s.pushedToMainCommit,
+        // PR state tracking
+        lastKnownPrState: s.lastKnownPrState,
+        lastKnownPrNumber: s.lastKnownPrNumber,
+        lastKnownPrUrl: s.lastKnownPrUrl,
       })),
       // Global state
       showSidebar: globalPanelVisibility[PANEL_IDS.SIDEBAR] ?? true,
@@ -261,6 +295,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           repoId: sessionData.repoId,
           issueNumber: sessionData.issueNumber,
           issueTitle: sessionData.issueTitle,
+          sessionType: sessionData.sessionType,
+          prNumber: sessionData.prNumber,
+          prTitle: sessionData.prTitle,
+          prUrl: sessionData.prUrl,
+          prBaseBranch: sessionData.prBaseBranch,
           // New panel visibility system
           panelVisibility,
           // Legacy fields (synced from panelVisibility)
@@ -286,6 +325,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           // Push to main tracking
           pushedToMainAt: sessionData.pushedToMainAt,
           pushedToMainCommit: sessionData.pushedToMainCommit,
+          // Branch status
+          branchStatus: 'in-progress',
+          lastKnownPrState: sessionData.lastKnownPrState,
+          lastKnownPrNumber: sessionData.lastKnownPrNumber,
+          lastKnownPrUrl: sessionData.lastKnownPrUrl,
         }
         sessions.push(session)
       }
@@ -309,7 +353,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  addSession: async (directory: string, agentId: string | null, extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; name?: string }) => {
+  addSession: async (directory: string, agentId: string | null, extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; name?: string; sessionType?: 'default' | 'review'; prNumber?: number; prTitle?: string; prUrl?: string; prBaseBranch?: string }) => {
     const isGitRepo = await window.git.isGitRepo(directory)
     if (!isGitRepo) {
       throw new Error('Selected directory is not a git repository')
@@ -320,6 +364,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const id = generateId()
 
     const panelVisibility = { ...DEFAULT_PANEL_VISIBILITY }
+    // Auto-show review panel for review sessions
+    if (extra?.sessionType === 'review') {
+      panelVisibility[PANEL_IDS.REVIEW] = true
+    }
     const newSession: Session = {
       id,
       name,
@@ -346,17 +394,33 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       recentFiles: [],
       // Terminal tabs
       terminalTabs: createDefaultTerminalTabs(),
+      // Branch status
+      branchStatus: 'in-progress',
     }
 
     const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
     const updatedSessions = [...sessions, newSession]
+
+    // Auto-add review to toolbar for review sessions
+    let updatedToolbarPanels = toolbarPanels
+    if (extra?.sessionType === 'review' && !toolbarPanels.includes(PANEL_IDS.REVIEW)) {
+      // Insert before settings (last item)
+      const settingsIdx = toolbarPanels.indexOf(PANEL_IDS.SETTINGS)
+      updatedToolbarPanels = [...toolbarPanels]
+      if (settingsIdx >= 0) {
+        updatedToolbarPanels.splice(settingsIdx, 0, PANEL_IDS.REVIEW)
+      } else {
+        updatedToolbarPanels.push(PANEL_IDS.REVIEW)
+      }
+      set({ toolbarPanels: updatedToolbarPanels })
+    }
 
     set({
       sessions: updatedSessions,
       activeSessionId: id,
     })
 
-    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
+    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, updatedToolbarPanels)
   },
 
   removeSession: async (id: string) => {
@@ -704,6 +768,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
   },
 
+  setAgentPtyId: (sessionId: string, ptyId: string) => {
+    const { sessions } = get()
+    const updatedSessions = sessions.map((s) =>
+      s.id === sessionId ? { ...s, agentPtyId: ptyId } : s
+    )
+    set({ sessions: updatedSessions })
+    // Don't persist - runtime only
+  },
+
   recordPushToMain: (sessionId: string, commitHash: string) => {
     const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
     const updatedSessions = sessions.map((s) =>
@@ -720,6 +793,31 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const updatedSessions = sessions.map((s) =>
       s.id === sessionId
         ? { ...s, pushedToMainAt: undefined, pushedToMainCommit: undefined }
+        : s
+    )
+    set({ sessions: updatedSessions })
+    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
+  },
+
+  updateBranchStatus: (sessionId: string, status: BranchStatus) => {
+    const { sessions } = get()
+    const updatedSessions = sessions.map((s) =>
+      s.id === sessionId ? { ...s, branchStatus: status } : s
+    )
+    set({ sessions: updatedSessions })
+    // Runtime only - don't persist
+  },
+
+  updatePrState: (sessionId: string, prState: PrState, prNumber?: number, prUrl?: string) => {
+    const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
+    const updatedSessions = sessions.map((s) =>
+      s.id === sessionId
+        ? {
+            ...s,
+            lastKnownPrState: prState,
+            lastKnownPrNumber: prNumber ?? s.lastKnownPrNumber,
+            lastKnownPrUrl: prUrl ?? s.lastKnownPrUrl,
+          }
         : s
     )
     set({ sessions: updatedSessions })

@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react'
+import { useRef, useEffect, useState, useCallback } from 'react'
 import Editor, { loader, Monaco } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor'
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
@@ -132,10 +132,23 @@ const getLanguageFromPath = (filePath: string): string => {
   return languageMap[ext] || 'plaintext'
 }
 
-function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrollToLine, searchHighlight }: FileViewerComponentProps) {
+interface PendingComment {
+  id: string
+  file: string
+  line: number
+  body: string
+  createdAt: string
+  pushed?: boolean
+}
+
+function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrollToLine, searchHighlight, reviewContext }: FileViewerComponentProps) {
   const language = getLanguageFromPath(filePath)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const originalContentRef = useRef(content)
+  const [commentLine, setCommentLine] = useState<number | null>(null)
+  const [commentText, setCommentText] = useState('')
+  const [existingComments, setExistingComments] = useState<PendingComment[]>([])
+  const commentDecorationsRef = useRef<string[]>([])
   const decorationsRef = useRef<monaco.editor.IEditorDecorationsCollection | null>(null)
   const scrollToLineRef = useRef(scrollToLine)
   const searchHighlightRef = useRef(searchHighlight)
@@ -144,11 +157,89 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
   scrollToLineRef.current = scrollToLine
   searchHighlightRef.current = searchHighlight
 
+  // Load existing comments for this file
+  useEffect(() => {
+    if (!reviewContext) return
+    const loadComments = async () => {
+      try {
+        const exists = await window.fs.exists(reviewContext.commentsFilePath)
+        if (exists) {
+          const data = await window.fs.readFile(reviewContext.commentsFilePath)
+          const allComments: PendingComment[] = JSON.parse(data)
+          setExistingComments(allComments.filter(c => c.file === filePath))
+        }
+      } catch {
+        // No comments yet
+      }
+    }
+    loadComments()
+  }, [filePath, reviewContext?.commentsFilePath])
+
+  // Update comment decorations when comments change
+  useEffect(() => {
+    if (!editorRef.current || !reviewContext) return
+    const editor = editorRef.current
+    const model = editor.getModel()
+    if (!model) return
+
+    const decorations: monaco.editor.IModelDeltaDecoration[] = existingComments.map(c => ({
+      range: new monaco.Range(c.line, 1, c.line, 1),
+      options: {
+        isWholeLine: true,
+        glyphMarginClassName: 'review-comment-glyph',
+        glyphMarginHoverMessage: { value: c.body },
+        className: 'review-comment-line',
+      },
+    }))
+
+    commentDecorationsRef.current = editor.deltaDecorations(commentDecorationsRef.current, decorations)
+  }, [existingComments, reviewContext])
+
   // Update original content when file changes
   useEffect(() => {
     originalContentRef.current = content
     onDirtyChange?.(false, content)
   }, [content, filePath])
+
+  const handleAddComment = useCallback(async () => {
+    if (!reviewContext || commentLine === null || !commentText.trim()) return
+
+    const newComment: PendingComment = {
+      id: `comment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      file: filePath,
+      line: commentLine,
+      body: commentText.trim(),
+      createdAt: new Date().toISOString(),
+    }
+
+    try {
+      // Load all existing comments
+      let allComments: PendingComment[] = []
+      try {
+        const exists = await window.fs.exists(reviewContext.commentsFilePath)
+        if (exists) {
+          const data = await window.fs.readFile(reviewContext.commentsFilePath)
+          allComments = JSON.parse(data)
+        }
+      } catch {
+        // Start fresh
+      }
+
+      allComments.push(newComment)
+
+      // Ensure directory exists
+      const dir = reviewContext.commentsFilePath.replace('/comments.json', '')
+      await window.fs.mkdir(dir)
+      await window.fs.writeFile(reviewContext.commentsFilePath, JSON.stringify(allComments, null, 2))
+
+      // Update local state
+      setExistingComments(prev => [...prev, newComment])
+      setCommentLine(null)
+      setCommentText('')
+    } catch {
+      // Comment save failed
+    }
+  }, [reviewContext, commentLine, commentText, filePath])
 
   // Shared function to scroll and highlight
   const applyScrollAndHighlight = useCallback((editor: monaco.editor.IStandaloneCodeEditor) => {
@@ -209,6 +300,19 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
         })
       }
     })
+
+    // Add glyph margin click handler for review comments
+    if (reviewContext) {
+      editor.onMouseDown((e) => {
+        if (e.target.type === monacoInstance.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
+          const lineNumber = e.target.position?.lineNumber
+          if (lineNumber) {
+            setCommentLine(lineNumber)
+            setCommentText('')
+          }
+        }
+      })
+    }
   }
 
   const handleEditorChange = (value: string | undefined) => {
@@ -218,25 +322,85 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
   }
 
   return (
-    <Editor
-      height="100%"
-      language={language}
-      value={content}
-      theme="vs-dark"
-      onMount={handleEditorDidMount}
-      onChange={handleEditorChange}
-      options={{
-        readOnly: !onSave,
-        minimap: { enabled: false },
-        fontSize: 13,
-        fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-        lineNumbers: 'on',
-        scrollBeyondLastLine: false,
-        wordWrap: 'on',
-        automaticLayout: true,
-        padding: { top: 8, bottom: 8 },
-      }}
-    />
+    <div className="h-full flex flex-col">
+      {/* Inline comment input */}
+      {reviewContext && commentLine !== null && (
+        <div className="flex-shrink-0 px-3 py-2 bg-bg-secondary border-b border-border">
+          <div className="text-xs text-text-secondary mb-1">Comment on line {commentLine}:</div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && commentText.trim()) {
+                  handleAddComment()
+                } else if (e.key === 'Escape') {
+                  setCommentLine(null)
+                }
+              }}
+              placeholder="Type your comment..."
+              className="flex-1 px-2 py-1 text-xs rounded border border-border bg-bg-primary text-text-primary focus:outline-none focus:border-accent"
+              autoFocus
+            />
+            <button
+              onClick={handleAddComment}
+              disabled={!commentText.trim()}
+              className="px-2 py-1 text-xs rounded bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-50 transition-colors"
+            >
+              Add
+            </button>
+            <button
+              onClick={() => setCommentLine(null)}
+              className="px-2 py-1 text-xs rounded text-text-secondary hover:text-text-primary transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      <div className="flex-1 min-h-0">
+        <Editor
+          height="100%"
+          language={language}
+          value={content}
+          theme="vs-dark"
+          onMount={handleEditorDidMount}
+          onChange={handleEditorChange}
+          options={{
+            readOnly: !onSave,
+            minimap: { enabled: false },
+            fontSize: 13,
+            fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+            lineNumbers: 'on',
+            scrollBeyondLastLine: false,
+            wordWrap: 'on',
+            automaticLayout: true,
+            padding: { top: 8, bottom: 8 },
+            glyphMargin: !!reviewContext,
+          }}
+        />
+      </div>
+      {/* Add CSS for review comment decorations */}
+      {reviewContext && (
+        <style>{`
+          .review-comment-glyph {
+            background-color: #eab308;
+            border-radius: 50%;
+            width: 8px !important;
+            height: 8px !important;
+            margin-top: 6px;
+            margin-left: 4px;
+          }
+          .review-comment-line {
+            background-color: rgba(234, 179, 8, 0.05);
+          }
+          .margin-view-overlays .cgmr {
+            cursor: pointer;
+          }
+        `}</style>
+      )}
+    </div>
   )
 }
 
