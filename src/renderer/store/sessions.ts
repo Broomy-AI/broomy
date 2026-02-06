@@ -21,6 +21,7 @@ export interface LayoutSizes {
   fileViewerSize: number // height when top, width when left
   userTerminalHeight: number
   diffPanelWidth: number
+  reviewPanelWidth: number
 }
 
 export type ExplorerFilter = 'files' | 'source-control' | 'search' | 'recent'
@@ -38,6 +39,12 @@ export interface Session {
   repoId?: string
   issueNumber?: number
   issueTitle?: string
+  // Review session fields
+  sessionType?: 'default' | 'review'
+  prNumber?: number
+  prTitle?: string
+  prUrl?: string
+  prBaseBranch?: string
   // Per-session UI state (persisted) - generic panel visibility
   panelVisibility: PanelVisibility
   // Legacy fields kept for backwards compat - computed from panelVisibility
@@ -54,6 +61,8 @@ export interface Session {
   lastMessage: string | null
   lastMessageTime: number | null
   isUnread: boolean
+  // Agent PTY ID (runtime only, set by Terminal.tsx)
+  agentPtyId?: string
   // Recently opened files (runtime, most recent first)
   recentFiles: string[]
   // User terminal tabs (persisted)
@@ -69,6 +78,7 @@ const DEFAULT_LAYOUT_SIZES: LayoutSizes = {
   fileViewerSize: 300,
   userTerminalHeight: 192, // 12rem = 192px
   diffPanelWidth: 320, // 20rem = 320px
+  reviewPanelWidth: 320,
 }
 
 const DEFAULT_SIDEBAR_WIDTH = 224 // 14rem = 224px
@@ -109,7 +119,7 @@ interface SessionStore {
 
   // Actions
   loadSessions: (profileId?: string) => Promise<void>
-  addSession: (directory: string, agentId: string | null, extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; name?: string }) => Promise<void>
+  addSession: (directory: string, agentId: string | null, extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; name?: string; sessionType?: 'default' | 'review'; prNumber?: number; prTitle?: string; prUrl?: string; prBaseBranch?: string }) => Promise<void>
   removeSession: (id: string) => Promise<void>
   setActiveSession: (id: string | null) => void
   updateSessionBranch: (id: string, branch: string) => void
@@ -141,6 +151,8 @@ interface SessionStore {
   setActiveTerminalTab: (sessionId: string, tabId: string) => void
   closeOtherTerminalTabs: (sessionId: string, tabId: string) => void
   closeTerminalTabsToRight: (sessionId: string, tabId: string) => void
+  // Agent PTY tracking (runtime only)
+  setAgentPtyId: (sessionId: string, ptyId: string) => void
   // Direct push to main tracking
   recordPushToMain: (sessionId: string, commitHash: string) => void
   clearPushToMain: (sessionId: string) => void
@@ -207,6 +219,12 @@ const debouncedSave = async (
         issueTitle: s.issueTitle,
         // Save new panelVisibility format
         panelVisibility: s.panelVisibility,
+        // Review session fields
+        sessionType: s.sessionType,
+        prNumber: s.prNumber,
+        prTitle: s.prTitle,
+        prUrl: s.prUrl,
+        prBaseBranch: s.prBaseBranch,
         // Also save legacy fields for backwards compat
         showAgentTerminal: s.showAgentTerminal,
         showUserTerminal: s.showUserTerminal,
@@ -261,6 +279,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           repoId: sessionData.repoId,
           issueNumber: sessionData.issueNumber,
           issueTitle: sessionData.issueTitle,
+          sessionType: sessionData.sessionType,
+          prNumber: sessionData.prNumber,
+          prTitle: sessionData.prTitle,
+          prUrl: sessionData.prUrl,
+          prBaseBranch: sessionData.prBaseBranch,
           // New panel visibility system
           panelVisibility,
           // Legacy fields (synced from panelVisibility)
@@ -309,7 +332,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  addSession: async (directory: string, agentId: string | null, extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; name?: string }) => {
+  addSession: async (directory: string, agentId: string | null, extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; name?: string; sessionType?: 'default' | 'review'; prNumber?: number; prTitle?: string; prUrl?: string; prBaseBranch?: string }) => {
     const isGitRepo = await window.git.isGitRepo(directory)
     if (!isGitRepo) {
       throw new Error('Selected directory is not a git repository')
@@ -320,6 +343,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const id = generateId()
 
     const panelVisibility = { ...DEFAULT_PANEL_VISIBILITY }
+    // Auto-show review panel for review sessions
+    if (extra?.sessionType === 'review') {
+      panelVisibility[PANEL_IDS.REVIEW] = true
+    }
     const newSession: Session = {
       id,
       name,
@@ -351,12 +378,26 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
     const updatedSessions = [...sessions, newSession]
 
+    // Auto-add review to toolbar for review sessions
+    let updatedToolbarPanels = toolbarPanels
+    if (extra?.sessionType === 'review' && !toolbarPanels.includes(PANEL_IDS.REVIEW)) {
+      // Insert before settings (last item)
+      const settingsIdx = toolbarPanels.indexOf(PANEL_IDS.SETTINGS)
+      updatedToolbarPanels = [...toolbarPanels]
+      if (settingsIdx >= 0) {
+        updatedToolbarPanels.splice(settingsIdx, 0, PANEL_IDS.REVIEW)
+      } else {
+        updatedToolbarPanels.push(PANEL_IDS.REVIEW)
+      }
+      set({ toolbarPanels: updatedToolbarPanels })
+    }
+
     set({
       sessions: updatedSessions,
       activeSessionId: id,
     })
 
-    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
+    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, updatedToolbarPanels)
   },
 
   removeSession: async (id: string) => {
@@ -702,6 +743,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     })
     set({ sessions: updatedSessions })
     debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
+  },
+
+  setAgentPtyId: (sessionId: string, ptyId: string) => {
+    const { sessions } = get()
+    const updatedSessions = sessions.map((s) =>
+      s.id === sessionId ? { ...s, agentPtyId: ptyId } : s
+    )
+    set({ sessions: updatedSessions })
+    // Don't persist - runtime only
   },
 
   recordPushToMain: (sessionId: string, commitHash: string) => {

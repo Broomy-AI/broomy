@@ -6,6 +6,7 @@ import Terminal from './components/Terminal'
 import TabbedTerminal from './components/TabbedTerminal'
 import Explorer from './components/Explorer'
 import FileViewer from './components/FileViewer'
+import ReviewPanel from './components/ReviewPanel'
 import AgentSettings from './components/AgentSettings'
 import NewSessionDialog from './components/NewSessionDialog'
 import PanelPicker from './components/PanelPicker'
@@ -27,6 +28,7 @@ const DEFAULT_LAYOUT_SIZES: LayoutSizes = {
   fileViewerSize: 300,
   userTerminalHeight: 192,
   diffPanelWidth: 320,
+  reviewPanelWidth: 320,
 }
 
 function AppContent() {
@@ -56,7 +58,7 @@ function AppContent() {
   } = useSessionStore()
 
   const { agents, loadAgents } = useAgentStore()
-  const { loadRepos, checkGhAvailability } = useRepoStore()
+  const { repos, loadRepos, checkGhAvailability } = useRepoStore()
   const { currentProfileId, profiles, loadProfiles, switchProfile } = useProfileStore()
   const { addError } = useErrorStore()
   const currentProfile = profiles.find((p) => p.id === currentProfileId)
@@ -247,7 +249,7 @@ function AppContent() {
   const handleNewSessionComplete = async (
     directory: string,
     agentId: string | null,
-    extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; name?: string }
+    extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; name?: string; sessionType?: 'default' | 'review'; prNumber?: number; prTitle?: string; prUrl?: string; prBaseBranch?: string }
   ) => {
     try {
       await addSession(directory, agentId, extra)
@@ -392,6 +394,21 @@ function AppContent() {
         directory={activeSession?.directory}
         onSaveComplete={fetchGitStatus}
         initialViewMode={openFileInDiffMode ? 'diff' : 'latest'}
+        reviewContext={activeSession?.sessionType === 'review' ? {
+          sessionDirectory: activeSession.directory,
+          commentsFilePath: `${activeSession.directory}/.broomer-review/comments.json`,
+        } : undefined}
+      />
+    ) : null,
+    [PANEL_IDS.REVIEW]: activeSession?.sessionType === 'review' && activeSession?.panelVisibility?.[PANEL_IDS.REVIEW] ? (
+      <ReviewPanel
+        session={activeSession}
+        repo={repos.find(r => r.id === activeSession.repoId)}
+        onSelectFile={(filePath) => {
+          if (activeSessionId) {
+            selectFile(activeSessionId, filePath)
+          }
+        }}
       />
     ) : null,
     [PANEL_IDS.SETTINGS]: globalPanelVisibility[PANEL_IDS.SETTINGS] ? (
@@ -410,6 +427,7 @@ function AppContent() {
     agentTerminalPanel,
     userTerminalPanel,
     handleToggleFileViewer,
+    repos,
   ])
 
   if (isLoading) {

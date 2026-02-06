@@ -17,9 +17,10 @@ interface FileViewerProps {
   directory?: string // For getting git diff
   onSaveComplete?: () => void // Called after a successful save
   initialViewMode?: ViewMode // Initial view mode when opening a file
+  reviewContext?: { sessionDirectory: string; commentsFilePath: string }
 }
 
-export default function FileViewer({ filePath, position = 'top', onPositionChange, onClose, fileStatus, directory, onSaveComplete, initialViewMode = 'latest' }: FileViewerProps) {
+export default function FileViewer({ filePath, position = 'top', onPositionChange, onClose, fileStatus, directory, onSaveComplete, initialViewMode = 'latest', reviewContext }: FileViewerProps) {
   // Show diff for modified and deleted files
   const canShowDiff = fileStatus === 'modified' || fileStatus === 'deleted'
   const [content, setContent] = useState<string>('')
@@ -402,6 +403,7 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
             content={content}
             onSave={handleSave}
             onDirtyChange={handleDirtyChange}
+            reviewContext={reviewContext}
           />
         )}
       </div>

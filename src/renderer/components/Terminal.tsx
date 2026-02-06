@@ -31,6 +31,7 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
   const { addError } = useErrorStore()
   const updateAgentMonitor = useSessionStore((state) => state.updateAgentMonitor)
   const markSessionRead = useSessionStore((state) => state.markSessionRead)
+  const setAgentPtyId = useSessionStore((state) => state.setAgentPtyId)
 
   // Use ref for updateAgentMonitor to avoid effect re-runs
   const updateAgentMonitorRef = useRef(updateAgentMonitor)
@@ -183,6 +184,11 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
     window.pty.create({ id, cwd, command, sessionId, env })
       .then(() => {
         setPtyId(id)
+
+        // Expose PTY ID to session store for review panel to send commands
+        if (isAgentTerminal && sessionId) {
+          setAgentPtyId(sessionId, id)
+        }
 
         // Connect terminal input to PTY
         terminal.onData((data) => {

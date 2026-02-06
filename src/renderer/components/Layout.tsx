@@ -34,7 +34,7 @@ const formatShortcut = (key: string) => {
   return `${modifier}${key}`
 }
 
-type DividerType = 'sidebar' | 'explorer' | 'fileViewer' | 'userTerminal' | null
+type DividerType = 'sidebar' | 'explorer' | 'review' | 'fileViewer' | 'userTerminal' | null
 
 export default function Layout({
   panels,
@@ -80,6 +80,7 @@ export default function Layout({
   const showSidebar = isPanelVisible(PANEL_IDS.SIDEBAR)
   const showExplorer = isPanelVisible(PANEL_IDS.EXPLORER)
   const showFileViewer = isPanelVisible(PANEL_IDS.FILE_VIEWER)
+  const showReview = isPanelVisible(PANEL_IDS.REVIEW)
   const showAgentTerminal = isPanelVisible(PANEL_IDS.AGENT_TERMINAL)
   const showUserTerminal = isPanelVisible(PANEL_IDS.USER_TERMINAL)
   const showSettings = isPanelVisible(PANEL_IDS.SETTINGS)
@@ -120,6 +121,14 @@ export default function Layout({
           const offset = showSidebar ? sidebarWidth : 0
           const newWidth = e.clientX - mainRect.left - offset
           onLayoutSizeChange('explorerWidth', Math.max(150, Math.min(newWidth, 500)))
+          break
+        }
+        case 'review': {
+          if (!mainRect) return
+          let reviewOffset = showSidebar ? sidebarWidth : 0
+          if (showExplorer) reviewOffset += layoutSizes.explorerWidth
+          const newReviewWidth = e.clientX - mainRect.left - reviewOffset
+          onLayoutSizeChange('reviewPanelWidth', Math.max(250, Math.min(newReviewWidth, 600)))
           break
         }
         case 'fileViewer': {
@@ -345,6 +354,7 @@ export default function Layout({
   // Get panel content
   const sidebar = panels[PANEL_IDS.SIDEBAR]
   const explorer = panels[PANEL_IDS.EXPLORER]
+  const reviewPanel = panels[PANEL_IDS.REVIEW]
   const fileViewer = panels[PANEL_IDS.FILE_VIEWER]
   const agentTerminal = panels[PANEL_IDS.AGENT_TERMINAL]
   const userTerminal = panels[PANEL_IDS.USER_TERMINAL]
@@ -452,6 +462,22 @@ export default function Layout({
                       {explorer}
                     </div>
                     <Divider type="explorer" direction="vertical" />
+                  </>
+                )}
+
+                {/* Review panel */}
+                {showReview && reviewPanel && (
+                  <>
+                    <div
+                      data-panel-id={PANEL_IDS.REVIEW}
+                      tabIndex={-1}
+                      className="relative flex-shrink-0 bg-bg-secondary overflow-y-auto outline-none"
+                      style={{ width: layoutSizes.reviewPanelWidth ?? 320 }}
+                    >
+                      <FlashOverlay panelId={PANEL_IDS.REVIEW} />
+                      {reviewPanel}
+                    </div>
+                    <Divider type="review" direction="vertical" />
                   </>
                 )}
 

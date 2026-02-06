@@ -22,6 +22,11 @@ export interface FileViewerComponentProps {
   onSave?: (content: string) => Promise<void>
   /** Callback when content is modified (for dirty tracking). Passes current content for external save button. */
   onDirtyChange?: (isDirty: boolean, currentContent?: string) => void
+  /** Review context - present when viewing files in a review session */
+  reviewContext?: {
+    sessionDirectory: string
+    commentsFilePath: string
+  }
 }
 
 /** Get file extension from path */

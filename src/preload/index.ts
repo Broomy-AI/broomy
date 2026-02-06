@@ -65,6 +65,7 @@ export type ManagedRepo = {
   rootDir: string
   defaultBranch: string
   defaultAgentId?: string  // Default agent for sessions in this repo
+  reviewInstructions?: string  // Custom instructions for AI review generation
 }
 
 export type GitHubIssue = {
@@ -95,6 +96,16 @@ export type GitHubPrComment = {
   inReplyToId?: number
 }
 
+export type GitHubPrForReview = {
+  number: number
+  title: string
+  author: string
+  url: string
+  headRefName: string
+  baseRefName: string
+  labels: string[]
+}
+
 export type WorktreeInfo = {
   path: string
   branch: string
@@ -122,6 +133,7 @@ export type GitApi = {
   branchChanges: (repoPath: string, baseBranch?: string) => Promise<{ files: { path: string; status: string }[]; baseBranch: string }>
   headCommit: (repoPath: string) => Promise<string | null>
   listBranches: (repoPath: string) => Promise<{ name: string; isRemote: boolean; current: boolean }[]>
+  fetchBranch: (repoPath: string, branchName: string) => Promise<{ success: boolean; error?: string }>
 }
 
 export type GhApi = {
@@ -134,6 +146,8 @@ export type GhApi = {
   getPrCreateUrl: (repoDir: string) => Promise<string | null>
   prComments: (repoDir: string, prNumber: number) => Promise<GitHubPrComment[]>
   replyToComment: (repoDir: string, prNumber: number, commentId: number, body: string) => Promise<{ success: boolean; error?: string }>
+  prsToReview: (repoDir: string) => Promise<GitHubPrForReview[]>
+  submitDraftReview: (repoDir: string, prNumber: number, comments: { path: string; line: number; body: string }[]) => Promise<{ success: boolean; reviewId?: number; error?: string }>
 }
 
 export type ReposApi = {
@@ -158,6 +172,7 @@ export type LayoutSizesData = {
   fileViewerSize: number
   userTerminalHeight: number
   diffPanelWidth: number
+  reviewPanelWidth: number
 }
 
 export type PanelVisibility = Record<string, boolean>
@@ -170,6 +185,12 @@ export type SessionData = {
   repoId?: string
   issueNumber?: number
   issueTitle?: string
+  // Review session fields
+  sessionType?: 'default' | 'review'
+  prNumber?: number
+  prTitle?: string
+  prUrl?: string
+  prBaseBranch?: string
   // New generic panel visibility
   panelVisibility?: PanelVisibility
   // Legacy fields for backwards compat
@@ -282,6 +303,7 @@ const gitApi: GitApi = {
   branchChanges: (repoPath, baseBranch) => ipcRenderer.invoke('git:branchChanges', repoPath, baseBranch),
   headCommit: (repoPath) => ipcRenderer.invoke('git:headCommit', repoPath),
   listBranches: (repoPath) => ipcRenderer.invoke('git:listBranches', repoPath),
+  fetchBranch: (repoPath, branchName) => ipcRenderer.invoke('git:fetchBranch', repoPath, branchName),
 }
 
 const ghApi: GhApi = {
@@ -294,6 +316,8 @@ const ghApi: GhApi = {
   getPrCreateUrl: (repoDir) => ipcRenderer.invoke('gh:getPrCreateUrl', repoDir),
   prComments: (repoDir, prNumber) => ipcRenderer.invoke('gh:prComments', repoDir, prNumber),
   replyToComment: (repoDir, prNumber, commentId, body) => ipcRenderer.invoke('gh:replyToComment', repoDir, prNumber, commentId, body),
+  prsToReview: (repoDir) => ipcRenderer.invoke('gh:prsToReview', repoDir),
+  submitDraftReview: (repoDir, prNumber, comments) => ipcRenderer.invoke('gh:submitDraftReview', repoDir, prNumber, comments),
 }
 
 const reposApi: ReposApi = {
