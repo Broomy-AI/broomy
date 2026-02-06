@@ -43,7 +43,7 @@ test.afterAll(async () => {
 
 test.describe('Broomer App', () => {
   test('should display the app title', async () => {
-    const title = page.locator('text=Broomer')
+    const title = page.locator('text=Broomer').first()
     await expect(title).toBeVisible()
   })
 
@@ -126,15 +126,15 @@ test.describe('Broomer App', () => {
     await backendSession.click()
     await page.waitForTimeout(300)
 
-    // The backend session should now be selected (has bg-bg-tertiary class)
-    await expect(backendSession).toHaveClass(/bg-bg-tertiary/)
+    // The backend session should now be selected (has bg-accent/15 class)
+    await expect(backendSession).toHaveClass(/bg-accent\/15/)
 
     // Click back to broomer session
     const broomerSession = page.locator('.cursor-pointer:has-text("broomer")')
     await broomerSession.click()
     await page.waitForTimeout(300)
 
-    await expect(broomerSession).toHaveClass(/bg-bg-tertiary/)
+    await expect(broomerSession).toHaveClass(/bg-accent\/15/)
   })
 })
 

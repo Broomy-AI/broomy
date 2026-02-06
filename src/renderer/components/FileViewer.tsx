@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { basename } from 'path-browserify'
 import { getViewersForFile, isTextContent } from './fileViewers'
 import MonacoDiffViewer from './fileViewers/MonacoDiffViewer'
@@ -17,12 +17,17 @@ interface FileViewerProps {
   directory?: string // For getting git diff
   onSaveComplete?: () => void // Called after a successful save
   initialViewMode?: ViewMode // Initial view mode when opening a file
+  scrollToLine?: number // Line number to scroll to
+  searchHighlight?: string // Text to highlight in the file
+  onDirtyStateChange?: (isDirty: boolean) => void // Report dirty state to parent
+  saveRef?: React.MutableRefObject<(() => Promise<void>) | null> // Ref for parent to trigger save
+  diffBaseRef?: string // Git ref to compare against (e.g. 'origin/main' for branch changes)
   reviewContext?: { sessionDirectory: string; commentsFilePath: string }
 }
 
-export default function FileViewer({ filePath, position = 'top', onPositionChange, onClose, fileStatus, directory, onSaveComplete, initialViewMode = 'latest', reviewContext }: FileViewerProps) {
-  // Show diff for modified and deleted files
-  const canShowDiff = fileStatus === 'modified' || fileStatus === 'deleted'
+export default function FileViewer({ filePath, position = 'top', onPositionChange, onClose, fileStatus, directory, onSaveComplete, initialViewMode = 'latest', scrollToLine, searchHighlight, onDirtyStateChange, saveRef, diffBaseRef, reviewContext }: FileViewerProps) {
+  // Show diff for modified/deleted files, or when a base ref is provided (branch changes)
+  const canShowDiff = fileStatus === 'modified' || fileStatus === 'deleted' || !!diffBaseRef
   const [content, setContent] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -34,6 +39,8 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
   const [viewMode, setViewMode] = useState<ViewMode>('latest')
   const [originalContent, setOriginalContent] = useState<string>('')
   const [diffSideBySide, setDiffSideBySide] = useState(true)
+  const [fileChangedOnDisk, setFileChangedOnDisk] = useState(false)
+  const contentRef = useRef(content)
 
   useEffect(() => {
     if (!filePath) {
@@ -107,11 +114,17 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
 
       setAvailableViewers(viewers)
 
-      // Select the highest priority viewer by default, or keep current if still available
+      // Select viewer: prefer Monaco when opening from changes list or search result
       if (viewers.length > 0) {
         const currentStillAvailable = viewers.find(v => v.id === selectedViewerId)
         if (!currentStillAvailable) {
-          setSelectedViewerId(viewers[0].id)
+          if (initialViewMode === 'diff' || scrollToLine) {
+            // When coming from changes list or search result, prefer code view over preview
+            const monacoViewer = viewers.find(v => v.id === 'monaco')
+            setSelectedViewerId(monacoViewer?.id ?? viewers[0].id)
+          } else {
+            setSelectedViewerId(viewers[0].id)
+          }
         }
       } else {
         setSelectedViewerId(null)
@@ -140,7 +153,8 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
         const relativePath = filePath.startsWith(directory + '/')
           ? filePath.slice(directory.length + 1)
           : filePath
-        const original = await window.git.show(directory, relativePath)
+        // Use diffBaseRef if provided (for branch changes), otherwise HEAD (for working changes)
+        const original = await window.git.show(directory, relativePath, diffBaseRef || 'HEAD')
         setOriginalContent(original)
       } catch {
         setOriginalContent('')
@@ -148,7 +162,82 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
     }
 
     loadOriginal()
-  }, [filePath, directory, canShowDiff, viewMode])
+  }, [filePath, directory, canShowDiff, viewMode, diffBaseRef])
+
+  // Keep contentRef in sync
+  useEffect(() => {
+    contentRef.current = content
+  }, [content])
+
+  // Watch file for external changes
+  useEffect(() => {
+    if (!filePath) return
+
+    const watcherId = `fileviewer-${filePath}`
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
+
+    window.fs.watch(watcherId, filePath)
+    const removeListener = window.fs.onChange(watcherId, () => {
+      // Debounce to avoid multiple triggers
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(async () => {
+        try {
+          const newContent = await window.fs.readFile(filePath)
+          // Only trigger if content actually changed
+          if (newContent !== contentRef.current) {
+            if (isDirty) {
+              setFileChangedOnDisk(true)
+            } else {
+              setContent(newContent)
+              contentRef.current = newContent
+            }
+          }
+        } catch {
+          // File might have been deleted
+        }
+      }, 300)
+    })
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer)
+      removeListener()
+      window.fs.unwatch(watcherId)
+    }
+  }, [filePath, isDirty])
+
+  // Reset fileChangedOnDisk when file changes
+  useEffect(() => {
+    setFileChangedOnDisk(false)
+  }, [filePath])
+
+  // Handle file-changed-on-disk responses
+  const handleKeepLocalChanges = useCallback(() => {
+    setFileChangedOnDisk(false)
+  }, [])
+
+  const handleLoadDiskVersion = useCallback(async () => {
+    if (!filePath) return
+    try {
+      const newContent = await window.fs.readFile(filePath)
+      setContent(newContent)
+      contentRef.current = newContent
+      setIsDirty(false)
+      onDirtyStateChange?.(false)
+      setFileChangedOnDisk(false)
+    } catch {
+      setFileChangedOnDisk(false)
+    }
+  }, [filePath, onDirtyStateChange])
+
+  // Switch to Monaco code view when scrollToLine is set (e.g. from search results)
+  useEffect(() => {
+    if (scrollToLine && selectedViewerId !== 'monaco') {
+      const monacoAvailable = availableViewers.find(v => v.id === 'monaco')
+      if (monacoAvailable) {
+        setSelectedViewerId('monaco')
+      }
+    }
+  }, [scrollToLine, selectedViewerId, availableViewers])
 
   // Reset dirty state and set initial view mode when file changes
   useEffect(() => {
@@ -176,6 +265,16 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
     }
   }, [filePath, onSaveComplete])
 
+  // Expose save function to parent via ref
+  useEffect(() => {
+    if (saveRef) {
+      saveRef.current = isDirty && editedContent ? () => handleSave(editedContent) : null
+    }
+    return () => {
+      if (saveRef) saveRef.current = null
+    }
+  }, [saveRef, isDirty, editedContent, handleSave])
+
   // Save button handler
   const handleSaveButton = useCallback(async () => {
     if (!filePath || !isDirty || !editedContent) return
@@ -185,10 +284,11 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
   // Dirty change handler - also tracks the current content for save button
   const handleDirtyChange = useCallback((dirty: boolean, currentContent?: string) => {
     setIsDirty(dirty)
+    onDirtyStateChange?.(dirty)
     if (currentContent !== undefined) {
       setEditedContent(currentContent)
     }
-  }, [])
+  }, [onDirtyStateChange])
 
   if (!filePath) {
     return (
@@ -230,6 +330,26 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
 
   return (
     <div className="h-full flex flex-col">
+      {/* File changed on disk notification */}
+      {fileChangedOnDisk && (
+        <div className="flex-shrink-0 px-3 py-2 bg-yellow-600/20 border-b border-yellow-600/40 flex items-center justify-between">
+          <span className="text-xs text-yellow-300">This file has been changed on disk.</span>
+          <div className="flex gap-2">
+            <button
+              onClick={handleKeepLocalChanges}
+              className="px-2 py-0.5 text-xs rounded bg-bg-tertiary text-text-secondary hover:text-text-primary transition-colors"
+            >
+              Keep my changes
+            </button>
+            <button
+              onClick={handleLoadDiskVersion}
+              className="px-2 py-0.5 text-xs rounded bg-yellow-600/30 text-yellow-300 hover:bg-yellow-600/40 transition-colors"
+            >
+              Load disk version
+            </button>
+          </div>
+        </div>
+      )}
       <div className="flex-shrink-0 p-3 border-b border-border flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-sm font-medium text-text-primary truncate">
@@ -396,6 +516,7 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
             originalContent={originalContent}
             modifiedContent={fileStatus === 'deleted' ? '' : content}
             sideBySide={diffSideBySide}
+            scrollToLine={scrollToLine}
           />
         ) : (
           <ViewerComponent
@@ -403,6 +524,8 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
             content={content}
             onSave={handleSave}
             onDirtyChange={handleDirtyChange}
+            scrollToLine={scrollToLine}
+            searchHighlight={searchHighlight}
             reviewContext={reviewContext}
           />
         )}

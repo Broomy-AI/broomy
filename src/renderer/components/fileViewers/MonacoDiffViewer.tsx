@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { DiffEditor, loader } from '@monaco-editor/react'
 import * as monacoEditor from 'monaco-editor'
 
@@ -10,6 +11,7 @@ interface MonacoDiffViewerProps {
   modifiedContent: string
   language?: string
   sideBySide?: boolean
+  scrollToLine?: number
 }
 
 // Map file extensions to Monaco language IDs
@@ -71,9 +73,28 @@ export default function MonacoDiffViewer({
   originalContent,
   modifiedContent,
   language,
-  sideBySide = true
+  sideBySide = true,
+  scrollToLine
 }: MonacoDiffViewerProps) {
   const detectedLanguage = language || getLanguageFromPath(filePath)
+  const diffEditorRef = useRef<monacoEditor.editor.IStandaloneDiffEditor | null>(null)
+
+  const handleDiffEditorMount = (editor: monacoEditor.editor.IStandaloneDiffEditor) => {
+    diffEditorRef.current = editor
+    if (scrollToLine) {
+      const modifiedEditor = editor.getModifiedEditor()
+      modifiedEditor.revealLineInCenter(scrollToLine)
+      modifiedEditor.setPosition({ lineNumber: scrollToLine, column: 1 })
+    }
+  }
+
+  useEffect(() => {
+    if (scrollToLine && diffEditorRef.current) {
+      const modifiedEditor = diffEditorRef.current.getModifiedEditor()
+      modifiedEditor.revealLineInCenter(scrollToLine)
+      modifiedEditor.setPosition({ lineNumber: scrollToLine, column: 1 })
+    }
+  }, [scrollToLine, filePath])
 
   return (
     <div className="h-full flex flex-col">
@@ -86,6 +107,7 @@ export default function MonacoDiffViewer({
           original={originalContent}
           modified={modifiedContent}
           theme="vs-dark"
+          onMount={handleDiffEditorMount}
           options={{
             readOnly: true,
             renderSideBySide: sideBySide,

@@ -141,14 +141,21 @@ interface PendingComment {
   pushed?: boolean
 }
 
-function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, reviewContext }: FileViewerComponentProps) {
+function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrollToLine, searchHighlight, reviewContext }: FileViewerComponentProps) {
   const language = getLanguageFromPath(filePath)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const originalContentRef = useRef(content)
   const [commentLine, setCommentLine] = useState<number | null>(null)
   const [commentText, setCommentText] = useState('')
   const [existingComments, setExistingComments] = useState<PendingComment[]>([])
-  const decorationsRef = useRef<string[]>([])
+  const commentDecorationsRef = useRef<string[]>([])
+  const decorationsRef = useRef<monaco.editor.IEditorDecorationsCollection | null>(null)
+  const scrollToLineRef = useRef(scrollToLine)
+  const searchHighlightRef = useRef(searchHighlight)
+
+  // Keep refs in sync
+  scrollToLineRef.current = scrollToLine
+  searchHighlightRef.current = searchHighlight
 
   // Load existing comments for this file
   useEffect(() => {
@@ -185,7 +192,7 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, revie
       },
     }))
 
-    decorationsRef.current = editor.deltaDecorations(decorationsRef.current, decorations)
+    commentDecorationsRef.current = editor.deltaDecorations(commentDecorationsRef.current, decorations)
   }, [existingComments, reviewContext])
 
   // Update original content when file changes
@@ -234,8 +241,54 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, revie
     }
   }, [reviewContext, commentLine, commentText, filePath])
 
+  // Shared function to scroll and highlight
+  const applyScrollAndHighlight = useCallback((editor: monaco.editor.IStandaloneCodeEditor) => {
+    const line = scrollToLineRef.current
+    const highlight = searchHighlightRef.current
+    if (!line) return
+
+    editor.revealLineInCenter(line)
+
+    if (highlight) {
+      const model = editor.getModel()
+      if (model) {
+        const lineContent = model.getLineContent(line)
+        const matchIndex = lineContent.toLowerCase().indexOf(highlight.toLowerCase())
+        if (matchIndex !== -1) {
+          const startColumn = matchIndex + 1
+          const endColumn = startColumn + highlight.length
+          editor.setSelection(new monaco.Range(line, startColumn, line, endColumn))
+          if (decorationsRef.current) {
+            decorationsRef.current.clear()
+          }
+          decorationsRef.current = editor.createDecorationsCollection([{
+            range: new monaco.Range(line, startColumn, line, endColumn),
+            options: {
+              className: 'searchHighlight',
+              isWholeLine: false,
+            }
+          }])
+        }
+      }
+    }
+  }, [])
+
+  // Scroll to line and highlight when props change (editor already mounted)
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!editor || !scrollToLine) return
+    // Delay to let Monaco update its model content after a value change
+    const timer = setTimeout(() => applyScrollAndHighlight(editor), 100)
+    return () => clearTimeout(timer)
+  }, [scrollToLine, searchHighlight, content, applyScrollAndHighlight])
+
   const handleEditorDidMount = (editor: monaco.editor.IStandaloneCodeEditor, monacoInstance: Monaco) => {
     editorRef.current = editor
+    // Apply pending scroll/highlight now that the editor is ready
+    if (scrollToLineRef.current) {
+      // Monaco editor is ready at onMount, but give it a moment for layout
+      setTimeout(() => applyScrollAndHighlight(editor), 150)
+    }
 
     // Add Cmd/Ctrl+S save handler
     editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS, () => {
@@ -351,18 +404,8 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, revie
   )
 }
 
-// Check if content appears to be text (exported for use by FileViewer)
-export function isTextContent(content: string): boolean {
-  if (!content || content.length === 0) return true
-  // Check for null bytes which indicate binary content
-  if (content.includes('\0')) return false
-  // Check if most characters are printable
-  const printableRatio = content.split('').filter((char) => {
-    const code = char.charCodeAt(0)
-    return (code >= 32 && code <= 126) || code === 9 || code === 10 || code === 13 || (code >= 160 && code <= 255)
-  }).length / content.length
-  return printableRatio > 0.85
-}
+// Re-export from utility module for backwards compatibility
+export { isTextContent } from '../../utils/textDetection'
 
 export const MonacoViewer: FileViewerPlugin = {
   id: 'monaco',

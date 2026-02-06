@@ -67,7 +67,19 @@ function AppContent() {
   const [gitStatusBySession, setGitStatusBySession] = useState<Record<string, GitStatusResult>>({})
   const [directoryExists, setDirectoryExists] = useState<Record<string, boolean>>({})
   const [openFileInDiffMode, setOpenFileInDiffMode] = useState(false)
+  const [scrollToLine, setScrollToLine] = useState<number | undefined>(undefined)
+  const [searchHighlight, setSearchHighlight] = useState<string | undefined>(undefined)
+  const [diffBaseRef, setDiffBaseRef] = useState<string | undefined>(undefined)
   const [showPanelPicker, setShowPanelPicker] = useState(false)
+  const [isFileViewerDirty, setIsFileViewerDirty] = useState(false)
+  const [pendingNavigation, setPendingNavigation] = useState<{
+    filePath: string
+    openInDiffMode: boolean
+    scrollToLine?: number
+    searchHighlight?: string
+    diffBaseRef?: string
+  } | null>(null)
+  const saveCurrentFileRef = React.useRef<(() => Promise<void>) | null>(null)
 
   const activeSession = sessions.find((s) => s.id === activeSessionId)
   const activeDirectoryExists = activeSession ? (directoryExists[activeSession.id] ?? true) : true
@@ -301,6 +313,59 @@ function AppContent() {
     }
   }, [activeSessionId, togglePanel])
 
+  // Navigate to a file, checking for unsaved changes first
+  const navigateToFile = useCallback((filePath: string, openInDiffMode: boolean, scrollToLine?: number, searchHighlight?: string, diffBaseRef?: string) => {
+    if (!activeSessionId) return
+    // If same file, just update scroll/highlight
+    if (filePath === activeSession?.selectedFilePath) {
+      setOpenFileInDiffMode(openInDiffMode)
+      setScrollToLine(scrollToLine)
+      setSearchHighlight(searchHighlight)
+      setDiffBaseRef(diffBaseRef)
+      return
+    }
+    if (isFileViewerDirty) {
+      setPendingNavigation({ filePath, openInDiffMode, scrollToLine, searchHighlight, diffBaseRef })
+      return
+    }
+    setOpenFileInDiffMode(openInDiffMode)
+    setScrollToLine(scrollToLine)
+    setSearchHighlight(searchHighlight)
+    setDiffBaseRef(diffBaseRef)
+    selectFile(activeSessionId, filePath)
+  }, [activeSessionId, activeSession?.selectedFilePath, isFileViewerDirty, selectFile])
+
+  const handlePendingSave = useCallback(async () => {
+    if (saveCurrentFileRef.current) {
+      await saveCurrentFileRef.current()
+    }
+    if (pendingNavigation && activeSessionId) {
+      setOpenFileInDiffMode(pendingNavigation.openInDiffMode)
+      setScrollToLine(pendingNavigation.scrollToLine)
+      setSearchHighlight(pendingNavigation.searchHighlight)
+      setDiffBaseRef(pendingNavigation.diffBaseRef)
+      selectFile(activeSessionId, pendingNavigation.filePath)
+    }
+    setPendingNavigation(null)
+    setIsFileViewerDirty(false)
+  }, [pendingNavigation, activeSessionId, selectFile])
+
+  const handlePendingDiscard = useCallback(() => {
+    if (pendingNavigation && activeSessionId) {
+      setOpenFileInDiffMode(pendingNavigation.openInDiffMode)
+      setScrollToLine(pendingNavigation.scrollToLine)
+      setSearchHighlight(pendingNavigation.searchHighlight)
+      setDiffBaseRef(pendingNavigation.diffBaseRef)
+      setIsFileViewerDirty(false)
+      selectFile(activeSessionId, pendingNavigation.filePath)
+    }
+    setPendingNavigation(null)
+  }, [pendingNavigation, activeSessionId, selectFile])
+
+  const handlePendingCancel = useCallback(() => {
+    setPendingNavigation(null)
+  }, [])
+
   // Memoize terminal panels separately to ensure stability
   // Only depends on sessions and agents (for command), not on activeSessionId
   const agentTerminalPanel = useMemo(() => (
@@ -364,11 +429,8 @@ function AppContent() {
     [PANEL_IDS.EXPLORER]: activeSession?.showExplorer ? (
       <Explorer
         directory={activeSession?.directory}
-        onFileSelect={(filePath, openInDiffMode) => {
-          if (activeSessionId) {
-            setOpenFileInDiffMode(openInDiffMode)
-            selectFile(activeSessionId, filePath)
-          }
+        onFileSelect={(filePath, openInDiffMode, scrollToLine, searchHighlight, diffBaseRef) => {
+          navigateToFile(filePath, openInDiffMode, scrollToLine, searchHighlight, diffBaseRef)
         }}
         selectedFilePath={activeSession?.selectedFilePath}
         gitStatus={activeSessionGitStatus}
@@ -382,6 +444,7 @@ function AppContent() {
         pushedToMainCommit={activeSession?.pushedToMainCommit}
         onRecordPushToMain={(commitHash) => activeSessionId && recordPushToMain(activeSessionId, commitHash)}
         onClearPushToMain={() => activeSessionId && clearPushToMain(activeSessionId)}
+        repoId={activeSession?.repoId}
       />
     ) : null,
     [PANEL_IDS.FILE_VIEWER]: activeSession?.showFileViewer ? (
@@ -394,6 +457,11 @@ function AppContent() {
         directory={activeSession?.directory}
         onSaveComplete={fetchGitStatus}
         initialViewMode={openFileInDiffMode ? 'diff' : 'latest'}
+        scrollToLine={scrollToLine}
+        searchHighlight={searchHighlight}
+        onDirtyStateChange={setIsFileViewerDirty}
+        saveRef={saveCurrentFileRef}
+        diffBaseRef={diffBaseRef}
         reviewContext={activeSession?.sessionType === 'review' ? {
           sessionDirectory: activeSession.directory,
           commentsFilePath: `${activeSession.directory}/.broomer-review/comments.json`,
@@ -422,6 +490,9 @@ function AppContent() {
     activeSessionGitStatusResult,
     selectedFileStatus,
     openFileInDiffMode,
+    scrollToLine,
+    searchHighlight,
+    diffBaseRef,
     globalPanelVisibility,
     fetchGitStatus,
     agentTerminalPanel,
@@ -472,6 +543,38 @@ function AppContent() {
           onToolbarPanelsChange={setToolbarPanels}
           onClose={() => setShowPanelPicker(false)}
         />
+      )}
+
+      {/* Unsaved changes confirmation dialog */}
+      {pendingNavigation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-bg-secondary border border-border rounded-lg shadow-xl p-4 max-w-sm mx-4">
+            <h3 className="text-sm font-medium text-text-primary mb-2">Unsaved Changes</h3>
+            <p className="text-xs text-text-secondary mb-4">
+              You have unsaved changes. What would you like to do?
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={handlePendingCancel}
+                className="px-3 py-1.5 text-xs rounded bg-bg-tertiary text-text-secondary hover:text-text-primary transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePendingDiscard}
+                className="px-3 py-1.5 text-xs rounded bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors"
+              >
+                Discard
+              </button>
+              <button
+                onClick={handlePendingSave}
+                className="px-3 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/80 transition-colors"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   )

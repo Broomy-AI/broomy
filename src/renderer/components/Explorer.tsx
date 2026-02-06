@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { FileEntry, GitFileStatus, GitStatusResult, SearchResult, GitHubPrStatus } from '../../preload/index'
 import type { ExplorerFilter } from '../store/sessions'
+import { useRepoStore } from '../store/repos'
+import { statusLabel, getStatusColor, statusBadgeColor, prStateBadgeClass } from '../utils/explorerHelpers'
 
 // PR comment type from GitHub API
 type PrComment = {
@@ -17,7 +19,7 @@ type PrComment = {
 
 interface ExplorerProps {
   directory?: string
-  onFileSelect?: (filePath: string, openInDiffMode: boolean) => void
+  onFileSelect?: (filePath: string, openInDiffMode: boolean, scrollToLine?: number, searchHighlight?: string, diffBaseRef?: string) => void
   selectedFilePath?: string | null
   gitStatus?: GitFileStatus[]
   syncStatus?: GitStatusResult | null
@@ -31,6 +33,7 @@ interface ExplorerProps {
   pushedToMainCommit?: string
   onRecordPushToMain?: (commitHash: string) => void
   onClearPushToMain?: () => void
+  repoId?: string
 }
 
 interface TreeNode extends FileEntry {
@@ -74,41 +77,16 @@ const RecentIcon = ({ className }: { className?: string }) => (
   </svg>
 )
 
-const statusLabel = (status: string): string => {
-  switch (status) {
-    case 'modified': return 'Modified'
-    case 'added': return 'Added'
-    case 'deleted': return 'Deleted'
-    case 'untracked': return 'Untracked'
-    case 'renamed': return 'Renamed'
-    default: return status
-  }
-}
+// statusLabel imported from utils/explorerHelpers
 
 // Status letter badge
 const StatusBadge = ({ status }: { status: string }) => {
   const letter = status.charAt(0).toUpperCase()
-  let color = 'text-text-secondary'
-  switch (status) {
-    case 'modified': color = 'text-yellow-400'; break
-    case 'added': color = 'text-green-400'; break
-    case 'deleted': color = 'text-red-400'; break
-    case 'untracked': color = 'text-gray-400'; break
-    case 'renamed': color = 'text-blue-400'; break
-  }
+  const color = statusBadgeColor(status)
   return <span className={`text-xs font-mono ${color}`} title={statusLabel(status)}>{letter}</span>
 }
 
-const getStatusColor = (status?: string): string => {
-  switch (status) {
-    case 'modified': return 'text-yellow-400'
-    case 'added': return 'text-green-400'
-    case 'deleted': return 'text-red-400'
-    case 'untracked': return 'text-gray-400'
-    case 'renamed': return 'text-blue-400'
-    default: return 'text-text-primary'
-  }
-}
+// getStatusColor imported from utils/explorerHelpers
 
 export default function Explorer({
   directory,
@@ -125,6 +103,7 @@ export default function Explorer({
   pushedToMainCommit,
   onRecordPushToMain,
   onClearPushToMain,
+  repoId,
 }: ExplorerProps) {
   const [tree, setTree] = useState<TreeNode[]>([])
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set())
@@ -138,6 +117,8 @@ export default function Explorer({
   // Source control state
   const [commitMessage, setCommitMessage] = useState('')
   const [isCommitting, setIsCommitting] = useState(false)
+  const [commitError, setCommitError] = useState<string | null>(null)
+  const [commitErrorExpanded, setCommitErrorExpanded] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
   const [scView, setScView] = useState<'working' | 'branch' | 'comments'>('working')
   const [branchChanges, setBranchChanges] = useState<{ path: string; status: string }[]>([])
@@ -157,12 +138,25 @@ export default function Explorer({
   const [replyText, setReplyText] = useState<Record<number, string>>({})
   const [isSubmittingReply, setIsSubmittingReply] = useState<number | null>(null)
 
+  // Repo lookup for allowPushToMain
+  const repos = useRepoStore((s) => s.repos)
+  const currentRepo = repoId ? repos.find((r) => r.id === repoId) : undefined
+
   // Search state
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [collapsedSearchGroups, setCollapsedSearchGroups] = useState<Set<string>>(new Set())
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Reset source control state when directory (session) changes
+  useEffect(() => {
+    setPrComments([])
+    setPrStatus(null)
+    setScView('working')
+    setHasWriteAccess(false)
+    setCommitError(null)
+  }, [directory])
 
   // Load directory contents
   const loadDirectory = useCallback(async (dirPath: string): Promise<TreeNode[]> => {
@@ -535,12 +529,20 @@ export default function Explorer({
     }
 
     setIsCommitting(true)
+    setCommitError(null)
     try {
       const result = await window.git.commit(directory, commitMessage.trim())
       if (result.success) {
         setCommitMessage('')
+        setCommitError(null)
         onGitStatusRefresh?.()
+      } else {
+        setCommitError(result.error || 'Commit failed')
+        setCommitErrorExpanded(false)
       }
+    } catch (err) {
+      setCommitError(String(err))
+      setCommitErrorExpanded(false)
     } finally {
       setIsCommitting(false)
     }
@@ -580,7 +582,7 @@ export default function Explorer({
     if (!directory) return
     const url = await window.gh.getPrCreateUrl(directory)
     if (url) {
-      window.open(url, '_blank')
+      window.shell.openExternal(url)
     }
   }
 
@@ -792,21 +794,15 @@ export default function Explorer({
         ) : prStatus ? (
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
-              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
-                prStatus.state === 'OPEN' ? 'bg-green-500/20 text-green-400' :
-                prStatus.state === 'MERGED' ? 'bg-purple-500/20 text-purple-400' :
-                'bg-red-500/20 text-red-400'
-              }`}>
+              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${prStateBadgeClass(prStatus.state)}`}>
                 {prStatus.state}
               </span>
-              <a
-                href={prStatus.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-accent hover:underline truncate flex-1"
+              <button
+                onClick={() => window.shell.openExternal(prStatus!.url)}
+                className="text-xs text-accent hover:underline truncate flex-1 text-left"
               >
                 #{prStatus.number}: {prStatus.title}
-              </a>
+              </button>
             </div>
           </div>
         ) : pushedToMainAt && !hasChangesSincePush ? (
@@ -830,7 +826,7 @@ export default function Explorer({
               >
                 Create PR
               </button>
-              {hasWriteAccess && (
+              {hasWriteAccess && currentRepo?.allowPushToMain && (
                 <button
                   onClick={handlePushToMain}
                   disabled={isPushingToMain}
@@ -867,7 +863,7 @@ export default function Explorer({
                       className="px-3 py-2 hover:bg-bg-tertiary cursor-pointer"
                       onClick={() => {
                         if (onFileSelect && directory && comment.path) {
-                          onFileSelect(`${directory}/${comment.path}`, true)
+                          onFileSelect(`${directory}/${comment.path}`, true, comment.line ?? undefined)
                         }
                       }}
                     >
@@ -948,7 +944,7 @@ export default function Explorer({
                   title={`${file.path} — ${statusLabel(file.status)}`}
                   onClick={() => {
                     if (onFileSelect && directory) {
-                      onFileSelect(`${directory}/${file.path}`, file.status === 'modified')
+                      onFileSelect(`${directory}/${file.path}`, true, undefined, undefined, `origin/${branchBaseName}`)
                     }
                   }}
                 >
@@ -1044,7 +1040,7 @@ export default function Explorer({
               disabled={isCommitting || gitStatus.length === 0 || !commitMessage.trim()}
               className="px-2 py-1 text-xs rounded bg-accent text-white hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
             >
-              {isCommitting ? '...' : 'Commit'}
+              {isCommitting ? 'Committing...' : 'Commit'}
             </button>
             <button
               onClick={async () => {
@@ -1060,6 +1056,23 @@ export default function Explorer({
               &#x22EF;
             </button>
           </div>
+          {commitError && (
+            <div className="mt-1 flex items-start gap-1 bg-red-500/10 border border-red-500/30 rounded px-2 py-1">
+              <div
+                className="flex-1 text-xs text-red-400 cursor-pointer"
+                onClick={() => setCommitErrorExpanded(!commitErrorExpanded)}
+              >
+                {commitErrorExpanded ? commitError : (commitError.length > 80 ? commitError.slice(0, 80) + '...' : commitError)}
+              </div>
+              <button
+                onClick={() => setCommitError(null)}
+                className="text-red-400 hover:text-red-300 text-xs shrink-0 px-1"
+                title="Dismiss"
+              >
+                x
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto text-sm">
@@ -1198,9 +1211,10 @@ export default function Explorer({
                   {result.contentMatches.map((match, i) => (
                     <div
                       key={`${result.path}-${match.line}-${i}`}
-                      className="py-0.5 hover:bg-bg-tertiary cursor-pointer text-xs text-text-secondary"
+                      className="py-0.5 hover:bg-bg-tertiary cursor-pointer text-xs text-text-secondary truncate"
                       style={{ paddingLeft: `${(isRoot ? depth : depth + 1) * 16 + 28}px` }}
-                      onClick={() => onFileSelect?.(result.path, false)}
+                      onClick={() => onFileSelect?.(result.path, false, match.line, searchQuery)}
+                      title={`${match.line}: ${match.text}`}
                     >
                       <span className="text-text-secondary opacity-60 mr-2">{match.line}:</span>
                       <span className="text-text-primary">{match.text}</span>

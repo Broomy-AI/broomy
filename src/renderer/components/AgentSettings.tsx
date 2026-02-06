@@ -141,9 +141,11 @@ function RepoSettingsEditor({
   onClose: () => void
 }) {
   const [defaultAgentId, setDefaultAgentId] = useState(repo.defaultAgentId || '')
+  const [allowPushToMain, setAllowPushToMain] = useState(repo.allowPushToMain || false)
   const [initScript, setInitScript] = useState('')
   const [loadingScript, setLoadingScript] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [pushToMainError, setPushToMainError] = useState<string | null>(null)
 
   useEffect(() => {
     async function loadScript() {
@@ -162,7 +164,7 @@ function RepoSettingsEditor({
   const handleSave = async () => {
     setSaving(true)
     try {
-      await onUpdate({ defaultAgentId: defaultAgentId || undefined })
+      await onUpdate({ defaultAgentId: defaultAgentId || undefined, allowPushToMain })
       await window.repos.saveInitScript(repo.id, initScript)
       onClose()
     } catch (err) {
@@ -190,6 +192,38 @@ function RepoSettingsEditor({
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="space-y-2">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={allowPushToMain}
+            onChange={async (e) => {
+              const checked = e.target.checked
+              if (checked) {
+                setPushToMainError(null)
+                try {
+                  const hasAccess = await window.gh.hasWriteAccess(repo.rootDir)
+                  if (!hasAccess) {
+                    setPushToMainError('You do not have write access to this repository.')
+                    return
+                  }
+                } catch {
+                  setPushToMainError('Failed to check write access. Is gh CLI installed?')
+                  return
+                }
+              }
+              setAllowPushToMain(checked)
+              setPushToMainError(null)
+            }}
+            className="rounded border-border"
+          />
+          <span className="text-xs text-text-secondary">Allow "Push to main" button</span>
+        </label>
+        {pushToMainError && (
+          <div className="text-xs text-red-400">{pushToMainError}</div>
+        )}
       </div>
 
       <div className="space-y-2">
