@@ -64,6 +64,9 @@ export type ManagedRepo = {
   remoteUrl: string
   rootDir: string
   defaultBranch: string
+  defaultAgentId?: string  // Default agent for sessions in this repo
+  reviewInstructions?: string  // Custom instructions for AI review generation
+  allowPushToMain?: boolean  // Whether "Push to main" button is shown for this repo
 }
 
 export type GitHubIssue = {
@@ -94,6 +97,24 @@ export type GitHubPrComment = {
   inReplyToId?: number
 }
 
+export type GitHubPrForReview = {
+  number: number
+  title: string
+  author: string
+  url: string
+  headRefName: string
+  baseRefName: string
+  labels: string[]
+}
+
+export type GitCommitInfo = {
+  hash: string
+  shortHash: string
+  message: string
+  author: string
+  date: string
+}
+
 export type WorktreeInfo = {
   path: string
   branch: string
@@ -119,7 +140,13 @@ export type GitApi = {
   defaultBranch: (repoPath: string) => Promise<string>
   remoteUrl: (repoPath: string) => Promise<string | null>
   branchChanges: (repoPath: string, baseBranch?: string) => Promise<{ files: { path: string; status: string }[]; baseBranch: string }>
+  branchCommits: (repoPath: string, baseBranch?: string) => Promise<{ commits: GitCommitInfo[]; baseBranch: string }>
+  commitFiles: (repoPath: string, commitHash: string) => Promise<{ path: string; status: string }[]>
   headCommit: (repoPath: string) => Promise<string | null>
+  listBranches: (repoPath: string) => Promise<{ name: string; isRemote: boolean; current: boolean }[]>
+  fetchBranch: (repoPath: string, branchName: string) => Promise<{ success: boolean; error?: string }>
+  fetchPrHead: (repoPath: string, prNumber: number) => Promise<{ success: boolean; error?: string }>
+  isMergedInto: (repoPath: string, ref: string) => Promise<boolean>
 }
 
 export type GhApi = {
@@ -132,15 +159,18 @@ export type GhApi = {
   getPrCreateUrl: (repoDir: string) => Promise<string | null>
   prComments: (repoDir: string, prNumber: number) => Promise<GitHubPrComment[]>
   replyToComment: (repoDir: string, prNumber: number, commentId: number, body: string) => Promise<{ success: boolean; error?: string }>
+  prsToReview: (repoDir: string) => Promise<GitHubPrForReview[]>
+  submitDraftReview: (repoDir: string, prNumber: number, comments: { path: string; line: number; body: string }[]) => Promise<{ success: boolean; reviewId?: number; error?: string }>
 }
 
 export type ReposApi = {
-  getInitScript: (repoId: string) => Promise<string | null>
-  saveInitScript: (repoId: string, script: string) => Promise<{ success: boolean; error?: string }>
+  getInitScript: (repoId: string, profileId?: string) => Promise<string | null>
+  saveInitScript: (repoId: string, script: string, profileId?: string) => Promise<{ success: boolean; error?: string }>
 }
 
 export type ShellApi = {
   exec: (command: string, cwd: string) => Promise<{ success: boolean; stdout: string; stderr: string; exitCode: number }>
+  openExternal: (url: string) => Promise<void>
 }
 
 export type AgentData = {
@@ -156,6 +186,7 @@ export type LayoutSizesData = {
   fileViewerSize: number
   userTerminalHeight: number
   diffPanelWidth: number
+  reviewPanelWidth: number
 }
 
 export type PanelVisibility = Record<string, boolean>
@@ -168,6 +199,12 @@ export type SessionData = {
   repoId?: string
   issueNumber?: number
   issueTitle?: string
+  // Review session fields
+  sessionType?: 'default' | 'review'
+  prNumber?: number
+  prTitle?: string
+  prUrl?: string
+  prBaseBranch?: string
   // New generic panel visibility
   panelVisibility?: PanelVisibility
   // Legacy fields for backwards compat
@@ -183,6 +220,10 @@ export type SessionData = {
   // Push to main tracking
   pushedToMainAt?: number
   pushedToMainCommit?: string
+  // Branch status PR tracking
+  lastKnownPrState?: 'OPEN' | 'MERGED' | 'CLOSED' | null
+  lastKnownPrNumber?: number
+  lastKnownPrUrl?: string
 }
 
 export type ConfigData = {
@@ -193,11 +234,30 @@ export type ConfigData = {
   toolbarPanels?: string[]
   repos?: ManagedRepo[]
   defaultCloneDir?: string
+  profileId?: string
 }
 
 export type ConfigApi = {
-  load: () => Promise<ConfigData>
+  load: (profileId?: string) => Promise<ConfigData>
   save: (config: ConfigData) => Promise<{ success: boolean; error?: string }>
+}
+
+export type ProfileData = {
+  id: string
+  name: string
+  color: string
+}
+
+export type ProfilesData = {
+  profiles: ProfileData[]
+  lastProfileId: string
+}
+
+export type ProfilesApi = {
+  list: () => Promise<ProfilesData>
+  save: (data: ProfilesData) => Promise<{ success: boolean; error?: string }>
+  openWindow: (profileId: string) => Promise<{ success: boolean; alreadyOpen: boolean }>
+  getOpenProfiles: () => Promise<string[]>
 }
 
 const ptyApi: PtyApi = {
@@ -259,7 +319,13 @@ const gitApi: GitApi = {
   defaultBranch: (repoPath) => ipcRenderer.invoke('git:defaultBranch', repoPath),
   remoteUrl: (repoPath) => ipcRenderer.invoke('git:remoteUrl', repoPath),
   branchChanges: (repoPath, baseBranch) => ipcRenderer.invoke('git:branchChanges', repoPath, baseBranch),
+  branchCommits: (repoPath, baseBranch) => ipcRenderer.invoke('git:branchCommits', repoPath, baseBranch),
+  commitFiles: (repoPath, commitHash) => ipcRenderer.invoke('git:commitFiles', repoPath, commitHash),
   headCommit: (repoPath) => ipcRenderer.invoke('git:headCommit', repoPath),
+  listBranches: (repoPath) => ipcRenderer.invoke('git:listBranches', repoPath),
+  fetchBranch: (repoPath, branchName) => ipcRenderer.invoke('git:fetchBranch', repoPath, branchName),
+  fetchPrHead: (repoPath, prNumber) => ipcRenderer.invoke('git:fetchPrHead', repoPath, prNumber),
+  isMergedInto: (repoPath, ref) => ipcRenderer.invoke('git:isMergedInto', repoPath, ref),
 }
 
 const ghApi: GhApi = {
@@ -272,20 +338,30 @@ const ghApi: GhApi = {
   getPrCreateUrl: (repoDir) => ipcRenderer.invoke('gh:getPrCreateUrl', repoDir),
   prComments: (repoDir, prNumber) => ipcRenderer.invoke('gh:prComments', repoDir, prNumber),
   replyToComment: (repoDir, prNumber, commentId, body) => ipcRenderer.invoke('gh:replyToComment', repoDir, prNumber, commentId, body),
+  prsToReview: (repoDir) => ipcRenderer.invoke('gh:prsToReview', repoDir),
+  submitDraftReview: (repoDir, prNumber, comments) => ipcRenderer.invoke('gh:submitDraftReview', repoDir, prNumber, comments),
 }
 
 const reposApi: ReposApi = {
-  getInitScript: (repoId) => ipcRenderer.invoke('repos:getInitScript', repoId),
-  saveInitScript: (repoId, script) => ipcRenderer.invoke('repos:saveInitScript', repoId, script),
+  getInitScript: (repoId, profileId?) => ipcRenderer.invoke('repos:getInitScript', repoId, profileId),
+  saveInitScript: (repoId, script, profileId?) => ipcRenderer.invoke('repos:saveInitScript', repoId, script, profileId),
 }
 
 const shellApi: ShellApi = {
   exec: (command, cwd) => ipcRenderer.invoke('shell:exec', command, cwd),
+  openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
 }
 
 const configApi: ConfigApi = {
-  load: () => ipcRenderer.invoke('config:load'),
+  load: (profileId?) => ipcRenderer.invoke('config:load', profileId),
   save: (config) => ipcRenderer.invoke('config:save', config),
+}
+
+const profilesApi: ProfilesApi = {
+  list: () => ipcRenderer.invoke('profiles:list'),
+  save: (data) => ipcRenderer.invoke('profiles:save', data),
+  openWindow: (profileId) => ipcRenderer.invoke('profiles:openWindow', profileId),
+  getOpenProfiles: () => ipcRenderer.invoke('profiles:getOpenProfiles'),
 }
 
 export type AppApi = {
@@ -325,6 +401,7 @@ contextBridge.exposeInMainWorld('menu', menuApi)
 contextBridge.exposeInMainWorld('gh', ghApi)
 contextBridge.exposeInMainWorld('repos', reposApi)
 contextBridge.exposeInMainWorld('shell', shellApi)
+contextBridge.exposeInMainWorld('profiles', profilesApi)
 
 declare global {
   interface Window {
@@ -339,5 +416,6 @@ declare global {
     gh: GhApi
     repos: ReposApi
     shell: ShellApi
+    profiles: ProfilesApi
   }
 }

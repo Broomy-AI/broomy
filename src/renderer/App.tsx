@@ -6,15 +6,19 @@ import Terminal from './components/Terminal'
 import TabbedTerminal from './components/TabbedTerminal'
 import Explorer from './components/Explorer'
 import FileViewer from './components/FileViewer'
+import ReviewPanel from './components/ReviewPanel'
 import AgentSettings from './components/AgentSettings'
 import NewSessionDialog from './components/NewSessionDialog'
 import PanelPicker from './components/PanelPicker'
+import ProfileChip from './components/ProfileChip'
 import { useSessionStore, type Session, type SessionStatus, type LayoutSizes } from './store/sessions'
 import { useAgentStore } from './store/agents'
 import { useRepoStore } from './store/repos'
+import { useProfileStore } from './store/profiles'
 import { useErrorStore } from './store/errors'
 import { PanelProvider, PANEL_IDS } from './panels'
 import { terminalBufferRegistry } from './utils/terminalBufferRegistry'
+import { computeBranchStatus } from './utils/branchStatus'
 
 // Re-export types for backwards compatibility
 export type { Session, SessionStatus }
@@ -25,6 +29,7 @@ const DEFAULT_LAYOUT_SIZES: LayoutSizes = {
   fileViewerSize: 300,
   userTerminalHeight: 192,
   diffPanelWidth: 320,
+  reviewPanelWidth: 320,
 }
 
 function AppContent() {
@@ -51,17 +56,38 @@ function AppContent() {
     markSessionRead,
     recordPushToMain,
     clearPushToMain,
+    updateBranchStatus,
+    updatePrState,
   } = useSessionStore()
 
   const { agents, loadAgents } = useAgentStore()
-  const { loadRepos, checkGhAvailability } = useRepoStore()
+  const { repos, loadRepos, checkGhAvailability } = useRepoStore()
+  const { currentProfileId, profiles, loadProfiles, switchProfile } = useProfileStore()
   const { addError } = useErrorStore()
+  const currentProfile = profiles.find((p) => p.id === currentProfileId)
 
   const [showNewSessionDialog, setShowNewSessionDialog] = useState(false)
   const [gitStatusBySession, setGitStatusBySession] = useState<Record<string, GitStatusResult>>({})
+  const [isMergedBySession, setIsMergedBySession] = useState<Record<string, boolean>>({})
   const [directoryExists, setDirectoryExists] = useState<Record<string, boolean>>({})
   const [openFileInDiffMode, setOpenFileInDiffMode] = useState(false)
+  const [scrollToLine, setScrollToLine] = useState<number | undefined>(undefined)
+  const [searchHighlight, setSearchHighlight] = useState<string | undefined>(undefined)
+  const [diffBaseRef, setDiffBaseRef] = useState<string | undefined>(undefined)
+  const [diffCurrentRef, setDiffCurrentRef] = useState<string | undefined>(undefined)
+  const [diffLabel, setDiffLabel] = useState<string | undefined>(undefined)
   const [showPanelPicker, setShowPanelPicker] = useState(false)
+  const [isFileViewerDirty, setIsFileViewerDirty] = useState(false)
+  const [pendingNavigation, setPendingNavigation] = useState<{
+    filePath: string
+    openInDiffMode: boolean
+    scrollToLine?: number
+    searchHighlight?: string
+    diffBaseRef?: string
+    diffCurrentRef?: string
+    diffLabel?: string
+  } | null>(null)
+  const saveCurrentFileRef = React.useRef<(() => Promise<void>) | null>(null)
 
   const activeSession = sessions.find((s) => s.id === activeSessionId)
   const activeDirectoryExists = activeSession ? (directoryExists[activeSession.id] ?? true) : true
@@ -128,10 +154,27 @@ function AppContent() {
         ...prev,
         [activeSession.id]: normalized
       }))
+
+      // Check if branch is merged into the default branch
+      const isOnMain = normalized.current === 'main' || normalized.current === 'master'
+      if (!isOnMain && normalized.current) {
+        const repo = repos.find(r => r.id === activeSession.repoId)
+        const defaultBranch = repo?.defaultBranch || 'main'
+        const merged = await window.git.isMergedInto(activeSession.directory, defaultBranch)
+        setIsMergedBySession(prev => ({
+          ...prev,
+          [activeSession.id]: merged
+        }))
+      } else {
+        setIsMergedBySession(prev => ({
+          ...prev,
+          [activeSession.id]: false
+        }))
+      }
     } catch {
       // Ignore errors
     }
-  }, [activeSession?.id, activeSession?.directory, normalizeGitStatus])
+  }, [activeSession?.id, activeSession?.directory, activeSession?.repoId, repos, normalizeGitStatus])
 
   // Poll git status every 2 seconds
   useEffect(() => {
@@ -141,6 +184,27 @@ function AppContent() {
       return () => clearInterval(interval)
     }
   }, [activeSession?.id, fetchGitStatus])
+
+  // Compute branch status whenever git status changes
+  useEffect(() => {
+    for (const session of sessions) {
+      const gitStatus = gitStatusBySession[session.id]
+      if (!gitStatus) continue
+
+      const status = computeBranchStatus({
+        uncommittedFiles: gitStatus.files.length,
+        ahead: gitStatus.ahead,
+        hasTrackingBranch: !!gitStatus.tracking,
+        isOnMainBranch: gitStatus.current === 'main' || gitStatus.current === 'master',
+        isMergedToMain: isMergedBySession[session.id] ?? false,
+        lastKnownPrState: session.lastKnownPrState,
+      })
+
+      if (status !== session.branchStatus) {
+        updateBranchStatus(session.id, status)
+      }
+    }
+  }, [gitStatusBySession, isMergedBySession, sessions, updateBranchStatus])
 
   // Get git status for the selected file
   const selectedFileStatus = React.useMemo(() => {
@@ -156,18 +220,26 @@ function AppContent() {
   const activeSessionGitStatusResult = activeSession ? (gitStatusBySession[activeSession.id] || null) : null
   const activeSessionGitStatus = activeSessionGitStatusResult?.files || []
 
-  // Load sessions, agents, and repos on mount
+  // Load profiles, then sessions/agents/repos for the current profile
   useEffect(() => {
-    loadSessions()
-    loadAgents()
-    loadRepos()
-    checkGhAvailability()
-  }, [loadSessions, loadAgents, loadRepos, checkGhAvailability])
+    loadProfiles().then(() => {
+      loadSessions(currentProfileId)
+      loadAgents(currentProfileId)
+      loadRepos(currentProfileId)
+      checkGhAvailability()
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Update window title to show active session name
+  // Handle profile switching: open the profile in a new window
+  const handleSwitchProfile = useCallback(async (profileId: string) => {
+    await switchProfile(profileId)
+  }, [switchProfile])
+
+  // Update window title to show active session name and profile
   useEffect(() => {
-    document.title = activeSession ? `${activeSession.name} — Broomer` : 'Broomer'
-  }, [activeSession?.name, activeSession?.id])
+    const profileLabel = currentProfile && profiles.length > 1 ? ` [${currentProfile.name}]` : ''
+    document.title = activeSession ? `${activeSession.name}${profileLabel} — Broomy` : `Broomy${profileLabel}`
+  }, [activeSession?.name, activeSession?.id, currentProfile?.name, profiles.length])
 
   // Mark session as read when it becomes active, and focus agent terminal
   useEffect(() => {
@@ -235,7 +307,7 @@ function AppContent() {
   const handleNewSessionComplete = async (
     directory: string,
     agentId: string | null,
-    extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; name?: string }
+    extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; name?: string; sessionType?: 'default' | 'review'; prNumber?: number; prTitle?: string; prUrl?: string; prBaseBranch?: string }
   ) => {
     try {
       await addSession(directory, agentId, extra)
@@ -248,6 +320,22 @@ function AppContent() {
   const handleCancelNewSession = () => {
     setShowNewSessionDialog(false)
   }
+
+  // Refresh PR status for all sessions
+  const refreshPrStatus = useCallback(async () => {
+    for (const session of sessions) {
+      try {
+        const prResult = await window.gh.prStatus(session.directory)
+        if (prResult) {
+          updatePrState(session.id, prResult.state, prResult.number, prResult.url)
+        } else {
+          updatePrState(session.id, null)
+        }
+      } catch {
+        // Ignore errors for individual sessions
+      }
+    }
+  }, [sessions, updatePrState])
 
   // Memoize getAgentCommand to ensure stable values
   const getAgentCommand = useCallback((session: Session) => {
@@ -286,6 +374,67 @@ function AppContent() {
       togglePanel(activeSessionId, PANEL_IDS.FILE_VIEWER)
     }
   }, [activeSessionId, togglePanel])
+
+  // Navigate to a file, checking for unsaved changes first
+  const navigateToFile = useCallback((filePath: string, openInDiffMode: boolean, scrollToLine?: number, searchHighlight?: string, diffBaseRef?: string, diffCurrentRef?: string, diffLabel?: string) => {
+    if (!activeSessionId) return
+    // If same file, just update scroll/highlight
+    if (filePath === activeSession?.selectedFilePath) {
+      setOpenFileInDiffMode(openInDiffMode)
+      setScrollToLine(scrollToLine)
+      setSearchHighlight(searchHighlight)
+      setDiffBaseRef(diffBaseRef)
+      setDiffCurrentRef(diffCurrentRef)
+      setDiffLabel(diffLabel)
+      return
+    }
+    if (isFileViewerDirty) {
+      setPendingNavigation({ filePath, openInDiffMode, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel })
+      return
+    }
+    setOpenFileInDiffMode(openInDiffMode)
+    setScrollToLine(scrollToLine)
+    setSearchHighlight(searchHighlight)
+    setDiffBaseRef(diffBaseRef)
+    setDiffCurrentRef(diffCurrentRef)
+    setDiffLabel(diffLabel)
+    selectFile(activeSessionId, filePath)
+  }, [activeSessionId, activeSession?.selectedFilePath, isFileViewerDirty, selectFile])
+
+  const handlePendingSave = useCallback(async () => {
+    if (saveCurrentFileRef.current) {
+      await saveCurrentFileRef.current()
+    }
+    if (pendingNavigation && activeSessionId) {
+      setOpenFileInDiffMode(pendingNavigation.openInDiffMode)
+      setScrollToLine(pendingNavigation.scrollToLine)
+      setSearchHighlight(pendingNavigation.searchHighlight)
+      setDiffBaseRef(pendingNavigation.diffBaseRef)
+      setDiffCurrentRef(pendingNavigation.diffCurrentRef)
+      setDiffLabel(pendingNavigation.diffLabel)
+      selectFile(activeSessionId, pendingNavigation.filePath)
+    }
+    setPendingNavigation(null)
+    setIsFileViewerDirty(false)
+  }, [pendingNavigation, activeSessionId, selectFile])
+
+  const handlePendingDiscard = useCallback(() => {
+    if (pendingNavigation && activeSessionId) {
+      setOpenFileInDiffMode(pendingNavigation.openInDiffMode)
+      setScrollToLine(pendingNavigation.scrollToLine)
+      setSearchHighlight(pendingNavigation.searchHighlight)
+      setDiffBaseRef(pendingNavigation.diffBaseRef)
+      setDiffCurrentRef(pendingNavigation.diffCurrentRef)
+      setDiffLabel(pendingNavigation.diffLabel)
+      setIsFileViewerDirty(false)
+      selectFile(activeSessionId, pendingNavigation.filePath)
+    }
+    setPendingNavigation(null)
+  }, [pendingNavigation, activeSessionId, selectFile])
+
+  const handlePendingCancel = useCallback(() => {
+    setPendingNavigation(null)
+  }, [])
 
   // Memoize terminal panels separately to ensure stability
   // Only depends on sessions and agents (for command), not on activeSessionId
@@ -343,6 +492,7 @@ function AppContent() {
         onSelectSession={setActiveSession}
         onNewSession={handleNewSession}
         onDeleteSession={removeSession}
+        onRefreshPrStatus={refreshPrStatus}
       />
     ),
     [PANEL_IDS.AGENT_TERMINAL]: agentTerminalPanel,
@@ -350,11 +500,8 @@ function AppContent() {
     [PANEL_IDS.EXPLORER]: activeSession?.showExplorer ? (
       <Explorer
         directory={activeSession?.directory}
-        onFileSelect={(filePath, openInDiffMode) => {
-          if (activeSessionId) {
-            setOpenFileInDiffMode(openInDiffMode)
-            selectFile(activeSessionId, filePath)
-          }
+        onFileSelect={(filePath, openInDiffMode, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel) => {
+          navigateToFile(filePath, openInDiffMode, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel)
         }}
         selectedFilePath={activeSession?.selectedFilePath}
         gitStatus={activeSessionGitStatus}
@@ -369,6 +516,9 @@ function AppContent() {
         onRecordPushToMain={(commitHash) => activeSessionId && recordPushToMain(activeSessionId, commitHash)}
         onClearPushToMain={() => activeSessionId && clearPushToMain(activeSessionId)}
         planFilePath={activeSession?.planFilePath}
+        branchStatus={activeSession?.branchStatus ?? 'in-progress'}
+        onUpdatePrState={(prState, prNumber, prUrl) => activeSessionId && updatePrState(activeSessionId, prState, prNumber, prUrl)}
+        repoId={activeSession?.repoId}
       />
     ) : null,
     [PANEL_IDS.FILE_VIEWER]: activeSession?.showFileViewer ? (
@@ -381,6 +531,28 @@ function AppContent() {
         directory={activeSession?.directory}
         onSaveComplete={fetchGitStatus}
         initialViewMode={openFileInDiffMode ? 'diff' : 'latest'}
+        scrollToLine={scrollToLine}
+        searchHighlight={searchHighlight}
+        onDirtyStateChange={setIsFileViewerDirty}
+        saveRef={saveCurrentFileRef}
+        diffBaseRef={diffBaseRef}
+        diffCurrentRef={diffCurrentRef}
+        diffLabel={diffLabel}
+        reviewContext={activeSession?.sessionType === 'review' ? {
+          sessionDirectory: activeSession.directory,
+          commentsFilePath: `${activeSession.directory}/.broomy-review/comments.json`,
+        } : undefined}
+      />
+    ) : null,
+    [PANEL_IDS.REVIEW]: activeSession ? (
+      <ReviewPanel
+        session={activeSession}
+        repo={repos.find(r => r.id === activeSession.repoId)}
+        onSelectFile={(filePath) => {
+          if (activeSessionId) {
+            selectFile(activeSessionId, filePath)
+          }
+        }}
       />
     ) : null,
     [PANEL_IDS.SETTINGS]: globalPanelVisibility[PANEL_IDS.SETTINGS] ? (
@@ -394,11 +566,17 @@ function AppContent() {
     activeSessionGitStatusResult,
     selectedFileStatus,
     openFileInDiffMode,
+    scrollToLine,
+    searchHighlight,
+    diffBaseRef,
+    diffCurrentRef,
+    diffLabel,
     globalPanelVisibility,
     fetchGitStatus,
     agentTerminalPanel,
     userTerminalPanel,
     handleToggleFileViewer,
+    repos,
   ])
 
   if (isLoading) {
@@ -422,6 +600,7 @@ function AppContent() {
         onLayoutSizeChange={handleLayoutSizeChange}
         errorMessage={activeSession && !activeDirectoryExists ? `Folder not found: ${activeSession.directory}` : null}
         title={activeSession ? activeSession.name : undefined}
+        profileChip={<ProfileChip onSwitchProfile={handleSwitchProfile} />}
         onTogglePanel={handleTogglePanel}
         onToggleGlobalPanel={toggleGlobalPanel}
         onOpenPanelPicker={() => setShowPanelPicker(true)}
@@ -442,6 +621,38 @@ function AppContent() {
           onToolbarPanelsChange={setToolbarPanels}
           onClose={() => setShowPanelPicker(false)}
         />
+      )}
+
+      {/* Unsaved changes confirmation dialog */}
+      {pendingNavigation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-bg-secondary border border-border rounded-lg shadow-xl p-4 max-w-sm mx-4">
+            <h3 className="text-sm font-medium text-text-primary mb-2">Unsaved Changes</h3>
+            <p className="text-xs text-text-secondary mb-4">
+              You have unsaved changes. What would you like to do?
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={handlePendingCancel}
+                className="px-3 py-1.5 text-xs rounded bg-bg-tertiary text-text-secondary hover:text-text-primary transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePendingDiscard}
+                className="px-3 py-1.5 text-xs rounded bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors"
+              >
+                Discard
+              </button>
+              <button
+                onClick={handlePendingSave}
+                className="px-3 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/80 transition-colors"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   )

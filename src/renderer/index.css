@@ -40,7 +40,8 @@ body {
   background: #4a4a4a;
 }
 
-/* Subtle focus indicator for panels */
+/* Focus indicator for panels — ::after overlay sits above panel content (including overflow).
+   No transition to avoid flicker during rapid focus changes. */
 [data-panel-id] {
   position: relative;
 }
@@ -51,10 +52,16 @@ body {
   border: 1px solid transparent;
   pointer-events: none;
   z-index: 20;
-  transition: border-color 0.15s ease;
 }
 [data-panel-id]:focus-within::after {
   border-color: rgba(59, 130, 246, 0.4);
+}
+
+/* Search highlight in Monaco editor */
+.searchHighlight {
+  background-color: rgba(255, 213, 0, 0.3);
+  border: 1px solid rgba(255, 213, 0, 0.6);
+  border-radius: 2px;
 }
 
 /* Draggable region for window */

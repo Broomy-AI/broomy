@@ -16,9 +16,11 @@ interface RepoStore {
   repos: ManagedRepo[]
   defaultCloneDir: string
   ghAvailable: boolean | null
+  profileId?: string
 
-  loadRepos: () => Promise<void>
+  loadRepos: (profileId?: string) => Promise<void>
   addRepo: (repo: Omit<ManagedRepo, 'id'>) => Promise<void>
+  updateRepo: (id: string, updates: Partial<Omit<ManagedRepo, 'id'>>) => Promise<void>
   removeRepo: (id: string) => Promise<void>
   setDefaultCloneDir: (dir: string) => Promise<void>
   checkGhAvailability: () => Promise<void>
@@ -29,9 +31,13 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
   defaultCloneDir: '',
   ghAvailable: null,
 
-  loadRepos: async () => {
+  loadRepos: async (profileId?: string) => {
+    if (profileId !== undefined) {
+      set({ profileId })
+    }
+    const pid = profileId ?? get().profileId
     try {
-      const config = await window.config.load()
+      const config = await window.config.load(pid)
       const home = await window.app.homedir()
       const defaultDir = config.defaultCloneDir
         ? await resolveHome(config.defaultCloneDir)
@@ -39,6 +45,7 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
       set({
         repos: config.repos || [],
         defaultCloneDir: defaultDir,
+        profileId: pid,
       })
     } catch {
       set({ repos: [], defaultCloneDir: '' })
@@ -51,25 +58,42 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
       ...repoData,
     }
 
-    const { repos } = get()
+    const { repos, profileId } = get()
     const updatedRepos = [...repos, repo]
     set({ repos: updatedRepos })
 
-    const config = await window.config.load()
+    const config = await window.config.load(profileId)
     await window.config.save({
       ...config,
+      profileId,
+      repos: updatedRepos,
+    })
+  },
+
+  updateRepo: async (id, updates) => {
+    const { repos, profileId } = get()
+    const updatedRepos = repos.map((r) =>
+      r.id === id ? { ...r, ...updates } : r
+    )
+    set({ repos: updatedRepos })
+
+    const config = await window.config.load(profileId)
+    await window.config.save({
+      ...config,
+      profileId,
       repos: updatedRepos,
     })
   },
 
   removeRepo: async (id) => {
-    const { repos } = get()
+    const { repos, profileId } = get()
     const updatedRepos = repos.filter((r) => r.id !== id)
     set({ repos: updatedRepos })
 
-    const config = await window.config.load()
+    const config = await window.config.load(profileId)
     await window.config.save({
       ...config,
+      profileId,
       repos: updatedRepos,
     })
   },
@@ -78,9 +102,11 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
     const resolved = await resolveHome(dir)
     set({ defaultCloneDir: resolved })
 
-    const config = await window.config.load()
+    const { profileId } = get()
+    const config = await window.config.load(profileId)
     await window.config.save({
       ...config,
+      profileId,
       defaultCloneDir: resolved,
     })
   },

@@ -1,156 +1,184 @@
-# Broomer
+# Broomy
 
-A desktop application for managing multiple AI coding agents (like Claude Code) across different repositories and worktrees. See all your agent sessions at a glance, monitor their status, and interact with them through embedded terminals.
+A desktop application for managing multiple AI coding agent sessions across different repositories. See all your agent sessions at a glance, monitor their status, and interact with them through embedded terminals.
+
+Built with Electron, React, and xterm.js.
 
 ## Features
 
-- **Session List**: View all active agent sessions with repo name, branch, and status
-- **Agent Terminal**: Interactive terminal showing the running agent
-- **User Terminal**: Optional secondary terminal for direct commands
-- **File Panel**: Browse files and view diffs (coming soon)
-- **Status Detection**: Automatic detection of agent state (working, waiting, idle, error)
-- **Notifications**: macOS notifications when an agent needs input
+- **Multi-session management** -- Run multiple AI coding agents (Claude Code, Aider, etc.) side-by-side
+- **Agent status detection** -- Automatically detects whether agents are working, idle, or need input by parsing terminal output
+- **Embedded terminals** -- Interactive xterm.js terminals with PTY integration for both agent and user shells
+- **File explorer** -- Browse files, view diffs, and edit code with Monaco Editor integration
+- **Git integration** -- Branch tracking, staging, committing, pushing, PR creation, and worktree support
+- **GitHub integration** -- View issues assigned to you, check PR status, and manage code review comments
+- **Profiles** -- Separate workspaces with independent sessions, agents, and repos (each opens in its own window)
+- **Customizable panels** -- Toggle and reorder panels (Explorer, File Viewer, Agent Terminal, User Terminal, Settings)
+- **Keyboard shortcuts** -- `Cmd+1-6` to toggle panels, `Cmd+Shift+C` to copy terminal content
 
 ## Quick Start
 
 ### Prerequisites
 
 - Node.js 18+
+- [pnpm](https://pnpm.io/) (required -- npm/yarn will not work)
 
 ### Installation
 
 ```bash
-# Clone the repository
-git clone <your-repo-url>
-cd broomer
-
-# Install dependencies
-npm install
-
-# Start in development mode
-npm run dev
+git clone <repo-url>
+cd broomy
+pnpm install
+pnpm dev
 ```
 
-The app will open automatically. You'll see:
-- A sidebar with demo sessions on the left
-- The main terminal pane in the center
-- Toggle buttons for Files and Terminal panels in the title bar
-
-### Development
-
-```bash
-# Start development server with hot reload
-npm run dev
-
-# Build for production (without packaging)
-npm run build
-
-# Preview production build
-npm run preview
-```
-
-**Note:** Development mode (`npm run dev`) and production mode use separate config files:
-- Development: `~/.broomer/config.dev.json`
-- Production: `~/.broomer/config.json`
-
-This allows you to have test sessions in dev mode without affecting your real work.
-
-The dev build shows a yellow "DEV" chip in the title bar so you can easily tell which mode you're in.
+The app opens automatically in development mode with hot reload. Dev mode uses a separate config file (`~/.broomy/config.dev.json`) so your test sessions don't interfere with real work. A yellow "DEV" chip appears in the title bar to distinguish dev from production.
 
 ### Building for Distribution
 
 ```bash
-# Build and package the app for macOS
-npm run dist
-
-# Run the packaged app
-npm start
-```
-
-The packaged app will be in the `dist/` folder.
-
-### Testing
-
-Run the Playwright E2E tests (window is hidden):
-
-```bash
-npm test
-```
-
-Run tests with visible window (useful for debugging):
-
-```bash
-npm run test:headed
-```
-
-Tests (23 total) cover:
-- UI components (app title, session list, status indicators)
-- Terminal integration (xterm rendering, command execution)
-- Panel toggles (Files, Terminal) and button states
-- Session switching between multiple sessions
-- File panel content (Tree/Diff buttons, file listing)
-- E2E shell integration with test markers
-
-### Troubleshooting
-
-If you encounter "posix_spawnp failed" errors with the terminal, rebuild native modules:
-
-```bash
-npx @electron/rebuild
+pnpm dist          # Build and package for macOS
+pnpm start         # Run the packaged app
 ```
 
 ## Usage
 
-### Creating a New Session
+### Creating a Session
 
 1. Click "+ New Session" in the sidebar
-2. Select a directory for the agent to work in
-3. Choose a command preset (e.g., "Claude Code")
-4. The agent will start automatically
+2. Select a git repository directory
+3. Choose an agent (e.g., "Claude Code", "Aider") or no agent for a plain terminal
+4. The session appears in the sidebar with the repo name and branch
 
 ### Managing Sessions
 
 - Click a session in the sidebar to switch to it
-- The status indicator shows:
-  - 🟢 **Working** - Agent is actively processing
-  - 🟡 **Waiting** - Agent needs input
-  - ⚫ **Idle** - Agent is waiting for commands
-  - 🔴 **Error** - Something went wrong
+- Status indicators show agent state:
+  - **Working** (green) -- Agent is actively processing
+  - **Idle** (gray) -- Agent is at its prompt, waiting for a command
+  - **Error** (red) -- Something went wrong
+- Sessions with new activity show an unread indicator (blue dot)
+
+### Panels
+
+Each session has independently togglable panels:
+
+| Panel | Description |
+|-------|-------------|
+| **Sessions** (sidebar) | List of all sessions with status, branch, and last activity |
+| **Explorer** | File tree and source control view with staging, committing, and search |
+| **File Viewer** | Monaco-based file editor and diff viewer |
+| **Agent Terminal** | The main terminal running the AI agent |
+| **User Terminal** | Additional terminals for manual commands (supports multiple tabs) |
+| **Settings** | Agent configuration and repo management |
 
 ### Keyboard Shortcuts
 
-- `Cmd+1-6` - Toggle panels (based on toolbar order)
-- `Cmd+Shift+C` - Copy terminal content + session summary to clipboard (for debugging)
+- `Cmd+1` through `Cmd+6` -- Toggle panels (based on toolbar order)
+- `Cmd+Shift+C` -- Copy terminal content + session summary to clipboard
 
 ## Architecture
 
-Built with:
-- **Electron** - Cross-platform desktop framework
-- **React** - UI components
-- **Vite** - Fast build tooling with HMR
-- **xterm.js** - Terminal emulation
-- **node-pty** - Native PTY bindings
-- **Tailwind CSS** - Styling
+See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for a detailed technical guide.
+
+### Quick Overview
+
+Broomy is a standard Electron app with three process layers:
+
+```
+Main Process (Node.js)          Preload (Context Bridge)       Renderer (React)
+─────────────────────           ──────────────────────         ─────────────────
+PTY management (node-pty)  ──►  window.pty                ──►  Terminal component
+Git operations (simple-git)──►  window.git                ──►  Explorer, SessionList
+Filesystem I/O             ──►  window.fs                 ──►  FileViewer, Explorer
+Config persistence         ──►  window.config             ──►  Zustand stores
+GitHub CLI (gh)            ──►  window.gh                 ──►  Explorer (PR/Issues)
+Profile management         ──►  window.profiles           ──►  ProfileChip
+```
+
+State is managed by four Zustand stores in the renderer: `sessions`, `agents`, `repos`, and `profiles`. The panel system uses a registry pattern for extensibility.
+
+## Testing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full testing guide.
+
+```bash
+pnpm test:unit              # Vitest unit tests
+pnpm test:unit:coverage     # With 90% line coverage threshold
+pnpm test                   # Playwright E2E tests (headless)
+pnpm test:headed            # E2E tests with visible window
+```
 
 ## Project Structure
 
 ```
-broomer/
+broomy/
 ├── src/
-│   ├── main/           # Electron main process
-│   │   └── index.ts    # App entry, window creation, PTY management
-│   ├── preload/        # Context bridge
-│   │   └── index.ts    # Exposes PTY API to renderer
-│   └── renderer/       # React application
-│       ├── App.tsx
-│       └── components/
-│           ├── Layout.tsx
-│           ├── SessionList.tsx
-│           ├── Terminal.tsx
-│           └── FilePanel.tsx
-├── docs/plans/         # Implementation plans
+│   ├── main/                    # Electron main process
+│   │   ├── index.ts             # App entry, IPC handlers, PTY/Git/FS operations
+│   │   └── gitStatusParser.ts   # Git status code parsing
+│   ├── preload/
+│   │   └── index.ts             # Context bridge: types + IPC wiring
+│   └── renderer/                # React application
+│       ├── App.tsx              # Root component, initialization
+│       ├── components/          # UI components
+│       │   ├── Layout.tsx       # Main layout with drag-to-resize panels
+│       │   ├── Terminal.tsx     # xterm.js terminal wrapper
+│       │   ├── Explorer.tsx     # File tree, source control, search
+│       │   ├── FileViewer.tsx   # Monaco file/diff viewer
+│       │   ├── SessionList.tsx  # Sidebar session list
+│       │   └── ...
+│       ├── panels/              # Panel registry system
+│       │   ├── types.ts         # Panel position/definition types
+│       │   ├── registry.ts      # PanelRegistry class
+│       │   ├── builtinPanels.tsx # Built-in panel definitions
+│       │   └── PanelContext.tsx  # React context for panel state
+│       ├── store/               # Zustand state management
+│       │   ├── sessions.ts      # Session state, panel visibility, layout
+│       │   ├── agents.ts        # Agent definitions (name, command, env)
+│       │   ├── repos.ts         # Managed repositories
+│       │   ├── profiles.ts      # Multi-window profiles
+│       │   └── errors.ts        # Application error tracking
+│       └── utils/               # Shared utilities
+│           ├── claudeOutputParser.ts  # Agent status detection from terminal output
+│           ├── explorerHelpers.ts     # Git status display helpers
+│           ├── terminalBufferRegistry.ts # Cross-component terminal buffer access
+│           ├── slugify.ts             # Issue-to-branch-name conversion
+│           └── textDetection.ts       # Binary vs text file detection
+├── scripts/
+│   └── fake-claude.sh           # Mock agent for E2E tests
+├── tests/                       # Playwright E2E tests
+├── electron.vite.config.ts      # Electron-vite build configuration
+├── vitest.config.ts             # Unit test configuration
+├── playwright.config.ts         # E2E test configuration
 └── package.json
 ```
+
+## Configuration
+
+Config files are stored at `~/.broomy/`:
+
+```
+~/.broomy/
+├── profiles.json                # Profile definitions + last active profile
+├── profiles/
+│   ├── default/
+│   │   ├── config.json          # Sessions, agents, repos (production)
+│   │   ├── config.dev.json      # Same structure (development)
+│   │   └── init-scripts/        # Per-repo init scripts (repo-id.sh)
+│   └── <profile-id>/
+│       └── ...
+```
+
+## Troubleshooting
+
+**"Electron uninstall" error** -- Run `rm -rf node_modules && pnpm install` to clean reinstall.
+
+**"posix_spawnp failed" terminal errors** -- Run `npx @electron/rebuild` to rebuild native modules for Electron.
+
+**Blank screen on launch** -- Check the DevTools console for preload script errors. Ensure the preload script is built as CommonJS (`.js`, not `.mjs`).
+
+**pnpm is required** -- This project enforces pnpm via a `preinstall` script. Using npm or yarn will fail.
 
 ## License
 

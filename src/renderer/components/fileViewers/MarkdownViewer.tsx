@@ -1,4 +1,5 @@
 import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import type { FileViewerPlugin, FileViewerComponentProps } from './types'
 import { matchesExtensions } from './types'
 
@@ -9,6 +10,7 @@ function MarkdownViewerComponent({ content }: FileViewerComponentProps) {
     <div className="h-full overflow-auto p-4 bg-bg-primary">
       <div className="max-w-3xl mx-auto prose prose-invert prose-sm">
         <Markdown
+          remarkPlugins={[remarkGfm]}
           components={{
             // Style overrides to match dark theme
             h1: ({ children }) => <h1 className="text-2xl font-bold mt-6 mb-4 text-text-primary">{children}</h1>,
@@ -31,6 +33,12 @@ function MarkdownViewerComponent({ content }: FileViewerComponentProps) {
             li: ({ children }) => <li className="text-text-primary">{children}</li>,
             hr: () => <hr className="border-border my-4" />,
             img: ({ src, alt }) => <img src={src} alt={alt} className="max-w-full my-2 rounded" />,
+            table: ({ children }) => <table className="border-collapse my-3 w-full">{children}</table>,
+            thead: ({ children }) => <thead className="bg-bg-tertiary">{children}</thead>,
+            tbody: ({ children }) => <tbody>{children}</tbody>,
+            tr: ({ children }) => <tr className="border-b border-border">{children}</tr>,
+            th: ({ children }) => <th className="px-3 py-1.5 text-left text-xs font-semibold text-text-primary border border-border">{children}</th>,
+            td: ({ children }) => <td className="px-3 py-1.5 text-xs text-text-primary border border-border">{children}</td>,
           }}
         >
           {content}

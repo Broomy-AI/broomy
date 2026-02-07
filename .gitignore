@@ -1,6 +1,8 @@
 # Dependencies
 node_modules/
 .pnpm-store/
+package-lock.json
+yarn.lock
 
 # Build output
 dist/
@@ -33,4 +35,5 @@ pnpm-debug.log*
 # Test artifacts
 test-results/
 playwright-report/
+coverage/
 *.png

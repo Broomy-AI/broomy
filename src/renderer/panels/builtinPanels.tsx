@@ -26,6 +26,14 @@ const FileIcon = () => (
   </svg>
 )
 
+const ReviewIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <path d="M9 15l2 2 4-4" />
+  </svg>
+)
+
 const TerminalIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="4 17 10 11 4 5" />
@@ -71,6 +79,17 @@ export const BUILTIN_PANELS: PanelDefinition[] = [
     resizable: true,
   },
   {
+    id: PANEL_IDS.REVIEW,
+    name: 'Review',
+    icon: <ReviewIcon />,
+    position: 'center-left',
+    defaultVisible: false,
+    defaultInToolbar: false,
+    resizable: true,
+    minSize: 250,
+    maxSize: 600,
+  },
+  {
     id: PANEL_IDS.AGENT_TERMINAL,
     name: 'Agent',
     icon: <TerminalIcon />,
@@ -105,6 +124,7 @@ export const PanelIcons = {
   sessions: SessionsIcon,
   folder: FolderIcon,
   file: FileIcon,
+  review: ReviewIcon,
   terminal: TerminalIcon,
   settings: SettingsIcon,
 }

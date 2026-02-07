@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAgentStore, type AgentConfig } from '../store/agents'
+import { useRepoStore } from '../store/repos'
+import type { ManagedRepo } from '../../preload/index'
 
 interface AgentSettingsProps {
   onClose: () => void
@@ -126,10 +128,149 @@ function EnvVarEditor({
   )
 }
 
+// Repo settings editor component
+function RepoSettingsEditor({
+  repo,
+  agents,
+  onUpdate,
+  onClose,
+}: {
+  repo: ManagedRepo
+  agents: AgentConfig[]
+  onUpdate: (updates: Partial<Omit<ManagedRepo, 'id'>>) => Promise<void>
+  onClose: () => void
+}) {
+  const [defaultAgentId, setDefaultAgentId] = useState(repo.defaultAgentId || '')
+  const [allowPushToMain, setAllowPushToMain] = useState(repo.allowPushToMain ?? false)
+  const [initScript, setInitScript] = useState('')
+  const [loadingScript, setLoadingScript] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [pushToMainError, setPushToMainError] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function loadScript() {
+      setLoadingScript(true)
+      try {
+        const script = await window.repos.getInitScript(repo.id)
+        setInitScript(script || '')
+      } catch {
+        setInitScript('')
+      }
+      setLoadingScript(false)
+    }
+    loadScript()
+  }, [repo.id])
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await onUpdate({ defaultAgentId: defaultAgentId || undefined, allowPushToMain })
+      await window.repos.saveInitScript(repo.id, initScript)
+      onClose()
+    } catch (err) {
+      console.error('Failed to save repo settings:', err)
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="text-sm font-medium text-text-primary">{repo.name}</div>
+      <div className="text-xs text-text-secondary font-mono">{repo.rootDir}</div>
+
+      <div className="space-y-2">
+        <label className="text-xs text-text-secondary">Default Agent</label>
+        <select
+          value={defaultAgentId}
+          onChange={(e) => setDefaultAgentId(e.target.value)}
+          className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary focus:outline-none focus:border-accent"
+        >
+          <option value="">No default (ask each time)</option>
+          {agents.map((agent) => (
+            <option key={agent.id} value={agent.id}>
+              {agent.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="space-y-2">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={allowPushToMain}
+            onChange={async (e) => {
+              const checked = e.target.checked
+              if (checked) {
+                setPushToMainError(null)
+                try {
+                  const hasAccess = await window.gh.hasWriteAccess(repo.rootDir)
+                  if (!hasAccess) {
+                    setPushToMainError('You do not have write access to this repository.')
+                    return
+                  }
+                } catch {
+                  setPushToMainError('Failed to check write access. Is gh CLI installed?')
+                  return
+                }
+              }
+              setAllowPushToMain(checked)
+              setPushToMainError(null)
+            }}
+            className="rounded border-border"
+          />
+          <span className="text-xs text-text-secondary">Allow "Push to main" button</span>
+        </label>
+        {pushToMainError && (
+          <div className="text-xs text-red-400">{pushToMainError}</div>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-xs text-text-secondary">Init Script (runs when session starts)</label>
+        {loadingScript ? (
+          <div className="text-xs text-text-secondary">Loading...</div>
+        ) : (
+          <textarea
+            value={initScript}
+            onChange={(e) => setInitScript(e.target.value)}
+            placeholder="# Commands to run when starting a session in this repo&#10;# e.g., source .venv/bin/activate"
+            className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary font-mono focus:outline-none focus:border-accent resize-y min-h-[80px]"
+            rows={4}
+          />
+        )}
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="px-3 py-1.5 bg-accent text-white text-sm rounded hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+        <button
+          onClick={onClose}
+          className="px-3 py-1.5 bg-bg-tertiary text-text-secondary text-sm rounded hover:text-text-primary transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function AgentSettings({ onClose }: AgentSettingsProps) {
   const { agents, addAgent, updateAgent, removeAgent } = useAgentStore()
+  const { repos, loadRepos, updateRepo } = useRepoStore()
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingRepoId, setEditingRepoId] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
+
+  // Load repos on mount
+  useEffect(() => {
+    loadRepos()
+  }, [loadRepos])
 
   // Form state
   const [name, setName] = useState('')
@@ -160,6 +301,7 @@ export default function AgentSettings({ onClose }: AgentSettingsProps) {
 
   const handleEdit = (agent: AgentConfig) => {
     setEditingId(agent.id)
+    setEditingRepoId(null)
     setName(agent.name)
     setCommand(agent.command)
     setColor(agent.color || '')
@@ -190,7 +332,7 @@ export default function AgentSettings({ onClose }: AgentSettingsProps) {
     <div className="h-full flex flex-col bg-bg-secondary">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border">
-        <h2 className="text-lg font-medium text-text-primary">Agent Settings</h2>
+        <h2 className="text-lg font-medium text-text-primary">Settings</h2>
         <button
           onClick={onClose}
           className="p-1 text-text-secondary hover:text-text-primary transition-colors"
@@ -215,7 +357,8 @@ export default function AgentSettings({ onClose }: AgentSettingsProps) {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4">
-        {/* Agent list */}
+        {/* Agents section */}
+        <h3 className="text-sm font-medium text-text-primary mb-3">Agents</h3>
         <div className="space-y-2 mb-4">
           {agents.map((agent) => (
             <div
@@ -393,6 +536,79 @@ export default function AgentSettings({ onClose }: AgentSettingsProps) {
           >
             + Add Agent
           </button>
+        )}
+
+        {/* Repositories section */}
+        {repos.length > 0 && (
+          <>
+            <div className="mt-8 mb-4 border-t border-border pt-4">
+              <h3 className="text-sm font-medium text-text-primary mb-3">Repositories</h3>
+            </div>
+
+            <div className="space-y-2">
+              {repos.map((repo) => (
+                <div
+                  key={repo.id}
+                  className={`p-3 rounded border transition-colors ${
+                    editingRepoId === repo.id
+                      ? 'border-accent bg-bg-tertiary'
+                      : 'border-border bg-bg-primary hover:bg-bg-tertiary'
+                  }`}
+                >
+                  {editingRepoId === repo.id ? (
+                    <RepoSettingsEditor
+                      repo={repo}
+                      agents={agents}
+                      onUpdate={async (updates) => {
+                        await updateRepo(repo.id, updates)
+                      }}
+                      onClose={() => setEditingRepoId(null)}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-medium text-sm text-text-primary">
+                          {repo.name}
+                        </div>
+                        <div className="text-xs text-text-secondary font-mono">
+                          {repo.rootDir}
+                        </div>
+                        {repo.defaultAgentId && (
+                          <div className="text-xs text-text-secondary mt-1">
+                            Default: {agents.find((a) => a.id === repo.defaultAgentId)?.name || 'Unknown'}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => {
+                          setEditingRepoId(repo.id)
+                          setEditingId(null)
+                          setShowAddForm(false)
+                        }}
+                        className="p-1.5 text-text-secondary hover:text-text-primary transition-colors"
+                        title="Edit repo settings"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>
