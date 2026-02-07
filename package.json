@@ -40,13 +40,6 @@
     "simple-git": "^3.22.0",
     "zustand": "^4.4.7"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "electron",
-      "esbuild",
-      "node-pty"
-    ]
-  },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
     "@playwright/test": "^1.58.1",
