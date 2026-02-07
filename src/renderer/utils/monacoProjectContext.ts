@@ -4,10 +4,10 @@ let currentProjectRoot: string | null = null
 let currentDisposables: monaco.IDisposable[] = []
 
 // Map tsconfig string values to Monaco TypeScript enums
-function mapCompilerOptions(opts: Record<string, unknown>, projectRoot: string): monaco.languages.typescript.CompilerOptions {
-  const ts = monaco.languages.typescript
+function mapCompilerOptions(opts: Record<string, unknown>, projectRoot: string): monaco.typescript.CompilerOptions {
+  const ts = monaco.typescript
 
-  const targetMap: Record<string, monaco.languages.typescript.ScriptTarget> = {
+  const targetMap: Record<string, monaco.typescript.ScriptTarget> = {
     es3: ts.ScriptTarget.ES3,
     es5: ts.ScriptTarget.ES5,
     es6: ts.ScriptTarget.ES2015,
@@ -21,7 +21,7 @@ function mapCompilerOptions(opts: Record<string, unknown>, projectRoot: string):
     latest: ts.ScriptTarget.Latest,
   }
 
-  const moduleMap: Record<string, monaco.languages.typescript.ModuleKind> = {
+  const moduleMap: Record<string, monaco.typescript.ModuleKind> = {
     none: ts.ModuleKind.None,
     commonjs: ts.ModuleKind.CommonJS,
     amd: ts.ModuleKind.AMD,
@@ -37,7 +37,7 @@ function mapCompilerOptions(opts: Record<string, unknown>, projectRoot: string):
     preserve: ts.ModuleKind.ESNext,
   }
 
-  const moduleResolutionMap: Record<string, monaco.languages.typescript.ModuleResolutionKind> = {
+  const moduleResolutionMap: Record<string, monaco.typescript.ModuleResolutionKind> = {
     classic: ts.ModuleResolutionKind.Classic,
     node: ts.ModuleResolutionKind.NodeJs,
     node10: ts.ModuleResolutionKind.NodeJs,
@@ -46,7 +46,7 @@ function mapCompilerOptions(opts: Record<string, unknown>, projectRoot: string):
     bundler: ts.ModuleResolutionKind.NodeJs,
   }
 
-  const jsxMap: Record<string, monaco.languages.typescript.JsxEmit> = {
+  const jsxMap: Record<string, monaco.typescript.JsxEmit> = {
     none: ts.JsxEmit.None,
     preserve: ts.JsxEmit.Preserve,
     react: ts.JsxEmit.React,
@@ -55,7 +55,7 @@ function mapCompilerOptions(opts: Record<string, unknown>, projectRoot: string):
     'react-native': ts.JsxEmit.ReactNative,
   }
 
-  const result: monaco.languages.typescript.CompilerOptions = {
+  const result: monaco.typescript.CompilerOptions = {
     // allowNonTsExtensions is required for typescriptDefaults — Monaco's editor
     // models use inmemory://model/N URIs (no .ts extension), so without this flag
     // the TS service throws "Could not find source file: 'inmemory://model/1'".
@@ -116,14 +116,14 @@ export async function loadMonacoProjectContext(projectRoot: string): Promise<voi
 
     const compilerOptions = mapCompilerOptions(ctx.compilerOptions, projectRoot)
 
-    monaco.languages.typescript.typescriptDefaults.setCompilerOptions(compilerOptions)
+    monaco.typescript.typescriptDefaults.setCompilerOptions(compilerOptions)
 
     // Suppress diagnostic codes caused by incomplete project context.
     // We load project source files but not node_modules type declarations,
     // so errors about missing external packages are noise.
     // 2307: Cannot find module (for node_modules packages we don't load)
     // 2875: JSX tag requires 'react/jsx-runtime' (React types not loaded)
-    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+    monaco.typescript.typescriptDefaults.setDiagnosticsOptions({
       diagnosticCodesToIgnore: [2875],
     })
 
@@ -131,7 +131,7 @@ export async function loadMonacoProjectContext(projectRoot: string): Promise<voi
     // extra libs, the JS language service can produce false "Type annotations can
     // only be used in TypeScript files" errors. Syntax highlighting and basic
     // editing for JS files still work; only semantic diagnostics are suppressed.
-    monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+    monaco.typescript.javascriptDefaults.setDiagnosticsOptions({
       noSemanticValidation: true,
     })
 
@@ -141,7 +141,7 @@ export async function loadMonacoProjectContext(projectRoot: string): Promise<voi
     // that @monaco-editor/react creates via Uri.parse(path).
     for (const file of ctx.files) {
       const uri = `${projectRoot}/${file.path}`
-      const d = monaco.languages.typescript.typescriptDefaults.addExtraLib(file.content, uri)
+      const d = monaco.typescript.typescriptDefaults.addExtraLib(file.content, uri)
       currentDisposables.push(d)
     }
 

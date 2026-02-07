@@ -362,9 +362,6 @@ export default function Layout({
 
   // Determine if we should show terminals (considering all visibility states)
   const terminalsVisible = showAgentTerminal || showUserTerminal
-  // Whether any "top/left" panels are visible (for flex layout decisions)
-  const hasTopPanels = showFileViewer && fileViewer
-
   return (
     <div className="h-screen flex flex-col bg-bg-primary">
       {/* Title bar / toolbar - draggable region */}

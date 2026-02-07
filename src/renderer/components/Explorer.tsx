@@ -371,7 +371,7 @@ export default function Explorer({
     fetchPrInfo()
 
     return () => { cancelled = true }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [filter, directory, syncStatus?.ahead, syncStatus?.behind]) // Re-fetch when commits ahead/behind change
 
   // Update session PR state when Explorer fetches PR status
@@ -385,7 +385,7 @@ export default function Explorer({
     } else {
       onUpdatePrState(null)
     }
-  }, [prStatus, isPrLoading, filter]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [prStatus, isPrLoading, filter])  
 
   // Fetch PR comments when comments view is active
   useEffect(() => {
@@ -780,7 +780,7 @@ export default function Explorer({
   }
 
   // Render a tree node
-  const renderNode = (node: TreeNode, depth: number = 0): JSX.Element => {
+  const renderNode = (node: TreeNode, depth = 0): JSX.Element => {
     const nodeIsExpanded = expandedPaths.has(node.path)
     const status = getFileStatus(node.path)
     const statusColor = getStatusColor(status?.status)

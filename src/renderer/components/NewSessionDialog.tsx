@@ -274,7 +274,7 @@ function CloneView({
   onComplete,
 }: {
   onBack: () => void
-  onComplete: (directory: string, agentId: string | null, extra?: { repoId?: string }) => void
+  onComplete: (directory: string, agentId: string | null, extra?: { repoId?: string; name?: string }) => void
 }) {
   const { agents } = useAgentStore()
   const { defaultCloneDir, addRepo } = useRepoStore()

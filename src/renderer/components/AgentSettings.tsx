@@ -38,8 +38,7 @@ function EnvVarEditor({
   }
 
   const handleRemove = (key: string) => {
-    const newEnv = { ...env }
-    delete newEnv[key]
+    const { [key]: _, ...newEnv } = env
     onChange(newEnv)
   }
 

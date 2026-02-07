@@ -283,7 +283,7 @@ describe('ClaudeOutputParser', () => {
 
   describe('integration', () => {
     it('does not detect status before seeing Claude', () => {
-      const result = parser.processData('⠋ Loading...')
+      parser.processData('⠋ Loading...')
       // Should detect Claude now (spinner is an indicator)
       // But before that call, it wasn't detected
       // The spinner itself will trigger Claude detection
