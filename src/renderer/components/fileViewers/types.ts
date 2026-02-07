@@ -13,6 +13,10 @@ export interface FileViewerPlugin {
   component: React.ComponentType<FileViewerComponentProps>
 }
 
+export interface EditorActions {
+  showOutline: () => void
+}
+
 export interface FileViewerComponentProps {
   /** The file path to display */
   filePath: string
@@ -31,6 +35,8 @@ export interface FileViewerComponentProps {
     sessionDirectory: string
     commentsFilePath: string
   }
+  /** Callback when editor provides actions (outline, etc.) */
+  onEditorReady?: (actions: EditorActions | null) => void
 }
 
 /** Get file extension from path */

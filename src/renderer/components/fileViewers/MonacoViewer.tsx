@@ -141,7 +141,7 @@ interface PendingComment {
   pushed?: boolean
 }
 
-function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrollToLine, searchHighlight, reviewContext }: FileViewerComponentProps) {
+function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrollToLine, searchHighlight, reviewContext, onEditorReady }: FileViewerComponentProps) {
   const language = getLanguageFromPath(filePath)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const originalContentRef = useRef(content)
@@ -313,7 +313,19 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
         }
       })
     }
+
+    // Notify parent of available editor actions
+    onEditorReady?.({
+      showOutline: () => editor.trigger('keyboard', 'editor.action.quickOutline', {}),
+    })
   }
+
+  // Cleanup: notify parent that editor actions are gone
+  useEffect(() => {
+    return () => {
+      onEditorReady?.(null)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEditorChange = (value: string | undefined) => {
     const newContent = value ?? ''
@@ -362,6 +374,7 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
       <div className="flex-1 min-h-0">
         <Editor
           height="100%"
+          path={filePath}
           language={language}
           value={content}
           theme="vs-dark"

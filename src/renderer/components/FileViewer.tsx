@@ -3,6 +3,7 @@ import { basename } from 'path-browserify'
 import { getViewersForFile, isTextContent } from './fileViewers'
 import MonacoDiffViewer from './fileViewers/MonacoDiffViewer'
 import type { FileViewerPlugin } from './fileViewers'
+import type { EditorActions } from './fileViewers/types'
 
 export type FileViewerPosition = 'top' | 'left'
 export type ViewMode = 'latest' | 'diff'
@@ -43,6 +44,7 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
   const [diffSideBySide, setDiffSideBySide] = useState(true)
   const [diffModifiedContent, setDiffModifiedContent] = useState<string | null>(null)
   const [fileChangedOnDisk, setFileChangedOnDisk] = useState(false)
+  const [editorActions, setEditorActions] = useState<EditorActions | null>(null)
   const contentRef = useRef(content)
 
   useEffect(() => {
@@ -232,9 +234,10 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
     }
   }, [filePath, isDirty])
 
-  // Reset fileChangedOnDisk when file changes
+  // Reset fileChangedOnDisk and editorActions when file changes
   useEffect(() => {
     setFileChangedOnDisk(false)
+    setEditorActions(null)
   }, [filePath])
 
   // Handle file-changed-on-disk responses
@@ -390,6 +393,22 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
               title="Save (Cmd+S)"
             >
               {isSaving ? 'Saving...' : 'Save'}
+            </button>
+          )}
+          {editorActions && viewMode !== 'diff' && (
+            <button
+              onClick={() => editorActions.showOutline()}
+              className="p-1 rounded hover:bg-bg-tertiary text-text-secondary hover:text-text-primary transition-colors"
+              title="Outline (symbol list)"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="8" y1="6" x2="21" y2="6" />
+                <line x1="8" y1="12" x2="21" y2="12" />
+                <line x1="8" y1="18" x2="21" y2="18" />
+                <line x1="3" y1="6" x2="3.01" y2="6" />
+                <line x1="3" y1="12" x2="3.01" y2="12" />
+                <line x1="3" y1="18" x2="3.01" y2="18" />
+              </svg>
             </button>
           )}
           <span className="text-xs text-text-secondary truncate">{filePath}</span>
@@ -559,6 +578,7 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
             scrollToLine={scrollToLine}
             searchHighlight={searchHighlight}
             reviewContext={reviewContext}
+            onEditorReady={setEditorActions}
           />
         )}
       </div>
