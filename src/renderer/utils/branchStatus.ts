@@ -35,7 +35,9 @@ export function computeBranchStatus(input: BranchStatusInput): BranchStatus {
   }
 
   // 3. Git-native merge check (works for UI push, terminal push, and GitHub PR merge)
-  if (isMergedToMain) {
+  // Require a tracking branch to avoid false positives: a fresh branch with no commits
+  // also has 0 commits ahead of main, which the git check interprets as "merged".
+  if (isMergedToMain && hasTrackingBranch) {
     return 'merged'
   }
 

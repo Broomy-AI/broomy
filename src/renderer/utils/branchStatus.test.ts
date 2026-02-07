@@ -48,10 +48,10 @@ describe('computeBranchStatus', () => {
     }))).toBe('in-progress')
   })
 
-  it('returns merged when isMergedToMain is true', () => {
+  it('returns in-progress when isMergedToMain but no tracking branch (fresh branch)', () => {
     expect(computeBranchStatus(makeInput({
       isMergedToMain: true,
-    }))).toBe('merged')
+    }))).toBe('in-progress')
   })
 
   it('returns merged when isMergedToMain is true with tracking branch', () => {
