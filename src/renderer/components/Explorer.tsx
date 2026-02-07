@@ -165,6 +165,7 @@ export default function Explorer({
   const [commitError, setCommitError] = useState<string | null>(null)
   const [commitErrorExpanded, setCommitErrorExpanded] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
+  const [gitOpError, setGitOpError] = useState<{ operation: string; message: string } | null>(null)
   const [scView, setScView] = useState<'working' | 'branch' | 'commits' | 'comments'>('working')
   const [branchChanges, setBranchChanges] = useState<{ path: string; status: string }[]>([])
   const [branchBaseName, setBranchBaseName] = useState<string>('main')
@@ -208,6 +209,7 @@ export default function Explorer({
     setScView('working')
     setHasWriteAccess(false)
     setCommitError(null)
+    setGitOpError(null)
     setBranchCommits([])
     setExpandedCommits(new Set())
     setCommitFilesByHash({})
@@ -620,6 +622,7 @@ export default function Explorer({
 
     setIsCommitting(true)
     setCommitError(null)
+    setGitOpError(null)
     try {
       const result = await window.git.commit(directory, commitMessage.trim())
       if (result.success) {
@@ -627,12 +630,16 @@ export default function Explorer({
         setCommitError(null)
         onGitStatusRefresh?.()
       } else {
-        setCommitError(result.error || 'Commit failed')
+        const errorMsg = result.error || 'Commit failed'
+        setCommitError(errorMsg)
         setCommitErrorExpanded(false)
+        setGitOpError({ operation: 'Commit', message: errorMsg })
       }
     } catch (err) {
-      setCommitError(String(err))
+      const errorMsg = String(err)
+      setCommitError(errorMsg)
       setCommitErrorExpanded(false)
+      setGitOpError({ operation: 'Commit', message: errorMsg })
     } finally {
       setIsCommitting(false)
     }
@@ -641,10 +648,21 @@ export default function Explorer({
   const handleSync = async () => {
     if (!directory) return
     setIsSyncing(true)
+    setGitOpError(null)
     try {
-      await window.git.pull(directory)
-      await window.git.push(directory)
+      const pullResult = await window.git.pull(directory)
+      if (!pullResult.success) {
+        setGitOpError({ operation: 'Pull', message: pullResult.error || 'Pull failed' })
+        return
+      }
+      const pushResult = await window.git.push(directory)
+      if (!pushResult.success) {
+        setGitOpError({ operation: 'Push', message: pushResult.error || 'Push failed' })
+        return
+      }
       onGitStatusRefresh?.()
+    } catch (err) {
+      setGitOpError({ operation: 'Sync', message: String(err) })
     } finally {
       setIsSyncing(false)
     }
@@ -653,6 +671,7 @@ export default function Explorer({
   const handlePushToMain = async () => {
     if (!directory) return
     setIsPushingToMain(true)
+    setGitOpError(null)
     try {
       const result = await window.gh.mergeBranchToMain(directory)
       if (result.success) {
@@ -662,7 +681,11 @@ export default function Explorer({
           onRecordPushToMain(headCommit)
         }
         onGitStatusRefresh?.()
+      } else {
+        setGitOpError({ operation: `Push to ${branchBaseName}`, message: result.error || 'Push to main failed' })
       }
+    } catch (err) {
+      setGitOpError({ operation: `Push to ${branchBaseName}`, message: String(err) })
     } finally {
       setIsPushingToMain(false)
     }
@@ -964,12 +987,40 @@ export default function Explorer({
       </div>
     )
 
+    // Git operation error banner
+    const gitOpErrorBanner = gitOpError ? (
+      <div className="px-3 py-2 border-b border-red-500/30 bg-red-500/10 flex items-center gap-2">
+        <div
+          className="flex-1 text-xs text-red-400 cursor-pointer hover:text-red-300 truncate"
+          title="Click to view full error"
+          onClick={async () => {
+            const errorContent = `${gitOpError.operation} failed\n${'='.repeat(40)}\n\n${gitOpError.message}`
+            const errorPath = '/tmp/broomy-git-error.txt'
+            await window.fs.writeFile(errorPath, errorContent)
+            onFileSelect?.(errorPath, false)
+          }}
+        >
+          {gitOpError.operation} failed: {gitOpError.message.length > 80
+            ? gitOpError.message.slice(0, 80) + '...'
+            : gitOpError.message}
+        </div>
+        <button
+          onClick={() => setGitOpError(null)}
+          className="text-red-400 hover:text-red-300 text-xs shrink-0 px-1"
+          title="Dismiss"
+        >
+          &times;
+        </button>
+      </div>
+    ) : null
+
     // Comments view
     if (scView === 'comments') {
       return (
         <div className="flex flex-col h-full">
           {viewToggle}
           {prStatusBanner}
+          {gitOpErrorBanner}
           {isCommentsLoading ? (
             <div className="flex-1 flex items-center justify-center text-text-secondary text-xs">Loading comments...</div>
           ) : prComments.length === 0 ? (
@@ -1049,6 +1100,7 @@ export default function Explorer({
         <div className="flex flex-col h-full">
           {viewToggle}
           {prStatusBanner}
+          {gitOpErrorBanner}
           {isCommitsLoading ? (
             <div className="flex-1 flex items-center justify-center text-text-secondary text-xs">Loading...</div>
           ) : branchCommits.length === 0 ? (
@@ -1127,6 +1179,7 @@ export default function Explorer({
         <div className="flex flex-col h-full">
           {viewToggle}
           {prStatusBanner}
+          {gitOpErrorBanner}
           {isBranchLoading ? (
             <div className="flex-1 flex items-center justify-center text-text-secondary text-xs">Loading...</div>
           ) : branchChanges.length === 0 ? (
@@ -1174,6 +1227,7 @@ export default function Explorer({
         <div className="flex flex-col h-full">
           {viewToggle}
           {prStatusBanner}
+          {gitOpErrorBanner}
           <div className="flex-1 flex flex-col items-center justify-center gap-4 p-4">
             {syncStatus?.tracking && (
               <div className="text-xs text-text-secondary text-center">
@@ -1225,6 +1279,7 @@ export default function Explorer({
       <div className="flex flex-col h-full">
         {viewToggle}
         {prStatusBanner}
+        {gitOpErrorBanner}
         {/* Commit area */}
         <div className="px-3 py-2 border-b border-border">
           <div className="flex items-center gap-1">
