@@ -30,6 +30,7 @@ const mockGit = {
   commitFiles: vi.fn().mockResolvedValue([]),
   headCommit: vi.fn().mockResolvedValue(null),
   listBranches: vi.fn().mockResolvedValue([]),
+  fetchPrHead: vi.fn().mockResolvedValue({ success: true }),
   isMergedInto: vi.fn().mockResolvedValue(false),
 }
 

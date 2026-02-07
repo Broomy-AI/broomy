@@ -1488,11 +1488,11 @@ function ReviewPrsView({
         return
       }
 
-      // Fetch the branch first
-      await window.git.fetchBranch(mainDir, branchName)
+      // Fetch the PR head ref (works for both same-repo and fork PRs)
+      await window.git.fetchPrHead(mainDir, selectedPr.number)
 
-      // Create worktree for the PR branch
-      const result = await window.git.worktreeAdd(mainDir, worktreePath, branchName, `origin/${branchName}`)
+      // Create worktree for the PR branch from FETCH_HEAD
+      const result = await window.git.worktreeAdd(mainDir, worktreePath, branchName, 'FETCH_HEAD')
       if (!result.success) {
         throw new Error(result.error || 'Failed to create worktree')
       }
