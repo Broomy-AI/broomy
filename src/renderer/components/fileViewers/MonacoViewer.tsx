@@ -141,7 +141,7 @@ interface PendingComment {
   pushed?: boolean
 }
 
-function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrollToLine, searchHighlight, reviewContext, onEditorReady }: FileViewerComponentProps) {
+function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrollToLine, searchHighlight, reviewContext, onEditorReady, onOpenFile }: FileViewerComponentProps) {
   const language = getLanguageFromPath(filePath)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const originalContentRef = useRef(content)
@@ -152,6 +152,8 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
   const decorationsRef = useRef<monaco.editor.IEditorDecorationsCollection | null>(null)
   const scrollToLineRef = useRef(scrollToLine)
   const searchHighlightRef = useRef(searchHighlight)
+  const onOpenFileRef = useRef(onOpenFile)
+  onOpenFileRef.current = onOpenFile
 
   // Keep refs in sync
   scrollToLineRef.current = scrollToLine
@@ -319,6 +321,24 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
       showOutline: () => editor.trigger('keyboard', 'editor.action.quickOutline', {}),
     })
   }
+
+  // Register editor opener for cmd-click go-to-definition across files
+  useEffect(() => {
+    const disposable = monaco.editor.registerEditorOpener({
+      openCodeEditor(_source, resource, selectionOrPosition) {
+        const targetPath = resource.path
+        if (targetPath && onOpenFileRef.current) {
+          const line = selectionOrPosition
+            ? ('startLineNumber' in selectionOrPosition ? selectionOrPosition.startLineNumber : selectionOrPosition.lineNumber)
+            : undefined
+          onOpenFileRef.current(targetPath, line)
+          return true
+        }
+        return false
+      }
+    })
+    return () => disposable.dispose()
+  }, [])
 
   // Cleanup: notify parent that editor actions are gone
   useEffect(() => {

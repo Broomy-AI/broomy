@@ -1794,7 +1794,6 @@ ipcMain.handle('ts:getProjectContext', async (_event, projectRoot: string) => {
   const MAX_FILE_SIZE = 1024 * 1024 // 1MB
 
   // Read and parse tsconfig.json (with extends chain)
-  let compilerOptions: Record<string, unknown> = {}
   const parseTsConfig = (configPath: string, depth = 0): Record<string, unknown> => {
     if (depth > 5) return {}
     try {
@@ -1824,7 +1823,41 @@ ipcMain.handle('ts:getProjectContext', async (_event, projectRoot: string) => {
     }
   }
 
-  compilerOptions = parseTsConfig(join(projectRoot, 'tsconfig.json'))
+  // Try root tsconfig first
+  let compilerOptions: Record<string, unknown> = parseTsConfig(join(projectRoot, 'tsconfig.json'))
+
+  // For monorepos: if no root tsconfig, find tsconfigs in immediate subdirectories.
+  // Set baseUrl to projectRoot and add paths entries so non-relative imports resolve
+  // across all sub-projects (e.g. 'util/util' finds client/util/util.ts or server/util/util.ts).
+  if (Object.keys(compilerOptions).length === 0) {
+    const subProjectDirs: string[] = []
+    try {
+      const entries = readdirSync(projectRoot, { withFileTypes: true })
+      for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'node_modules') continue
+        const subTsconfigPath = join(projectRoot, entry.name, 'tsconfig.json')
+        if (existsSync(subTsconfigPath)) {
+          const subOpts = parseTsConfig(subTsconfigPath)
+          // Use the first sub-project's options as the base (merge others on top)
+          if (Object.keys(compilerOptions).length === 0) {
+            compilerOptions = { ...subOpts }
+          }
+          // Track sub-project dirs that have baseUrl: '.' (common monorepo pattern)
+          if (!subOpts.baseUrl || subOpts.baseUrl === '.' || subOpts.baseUrl === './') {
+            subProjectDirs.push(entry.name)
+          }
+        }
+      }
+    } catch {
+      // Ignore read errors
+    }
+
+    if (subProjectDirs.length > 0) {
+      // Override baseUrl to project root and add paths so imports resolve in each sub-project
+      compilerOptions.baseUrl = '.'
+      compilerOptions.paths = { '*': subProjectDirs.map(d => `${d}/*`) }
+    }
+  }
 
   // Collect project files
   const files: { path: string; content: string }[] = []

@@ -118,6 +118,15 @@ export async function loadMonacoProjectContext(projectRoot: string): Promise<voi
 
     monaco.languages.typescript.typescriptDefaults.setCompilerOptions(compilerOptions)
 
+    // Suppress diagnostic codes caused by incomplete project context.
+    // We load project source files but not node_modules type declarations,
+    // so errors about missing external packages are noise.
+    // 2307: Cannot find module (for node_modules packages we don't load)
+    // 2875: JSX tag requires 'react/jsx-runtime' (React types not loaded)
+    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+      diagnosticCodesToIgnore: [2875],
+    })
+
     // Disable JavaScript semantic validation — when we load TS project files as
     // extra libs, the JS language service can produce false "Type annotations can
     // only be used in TypeScript files" errors. Syntax highlighting and basic
@@ -134,6 +143,16 @@ export async function loadMonacoProjectContext(projectRoot: string): Promise<voi
       const uri = `${projectRoot}/${file.path}`
       const d = monaco.languages.typescript.typescriptDefaults.addExtraLib(file.content, uri)
       currentDisposables.push(d)
+    }
+
+    // Force all open editor models to re-analyze. TypeScript's language service
+    // caches module resolution results per file. If diagnostics were computed before
+    // extra libs were loaded, the cache holds stale "not found" results.
+    // hasInvalidatedResolutions (which Monaco doesn't implement) would normally
+    // clear this, but since it's missing, we bump each model's version to force
+    // the TS service to re-resolve all imports.
+    for (const model of monaco.editor.getModels()) {
+      model.setValue(model.getValue())
     }
   } catch {
     // Silently ignore — project context is best-effort

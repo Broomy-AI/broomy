@@ -554,6 +554,7 @@ function AppContent() {
           sessionDirectory: activeSession.directory,
           commentsFilePath: `${activeSession.directory}/.broomy-review/comments.json`,
         } : undefined}
+        onOpenFile={(targetPath, line) => navigateToFile(targetPath, false, line)}
       />
     ) : null,
     [PANEL_IDS.REVIEW]: activeSession ? (

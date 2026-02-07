@@ -37,6 +37,8 @@ export interface FileViewerComponentProps {
   }
   /** Callback when editor provides actions (outline, etc.) */
   onEditorReady?: (actions: EditorActions | null) => void
+  /** Callback when the editor wants to navigate to a different file (e.g. go-to-definition) */
+  onOpenFile?: (filePath: string, line?: number) => void
 }
 
 /** Get file extension from path */

@@ -26,9 +26,10 @@ interface FileViewerProps {
   diffCurrentRef?: string // Git ref for the "modified" side (e.g. commit hash for commit diffs)
   diffLabel?: string // Label to display in the header (e.g. "abc1234: commit message")
   reviewContext?: { sessionDirectory: string; commentsFilePath: string }
+  onOpenFile?: (filePath: string, line?: number) => void // Navigate to a different file (e.g. go-to-definition)
 }
 
-export default function FileViewer({ filePath, position = 'top', onPositionChange, onClose, fileStatus, directory, onSaveComplete, initialViewMode = 'latest', scrollToLine, searchHighlight, onDirtyStateChange, saveRef, diffBaseRef, diffCurrentRef, diffLabel, reviewContext }: FileViewerProps) {
+export default function FileViewer({ filePath, position = 'top', onPositionChange, onClose, fileStatus, directory, onSaveComplete, initialViewMode = 'latest', scrollToLine, searchHighlight, onDirtyStateChange, saveRef, diffBaseRef, diffCurrentRef, diffLabel, reviewContext, onOpenFile }: FileViewerProps) {
   // Show diff for modified/deleted files, or when a base ref is provided (branch changes), or when viewing a specific commit
   const canShowDiff = fileStatus === 'modified' || fileStatus === 'deleted' || !!diffBaseRef || !!diffCurrentRef
   const [content, setContent] = useState<string>('')
@@ -579,6 +580,7 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
             searchHighlight={searchHighlight}
             reviewContext={reviewContext}
             onEditorReady={setEditorActions}
+            onOpenFile={onOpenFile}
           />
         )}
       </div>
