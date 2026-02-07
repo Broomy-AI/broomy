@@ -1,10 +1,10 @@
 # Architecture Guide
 
-This document describes Broomer's technical architecture in detail. It's intended for developers who want to understand how the codebase works before making changes.
+This document describes Broomy's technical architecture in detail. It's intended for developers who want to understand how the codebase works before making changes.
 
 ## Process Model
 
-Broomer follows the standard Electron three-process model:
+Broomy follows the standard Electron three-process model:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -56,7 +56,7 @@ The main process is a single file that registers all IPC handlers. It manages:
 - **Git operations** -- All git commands run here via `simple-git`, keeping the renderer process free of Node.js APIs
 - **File system** -- Reading, writing, watching files, and searching directory trees
 - **GitHub CLI** -- Wrapping `gh` commands for issue/PR management
-- **Configuration** -- Reading and writing JSON config files at `~/.broomer/`
+- **Configuration** -- Reading and writing JSON config files at `~/.broomy/`
 - **Profile management** -- Multi-window support where each profile gets its own window
 
 Every IPC handler checks for E2E test mode (`E2E_TEST=true`) and returns mock data when testing, so tests never touch the real filesystem or git repos.
@@ -160,7 +160,7 @@ Agents are profile-scoped -- each profile can have different agent configuration
 
 ### Repo Store (`store/repos.ts`)
 
-Manages "managed repositories" -- repos that Broomer knows about for features like worktree creation and GitHub integration.
+Manages "managed repositories" -- repos that Broomy knows about for features like worktree creation and GitHub integration.
 
 ```typescript
 interface ManagedRepo {
@@ -363,7 +363,7 @@ When a session transitions from `working` to `idle`, it's marked as `isUnread: t
 ### Config File Structure
 
 ```
-~/.broomer/
+~/.broomy/
 ├── profiles.json                    # Profile list
 │   {
 │     "profiles": [{ "id": "default", "name": "Default", "color": "#3b82f6" }],

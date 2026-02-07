@@ -240,7 +240,7 @@ ipcMain.handle('pty:kill', (_event, id: string) => {
 })
 
 // Config directory and file - use different config for dev mode
-const CONFIG_DIR = join(homedir(), '.broomer')
+const CONFIG_DIR = join(homedir(), '.broomy')
 const PROFILES_DIR = join(CONFIG_DIR, 'profiles')
 const PROFILES_FILE = join(CONFIG_DIR, 'profiles.json')
 const CONFIG_FILE_NAME = isDev ? 'config.dev.json' : 'config.json'
@@ -309,7 +309,7 @@ migrateToProfiles()
 
 // Demo sessions for E2E tests (each needs a unique directory for branch tracking)
 const E2E_DEMO_SESSIONS = [
-  { id: '1', name: 'broomer', directory: '/tmp/e2e-broomer', agentId: 'claude' },
+  { id: '1', name: 'broomy', directory: '/tmp/e2e-broomy', agentId: 'claude' },
   { id: '2', name: 'backend-api', directory: '/tmp/e2e-backend-api', agentId: 'aider' },
   { id: '3', name: 'docs-site', directory: '/tmp/e2e-docs-site', agentId: null },
 ]
@@ -447,7 +447,7 @@ ipcMain.handle('config:save', async (_event, config: { profileId?: string; agent
 
 // Mock branch data for E2E tests (keyed by directory)
 const E2E_MOCK_BRANCHES: Record<string, string> = {
-  '/tmp/e2e-broomer': 'main',
+  '/tmp/e2e-broomy': 'main',
   '/tmp/e2e-backend-api': 'feature/auth',
   '/tmp/e2e-docs-site': 'main',
 }

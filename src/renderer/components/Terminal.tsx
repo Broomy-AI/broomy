@@ -5,6 +5,7 @@ import { SerializeAddon } from '@xterm/addon-serialize'
 import { useErrorStore } from '../store/errors'
 import { useSessionStore } from '../store/sessions'
 import { terminalBufferRegistry } from '../utils/terminalBufferRegistry'
+import { stripAnsi } from '../utils/stripAnsi'
 import '@xterm/xterm/css/xterm.css'
 
 interface TerminalProps {
@@ -42,12 +43,19 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
   addErrorRef.current = addError
   const updateAgentMonitor = useSessionStore((state) => state.updateAgentMonitor)
   const markSessionRead = useSessionStore((state) => state.markSessionRead)
+  const setPlanFile = useSessionStore((state) => state.setPlanFile)
   const setAgentPtyId = useSessionStore((state) => state.setAgentPtyId)
 
   const updateAgentMonitorRef = useRef(updateAgentMonitor)
   updateAgentMonitorRef.current = updateAgentMonitor
   const markSessionReadRef = useRef(markSessionRead)
   markSessionReadRef.current = markSessionRead
+  const setPlanFileRef = useRef(setPlanFile)
+  setPlanFileRef.current = setPlanFile
+
+  // Rolling buffer for plan file detection (agent terminals only)
+  const planDetectionBufferRef = useRef('')
+  const lastDetectedPlanRef = useRef<string | null>(null)
 
   const sessionIdRef = useRef(sessionId)
   sessionIdRef.current = sessionId
@@ -226,6 +234,20 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
 
         const removeDataListener = window.pty.onData(id, (data) => {
           terminal.write(data)
+
+          // Plan file detection for agent terminals
+          if (isAgent && sessionIdRef.current) {
+            const stripped = stripAnsi(data)
+            planDetectionBufferRef.current += stripped
+            if (planDetectionBufferRef.current.length > 1000) {
+              planDetectionBufferRef.current = planDetectionBufferRef.current.slice(-1000)
+            }
+            const planMatch = planDetectionBufferRef.current.match(/\/[^\s)]+\.claude-personal\/plans\/[^\s)]+\.md/)
+            if (planMatch && planMatch[0] !== lastDetectedPlanRef.current) {
+              lastDetectedPlanRef.current = planMatch[0]
+              setPlanFileRef.current(sessionIdRef.current, planMatch[0])
+            }
+          }
 
           // Activity detection for agent terminals
           if (isAgent && data.length > 0 && (Date.now() - effectStartTime >= 5000)) {

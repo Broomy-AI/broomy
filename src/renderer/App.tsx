@@ -238,7 +238,7 @@ function AppContent() {
   // Update window title to show active session name and profile
   useEffect(() => {
     const profileLabel = currentProfile && profiles.length > 1 ? ` [${currentProfile.name}]` : ''
-    document.title = activeSession ? `${activeSession.name}${profileLabel} — Broomer` : `Broomer${profileLabel}`
+    document.title = activeSession ? `${activeSession.name}${profileLabel} — Broomy` : `Broomy${profileLabel}`
   }, [activeSession?.name, activeSession?.id, currentProfile?.name, profiles.length])
 
   // Mark session as read when it becomes active, and focus agent terminal
@@ -515,6 +515,7 @@ function AppContent() {
         pushedToMainCommit={activeSession?.pushedToMainCommit}
         onRecordPushToMain={(commitHash) => activeSessionId && recordPushToMain(activeSessionId, commitHash)}
         onClearPushToMain={() => activeSessionId && clearPushToMain(activeSessionId)}
+        planFilePath={activeSession?.planFilePath}
         branchStatus={activeSession?.branchStatus ?? 'in-progress'}
         onUpdatePrState={(prState, prNumber, prUrl) => activeSessionId && updatePrState(activeSessionId, prState, prNumber, prUrl)}
         repoId={activeSession?.repoId}
@@ -539,7 +540,7 @@ function AppContent() {
         diffLabel={diffLabel}
         reviewContext={activeSession?.sessionType === 'review' ? {
           sessionDirectory: activeSession.directory,
-          commentsFilePath: `${activeSession.directory}/.broomer-review/comments.json`,
+          commentsFilePath: `${activeSession.directory}/.broomy-review/comments.json`,
         } : undefined}
       />
     ) : null,

@@ -92,7 +92,7 @@ export default function ReviewPanel({ session, repo, onSelectFile }: ReviewPanel
   const [error, setError] = useState<string | null>(null)
   const watchIdRef = useRef<string | null>(null)
 
-  const reviewDir = `${session.directory}/.broomer-review`
+  const reviewDir = `${session.directory}/.broomy-review`
   const reviewFilePath = `${reviewDir}/review.json`
   const commentsFilePath = `${reviewDir}/comments.json`
 
@@ -183,7 +183,7 @@ export default function ReviewPanel({ session, repo, onSelectFile }: ReviewPanel
     setError(null)
 
     try {
-      // Ensure .broomer-review directory exists
+      // Ensure .broomy-review directory exists
       await window.fs.mkdir(reviewDir)
 
       // Add to .git/info/exclude
@@ -192,8 +192,8 @@ export default function ReviewPanel({ session, repo, onSelectFile }: ReviewPanel
         const excludeExists = await window.fs.exists(excludeFile)
         if (excludeExists) {
           const content = await window.fs.readFile(excludeFile)
-          if (!content.includes('.broomer-review/')) {
-            await window.fs.appendFile(excludeFile, '\n.broomer-review/\n')
+          if (!content.includes('.broomy-review/')) {
+            await window.fs.appendFile(excludeFile, '\n.broomy-review/\n')
           }
         }
       } catch {
@@ -208,7 +208,7 @@ export default function ReviewPanel({ session, repo, onSelectFile }: ReviewPanel
       await window.fs.writeFile(`${reviewDir}/prompt.md`, prompt)
 
       // Send command to agent terminal
-      await window.pty.write(session.agentPtyId, 'Please read and follow the instructions in .broomer-review/prompt.md\n')
+      await window.pty.write(session.agentPtyId, 'Please read and follow the instructions in .broomy-review/prompt.md\n')
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       setGenerating(false)
@@ -547,11 +547,11 @@ You are reviewing a pull request. Analyze the diff and produce a structured revi
 
 1. Run \`git diff ${baseBranch}...HEAD\` to see the full diff
 2. Examine the changed files to understand the context
-3. Produce a structured JSON review and write it to \`.broomer-review/review.json\`
+3. Produce a structured JSON review and write it to \`.broomy-review/review.json\`
 
 ## Output Format
 
-Write the following JSON to \`.broomer-review/review.json\`:
+Write the following JSON to \`.broomy-review/review.json\`:
 
 \`\`\`json
 ${schema}
@@ -581,7 +581,7 @@ ${reviewInstructions}
   prompt += `
 ## Action
 
-Please analyze the PR now and write the result to \`.broomer-review/review.json\`.
+Please analyze the PR now and write the result to \`.broomy-review/review.json\`.
 `
 
   return prompt

@@ -31,7 +31,7 @@ pnpm dist            # Build and package for macOS
 
 ## Architecture
 
-Broomer is an Electron + React desktop app for managing multiple AI coding agent sessions across different repositories. See `docs/ARCHITECTURE.md` for the full technical guide.
+Broomy is an Electron + React desktop app for managing multiple AI coding agent sessions across different repositories. See `docs/ARCHITECTURE.md` for the full technical guide.
 
 ### Process Structure
 
@@ -57,7 +57,7 @@ When a session transitions from working to idle, it's marked as `isUnread` to al
 
 ### Data Persistence
 
-Config files at `~/.broomer/profiles/<profileId>/`:
+Config files at `~/.broomy/profiles/<profileId>/`:
 - `config.json` (production) / `config.dev.json` (development)
 - Contains agents, sessions with panel visibility and layout sizes, repos, toolbar panel order
 

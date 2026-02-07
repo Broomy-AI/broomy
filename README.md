@@ -1,4 +1,4 @@
-# Broomer
+# Broomy
 
 A desktop application for managing multiple AI coding agent sessions across different repositories. See all your agent sessions at a glance, monitor their status, and interact with them through embedded terminals.
 
@@ -27,12 +27,12 @@ Built with Electron, React, and xterm.js.
 
 ```bash
 git clone <repo-url>
-cd broomer
+cd broomy
 pnpm install
 pnpm dev
 ```
 
-The app opens automatically in development mode with hot reload. Dev mode uses a separate config file (`~/.broomer/config.dev.json`) so your test sessions don't interfere with real work. A yellow "DEV" chip appears in the title bar to distinguish dev from production.
+The app opens automatically in development mode with hot reload. Dev mode uses a separate config file (`~/.broomy/config.dev.json`) so your test sessions don't interfere with real work. A yellow "DEV" chip appears in the title bar to distinguish dev from production.
 
 ### Building for Distribution
 
@@ -83,7 +83,7 @@ See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for a detailed technical guide.
 
 ### Quick Overview
 
-Broomer is a standard Electron app with three process layers:
+Broomy is a standard Electron app with three process layers:
 
 ```
 Main Process (Node.js)          Preload (Context Bridge)       Renderer (React)
@@ -112,7 +112,7 @@ pnpm test:headed            # E2E tests with visible window
 ## Project Structure
 
 ```
-broomer/
+broomy/
 ├── src/
 │   ├── main/                    # Electron main process
 │   │   ├── index.ts             # App entry, IPC handlers, PTY/Git/FS operations
@@ -156,10 +156,10 @@ broomer/
 
 ## Configuration
 
-Config files are stored at `~/.broomer/`:
+Config files are stored at `~/.broomy/`:
 
 ```
-~/.broomer/
+~/.broomy/
 ├── profiles.json                # Profile definitions + last active profile
 ├── profiles/
 │   ├── default/

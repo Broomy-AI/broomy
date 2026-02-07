@@ -362,6 +362,8 @@ export default function Layout({
 
   // Determine if we should show terminals (considering all visibility states)
   const terminalsVisible = showAgentTerminal || showUserTerminal
+  // Whether any "top/left" panels are visible (for flex layout decisions)
+  const hasTopPanels = showFileViewer && fileViewer
 
   return (
     <div className="h-screen flex flex-col bg-bg-primary">
@@ -374,7 +376,7 @@ export default function Layout({
           className="flex items-center gap-2 pl-16"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
-          <span className="text-sm font-medium text-text-primary" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>{title || 'Broomer'}</span>
+          <span className="text-sm font-medium text-text-primary" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>{title || 'Broomy'}</span>
           {isDev && (
             <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
               DEV

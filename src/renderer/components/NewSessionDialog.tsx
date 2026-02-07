@@ -1283,10 +1283,10 @@ function RepoSettingsView({
                 onClick={handleDelete}
                 className="text-xs text-red-400 hover:text-red-300 transition-colors"
               >
-                Remove repository from Broomer
+                Remove repository from Broomy
               </button>
               <p className="text-xs text-text-secondary mt-1">
-                This won't delete any files, just removes it from Broomer's managed repos list.
+                This won't delete any files, just removes it from Broomy's managed repos list.
               </p>
             </div>
           </>

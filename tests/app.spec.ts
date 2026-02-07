@@ -41,9 +41,9 @@ test.afterAll(async () => {
   }
 })
 
-test.describe('Broomer App', () => {
+test.describe('Broomy App', () => {
   test('should display the app title', async () => {
-    const title = page.locator('text=Broomer').first()
+    const title = page.locator('text=Broomy').first()
     await expect(title).toBeVisible()
   })
 
@@ -54,8 +54,8 @@ test.describe('Broomer App', () => {
 
   test('should display demo sessions in the sidebar', async () => {
     // Check for demo sessions (sessions are now divs, not buttons)
-    const broomerSession = page.locator('div:has-text("broomer")').first()
-    await expect(broomerSession).toBeVisible()
+    const broomySession = page.locator('div:has-text("broomy")').first()
+    await expect(broomySession).toBeVisible()
 
     const backendSession = page.locator('div:has-text("backend-api")').first()
     await expect(backendSession).toBeVisible()
@@ -129,12 +129,12 @@ test.describe('Broomer App', () => {
     // The backend session should now be selected (has bg-accent/15 class)
     await expect(backendSession).toHaveClass(/bg-accent\/15/)
 
-    // Click back to broomer session
-    const broomerSession = page.locator('.cursor-pointer:has-text("broomer")')
-    await broomerSession.click()
+    // Click back to broomy session
+    const broomySession = page.locator('.cursor-pointer:has-text("broomy")')
+    await broomySession.click()
     await page.waitForTimeout(300)
 
-    await expect(broomerSession).toHaveClass(/bg-accent\/15/)
+    await expect(broomySession).toHaveClass(/bg-accent\/15/)
   })
 })
 
@@ -214,7 +214,7 @@ test.describe('Terminal Integration', () => {
 test.describe('Layout', () => {
   test('should have correct layout structure', async () => {
     // Title bar - look for the app title text
-    const titleBar = page.locator('text=Broomer').first()
+    const titleBar = page.locator('text=Broomy').first()
     await expect(titleBar).toBeVisible()
 
     // Sidebar - contains session list with "+ New Session" button
@@ -281,7 +281,7 @@ test.describe('Explorer Panel', () => {
     await page.waitForTimeout(300)
 
     // The demo sessions use /tmp/e2e-* directories - use partial match
-    const directoryPath = page.locator('text=e2e-broomer')
+    const directoryPath = page.locator('text=e2e-broomy')
     await expect(directoryPath).toBeVisible()
 
     // Close the panel
@@ -357,8 +357,8 @@ test.describe('Session Terminal Persistence', () => {
     await page.waitForTimeout(500)
 
     // Switch back to the first session
-    const broomerSession = page.locator('.cursor-pointer:has-text("broomer")')
-    await broomerSession.click()
+    const broomySession = page.locator('.cursor-pointer:has-text("broomy")')
+    await broomySession.click()
     await page.waitForTimeout(500)
 
     // Verify the marker is still in the terminal

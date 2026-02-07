@@ -1,5 +1,5 @@
 {
-  "name": "broomer",
+  "name": "broomy",
   "version": "1.0.0",
   "description": "Multi-agent session manager for AI coding assistants",
   "type": "module",
@@ -9,9 +9,9 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
-    "dist": "pnpm build && electron-builder --mac && chmod +x dist/mac-arm64/Broomer.app/Contents/Resources/app/node_modules/node-pty/prebuilds/darwin-arm64/spawn-helper",
+    "dist": "pnpm build && electron-builder --mac && chmod +x dist/mac-arm64/Broomy.app/Contents/Resources/app/node_modules/node-pty/prebuilds/darwin-arm64/spawn-helper",
     "dist:dir": "pnpm build && electron-builder --mac --dir",
-    "start": "open dist/mac-arm64/Broomer.app",
+    "start": "open dist/mac-arm64/Broomy.app",
     "test": "playwright test",
     "test:headed": "E2E_HEADLESS=false playwright test",
     "test:unit": "vitest run",
