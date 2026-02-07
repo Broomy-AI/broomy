@@ -7,7 +7,7 @@ All copy for the website, section by section. Written to be concise, specific, a
 ## Nav Bar (appears on scroll)
 
 Left: **Broomy**
-Right: **[Download for macOS]** button
+Right: **[Download for macOS]** **[Download for Linux]** **[Download for Windows]** buttons
 
 ---
 
@@ -26,7 +26,7 @@ See what every agent is doing. Ship faster.
 
 ### CTA Buttons
 ```
-[Download for macOS]   [View on GitHub →]
+[Download for macOS] [Dowload for Linux] [Download for Windows]  [View on GitHub →]
 ```
 
 The download button includes a small subtitle: `Apple Silicon · v1.0.0` (version fetched at build time).
