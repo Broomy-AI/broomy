@@ -5,6 +5,7 @@ import { SerializeAddon } from '@xterm/addon-serialize'
 import { useErrorStore } from '../store/errors'
 import { useSessionStore } from '../store/sessions'
 import { terminalBufferRegistry } from '../utils/terminalBufferRegistry'
+import { stripAnsi } from '../utils/stripAnsi'
 import '@xterm/xterm/css/xterm.css'
 
 interface TerminalProps {
@@ -33,12 +34,19 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
   const { addError } = useErrorStore()
   const updateAgentMonitor = useSessionStore((state) => state.updateAgentMonitor)
   const markSessionRead = useSessionStore((state) => state.markSessionRead)
+  const setPlanFile = useSessionStore((state) => state.setPlanFile)
 
   // Use ref for updateAgentMonitor to avoid effect re-runs
   const updateAgentMonitorRef = useRef(updateAgentMonitor)
   updateAgentMonitorRef.current = updateAgentMonitor
   const markSessionReadRef = useRef(markSessionRead)
   markSessionReadRef.current = markSessionRead
+  const setPlanFileRef = useRef(setPlanFile)
+  setPlanFileRef.current = setPlanFile
+
+  // Rolling buffer for plan file detection (agent terminals only)
+  const planDetectionBufferRef = useRef('')
+  const lastDetectedPlanRef = useRef<string | null>(null)
 
   // Use ref for sessionId to avoid effect re-runs
   const sessionIdRef = useRef(sessionId)
@@ -239,6 +247,20 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
               terminal.scrollToBottom()
             }
           })
+
+          // Plan file detection for agent terminals
+          if (isAgentTerminal && sessionIdRef.current) {
+            const stripped = stripAnsi(data)
+            planDetectionBufferRef.current += stripped
+            if (planDetectionBufferRef.current.length > 1000) {
+              planDetectionBufferRef.current = planDetectionBufferRef.current.slice(-1000)
+            }
+            const planMatch = planDetectionBufferRef.current.match(/\/[^\s)]+\.claude-personal\/plans\/[^\s)]+\.md/)
+            if (planMatch && planMatch[0] !== lastDetectedPlanRef.current) {
+              lastDetectedPlanRef.current = planMatch[0]
+              setPlanFileRef.current(sessionIdRef.current, planMatch[0])
+            }
+          }
 
           // Simple activity detection: any terminal output = working
           // Just pause briefly after user interaction to avoid false positives

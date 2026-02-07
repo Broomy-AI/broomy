@@ -368,6 +368,7 @@ function AppContent() {
         pushedToMainCommit={activeSession?.pushedToMainCommit}
         onRecordPushToMain={(commitHash) => activeSessionId && recordPushToMain(activeSessionId, commitHash)}
         onClearPushToMain={() => activeSessionId && clearPushToMain(activeSessionId)}
+        planFilePath={activeSession?.planFilePath}
       />
     ) : null,
     [PANEL_IDS.FILE_VIEWER]: activeSession?.showFileViewer ? (

@@ -350,6 +350,8 @@ export default function Layout({
 
   // Determine if we should show terminals (considering all visibility states)
   const terminalsVisible = showAgentTerminal || showUserTerminal
+  // Whether any "top/left" panels are visible (for flex layout decisions)
+  const hasTopPanels = showFileViewer && fileViewer
 
   return (
     <div className="h-screen flex flex-col bg-bg-primary">
@@ -452,7 +454,7 @@ export default function Layout({
                 {/* Center: file viewer + terminals or settings */}
                 <div ref={containerRef} className={`flex-1 min-w-0 flex ${
                   showSettings && settingsPanel ? 'flex-col' :
-                  fileViewerPosition === 'left' && showFileViewer && fileViewer ? 'flex-row' : 'flex-col'
+                  fileViewerPosition === 'left' && hasTopPanels ? 'flex-row' : 'flex-col'
                 }`}>
                   {showSettings && settingsPanel ? (
                     <div data-panel-id={PANEL_IDS.SETTINGS} tabIndex={-1} className="flex-1 min-w-0 bg-bg-secondary overflow-y-auto outline-none">

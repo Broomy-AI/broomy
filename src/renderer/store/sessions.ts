@@ -47,6 +47,7 @@ export interface Session {
   showFileViewer: boolean
   showDiff: boolean
   selectedFilePath: string | null
+  planFilePath: string | null
   fileViewerPosition: FileViewerPosition
   layoutSizes: LayoutSizes
   explorerFilter: ExplorerFilter
@@ -126,6 +127,7 @@ interface SessionStore {
   toggleUserTerminal: (id: string) => void
   toggleExplorer: (id: string) => void
   toggleFileViewer: (id: string) => void
+  setPlanFile: (id: string, path: string | null) => void
   selectFile: (id: string, filePath: string, openInDiffMode?: boolean) => void
   setFileViewerPosition: (id: string, position: FileViewerPosition) => void
   updateLayoutSize: (id: string, key: keyof LayoutSizes, value: number) => void
@@ -263,8 +265,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           showFileViewer: panelVisibility[PANEL_IDS.FILE_VIEWER] ?? false,
           showDiff: sessionData.showDiff ?? false,
           selectedFilePath: null,
+          planFilePath: null,
           fileViewerPosition: sessionData.fileViewerPosition ?? 'top',
-          layoutSizes: sessionData.layoutSizes ?? { ...DEFAULT_LAYOUT_SIZES },
+          layoutSizes: { ...DEFAULT_LAYOUT_SIZES, ...(sessionData.layoutSizes ?? {}) },
           explorerFilter: sessionData.explorerFilter === 'all' ? 'files'
             : sessionData.explorerFilter === 'changed' ? 'source-control'
             : sessionData.explorerFilter ?? 'files',
@@ -328,6 +331,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       showFileViewer: false,
       showDiff: false,
       selectedFilePath: null,
+      planFilePath: null,
       fileViewerPosition: 'top',
       layoutSizes: { ...DEFAULT_LAYOUT_SIZES },
       explorerFilter: 'files',
@@ -472,6 +476,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   toggleFileViewer: (id: string) => {
     get().togglePanel(id, PANEL_IDS.FILE_VIEWER)
+  },
+
+  setPlanFile: (id: string, path: string | null) => {
+    const { sessions } = get()
+    const updatedSessions = sessions.map((s) =>
+      s.id === id ? { ...s, planFilePath: path } : s
+    )
+    set({ sessions: updatedSessions })
+    // planFilePath is runtime-only state, no need to persist
   },
 
   selectFile: (id: string, filePath: string) => {
