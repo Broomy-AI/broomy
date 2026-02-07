@@ -57,6 +57,7 @@ function AppContent() {
     markSessionRead,
     recordPushToMain,
     clearPushToMain,
+    markHasHadCommits,
     updateBranchStatus,
     updatePrState,
     archiveSession,
@@ -158,6 +159,11 @@ function AppContent() {
         [activeSession.id]: normalized
       }))
 
+      // Track if the session has ever had commits ahead of remote
+      if (normalized.ahead > 0) {
+        markHasHadCommits(activeSession.id)
+      }
+
       // Check if branch is merged into the default branch
       const isOnMain = normalized.current === 'main' || normalized.current === 'master'
       if (!isOnMain && normalized.current) {
@@ -177,7 +183,7 @@ function AppContent() {
     } catch {
       // Ignore errors
     }
-  }, [activeSession?.id, activeSession?.directory, activeSession?.repoId, repos, normalizeGitStatus])
+  }, [activeSession?.id, activeSession?.directory, activeSession?.repoId, repos, normalizeGitStatus, markHasHadCommits])
 
   // Poll git status every 2 seconds
   useEffect(() => {
@@ -200,6 +206,7 @@ function AppContent() {
         hasTrackingBranch: !!gitStatus.tracking,
         isOnMainBranch: gitStatus.current === 'main' || gitStatus.current === 'master',
         isMergedToMain: isMergedBySession[session.id] ?? false,
+        hasHadCommits: session.hasHadCommits ?? false,
         lastKnownPrState: session.lastKnownPrState,
       })
 

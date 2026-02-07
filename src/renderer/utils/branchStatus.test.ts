@@ -8,6 +8,7 @@ function makeInput(overrides: Partial<BranchStatusInput> = {}): BranchStatusInpu
     hasTrackingBranch: false,
     isOnMainBranch: false,
     isMergedToMain: false,
+    hasHadCommits: false,
     lastKnownPrState: undefined,
     ...overrides,
   }
@@ -48,16 +49,26 @@ describe('computeBranchStatus', () => {
     }))).toBe('in-progress')
   })
 
-  it('returns in-progress when isMergedToMain but no tracking branch (fresh branch)', () => {
-    expect(computeBranchStatus(makeInput({
-      isMergedToMain: true,
-    }))).toBe('in-progress')
-  })
-
-  it('returns merged when isMergedToMain is true with tracking branch', () => {
+  it('returns pushed when isMergedToMain but no commits ever made (fresh branch)', () => {
+    // A fresh branch that was pushed but never had commits shows as "pushed", not "merged"
     expect(computeBranchStatus(makeInput({
       isMergedToMain: true,
       hasTrackingBranch: true,
+    }))).toBe('pushed')
+  })
+
+  it('returns in-progress when isMergedToMain but no tracking branch', () => {
+    expect(computeBranchStatus(makeInput({
+      isMergedToMain: true,
+      hasHadCommits: true,
+    }))).toBe('in-progress')
+  })
+
+  it('returns merged when isMergedToMain with tracking branch and prior commits', () => {
+    expect(computeBranchStatus(makeInput({
+      isMergedToMain: true,
+      hasTrackingBranch: true,
+      hasHadCommits: true,
     }))).toBe('merged')
   })
 
@@ -66,6 +77,7 @@ describe('computeBranchStatus', () => {
       isMergedToMain: true,
       lastKnownPrState: 'OPEN',
       hasTrackingBranch: true,
+      hasHadCommits: true,
     }))).toBe('merged')
   })
 
@@ -136,6 +148,14 @@ describe('computeBranchStatus', () => {
       ahead: 1,
       lastKnownPrState: 'OPEN',
       hasTrackingBranch: true,
+    }))).toBe('in-progress')
+  })
+
+  it('returns pushed when isMergedToMain and hasHadCommits but no tracking branch', () => {
+    // Edge case: even if branch diverged before, without tracking it falls through
+    expect(computeBranchStatus(makeInput({
+      isMergedToMain: true,
+      hasHadCommits: true,
     }))).toBe('in-progress')
   })
 })

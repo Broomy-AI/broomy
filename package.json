@@ -18,6 +18,7 @@
     "dist:all": "pnpm build && electron-builder --mac --win --linux",
     "dist:dir": "pnpm build && electron-builder --mac --dir",
     "start": "electron .",
+    "start:dist": "pnpm dist:dir && open dist/mac-arm64/Broomy.app",
     "test": "playwright test",
     "test:headed": "E2E_HEADLESS=false playwright test",
     "test:unit": "vitest run",
