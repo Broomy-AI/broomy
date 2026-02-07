@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron'
 import { join } from 'path'
 import { homedir, tmpdir } from 'os'
 import { statusFromChar, buildPrCreateUrl } from './gitStatusParser'
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, watch, FSWatcher, appendFileSync, copyFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, watch, FSWatcher, appendFileSync, chmodSync, copyFileSync, rmSync } from 'fs'
 import * as pty from 'node-pty'
 import simpleGit from 'simple-git'
 import { exec, execSync } from 'child_process'
@@ -779,6 +779,22 @@ ipcMain.handle('fs:mkdir', async (_event, dirPath: string) => {
       return { success: false, error: 'Directory already exists' }
     }
     mkdirSync(dirPath, { recursive: true })
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('fs:rm', async (_event, targetPath: string) => {
+  if (isE2ETest) {
+    return { success: true }
+  }
+
+  try {
+    if (!existsSync(targetPath)) {
+      return { success: true }
+    }
+    rmSync(targetPath, { recursive: true, force: true })
     return { success: true }
   } catch (error) {
     return { success: false, error: String(error) }
@@ -1796,6 +1812,127 @@ ipcMain.handle('menu:popup', async (_event, items: Array<{ id: string; label: st
       },
     })
   })
+})
+
+// TypeScript project context handler
+ipcMain.handle('ts:getProjectContext', async (_event, projectRoot: string) => {
+  if (isE2ETest) {
+    return {
+      projectRoot,
+      compilerOptions: { target: 'es2020', module: 'esnext', jsx: 'react-jsx', strict: true, esModuleInterop: true },
+      files: [
+        { path: 'src/index.ts', content: 'export const test = true;\n' },
+        { path: 'src/utils.ts', content: 'export function add(a: number, b: number) { return a + b; }\n' },
+      ],
+    }
+  }
+
+  const SKIP_DIRS = new Set(['.git', 'node_modules', 'dist', 'build', '.next', '.cache', '__pycache__', '.venv'])
+  const TS_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx'])
+  const MAX_FILES = 2000
+  const MAX_FILE_SIZE = 1024 * 1024 // 1MB
+
+  // Read and parse tsconfig.json (with extends chain)
+  const parseTsConfig = (configPath: string, depth = 0): Record<string, unknown> => {
+    if (depth > 5) return {}
+    try {
+      if (!existsSync(configPath)) return {}
+      const raw = readFileSync(configPath, 'utf-8')
+      // Strip comments (// and /* */) for JSON parsing
+      const stripped = raw.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')
+      const parsed = JSON.parse(stripped)
+
+      let result: Record<string, unknown> = {}
+      if (parsed.extends) {
+        const extendsPath = parsed.extends.startsWith('.')
+          ? join(configPath, '..', parsed.extends)
+          : join(projectRoot, 'node_modules', parsed.extends)
+        // Add .json if not present
+        const resolvedExtends = existsSync(extendsPath) ? extendsPath :
+          existsSync(extendsPath + '.json') ? extendsPath + '.json' : extendsPath
+        result = parseTsConfig(resolvedExtends, depth + 1)
+      }
+
+      if (parsed.compilerOptions) {
+        result = { ...result, ...parsed.compilerOptions }
+      }
+      return result
+    } catch {
+      return {}
+    }
+  }
+
+  // Try root tsconfig first
+  let compilerOptions: Record<string, unknown> = parseTsConfig(join(projectRoot, 'tsconfig.json'))
+
+  // For monorepos: if no root tsconfig, find tsconfigs in immediate subdirectories.
+  // Set baseUrl to projectRoot and add paths entries so non-relative imports resolve
+  // across all sub-projects (e.g. 'util/util' finds client/util/util.ts or server/util/util.ts).
+  if (Object.keys(compilerOptions).length === 0) {
+    const subProjectDirs: string[] = []
+    try {
+      const entries = readdirSync(projectRoot, { withFileTypes: true })
+      for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'node_modules') continue
+        const subTsconfigPath = join(projectRoot, entry.name, 'tsconfig.json')
+        if (existsSync(subTsconfigPath)) {
+          const subOpts = parseTsConfig(subTsconfigPath)
+          // Use the first sub-project's options as the base (merge others on top)
+          if (Object.keys(compilerOptions).length === 0) {
+            compilerOptions = { ...subOpts }
+          }
+          // Track sub-project dirs that have baseUrl: '.' (common monorepo pattern)
+          if (!subOpts.baseUrl || subOpts.baseUrl === '.' || subOpts.baseUrl === './') {
+            subProjectDirs.push(entry.name)
+          }
+        }
+      }
+    } catch {
+      // Ignore read errors
+    }
+
+    if (subProjectDirs.length > 0) {
+      // Override baseUrl to project root and add paths so imports resolve in each sub-project
+      compilerOptions.baseUrl = '.'
+      compilerOptions.paths = { '*': subProjectDirs.map(d => `${d}/*`) }
+    }
+  }
+
+  // Collect project files
+  const files: { path: string; content: string }[] = []
+  const walkDir = (dir: string) => {
+    if (files.length >= MAX_FILES) return
+    let entries
+    try {
+      entries = readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      if (files.length >= MAX_FILES) return
+      const fullPath = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        if (SKIP_DIRS.has(entry.name)) continue
+        walkDir(fullPath)
+      } else {
+        const ext = entry.name.substring(entry.name.lastIndexOf('.'))
+        if (!TS_EXTENSIONS.has(ext)) continue
+        try {
+          const stats = statSync(fullPath)
+          if (stats.size > MAX_FILE_SIZE) continue
+          const content = readFileSync(fullPath, 'utf-8')
+          const relativePath = fullPath.replace(projectRoot + '/', '')
+          files.push({ path: relativePath, content })
+        } catch {
+          // Skip unreadable files
+        }
+      }
+    }
+  }
+
+  walkDir(projectRoot)
+
+  return { projectRoot, compilerOptions, files }
 })
 
 // App lifecycle

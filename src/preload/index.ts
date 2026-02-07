@@ -51,6 +51,7 @@ export type FsApi = {
   readFileBase64: (path: string) => Promise<string>
   exists: (path: string) => Promise<boolean>
   mkdir: (path: string) => Promise<{ success: boolean; error?: string }>
+  rm: (path: string) => Promise<{ success: boolean; error?: string }>
   createFile: (path: string) => Promise<{ success: boolean; error?: string }>
   search: (directory: string, query: string) => Promise<SearchResult[]>
   watch: (id: string, path: string) => Promise<{ success: boolean; error?: string }>
@@ -289,6 +290,7 @@ const fsApi: FsApi = {
   readFileBase64: (path) => ipcRenderer.invoke('fs:readFileBase64', path),
   exists: (path) => ipcRenderer.invoke('fs:exists', path),
   mkdir: (path) => ipcRenderer.invoke('fs:mkdir', path),
+  rm: (path) => ipcRenderer.invoke('fs:rm', path),
   createFile: (path) => ipcRenderer.invoke('fs:createFile', path),
   search: (directory, query) => ipcRenderer.invoke('fs:search', directory, query),
   watch: (id, path) => ipcRenderer.invoke('fs:watch', id, path),
@@ -381,6 +383,20 @@ export type MenuApi = {
   popup: (items: MenuItemDef[]) => Promise<string | null>
 }
 
+export type TsProjectContext = {
+  projectRoot: string
+  compilerOptions: Record<string, unknown>
+  files: { path: string; content: string }[]
+}
+
+export type TsApi = {
+  getProjectContext: (projectRoot: string) => Promise<TsProjectContext>
+}
+
+const tsApi: TsApi = {
+  getProjectContext: (projectRoot) => ipcRenderer.invoke('ts:getProjectContext', projectRoot),
+}
+
 const appApi: AppApi = {
   isDev: () => ipcRenderer.invoke('app:isDev'),
   homedir: () => ipcRenderer.invoke('app:homedir'),
@@ -404,6 +420,7 @@ contextBridge.exposeInMainWorld('gh', ghApi)
 contextBridge.exposeInMainWorld('repos', reposApi)
 contextBridge.exposeInMainWorld('shell', shellApi)
 contextBridge.exposeInMainWorld('profiles', profilesApi)
+contextBridge.exposeInMainWorld('ts', tsApi)
 
 declare global {
   interface Window {
@@ -419,5 +436,6 @@ declare global {
     repos: ReposApi
     shell: ShellApi
     profiles: ProfilesApi
+    ts: TsApi
   }
 }

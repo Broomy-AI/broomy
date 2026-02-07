@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "generatedAt": "2026-02-06T20:05:00Z",
+  "prNumber": null,
+  "prTitle": null,
+  "overview": {
+    "purpose": "Fixes review session creation for fork PRs and improves default panel layouts for review vs non-review sessions.",
+    "approach": "Adds a new git:fetchPrHead IPC handler that fetches via GitHub's pull/<number>/head ref (which works for all PRs regardless of origin), and introduces separate panel visibility presets for review and non-review session types."
+  },
+  "changePatterns": [
+    {
+      "id": "cp-1",
+      "title": "Fork PR fetch fix",
+      "description": "Replaces git fetch origin <branchName> with git fetch origin pull/<number>/head for review session creation. This ensures fork PRs can be checked out, since fork branches don't exist on the origin remote. The worktree is then created from FETCH_HEAD instead of origin/<branchName>.",
+      "locations": [
+        { "file": "src/main/index.ts", "startLine": 1086, "endLine": 1098 },
+        { "file": "src/preload/index.ts", "startLine": 148, "endLine": 148 },
+        { "file": "src/preload/index.ts", "startLine": 327, "endLine": 327 },
+        { "file": "src/renderer/components/NewSessionDialog.tsx", "startLine": 1491, "endLine": 1495 },
+        { "file": "src/test/setup.ts", "startLine": 33, "endLine": 33 }
+      ]
+    },
+    {
+      "id": "cp-2",
+      "title": "Session-type-specific default panel layouts",
+      "description": "Introduces separate default panel visibility constants for review sessions (review pane + agent terminal) and non-review sessions (explorer + agent terminal + user terminal). The addSession logic now selects the appropriate preset based on sessionType.",
+      "locations": [
+        { "file": "src/renderer/store/sessions.ts", "startLine": 104, "endLine": 119 },
+        { "file": "src/renderer/store/sessions.ts", "startLine": 374, "endLine": 389 }
+      ]
+    }
+  ],
+  "potentialIssues": [
+    {
+      "id": "pi-1",
+      "severity": "warning",
+      "title": "fetchPrHead result not checked before proceeding",
+      "description": "The return value of window.git.fetchPrHead() is awaited but its success/error fields are not checked. If the fetch fails (e.g. network error, invalid PR number), the code silently proceeds to worktreeAdd with a stale or missing FETCH_HEAD, which will produce a confusing git error rather than a clear 'fetch failed' message.",
+      "locations": [
+        { "file": "src/renderer/components/NewSessionDialog.tsx", "startLine": 1492, "endLine": 1492 }
+      ]
+    },
+    {
+      "id": "pi-2",
+      "severity": "warning",
+      "title": "FETCH_HEAD is a global ref that can be overwritten by concurrent fetches",
+      "description": "FETCH_HEAD is a repo-global ref. If another git fetch happens between fetchPrHead and worktreeAdd (e.g. from another session or background process), FETCH_HEAD could point to the wrong commit. This is unlikely in practice but could cause the worktree to be created from an incorrect ref.",
+      "locations": [
+        { "file": "src/renderer/components/NewSessionDialog.tsx", "startLine": 1492, "endLine": 1495 }
+      ]
+    }
+  ],
+  "designDecisions": [
+    {
+      "id": "dd-1",
+      "title": "Using pull/<number>/head instead of branch-name fetch",
+      "description": "GitHub provides pull/<N>/head refs for all PRs regardless of whether they come from the same repo or a fork. This is the standard approach for checking out PR code when you don't know the source remote.",
+      "alternatives": ["Add the fork as a named remote and fetch from it directly", "Use gh pr checkout which handles fork detection automatically"],
+      "locations": [
+        { "file": "src/main/index.ts", "startLine": 1093, "endLine": 1093 }
+      ]
+    },
+    {
+      "id": "dd-2",
+      "title": "Separate visibility constants vs runtime patching",
+      "description": "Defines REVIEW_PANEL_VISIBILITY and DEFAULT_PANEL_VISIBILITY as separate constants rather than starting with a default and conditionally modifying it. This makes the intent clearer and avoids mutation.",
+      "alternatives": ["Single default with conditional overrides in addSession"],
+      "locations": [
+        { "file": "src/renderer/store/sessions.ts", "startLine": 104, "endLine": 119 }
+      ]
+    }
+  ]
+}

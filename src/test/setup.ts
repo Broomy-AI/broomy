@@ -73,6 +73,15 @@ const mockRepos = {
   saveInitScript: vi.fn().mockResolvedValue({ success: true }),
 }
 
+// Mock window.ts
+const mockTs = {
+  getProjectContext: vi.fn().mockResolvedValue({
+    projectRoot: '/tmp/test-project',
+    compilerOptions: {},
+    files: [],
+  }),
+}
+
 // Mock window.menu
 const mockMenu = {
   popup: vi.fn().mockResolvedValue(null),
@@ -87,6 +96,7 @@ const mockFs = {
   readFileBase64: vi.fn().mockResolvedValue(''),
   exists: vi.fn().mockResolvedValue(true),
   mkdir: vi.fn().mockResolvedValue({ success: true }),
+  rm: vi.fn().mockResolvedValue({ success: true }),
   createFile: vi.fn().mockResolvedValue({ success: true }),
   search: vi.fn().mockResolvedValue([]),
   watch: vi.fn().mockResolvedValue({ success: true }),
@@ -118,6 +128,7 @@ Object.defineProperty(globalThis, 'window', {
     shell: mockShell,
     repos: mockRepos,
     menu: mockMenu,
+    ts: mockTs,
     fs: mockFs,
     location: mockLocation,
   },
