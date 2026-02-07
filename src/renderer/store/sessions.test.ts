@@ -54,12 +54,14 @@ describe('useSessionStore', () => {
       showFileViewer: false,
       showDiff: false,
       selectedFilePath: null,
+      planFilePath: null,
       fileViewerPosition: 'top' as const,
       layoutSizes: {
         explorerWidth: 256,
         fileViewerSize: 300,
         userTerminalHeight: 192,
         diffPanelWidth: 320,
+        reviewPanelWidth: 320,
       },
       explorerFilter: 'files' as const,
       lastMessage: null,
@@ -860,7 +862,7 @@ describe('useSessionStore', () => {
       expect(savedSession.prTitle).toBe('Fix bug')
       expect(savedSession.prUrl).toBe('https://github.com/pr/42')
       expect(savedSession.prBaseBranch).toBe('main')
-      expect(savedSession.panelVisibility[PANEL_IDS.REVIEW]).toBe(true)
+      expect(savedSession.panelVisibility?.[PANEL_IDS.REVIEW]).toBe(true)
     })
   })
 

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useProfileStore, type ProfileData } from '../store/profiles'
+import { useProfileStore } from '../store/profiles'
 
 const PROFILE_COLORS = [
   '#3b82f6', // blue

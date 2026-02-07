@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import Terminal from './Terminal'
-import { useSessionStore, type TerminalTab } from '../store/sessions'
+import { useSessionStore } from '../store/sessions'
 
 // Inline SVG icons
 const PlusIcon = () => (

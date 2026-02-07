@@ -15,10 +15,12 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
     "paths": {
       "@/*": ["./src/renderer/*"]
     }
   },
   "include": ["src"],
+  "exclude": ["dist", "out", "node_modules"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

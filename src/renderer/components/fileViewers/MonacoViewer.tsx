@@ -345,7 +345,7 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
     return () => {
       onEditorReady?.(null)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])  
 
   const handleEditorChange = (value: string | undefined) => {
     const newContent = value ?? ''

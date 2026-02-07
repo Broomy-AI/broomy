@@ -342,7 +342,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           // Recent files
           recentFiles: [],
           // Terminal tabs
-          terminalTabs: sessionData.terminalTabs ?? createDefaultTerminalTabs(),
+          terminalTabs: (sessionData.terminalTabs as TerminalTabsState | undefined) ?? createDefaultTerminalTabs(),
           // Push to main tracking
           pushedToMainAt: sessionData.pushedToMainAt,
           pushedToMainCommit: sessionData.pushedToMainCommit,

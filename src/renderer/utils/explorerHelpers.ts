@@ -50,7 +50,7 @@ export function statusBadgeColor(status: string): string {
 /**
  * Truncates a commit error message for display, with optional expansion.
  */
-export function truncateError(error: string, maxLength: number = 80): string {
+export function truncateError(error: string, maxLength = 80): string {
   if (error.length <= maxLength) return error
   return error.slice(0, maxLength) + '...'
 }

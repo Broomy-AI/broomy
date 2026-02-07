@@ -1,7 +1,7 @@
 import { PanelDefinition, PanelPosition } from './types'
 
 export class PanelRegistry {
-  private panels: Map<string, PanelDefinition> = new Map()
+  private panels = new Map<string, PanelDefinition>()
 
   register(panel: PanelDefinition): void {
     this.panels.set(panel.id, panel)

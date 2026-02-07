@@ -345,7 +345,7 @@ ipcMain.handle('profiles:list', async () => {
   }
 })
 
-ipcMain.handle('profiles:save', async (_event, data: { profiles: Array<{ id: string; name: string; color: string }>; lastProfileId: string }) => {
+ipcMain.handle('profiles:save', async (_event, data: { profiles: { id: string; name: string; color: string }[]; lastProfileId: string }) => {
   if (isE2ETest) {
     return { success: true }
   }
@@ -427,7 +427,7 @@ ipcMain.handle('config:save', async (_event, config: { profileId?: string; agent
         // ignore
       }
     }
-    const configToSave = {
+    const configToSave: Record<string, unknown> = {
       ...existingConfig,
       agents: config.agents || DEFAULT_AGENTS,
       sessions: config.sessions,
@@ -647,7 +647,7 @@ ipcMain.handle('git:diff', async (_event, repoPath: string, filePath?: string) =
   }
 })
 
-ipcMain.handle('git:show', async (_event, repoPath: string, filePath: string, ref: string = 'HEAD') => {
+ipcMain.handle('git:show', async (_event, repoPath: string, filePath: string, ref = 'HEAD') => {
   // In E2E test mode, return mock original content
   if (isE2ETest) {
     return `export function main() {
@@ -704,22 +704,18 @@ ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
     return '// Mock file content for E2E tests\nexport const test = true;\n'
   }
 
-  try {
-    if (!existsSync(filePath)) {
-      throw new Error(`File not found: ${filePath}`)
-    }
-    const stats = statSync(filePath)
-    if (stats.isDirectory()) {
-      throw new Error('Cannot read directory as file')
-    }
-    // Check if file is too large (over 5MB)
-    if (stats.size > 5 * 1024 * 1024) {
-      throw new Error('File is too large to display')
-    }
-    return readFileSync(filePath, 'utf-8')
-  } catch (error) {
-    throw error // Re-throw to send error to renderer
+  if (!existsSync(filePath)) {
+    throw new Error(`File not found: ${filePath}`)
   }
+  const stats = statSync(filePath)
+  if (stats.isDirectory()) {
+    throw new Error('Cannot read directory as file')
+  }
+  // Check if file is too large (over 5MB)
+  if (stats.size > 5 * 1024 * 1024) {
+    throw new Error('File is too large to display')
+  }
+  return readFileSync(filePath, 'utf-8')
 })
 
 ipcMain.handle('fs:writeFile', async (_event, filePath: string, content: string) => {
@@ -881,22 +877,18 @@ ipcMain.handle('fs:readFileBase64', async (_event, filePath: string) => {
     return 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
   }
 
-  try {
-    if (!existsSync(filePath)) {
-      throw new Error(`File not found: ${filePath}`)
-    }
-    const stats = statSync(filePath)
-    if (stats.isDirectory()) {
-      throw new Error('Cannot read directory as file')
-    }
-    // Check if file is too large (over 10MB for images)
-    if (stats.size > 10 * 1024 * 1024) {
-      throw new Error('File is too large to display')
-    }
-    return readFileSync(filePath).toString('base64')
-  } catch (error) {
-    throw error
+  if (!existsSync(filePath)) {
+    throw new Error(`File not found: ${filePath}`)
   }
+  const stats = statSync(filePath)
+  if (stats.isDirectory()) {
+    throw new Error('Cannot read directory as file')
+  }
+  // Check if file is too large (over 10MB for images)
+  if (stats.size > 10 * 1024 * 1024) {
+    throw new Error('File is too large to display')
+  }
+  return readFileSync(filePath).toString('base64')
 })
 
 // App info IPC handlers
@@ -1324,7 +1316,7 @@ ipcMain.handle('gh:issues', async (_event, repoDir: string) => {
       timeout: 30000,
     })
     const issues = JSON.parse(result)
-    return issues.map((issue: { number: number; title: string; labels: Array<{ name: string }>; url: string }) => ({
+    return issues.map((issue: { number: number; title: string; labels: { name: string }[]; url: string }) => ({
       number: issue.number,
       title: issue.title,
       labels: (issue.labels || []).map((l: { name: string }) => l.name),
@@ -1593,7 +1585,7 @@ ipcMain.handle('gh:prsToReview', async (_event, repoDir: string) => {
       timeout: 30000,
     })
     const prs = JSON.parse(result)
-    return prs.map((pr: { number: number; title: string; author: { login: string }; url: string; headRefName: string; baseRefName: string; labels: Array<{ name: string }> }) => ({
+    return prs.map((pr: { number: number; title: string; author: { login: string }; url: string; headRefName: string; baseRefName: string; labels: { name: string }[] }) => ({
       number: pr.number,
       title: pr.title,
       author: pr.author?.login || 'unknown',
@@ -1614,12 +1606,6 @@ ipcMain.handle('gh:submitDraftReview', async (_event, repoDir: string, prNumber:
   }
 
   try {
-    const commentsJson = JSON.stringify(comments.map(c => ({
-      path: c.path,
-      line: c.line,
-      body: c.body,
-    })))
-
     const result = execSync(
       `gh api repos/{owner}/{repo}/pulls/${prNumber}/reviews -X POST -f event=PENDING -f body="" --input -`,
       {
@@ -1766,7 +1752,7 @@ ipcMain.handle('fs:unwatch', async (_event, id: string) => {
 })
 
 // Native context menu IPC handler
-ipcMain.handle('menu:popup', async (_event, items: Array<{ id: string; label: string; enabled?: boolean; type?: 'separator' }>) => {
+ipcMain.handle('menu:popup', async (_event, items: { id: string; label: string; enabled?: boolean; type?: 'separator' }[]) => {
   const senderWindow = BrowserWindow.fromWebContents(_event.sender) || mainWindow
   return new Promise<string | null>((resolve) => {
     const template = items.map((item) => {
