@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import type { ReviewData, PendingComment, CodeLocation } from '../types/review'
 import type { Session } from '../store/sessions'
 import type { ManagedRepo } from '../../preload/index'
@@ -6,7 +6,7 @@ import type { ManagedRepo } from '../../preload/index'
 interface ReviewPanelProps {
   session: Session
   repo?: ManagedRepo
-  onSelectFile: (filePath: string) => void
+  onSelectFile: (filePath: string, openInDiffMode: boolean, scrollToLine?: number, diffBaseRef?: string) => void
 }
 
 function CollapsibleSection({
@@ -57,14 +57,13 @@ function LocationLink({
   directory: string
   onClick: () => void
 }) {
-  const fileName = location.file.split('/').pop() || location.file
   return (
     <button
       onClick={onClick}
       className="text-xs text-accent hover:text-accent/80 font-mono truncate block transition-colors"
       title={`${location.file}:${location.startLine}`}
     >
-      {fileName}:{location.startLine}
+      {location.file}:{location.startLine}
       {location.endLine && location.endLine !== location.startLine ? `-${location.endLine}` : ''}
     </button>
   )
@@ -90,19 +89,21 @@ export default function ReviewPanel({ session, repo, onSelectFile }: ReviewPanel
   const [pushing, setPushing] = useState(false)
   const [pushResult, setPushResult] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const watchIdRef = useRef<string | null>(null)
 
-  const reviewDir = `${session.directory}/.broomy-review`
-  const reviewFilePath = `${reviewDir}/review.json`
-  const commentsFilePath = `${reviewDir}/comments.json`
+  // Agent writes to .broomy-review/ in repo; we move results to /tmp
+  const repoReviewDir = `${session.directory}/.broomy-review`
+  const repoReviewFilePath = `${repoReviewDir}/review.json`
+  const tmpDir = `/tmp/broomy-review-${session.id}`
+  const tmpReviewFilePath = `${tmpDir}/review.json`
+  const commentsFilePath = `${tmpDir}/comments.json`
 
-  // Load review data and comments on mount
+  // Load review data and comments from tmp dir on mount
   useEffect(() => {
     const loadData = async () => {
       try {
-        const exists = await window.fs.exists(reviewFilePath)
+        const exists = await window.fs.exists(tmpReviewFilePath)
         if (exists) {
-          const content = await window.fs.readFile(reviewFilePath)
+          const content = await window.fs.readFile(tmpReviewFilePath)
           const data = JSON.parse(content) as ReviewData
           setReviewData(data)
         }
@@ -121,57 +122,37 @@ export default function ReviewPanel({ session, repo, onSelectFile }: ReviewPanel
       }
     }
     loadData()
-  }, [session.id, reviewFilePath, commentsFilePath])
+  }, [session.id, tmpReviewFilePath, commentsFilePath])
 
-  // Watch for review.json changes
+  // Poll for review.json in repo when generating, then move to tmp
   useEffect(() => {
-    const watchId = `review-watch-${session.id}`
-    watchIdRef.current = watchId
+    if (!generating) return
 
-    const setupWatch = async () => {
+    const interval = setInterval(async () => {
       try {
-        const dirExists = await window.fs.exists(reviewDir)
-        if (!dirExists) return
-
-        await window.fs.watch(watchId, reviewDir)
-        const cleanup = window.fs.onChange(watchId, async (event) => {
-          if (event.filename === 'review.json') {
-            try {
-              const content = await window.fs.readFile(reviewFilePath)
-              const data = JSON.parse(content) as ReviewData
-              setReviewData(data)
-              setGenerating(false)
-            } catch {
-              // File may be partially written
-            }
+        const exists = await window.fs.exists(repoReviewFilePath)
+        if (exists) {
+          const content = await window.fs.readFile(repoReviewFilePath)
+          const data = JSON.parse(content) as ReviewData
+          // Save to tmp dir
+          await window.fs.mkdir(tmpDir)
+          await window.fs.writeFile(tmpReviewFilePath, content)
+          // Clean up .broomer-review/ from repo
+          try {
+            await window.fs.rm(repoReviewDir)
+          } catch {
+            // Non-fatal: cleanup failure doesn't affect functionality
           }
-          if (event.filename === 'comments.json') {
-            try {
-              const content = await window.fs.readFile(commentsFilePath)
-              setComments(JSON.parse(content))
-            } catch {
-              // Ignore
-            }
-          }
-        })
-
-        return () => {
-          cleanup()
-          window.fs.unwatch(watchId)
+          setReviewData(data)
+          setGenerating(false)
         }
       } catch {
-        // Watch setup failed
+        // File may not exist yet or be partially written
       }
-    }
+    }, 1000)
 
-    setupWatch()
-
-    return () => {
-      if (watchIdRef.current) {
-        window.fs.unwatch(watchIdRef.current)
-      }
-    }
-  }, [session.id, reviewDir, reviewFilePath, commentsFilePath])
+    return () => clearInterval(interval)
+  }, [generating, repoReviewFilePath, tmpDir, tmpReviewFilePath, repoReviewDir])
 
   const handleGenerateReview = useCallback(async () => {
     if (!session.agentPtyId) {
@@ -183,37 +164,26 @@ export default function ReviewPanel({ session, repo, onSelectFile }: ReviewPanel
     setError(null)
 
     try {
-      // Ensure .broomy-review directory exists
-      await window.fs.mkdir(reviewDir)
+      // Create .broomy-review/ in repo for agent to write to
+      await window.fs.mkdir(repoReviewDir)
 
-      // Add to .git/info/exclude
-      const excludeFile = `${session.directory}/.git/info/exclude`
-      try {
-        const excludeExists = await window.fs.exists(excludeFile)
-        if (excludeExists) {
-          const content = await window.fs.readFile(excludeFile)
-          if (!content.includes('.broomy-review/')) {
-            await window.fs.appendFile(excludeFile, '\n.broomy-review/\n')
-          }
-        }
-      } catch {
-        // Non-fatal
-      }
+      // Ensure tmp dir exists for comments
+      await window.fs.mkdir(tmpDir)
 
       // Build the review prompt
       const reviewInstructions = repo?.reviewInstructions || ''
       const prompt = buildReviewPrompt(session, reviewInstructions)
 
       // Write the prompt file
-      await window.fs.writeFile(`${reviewDir}/prompt.md`, prompt)
+      await window.fs.writeFile(`${repoReviewDir}/prompt.md`, prompt)
 
-      // Send command to agent terminal
-      await window.pty.write(session.agentPtyId, 'Please read and follow the instructions in .broomy-review/prompt.md\n')
+      // Send command to agent terminal (user must press enter to confirm)
+      await window.pty.write(session.agentPtyId, 'Please read and follow the instructions in .broomy-review/prompt.md')
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       setGenerating(false)
     }
-  }, [session, repo, reviewDir])
+  }, [session, repo, repoReviewDir, tmpDir])
 
   const handlePushComments = useCallback(async () => {
     if (!session.prNumber || comments.length === 0) return
@@ -276,8 +246,9 @@ export default function ReviewPanel({ session, repo, onSelectFile }: ReviewPanel
     const fullPath = location.file.startsWith('/')
       ? location.file
       : `${session.directory}/${location.file}`
-    onSelectFile(fullPath)
-  }, [session.directory, onSelectFile])
+    const baseBranch = session.prBaseBranch || 'main'
+    onSelectFile(fullPath, true, location.startLine, baseBranch)
+  }, [session.directory, session.prBaseBranch, onSelectFile])
 
   const unpushedCount = comments.filter(c => !c.pushed).length
 

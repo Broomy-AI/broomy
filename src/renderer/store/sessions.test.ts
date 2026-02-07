@@ -65,6 +65,7 @@ describe('useSessionStore', () => {
       lastMessage: null,
       lastMessageTime: null,
       isUnread: false,
+      workingStartTime: null,
       recentFiles: [],
       terminalTabs: {
         tabs: [{ id: 'tab-1', name: 'Terminal' }],
@@ -417,12 +418,33 @@ describe('useSessionStore', () => {
       expect(session.lastMessageTime).toBeGreaterThan(0)
     })
 
-    it('marks as unread when transitioning from working to idle', () => {
-      const s1 = { ...createTestSession({ id: 's1' }), status: 'working' as const }
+    it('marks as unread when transitioning from working to idle after sufficient work', () => {
+      const s1 = createTestSession({ id: 's1' })
       useSessionStore.setState({ sessions: [s1], isLoading: false })
 
+      // Start working
+      useSessionStore.getState().updateAgentMonitor('s1', { status: 'working' })
+      expect(useSessionStore.getState().sessions[0].status).toBe('working')
+
+      // Advance time past the minimum working duration (3s)
+      vi.advanceTimersByTime(4000)
+
+      // Transition to idle - should mark as unread
       useSessionStore.getState().updateAgentMonitor('s1', { status: 'idle' })
       expect(useSessionStore.getState().sessions[0].isUnread).toBe(true)
+    })
+
+    it('does not mark as unread for brief activity (e.g. notifications)', () => {
+      const s1 = createTestSession({ id: 's1' })
+      useSessionStore.setState({ sessions: [s1], isLoading: false })
+
+      // Start working
+      useSessionStore.getState().updateAgentMonitor('s1', { status: 'working' })
+
+      // Transition to idle quickly (< 3s) - should NOT mark as unread
+      vi.advanceTimersByTime(1500)
+      useSessionStore.getState().updateAgentMonitor('s1', { status: 'idle' })
+      expect(useSessionStore.getState().sessions[0].isUnread).toBe(false)
     })
 
     it('does not mark as unread when already idle', () => {
@@ -688,6 +710,157 @@ describe('useSessionStore', () => {
       expect(session.lastKnownPrNumber).toBe(10)
       expect(session.lastKnownPrUrl).toBe('https://github.com/pr/10')
       expect(session.branchStatus).toBe('in-progress') // Default until computed
+    })
+  })
+
+  describe('review sessions', () => {
+    it('addSession with sessionType review uses REVIEW_PANEL_VISIBILITY', async () => {
+      await useSessionStore.getState().addSession('/test/repo', 'agent-1', {
+        sessionType: 'review',
+        prNumber: 42,
+        prTitle: 'Fix bug',
+        prUrl: 'https://github.com/pr/42',
+        prBaseBranch: 'main',
+      })
+      const session = useSessionStore.getState().sessions[0]
+      expect(session.sessionType).toBe('review')
+      expect(session.panelVisibility[PANEL_IDS.REVIEW]).toBe(true)
+      expect(session.panelVisibility[PANEL_IDS.EXPLORER]).toBe(false)
+      expect(session.panelVisibility[PANEL_IDS.USER_TERMINAL]).toBe(false)
+      expect(session.panelVisibility[PANEL_IDS.AGENT_TERMINAL]).toBe(true)
+      expect(session.panelVisibility[PANEL_IDS.FILE_VIEWER]).toBe(false)
+    })
+
+    it('addSession with sessionType review sets legacy fields from review visibility', async () => {
+      await useSessionStore.getState().addSession('/test/repo', 'agent-1', {
+        sessionType: 'review',
+      })
+      const session = useSessionStore.getState().sessions[0]
+      expect(session.showExplorer).toBe(false)
+      expect(session.showUserTerminal).toBe(false)
+      expect(session.showAgentTerminal).toBe(true)
+      expect(session.showFileViewer).toBe(false)
+    })
+
+    it('addSession with sessionType review stores PR fields', async () => {
+      await useSessionStore.getState().addSession('/test/repo', 'agent-1', {
+        sessionType: 'review',
+        prNumber: 99,
+        prTitle: 'Add feature',
+        prUrl: 'https://github.com/pr/99',
+        prBaseBranch: 'develop',
+      })
+      const session = useSessionStore.getState().sessions[0]
+      expect(session.prNumber).toBe(99)
+      expect(session.prTitle).toBe('Add feature')
+      expect(session.prUrl).toBe('https://github.com/pr/99')
+      expect(session.prBaseBranch).toBe('develop')
+    })
+
+    it('addSession with sessionType review auto-adds review to toolbar', async () => {
+      await useSessionStore.getState().addSession('/test/repo', 'agent-1', {
+        sessionType: 'review',
+      })
+      const state = useSessionStore.getState()
+      expect(state.toolbarPanels).toContain(PANEL_IDS.REVIEW)
+    })
+
+    it('addSession with sessionType review inserts review before settings in toolbar', async () => {
+      await useSessionStore.getState().addSession('/test/repo', 'agent-1', {
+        sessionType: 'review',
+      })
+      const toolbar = useSessionStore.getState().toolbarPanels
+      const reviewIdx = toolbar.indexOf(PANEL_IDS.REVIEW)
+      const settingsIdx = toolbar.indexOf(PANEL_IDS.SETTINGS)
+      expect(reviewIdx).toBeLessThan(settingsIdx)
+    })
+
+    it('addSession with sessionType review does not duplicate review in toolbar', async () => {
+      // Pre-set toolbar with review already present
+      useSessionStore.setState({
+        toolbarPanels: [...DEFAULT_TOOLBAR_PANELS, PANEL_IDS.REVIEW],
+      })
+
+      await useSessionStore.getState().addSession('/test/repo', 'agent-1', {
+        sessionType: 'review',
+      })
+      const toolbar = useSessionStore.getState().toolbarPanels
+      const reviewCount = toolbar.filter(p => p === PANEL_IDS.REVIEW).length
+      expect(reviewCount).toBe(1)
+    })
+
+    it('addSession without sessionType uses default panel visibility', async () => {
+      await useSessionStore.getState().addSession('/test/repo', 'agent-1')
+      const session = useSessionStore.getState().sessions[0]
+      expect(session.panelVisibility[PANEL_IDS.EXPLORER]).toBe(true)
+      expect(session.panelVisibility[PANEL_IDS.USER_TERMINAL]).toBe(true)
+      expect(session.panelVisibility[PANEL_IDS.REVIEW]).toBeUndefined()
+    })
+
+    it('addSession without sessionType does not add review to toolbar', async () => {
+      await useSessionStore.getState().addSession('/test/repo', 'agent-1')
+      const state = useSessionStore.getState()
+      expect(state.toolbarPanels).not.toContain(PANEL_IDS.REVIEW)
+    })
+
+    it('loadSessions preserves review panelVisibility from config', async () => {
+      const reviewPanelVisibility = {
+        [PANEL_IDS.AGENT_TERMINAL]: true,
+        [PANEL_IDS.USER_TERMINAL]: false,
+        [PANEL_IDS.EXPLORER]: false,
+        [PANEL_IDS.FILE_VIEWER]: false,
+        [PANEL_IDS.REVIEW]: true,
+      }
+      vi.mocked(window.config.load).mockResolvedValue({
+        agents: [],
+        sessions: [
+          {
+            id: 's1', name: 'Review Session', directory: '/d',
+            sessionType: 'review',
+            prNumber: 42,
+            prTitle: 'Fix bug',
+            prUrl: 'https://github.com/pr/42',
+            prBaseBranch: 'main',
+            panelVisibility: reviewPanelVisibility,
+          },
+        ],
+      })
+
+      await useSessionStore.getState().loadSessions()
+      const session = useSessionStore.getState().sessions[0]
+      expect(session.sessionType).toBe('review')
+      expect(session.panelVisibility[PANEL_IDS.REVIEW]).toBe(true)
+      expect(session.panelVisibility[PANEL_IDS.EXPLORER]).toBe(false)
+      expect(session.prNumber).toBe(42)
+      expect(session.prTitle).toBe('Fix bug')
+      expect(session.prBaseBranch).toBe('main')
+    })
+
+    it('debouncedSave persists review session fields', async () => {
+      await useSessionStore.getState().addSession('/test/repo', 'agent-1', {
+        sessionType: 'review',
+        prNumber: 42,
+        prTitle: 'Fix bug',
+        prUrl: 'https://github.com/pr/42',
+        prBaseBranch: 'main',
+      })
+
+      // Trigger save via a panel toggle
+      const sessionId = useSessionStore.getState().sessions[0].id
+      useSessionStore.getState().togglePanel(sessionId, PANEL_IDS.FILE_VIEWER)
+
+      // Advance past debounce
+      await vi.advanceTimersByTimeAsync(600)
+
+      expect(window.config.save).toHaveBeenCalled()
+      const savedConfig = vi.mocked(window.config.save).mock.calls[0][0]
+      const savedSession = savedConfig.sessions[0]
+      expect(savedSession.sessionType).toBe('review')
+      expect(savedSession.prNumber).toBe(42)
+      expect(savedSession.prTitle).toBe('Fix bug')
+      expect(savedSession.prUrl).toBe('https://github.com/pr/42')
+      expect(savedSession.prBaseBranch).toBe('main')
+      expect(savedSession.panelVisibility[PANEL_IDS.REVIEW]).toBe(true)
     })
   })
 

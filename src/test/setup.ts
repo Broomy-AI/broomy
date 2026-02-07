@@ -95,6 +95,7 @@ const mockFs = {
   readFileBase64: vi.fn().mockResolvedValue(''),
   exists: vi.fn().mockResolvedValue(true),
   mkdir: vi.fn().mockResolvedValue({ success: true }),
+  rm: vi.fn().mockResolvedValue({ success: true }),
   createFile: vi.fn().mockResolvedValue({ success: true }),
   search: vi.fn().mockResolvedValue([]),
   watch: vi.fn().mockResolvedValue({ success: true }),

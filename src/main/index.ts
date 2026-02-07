@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron'
 import { join } from 'path'
 import { homedir } from 'os'
 import { statusFromChar, buildPrCreateUrl } from './gitStatusParser'
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, watch, FSWatcher, appendFileSync, chmodSync, copyFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, watch, FSWatcher, appendFileSync, chmodSync, copyFileSync, rmSync } from 'fs'
 import * as pty from 'node-pty'
 import simpleGit from 'simple-git'
 import { exec, execSync } from 'child_process'
@@ -762,6 +762,22 @@ ipcMain.handle('fs:mkdir', async (_event, dirPath: string) => {
       return { success: false, error: 'Directory already exists' }
     }
     mkdirSync(dirPath, { recursive: true })
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+})
+
+ipcMain.handle('fs:rm', async (_event, targetPath: string) => {
+  if (isE2ETest) {
+    return { success: true }
+  }
+
+  try {
+    if (!existsSync(targetPath)) {
+      return { success: true }
+    }
+    rmSync(targetPath, { recursive: true, force: true })
     return { success: true }
   } catch (error) {
     return { success: false, error: String(error) }
