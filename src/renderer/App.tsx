@@ -231,7 +231,7 @@ function AppContent() {
       loadRepos(currentProfileId)
       checkGhAvailability()
     })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])  
 
   // Handle profile switching: open the profile in a new window
   const handleSwitchProfile = useCallback(async (profileId: string) => {

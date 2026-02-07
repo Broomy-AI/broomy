@@ -17,6 +17,8 @@
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
     "test:unit:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
     "postinstall": "electron-builder install-app-deps && chmod +x node_modules/node-pty/prebuilds/darwin-*/spawn-helper 2>/dev/null || true"
   },
   "dependencies": {
@@ -40,6 +42,7 @@
     ]
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.2",
     "@playwright/test": "^1.58.1",
     "@types/node": "^20.10.0",
     "@types/path-browserify": "^1.0.3",
@@ -51,12 +54,15 @@
     "electron": "^28.1.0",
     "electron-builder": "^24.9.1",
     "electron-vite": "^2.0.0",
+    "eslint": "^9.39.2",
+    "eslint-plugin-react-hooks": "^7.0.1",
     "playwright": "^1.58.1",
     "postcss": "^8.4.32",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.3.3",
+    "typescript-eslint": "^8.54.0",
     "vite": "^5.0.10",
     "vitest": "^4.0.18"
   }

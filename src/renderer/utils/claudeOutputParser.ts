@@ -101,12 +101,12 @@ const ACTION_PATTERNS = [
 ]
 
 export class ClaudeOutputParser {
-  private buffer: string = ''
+  private buffer = ''
   private lastStatus: SessionStatus = 'idle'
   private lastMessage: string | null = null
   private lastActionMessage: string | null = null  // Separate tracking for action messages
   private idleTimeout: ReturnType<typeof setTimeout> | null = null
-  private hasSeenClaude: boolean = false // Only detect states after we've seen Claude
+  private hasSeenClaude = false // Only detect states after we've seen Claude
 
   /**
    * Strip ANSI escape codes from text
@@ -278,7 +278,7 @@ export class ClaudeOutputParser {
       if (trimmed.length < 3) return false
       if (this.isStatusLine(trimmed)) return false
       // Skip shell prompts
-      if (/^[\$%>#]\s*$/.test(trimmed)) return false
+      if (/^[$%>#]\s*$/.test(trimmed)) return false
       // Skip lines that are just special characters
       if (/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏✻✳⏺⎿◇◆●○\s]+$/.test(trimmed)) return false
       return true

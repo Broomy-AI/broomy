@@ -50,7 +50,6 @@ function CollapsibleSection({
 
 function LocationLink({
   location,
-  directory,
   onClick,
 }: {
   location: CodeLocation

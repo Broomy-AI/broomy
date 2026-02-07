@@ -225,6 +225,8 @@ export type SessionData = {
   lastKnownPrState?: 'OPEN' | 'MERGED' | 'CLOSED' | null
   lastKnownPrNumber?: number
   lastKnownPrUrl?: string
+  // Archive state
+  isArchived?: boolean
 }
 
 export type ConfigData = {
