@@ -8,6 +8,9 @@ import simpleGit from 'simple-git'
 import { exec, execSync } from 'child_process'
 import { isWindows, isMac, getDefaultShell, getExecShell, normalizePath, makeExecutable } from './platform'
 
+// Ensure app name is correct (in dev mode Electron defaults to "Electron")
+app.name = 'Broomy'
+
 // Check if we're in development mode
 const isDev = process.env.ELECTRON_RENDERER_URL !== undefined
 
@@ -30,6 +33,7 @@ let mainWindow: BrowserWindow | null = null
 
 function createWindow(profileId?: string): BrowserWindow {
   const window = new BrowserWindow({
+    title: 'Broomy',
     width: 1400,
     height: 900,
     minWidth: 800,

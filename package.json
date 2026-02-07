@@ -18,6 +18,7 @@
     "dist:all": "pnpm build && electron-builder --mac --win --linux",
     "dist:dir": "pnpm build && electron-builder --mac --dir",
     "start": "electron .",
+    "start:dist": "pnpm dist:dir && open dist/mac-arm64/Broomy.app",
     "test": "playwright test",
     "test:headed": "E2E_HEADLESS=false playwright test",
     "test:unit": "vitest run",
@@ -25,6 +26,8 @@
     "test:unit:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
+    "website": "pnpm --filter broomy-website dev",
+    "release": "gh release create v$npm_package_version dist/*.dmg dist/*.zip dist/*.exe dist/*.AppImage dist/*.deb --title \"Broomy v$npm_package_version\" --generate-notes",
     "postinstall": "electron-builder install-app-deps && node scripts/postinstall.cjs"
   },
   "dependencies": {

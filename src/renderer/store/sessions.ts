@@ -75,6 +75,8 @@ export interface Session {
   // Direct push to main tracking (persisted)
   pushedToMainAt?: number  // Timestamp when branch was pushed to main
   pushedToMainCommit?: string  // The HEAD commit when pushed (to detect new changes)
+  // Track whether this session has ever had commits ahead of remote (persisted)
+  hasHadCommits?: boolean
   // Branch status (runtime, derived)
   branchStatus: BranchStatus
   // PR state tracking (persisted)
@@ -180,6 +182,7 @@ interface SessionStore {
   recordPushToMain: (sessionId: string, commitHash: string) => void
   clearPushToMain: (sessionId: string) => void
   // Branch status actions
+  markHasHadCommits: (sessionId: string) => void
   updateBranchStatus: (sessionId: string, status: BranchStatus) => void
   updatePrState: (sessionId: string, prState: PrState, prNumber?: number, prUrl?: string) => void
   // Archive actions
@@ -267,6 +270,8 @@ const debouncedSave = async (
         // Push to main tracking
         pushedToMainAt: s.pushedToMainAt,
         pushedToMainCommit: s.pushedToMainCommit,
+        // Commit tracking
+        hasHadCommits: s.hasHadCommits || undefined,
         // PR state tracking
         lastKnownPrState: s.lastKnownPrState,
         lastKnownPrNumber: s.lastKnownPrNumber,
@@ -346,6 +351,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           // Push to main tracking
           pushedToMainAt: sessionData.pushedToMainAt,
           pushedToMainCommit: sessionData.pushedToMainCommit,
+          // Commit tracking
+          hasHadCommits: sessionData.hasHadCommits,
           // Branch status
           branchStatus: 'in-progress',
           lastKnownPrState: sessionData.lastKnownPrState,
@@ -836,6 +843,17 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       s.id === sessionId
         ? { ...s, pushedToMainAt: undefined, pushedToMainCommit: undefined }
         : s
+    )
+    set({ sessions: updatedSessions })
+    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
+  },
+
+  markHasHadCommits: (sessionId: string) => {
+    const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
+    const session = sessions.find((s) => s.id === sessionId)
+    if (!session || session.hasHadCommits) return // Already set
+    const updatedSessions = sessions.map((s) =>
+      s.id === sessionId ? { ...s, hasHadCommits: true } : s
     )
     set({ sessions: updatedSessions })
     debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)

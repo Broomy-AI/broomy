@@ -4,6 +4,8 @@
 
 Broomy is positioned as a **professional-grade desktop tool** — the kind of app a senior engineer would adopt as their daily driver for managing AI coding workflows. The website should feel like the landing pages of tools developers already trust: **Linear**, **Warp**, **Raycast**, or **Zed**. Clean. Confident. No gimmicks.
 
+But it's also positioned as being fun and friendly, with an icon and name themed aronud the magical brooms from Fantasia.
+
 The open source angle is not a footnote — it's a core trust signal. The site should make it easy to verify the project is real: link to the repo, show the architecture, surface contribution paths. Developers are skeptical of polished marketing for tools that don't ship. The website earns trust by showing the product, not by describing it.
 
 ## Site Structure

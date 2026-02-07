@@ -10,7 +10,8 @@ export interface BranchStatusInput {
   isOnMainBranch: boolean
   // Git-native merge detection
   isMergedToMain: boolean
-  // Persisted PR state
+  // Persisted session state
+  hasHadCommits: boolean
   lastKnownPrState: PrState | undefined
 }
 
@@ -21,6 +22,7 @@ export function computeBranchStatus(input: BranchStatusInput): BranchStatus {
     hasTrackingBranch,
     isOnMainBranch,
     isMergedToMain,
+    hasHadCommits,
     lastKnownPrState,
   } = input
 
@@ -35,9 +37,11 @@ export function computeBranchStatus(input: BranchStatusInput): BranchStatus {
   }
 
   // 3. Git-native merge check (works for UI push, terminal push, and GitHub PR merge)
-  // Require a tracking branch to avoid false positives: a fresh branch with no commits
-  // also has 0 commits ahead of main, which the git check interprets as "merged".
-  if (isMergedToMain && hasTrackingBranch) {
+  // Require both hasHadCommits and hasTrackingBranch to avoid false positives:
+  // a fresh branch with no commits also has 0 commits ahead of main, which the git
+  // check interprets as "merged". The app pushes branches upstream on creation,
+  // so hasTrackingBranch alone is insufficient.
+  if (isMergedToMain && hasHadCommits && hasTrackingBranch) {
     return 'merged'
   }
 
