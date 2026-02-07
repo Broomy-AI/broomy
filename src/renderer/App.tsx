@@ -58,6 +58,8 @@ function AppContent() {
     clearPushToMain,
     updateBranchStatus,
     updatePrState,
+    archiveSession,
+    unarchiveSession,
   } = useSessionStore()
 
   const { agents, loadAgents } = useAgentStore()
@@ -493,6 +495,8 @@ function AppContent() {
         onNewSession={handleNewSession}
         onDeleteSession={removeSession}
         onRefreshPrStatus={refreshPrStatus}
+        onArchiveSession={archiveSession}
+        onUnarchiveSession={unarchiveSession}
       />
     ),
     [PANEL_IDS.AGENT_TERMINAL]: agentTerminalPanel,

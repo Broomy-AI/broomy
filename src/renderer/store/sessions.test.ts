@@ -71,6 +71,7 @@ describe('useSessionStore', () => {
         activeTabId: 'tab-1',
       },
       branchStatus: 'in-progress' as const,
+      isArchived: false,
     }
     return session
   }
@@ -838,6 +839,67 @@ describe('useSessionStore', () => {
       expect(savedSession.prUrl).toBe('https://github.com/pr/42')
       expect(savedSession.prBaseBranch).toBe('main')
       expect(savedSession.panelVisibility[PANEL_IDS.REVIEW]).toBe(true)
+    })
+  })
+
+  describe('archive', () => {
+    it('archiveSession sets isArchived to true', () => {
+      const s1 = createTestSession({ id: 's1' })
+      useSessionStore.setState({ sessions: [s1], activeSessionId: 's1', isLoading: false })
+
+      useSessionStore.getState().archiveSession('s1')
+      expect(useSessionStore.getState().sessions[0].isArchived).toBe(true)
+    })
+
+    it('archiveSession switches active session to next non-archived', () => {
+      const s1 = createTestSession({ id: 's1' })
+      const s2 = createTestSession({ id: 's2' })
+      useSessionStore.setState({ sessions: [s1, s2], activeSessionId: 's1', isLoading: false })
+
+      useSessionStore.getState().archiveSession('s1')
+      expect(useSessionStore.getState().activeSessionId).toBe('s2')
+    })
+
+    it('archiveSession sets null active when all archived', () => {
+      const s1 = createTestSession({ id: 's1' })
+      useSessionStore.setState({ sessions: [s1], activeSessionId: 's1', isLoading: false })
+
+      useSessionStore.getState().archiveSession('s1')
+      expect(useSessionStore.getState().activeSessionId).toBeNull()
+    })
+
+    it('archiveSession does not change active if archiving non-active', () => {
+      const s1 = createTestSession({ id: 's1' })
+      const s2 = createTestSession({ id: 's2' })
+      useSessionStore.setState({ sessions: [s1, s2], activeSessionId: 's1', isLoading: false })
+
+      useSessionStore.getState().archiveSession('s2')
+      expect(useSessionStore.getState().activeSessionId).toBe('s1')
+    })
+
+    it('unarchiveSession sets isArchived to false', () => {
+      const s1 = { ...createTestSession({ id: 's1' }), isArchived: true }
+      useSessionStore.setState({ sessions: [s1], isLoading: false })
+
+      useSessionStore.getState().unarchiveSession('s1')
+      expect(useSessionStore.getState().sessions[0].isArchived).toBe(false)
+    })
+
+    it('loadSessions restores isArchived from config', async () => {
+      vi.mocked(window.config.load).mockResolvedValue({
+        agents: [],
+        sessions: [
+          { id: 's1', name: 'S', directory: '/d', isArchived: true },
+          { id: 's2', name: 'S2', directory: '/d2' },
+        ],
+      })
+
+      await useSessionStore.getState().loadSessions()
+      const state = useSessionStore.getState()
+      expect(state.sessions[0].isArchived).toBe(true)
+      expect(state.sessions[1].isArchived).toBe(false)
+      // Active session should prefer non-archived
+      expect(state.activeSessionId).toBe('s2')
     })
   })
 

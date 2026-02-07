@@ -80,6 +80,8 @@ export interface Session {
   lastKnownPrState?: PrState
   lastKnownPrNumber?: number
   lastKnownPrUrl?: string
+  // Archive state (persisted)
+  isArchived: boolean
 }
 
 // Default layout sizes
@@ -179,6 +181,9 @@ interface SessionStore {
   // Branch status actions
   updateBranchStatus: (sessionId: string, status: BranchStatus) => void
   updatePrState: (sessionId: string, prState: PrState, prNumber?: number, prUrl?: string) => void
+  // Archive actions
+  archiveSession: (sessionId: string) => void
+  unarchiveSession: (sessionId: string) => void
 }
 
 const generateId = () => `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
@@ -265,6 +270,8 @@ const debouncedSave = async (
         lastKnownPrState: s.lastKnownPrState,
         lastKnownPrNumber: s.lastKnownPrNumber,
         lastKnownPrUrl: s.lastKnownPrUrl,
+        // Archive state
+        isArchived: s.isArchived || undefined,
       })),
       // Global state
       showSidebar: globalPanelVisibility[PANEL_IDS.SIDEBAR] ?? true,
@@ -342,6 +349,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           lastKnownPrState: sessionData.lastKnownPrState,
           lastKnownPrNumber: sessionData.lastKnownPrNumber,
           lastKnownPrUrl: sessionData.lastKnownPrUrl,
+          isArchived: sessionData.isArchived ?? false,
         }
         sessions.push(session)
       }
@@ -353,7 +361,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
       set({
         sessions,
-        activeSessionId: sessions.length > 0 ? sessions[0].id : null,
+        activeSessionId: (sessions.find((s) => !s.isArchived) ?? sessions[0])?.id ?? null,
         isLoading: false,
         showSidebar: config.showSidebar ?? true,
         sidebarWidth: config.sidebarWidth ?? DEFAULT_SIDEBAR_WIDTH,
@@ -406,6 +414,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       terminalTabs: createDefaultTerminalTabs(),
       // Branch status
       branchStatus: 'in-progress',
+      // Archive state
+      isArchived: false,
     }
 
     const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
@@ -838,6 +848,30 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             lastKnownPrUrl: prUrl ?? s.lastKnownPrUrl,
           }
         : s
+    )
+    set({ sessions: updatedSessions })
+    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
+  },
+
+  archiveSession: (sessionId: string) => {
+    const { sessions, activeSessionId, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
+    const updatedSessions = sessions.map((s) =>
+      s.id === sessionId ? { ...s, isArchived: true } : s
+    )
+    // If archiving the active session, switch to the next non-archived session
+    let newActiveId = activeSessionId
+    if (activeSessionId === sessionId) {
+      const nextActive = updatedSessions.find((s) => !s.isArchived)
+      newActiveId = nextActive?.id ?? null
+    }
+    set({ sessions: updatedSessions, activeSessionId: newActiveId })
+    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
+  },
+
+  unarchiveSession: (sessionId: string) => {
+    const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
+    const updatedSessions = sessions.map((s) =>
+      s.id === sessionId ? { ...s, isArchived: false } : s
     )
     set({ sessions: updatedSessions })
     debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)

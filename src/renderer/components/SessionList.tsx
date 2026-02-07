@@ -8,6 +8,8 @@ interface SessionListProps {
   onNewSession: () => void
   onDeleteSession: (id: string) => void
   onRefreshPrStatus?: () => Promise<void>
+  onArchiveSession: (id: string) => void
+  onUnarchiveSession: (id: string) => void
 }
 
 const statusLabels: Record<SessionStatus, string> = {
@@ -79,6 +81,127 @@ function BranchStatusChip({ status }: { status: BranchStatus }) {
   )
 }
 
+function SessionCard({
+  session,
+  isActive,
+  onSelect,
+  onDelete,
+  onArchive,
+}: {
+  session: Session
+  isActive: boolean
+  onSelect: () => void
+  onDelete: (e: React.MouseEvent) => void
+  onArchive?: (e: React.MouseEvent) => void
+}) {
+  const isUnread = session.isUnread === true
+
+  return (
+    <div
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          onSelect()
+        } else if (e.key === 'ArrowDown') {
+          e.preventDefault()
+          const next = (e.currentTarget as HTMLElement).nextElementSibling as HTMLElement
+          if (next?.tabIndex >= 0) next.focus()
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault()
+          const prev = (e.currentTarget as HTMLElement).previousElementSibling as HTMLElement
+          if (prev?.tabIndex >= 0) prev.focus()
+        } else if (e.key === 'Delete' || e.key === 'Backspace') {
+          if (window.confirm(`Close session "${session.name}"?`)) {
+            onDelete(e as unknown as React.MouseEvent)
+          }
+        }
+      }}
+      className={`group relative w-full text-left p-3 rounded mb-1 transition-all cursor-pointer outline-none focus:ring-1 focus:ring-accent/50 ${
+        isActive ? 'bg-accent/15' : 'hover:bg-bg-tertiary/50'
+      }`}
+    >
+      <div className="flex items-center gap-2 mb-1">
+        <StatusIndicator status={session.status} isUnread={isUnread} />
+        <span className={`text-sm truncate flex-1 text-text-primary ${
+          isUnread ? 'font-bold' : 'font-medium'
+        }`}>
+          {session.branch}
+        </span>
+        {session.sessionType === 'review' ? (
+          <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-purple-500/20 text-purple-400 flex-shrink-0">
+            Review
+          </span>
+        ) : (
+          <BranchStatusChip status={session.branchStatus} />
+        )}
+        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity">
+          {onArchive && (
+            <button
+              onClick={onArchive}
+              className="text-text-secondary hover:text-text-primary p-1"
+              title={session.isArchived ? 'Unarchive session' : 'Archive session'}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="2" y="3" width="20" height="5" rx="1" />
+                <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+                <path d="M10 12h4" />
+              </svg>
+            </button>
+          )}
+          <button
+            onClick={onDelete}
+            className="text-text-secondary hover:text-status-error p-1"
+            title="Delete session"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M18 6L6 18" />
+              <path d="M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 text-xs text-text-secondary">
+        <span className="truncate">{session.name}</span>
+        {session.prNumber && (
+          <span className="text-purple-400 flex-shrink-0">PR #{session.prNumber}</span>
+        )}
+      </div>
+      {session.lastMessage ? (
+        <div className={`text-xs mt-1 truncate ${
+          isUnread ? 'text-text-secondary' : 'text-text-secondary/60'
+        }`}>
+          "{session.lastMessage}"
+        </div>
+      ) : (
+        <div className="text-xs text-text-secondary/60 mt-1 truncate">
+          {statusLabels[session.status]}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function SessionList({
   sessions,
   activeSessionId,
@@ -86,8 +209,14 @@ export default function SessionList({
   onNewSession,
   onDeleteSession,
   onRefreshPrStatus,
+  onArchiveSession,
+  onUnarchiveSession,
 }: SessionListProps) {
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
+
+  const activeSessions = sessions.filter((s) => !s.isArchived)
+  const archivedSessions = sessions.filter((s) => s.isArchived)
 
   const handleRefresh = async () => {
     if (!onRefreshPrStatus || isRefreshing) return
@@ -104,6 +233,23 @@ export default function SessionList({
     if (window.confirm(`Close session "${session.name}"?`)) {
       onDeleteSession(session.id)
     }
+  }
+
+  const handleArchive = (e: React.MouseEvent, session: Session) => {
+    e.stopPropagation()
+    onArchiveSession(session.id)
+  }
+
+  const handleUnarchive = (e: React.MouseEvent, session: Session) => {
+    e.stopPropagation()
+    onUnarchiveSession(session.id)
+  }
+
+  const handleSelectSession = (session: Session) => {
+    if (session.isArchived) {
+      onUnarchiveSession(session.id)
+    }
+    onSelectSession(session.id)
   }
 
   return (
@@ -143,98 +289,58 @@ export default function SessionList({
 
       {/* Session list */}
       <div className="flex-1 overflow-y-auto p-2">
-        {sessions.map((session) => {
-          const isUnread = session.isUnread === true
+        {activeSessions.map((session) => (
+          <SessionCard
+            key={session.id}
+            session={session}
+            isActive={session.id === activeSessionId}
+            onSelect={() => handleSelectSession(session)}
+            onDelete={(e) => handleDelete(e, session)}
+            onArchive={(e) => handleArchive(e, session)}
+          />
+        ))}
 
-          return (
-            <div
-              key={session.id}
-              tabIndex={0}
-              onClick={() => onSelectSession(session.id)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  onSelectSession(session.id)
-                } else if (e.key === 'ArrowDown') {
-                  e.preventDefault()
-                  const next = (e.currentTarget as HTMLElement).nextElementSibling as HTMLElement
-                  if (next?.tabIndex >= 0) next.focus()
-                } else if (e.key === 'ArrowUp') {
-                  e.preventDefault()
-                  const prev = (e.currentTarget as HTMLElement).previousElementSibling as HTMLElement
-                  if (prev?.tabIndex >= 0) prev.focus()
-                } else if (e.key === 'Delete' || e.key === 'Backspace') {
-                  if (window.confirm(`Close session "${session.name}"?`)) {
-                    onDeleteSession(session.id)
-                  }
-                }
-              }}
-              className={`group relative w-full text-left p-3 rounded mb-1 transition-all cursor-pointer outline-none focus:ring-1 focus:ring-accent/50 ${
-                session.id === activeSessionId ? 'bg-accent/15' : 'hover:bg-bg-tertiary/50'
-              }`}
-            >
-              <div className="flex items-center gap-2 mb-1">
-                {/* Status indicator */}
-                <StatusIndicator status={session.status} isUnread={isUnread} />
-                <span className={`text-sm truncate flex-1 text-text-primary ${
-                  isUnread ? 'font-bold' : 'font-medium'
-                }`}>
-                  {session.branch}
-                </span>
-                {session.sessionType === 'review' ? (
-                  <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-purple-500/20 text-purple-400 flex-shrink-0">
-                    Review
-                  </span>
-                ) : (
-                  <BranchStatusChip status={session.branchStatus} />
-                )}
-                <button
-                  onClick={(e) => handleDelete(e, session)}
-                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-text-secondary hover:text-status-error transition-opacity p-1"
-                  title="Delete session"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M18 6L6 18" />
-                    <path d="M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-text-secondary">
-                <span className="truncate">{session.name}</span>
-                {session.prNumber && (
-                  <span className="text-purple-400 flex-shrink-0">PR #{session.prNumber}</span>
-                )}
-              </div>
-              {/* Last message preview */}
-              {session.lastMessage ? (
-                <div className={`text-xs mt-1 truncate ${
-                  isUnread ? 'text-text-secondary' : 'text-text-secondary/60'
-                }`}>
-                  "{session.lastMessage}"
-                </div>
-              ) : (
-                <div className="text-xs text-text-secondary/60 mt-1 truncate">
-                  {statusLabels[session.status]}
-                </div>
-              )}
-            </div>
-          )
-        })}
-
-        {sessions.length === 0 && (
+        {activeSessions.length === 0 && archivedSessions.length === 0 && (
           <div className="text-center text-text-secondary text-sm py-8">
             No sessions yet.
             <br />
             Click "+ New Session" to start.
+          </div>
+        )}
+
+        {/* Archived section */}
+        {archivedSessions.length > 0 && (
+          <div className="mt-2">
+            <button
+              onClick={() => setShowArchived(!showArchived)}
+              className="flex items-center gap-1.5 w-full px-2 py-1.5 text-xs text-text-secondary hover:text-text-primary transition-colors"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="10"
+                height="10"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className={`transition-transform ${showArchived ? 'rotate-90' : ''}`}
+              >
+                <path d="M8 5l8 7-8 7z" />
+              </svg>
+              Archived ({archivedSessions.length})
+            </button>
+            {showArchived && (
+              <div className="mt-1">
+                {archivedSessions.map((session) => (
+                  <SessionCard
+                    key={session.id}
+                    session={session}
+                    isActive={session.id === activeSessionId}
+                    onSelect={() => handleSelectSession(session)}
+                    onDelete={(e) => handleDelete(e, session)}
+                    onArchive={(e) => handleUnarchive(e, session)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
