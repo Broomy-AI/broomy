@@ -65,6 +65,7 @@ export interface Session {
   lastMessage: string | null
   lastMessageTime: number | null
   isUnread: boolean
+  workingStartTime: number | null // When the current working period began
   // Agent PTY ID (runtime only, set by Terminal.tsx)
   agentPtyId?: string
   // Recently opened files (runtime, most recent first)
@@ -337,6 +338,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           lastMessage: null,
           lastMessageTime: null,
           isUnread: false,
+          workingStartTime: null,
           // Recent files
           recentFiles: [],
           // Terminal tabs
@@ -408,6 +410,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       lastMessage: null,
       lastMessageTime: null,
       isUnread: false,
+      workingStartTime: null,
       // Recent files
       recentFiles: [],
       // Terminal tabs
@@ -634,10 +637,20 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         changes.lastMessage = update.lastMessage
         changes.lastMessageTime = Date.now()
       }
-      // Mark as unread when transitioning from working to idle
-      // This signals "agent finished doing something" so the user knows to check results
+      // Track when working period starts
+      if (update.status === 'working' && s.status !== 'working') {
+        changes.workingStartTime = Date.now()
+      }
+      // Mark as unread when transitioning from working to idle,
+      // but only if the agent was working for at least 3 seconds.
+      // This filters out brief notifications (e.g. usage threshold alerts)
+      // that would otherwise cause false "unread" alerts.
       if (update.status === 'idle' && s.status === 'working') {
-        changes.isUnread = true
+        const workingDuration = Date.now() - (s.workingStartTime ?? Date.now())
+        if (workingDuration >= 3000) {
+          changes.isUnread = true
+        }
+        changes.workingStartTime = null
       }
       return { ...s, ...changes }
     })

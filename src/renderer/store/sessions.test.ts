@@ -65,6 +65,7 @@ describe('useSessionStore', () => {
       lastMessage: null,
       lastMessageTime: null,
       isUnread: false,
+      workingStartTime: null,
       recentFiles: [],
       terminalTabs: {
         tabs: [{ id: 'tab-1', name: 'Terminal' }],
@@ -417,12 +418,33 @@ describe('useSessionStore', () => {
       expect(session.lastMessageTime).toBeGreaterThan(0)
     })
 
-    it('marks as unread when transitioning from working to idle', () => {
-      const s1 = { ...createTestSession({ id: 's1' }), status: 'working' as const }
+    it('marks as unread when transitioning from working to idle after sufficient work', () => {
+      const s1 = createTestSession({ id: 's1' })
       useSessionStore.setState({ sessions: [s1], isLoading: false })
 
+      // Start working
+      useSessionStore.getState().updateAgentMonitor('s1', { status: 'working' })
+      expect(useSessionStore.getState().sessions[0].status).toBe('working')
+
+      // Advance time past the minimum working duration (3s)
+      vi.advanceTimersByTime(4000)
+
+      // Transition to idle - should mark as unread
       useSessionStore.getState().updateAgentMonitor('s1', { status: 'idle' })
       expect(useSessionStore.getState().sessions[0].isUnread).toBe(true)
+    })
+
+    it('does not mark as unread for brief activity (e.g. notifications)', () => {
+      const s1 = createTestSession({ id: 's1' })
+      useSessionStore.setState({ sessions: [s1], isLoading: false })
+
+      // Start working
+      useSessionStore.getState().updateAgentMonitor('s1', { status: 'working' })
+
+      // Transition to idle quickly (< 3s) - should NOT mark as unread
+      vi.advanceTimersByTime(1500)
+      useSessionStore.getState().updateAgentMonitor('s1', { status: 'idle' })
+      expect(useSessionStore.getState().sessions[0].isUnread).toBe(false)
     })
 
     it('does not mark as unread when already idle', () => {
