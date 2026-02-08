@@ -20,6 +20,9 @@ const isE2ETest = process.env.E2E_TEST === 'true'
 // Check if we should hide the window (headless mode)
 const isHeadless = process.env.E2E_HEADLESS !== 'false'
 
+// Check if we're in screenshot mode (richer mock data for marketing screenshots)
+const isScreenshotMode = process.env.SCREENSHOT_MODE === 'true'
+
 // Mock shell for E2E tests - predictable, non-interactive output
 const E2E_MOCK_SHELL = process.env.E2E_MOCK_SHELL
 
@@ -145,7 +148,16 @@ ipcMain.handle('pty:create', (_event, options: { id: string; cwd: string; comman
 
       if (options.command) {
         // This is an agent terminal - run the fake claude script
-        const fakeClaude = join(__dirname, '../../scripts/fake-claude.sh')
+        let fakeClaude: string
+        if (isScreenshotMode && options.sessionId === '1') {
+          // First session gets the long "working" script for screenshots
+          fakeClaude = join(__dirname, '../../scripts/fake-claude-screenshot.sh')
+        } else if (isScreenshotMode) {
+          // Other sessions get the quick "idle" script for screenshots
+          fakeClaude = join(__dirname, '../../scripts/fake-claude-screenshot-idle.sh')
+        } else {
+          fakeClaude = join(__dirname, '../../scripts/fake-claude.sh')
+        }
         initialCommand = `bash "${fakeClaude}"`
       } else {
         // Regular user terminal - just echo ready marker
@@ -330,7 +342,16 @@ function migrateToProfiles(): void {
 migrateToProfiles()
 
 // Demo sessions for E2E tests (each needs a unique directory for branch tracking)
-const E2E_DEMO_SESSIONS = [
+const E2E_DEMO_SESSIONS = isScreenshotMode ? [
+  { id: '1', name: 'backend-api', directory: normalizePath(join(tmpdir(), 'broomy-e2e-backend-api')), agentId: 'claude' },
+  { id: '2', name: 'web-dashboard', directory: normalizePath(join(tmpdir(), 'broomy-e2e-web-dashboard')), agentId: 'codex' },
+  { id: '3', name: 'mobile-app', directory: normalizePath(join(tmpdir(), 'broomy-e2e-mobile-app')), agentId: 'gemini' },
+  { id: '4', name: 'payments-svc', directory: normalizePath(join(tmpdir(), 'broomy-e2e-payments-svc')), agentId: 'claude' },
+  { id: '5', name: 'search-engine', directory: normalizePath(join(tmpdir(), 'broomy-e2e-search-engine')), agentId: 'claude' },
+  { id: '6', name: 'infra-config', directory: normalizePath(join(tmpdir(), 'broomy-e2e-infra-config')), agentId: 'codex' },
+  { id: '7', name: 'docs-site', directory: normalizePath(join(tmpdir(), 'broomy-e2e-docs-site')), agentId: null },
+  { id: '8', name: 'data-pipeline', directory: normalizePath(join(tmpdir(), 'broomy-e2e-data-pipeline')), agentId: 'claude' },
+] : [
   { id: '1', name: 'broomy', directory: normalizePath(join(tmpdir(), 'broomy-e2e-broomy')), agentId: 'claude' },
   { id: '2', name: 'backend-api', directory: normalizePath(join(tmpdir(), 'broomy-e2e-backend-api')), agentId: 'aider' },
   { id: '3', name: 'docs-site', directory: normalizePath(join(tmpdir(), 'broomy-e2e-docs-site')), agentId: null },
@@ -476,7 +497,16 @@ ipcMain.handle('config:save', async (_event, config: { profileId?: string; agent
 })
 
 // Mock branch data for E2E tests (keyed by directory)
-const E2E_MOCK_BRANCHES: Record<string, string> = {
+const E2E_MOCK_BRANCHES: Record<string, string> = isScreenshotMode ? {
+  [normalizePath(join(tmpdir(), 'broomy-e2e-backend-api'))]: 'feature/jwt-auth',
+  [normalizePath(join(tmpdir(), 'broomy-e2e-web-dashboard'))]: 'fix/dashboard-perf',
+  [normalizePath(join(tmpdir(), 'broomy-e2e-mobile-app'))]: 'feature/push-notifs',
+  [normalizePath(join(tmpdir(), 'broomy-e2e-payments-svc'))]: 'feature/stripe-webhooks',
+  [normalizePath(join(tmpdir(), 'broomy-e2e-search-engine'))]: 'feature/vector-search',
+  [normalizePath(join(tmpdir(), 'broomy-e2e-infra-config'))]: 'fix/k8s-scaling',
+  [normalizePath(join(tmpdir(), 'broomy-e2e-docs-site'))]: 'main',
+  [normalizePath(join(tmpdir(), 'broomy-e2e-data-pipeline'))]: 'feature/batch-processing',
+} : {
   [normalizePath(join(tmpdir(), 'broomy-e2e-broomy'))]: 'main',
   [normalizePath(join(tmpdir(), 'broomy-e2e-backend-api'))]: 'feature/auth',
   [normalizePath(join(tmpdir(), 'broomy-e2e-docs-site'))]: 'main',
@@ -515,6 +545,23 @@ ipcMain.handle('git:isGitRepo', async (_event, dirPath: string) => {
 ipcMain.handle('git:status', async (_event, repoPath: string) => {
   // In E2E test mode, return mock status
   if (isE2ETest) {
+    if (isScreenshotMode) {
+      return {
+        files: [
+          { path: 'src/middleware/auth.ts', status: 'modified', staged: true, indexStatus: 'M', workingDirStatus: ' ' },
+          { path: 'src/services/token.ts', status: 'added', staged: true, indexStatus: 'A', workingDirStatus: ' ' },
+          { path: 'src/services/session.ts', status: 'added', staged: true, indexStatus: 'A', workingDirStatus: ' ' },
+          { path: 'src/routes/auth.ts', status: 'modified', staged: false, indexStatus: ' ', workingDirStatus: 'M' },
+          { path: 'src/types/auth.d.ts', status: 'added', staged: false, indexStatus: '?', workingDirStatus: '?' },
+          { path: 'tests/auth.test.ts', status: 'modified', staged: false, indexStatus: ' ', workingDirStatus: 'M' },
+          { path: 'package.json', status: 'modified', staged: true, indexStatus: 'M', workingDirStatus: ' ' },
+        ],
+        ahead: 3,
+        behind: 0,
+        tracking: 'origin/feature/jwt-auth',
+        current: E2E_MOCK_BRANCHES[repoPath] || 'main',
+      }
+    }
     return {
       files: [
         { path: 'src/index.ts', status: 'modified', staged: false, indexStatus: ' ', workingDirStatus: 'M' },
@@ -656,6 +703,58 @@ ipcMain.handle('git:pull', async (_event, repoPath: string) => {
 ipcMain.handle('git:diff', async (_event, repoPath: string, filePath?: string) => {
   // In E2E test mode, return mock diff
   if (isE2ETest) {
+    if (isScreenshotMode) {
+      // Build diff string without template literals to avoid Vite bundler issues
+      const IM = 'im' + 'port' // avoid bundler parsing
+      const lines = []
+      lines.push('diff --git a/src/middleware/auth.ts b/src/middleware/auth.ts')
+      lines.push('--- a/src/middleware/auth.ts')
+      lines.push('+++ b/src/middleware/auth.ts')
+      lines.push('@@ -1,15 +1,42 @@')
+      lines.push(' ' + IM + " { Request, Response, NextFunction } from 'express'")
+      lines.push(' ' + IM + " jwt from 'jsonwebtoken'")
+      lines.push('-// TODO: Add proper token validation')
+      lines.push('+' + IM + " { TokenService } from '../services/token'")
+      lines.push('+' + IM + " { SessionStore } from '../services/session'")
+      lines.push('+')
+      lines.push('+const tokenService = new TokenService({')
+      lines.push("+  accessTokenTTL: '15m',")
+      lines.push("+  refreshTokenTTL: '7d',")
+      lines.push('+  rotateRefreshTokens: true,')
+      lines.push('+})')
+      lines.push('')
+      lines.push('-export function authenticate(req: Request, res: Response, next: NextFunction) {')
+      lines.push("-  const token = req.headers.authorization?.split(' ')[1]")
+      lines.push("-  if (!token) return res.status(401).json({ error: 'No token' })")
+      lines.push('-  try {')
+      lines.push('-    const decoded = jwt.verify(token, process.env.JWT_SECRET!)')
+      lines.push('-    req.user = decoded')
+      lines.push('-    next()')
+      lines.push('-  } catch {')
+      lines.push("-    return res.status(401).json({ error: 'Invalid token' })")
+      lines.push('+export async function authenticate(req: Request, res: Response, next: NextFunction) {')
+      lines.push('+  try {')
+      lines.push("+    const accessToken = req.headers.authorization?.split(' ')[1]")
+      lines.push("+    if (!accessToken) return res.status(401).json({ error: 'Missing token' })")
+      lines.push('+')
+      lines.push('+    const payload = await tokenService.verifyAccessToken(accessToken)')
+      lines.push('+    const session = await SessionStore.get(payload.sessionId)')
+      lines.push('+    if (!session || session.revoked) {')
+      lines.push("+      return res.status(401).json({ error: 'Session revoked' })")
+      lines.push('+    }')
+      lines.push('+')
+      lines.push('+    req.user = payload.user')
+      lines.push('+    req.sessionId = payload.sessionId')
+      lines.push('+    next()')
+      lines.push('+  } catch (err) {')
+      lines.push('+    if (err instanceof jwt.TokenExpiredError) {')
+      lines.push("+      return res.status(401).json({ error: 'Token expired', code: 'TOKEN_EXPIRED' })")
+      lines.push('+    }')
+      lines.push("+    return res.status(401).json({ error: 'Invalid token' })")
+      lines.push('   }')
+      lines.push(' }')
+      return lines.join('\n')
+    }
     return `diff --git a/src/index.ts b/src/index.ts
 --- a/src/index.ts
 +++ b/src/index.ts
@@ -680,6 +779,26 @@ ipcMain.handle('git:diff', async (_event, repoPath: string, filePath?: string) =
 ipcMain.handle('git:show', async (_event, repoPath: string, filePath: string, ref = 'HEAD') => {
   // In E2E test mode, return mock original content
   if (isE2ETest) {
+    if (isScreenshotMode) {
+      const IM = 'im' + 'port'
+      const lines = []
+      lines.push(IM + " { Request, Response, NextFunction } from 'express'")
+      lines.push(IM + " jwt from 'jsonwebtoken'")
+      lines.push('// TODO: Add proper token validation')
+      lines.push('')
+      lines.push('export function authenticate(req: Request, res: Response, next: NextFunction) {')
+      lines.push("  const token = req.headers.authorization?.split(' ')[1]")
+      lines.push("  if (!token) return res.status(401).json({ error: 'No token' })")
+      lines.push('  try {')
+      lines.push('    const decoded = jwt.verify(token, process.env.JWT_SECRET!)')
+      lines.push('    req.user = decoded')
+      lines.push('    next()')
+      lines.push('  } catch {')
+      lines.push("    return res.status(401).json({ error: 'Invalid token' })")
+      lines.push('  }')
+      lines.push('}')
+      return lines.join('\n')
+    }
     return `export function main() {
   console.log('Hello')
 }`
@@ -701,6 +820,54 @@ ipcMain.handle('git:show', async (_event, repoPath: string, filePath: string, re
 ipcMain.handle('fs:readDir', async (_event, dirPath: string) => {
   // In E2E test mode, return mock directory listing
   if (isE2ETest) {
+    if (isScreenshotMode) {
+      // Check if this is a subdirectory request
+      if (dirPath.endsWith('/src')) {
+        return [
+          { name: 'components', path: join(dirPath, 'components'), isDirectory: true },
+          { name: 'middleware', path: join(dirPath, 'middleware'), isDirectory: true },
+          { name: 'routes', path: join(dirPath, 'routes'), isDirectory: true },
+          { name: 'services', path: join(dirPath, 'services'), isDirectory: true },
+          { name: 'types', path: join(dirPath, 'types'), isDirectory: true },
+          { name: 'utils', path: join(dirPath, 'utils'), isDirectory: true },
+          { name: 'app.ts', path: join(dirPath, 'app.ts'), isDirectory: false },
+          { name: 'config.ts', path: join(dirPath, 'config.ts'), isDirectory: false },
+          { name: 'index.ts', path: join(dirPath, 'index.ts'), isDirectory: false },
+        ]
+      }
+      if (dirPath.endsWith('/middleware')) {
+        return [
+          { name: 'auth.ts', path: join(dirPath, 'auth.ts'), isDirectory: false },
+          { name: 'cors.ts', path: join(dirPath, 'cors.ts'), isDirectory: false },
+          { name: 'rateLimit.ts', path: join(dirPath, 'rateLimit.ts'), isDirectory: false },
+        ]
+      }
+      if (dirPath.endsWith('/services')) {
+        return [
+          { name: 'session.ts', path: join(dirPath, 'session.ts'), isDirectory: false },
+          { name: 'token.ts', path: join(dirPath, 'token.ts'), isDirectory: false },
+          { name: 'user.ts', path: join(dirPath, 'user.ts'), isDirectory: false },
+        ]
+      }
+      if (dirPath.endsWith('/routes')) {
+        return [
+          { name: 'auth.ts', path: join(dirPath, 'auth.ts'), isDirectory: false },
+          { name: 'users.ts', path: join(dirPath, 'users.ts'), isDirectory: false },
+          { name: 'health.ts', path: join(dirPath, 'health.ts'), isDirectory: false },
+        ]
+      }
+      // Root directory
+      return [
+        { name: 'src', path: join(dirPath, 'src'), isDirectory: true },
+        { name: 'tests', path: join(dirPath, 'tests'), isDirectory: true },
+        { name: '.env.example', path: join(dirPath, '.env.example'), isDirectory: false },
+        { name: 'docker-compose.yml', path: join(dirPath, 'docker-compose.yml'), isDirectory: false },
+        { name: 'Dockerfile', path: join(dirPath, 'Dockerfile'), isDirectory: false },
+        { name: 'package.json', path: join(dirPath, 'package.json'), isDirectory: false },
+        { name: 'README.md', path: join(dirPath, 'README.md'), isDirectory: false },
+        { name: 'tsconfig.json', path: join(dirPath, 'tsconfig.json'), isDirectory: false },
+      ]
+    }
     return [
       { name: 'src', path: join(dirPath, 'src'), isDirectory: true },
       { name: 'package.json', path: join(dirPath, 'package.json'), isDirectory: false },
@@ -731,6 +898,43 @@ ipcMain.handle('fs:readDir', async (_event, dirPath: string) => {
 ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
   // In E2E test mode, return mock file content
   if (isE2ETest) {
+    if (isScreenshotMode && filePath.includes('auth.ts')) {
+      const IM = 'im' + 'port'
+      const lines = []
+      lines.push(IM + " { Request, Response, NextFunction } from 'express'")
+      lines.push(IM + " jwt from 'jsonwebtoken'")
+      lines.push(IM + " { TokenService } from '../services/token'")
+      lines.push(IM + " { SessionStore } from '../services/session'")
+      lines.push('')
+      lines.push('const tokenService = new TokenService({')
+      lines.push("  accessTokenTTL: '15m',")
+      lines.push("  refreshTokenTTL: '7d',")
+      lines.push('  rotateRefreshTokens: true,')
+      lines.push('})')
+      lines.push('')
+      lines.push('export async function authenticate(req: Request, res: Response, next: NextFunction) {')
+      lines.push('  try {')
+      lines.push("    const accessToken = req.headers.authorization?.split(' ')[1]")
+      lines.push("    if (!accessToken) return res.status(401).json({ error: 'Missing token' })")
+      lines.push('')
+      lines.push('    const payload = await tokenService.verifyAccessToken(accessToken)')
+      lines.push('    const session = await SessionStore.get(payload.sessionId)')
+      lines.push('    if (!session || session.revoked) {')
+      lines.push("      return res.status(401).json({ error: 'Session revoked' })")
+      lines.push('    }')
+      lines.push('')
+      lines.push('    req.user = payload.user')
+      lines.push('    req.sessionId = payload.sessionId')
+      lines.push('    next()')
+      lines.push('  } catch (err) {')
+      lines.push('    if (err instanceof jwt.TokenExpiredError) {')
+      lines.push("      return res.status(401).json({ error: 'Token expired', code: 'TOKEN_EXPIRED' })")
+      lines.push('    }')
+      lines.push("    return res.status(401).json({ error: 'Invalid token' })")
+      lines.push('  }')
+      lines.push('}')
+      return lines.join('\n')
+    }
     return '// Mock file content for E2E tests\nexport const test = true;\n'
   }
 
@@ -1294,6 +1498,20 @@ ipcMain.handle('git:setConfig', async (_event, repoPath: string, key: string, va
 
 ipcMain.handle('git:branchChanges', async (_event, repoPath: string, baseBranch?: string) => {
   if (isE2ETest) {
+    if (isScreenshotMode) {
+      return {
+        files: [
+          { path: 'src/middleware/auth.ts', status: 'modified' },
+          { path: 'src/services/token.ts', status: 'added' },
+          { path: 'src/services/session.ts', status: 'added' },
+          { path: 'src/routes/auth.ts', status: 'modified' },
+          { path: 'src/types/auth.d.ts', status: 'added' },
+          { path: 'tests/auth.test.ts', status: 'modified' },
+          { path: 'package.json', status: 'modified' },
+        ],
+        baseBranch: 'main',
+      }
+    }
     return {
       files: [
         { path: 'src/index.ts', status: 'modified' },
@@ -1358,6 +1576,17 @@ ipcMain.handle('git:branchChanges', async (_event, repoPath: string, baseBranch?
 
 ipcMain.handle('git:branchCommits', async (_event, repoPath: string, baseBranch?: string) => {
   if (isE2ETest) {
+    if (isScreenshotMode) {
+      return {
+        commits: [
+          { hash: 'a1b2c3d4e5f60', shortHash: 'a1b2c3d', message: 'Add JWT token refresh with rotation', author: 'Claude', date: '2025-01-15T14:30:00Z' },
+          { hash: 'b2c3d4e5f6a70', shortHash: 'b2c3d4e', message: 'Implement session store with Redis backend', author: 'Claude', date: '2025-01-15T14:15:00Z' },
+          { hash: 'c3d4e5f6a7b80', shortHash: 'c3d4e5f', message: 'Add auth middleware with token validation', author: 'Claude', date: '2025-01-15T14:00:00Z' },
+          { hash: 'd4e5f6a7b8c90', shortHash: 'd4e5f6a', message: 'Set up authentication routes and types', author: 'Claude', date: '2025-01-15T13:45:00Z' },
+        ],
+        baseBranch: 'main',
+      }
+    }
     return {
       commits: [
         { hash: 'abc1234567890', shortHash: 'abc1234', message: 'Add new feature', author: 'Test User', date: '2025-01-15T10:00:00Z' },

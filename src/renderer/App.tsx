@@ -643,6 +643,11 @@ function AppContent() {
 function App() {
   const { toolbarPanels, setToolbarPanels } = useSessionStore()
 
+  // Expose store for Playwright screenshot manipulation
+  useEffect(() => {
+    (window as Record<string, unknown>).__sessionStore = useSessionStore
+  }, [])
+
   return (
     <PanelProvider
       toolbarPanels={toolbarPanels}
