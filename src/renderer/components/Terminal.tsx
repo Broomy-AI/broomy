@@ -39,8 +39,7 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
   const cwdRef = useRef(cwd)
   cwdRef.current = cwd
   const [showScrollButton, setShowScrollButton] = useState(false)
-  const wasAtBottomRef = useRef(true)
-  const userScrollTimestampRef = useRef(0)
+  const isFollowingRef = useRef(true)
   const { addError } = useErrorStore()
   const addErrorRef = useRef(addError)
   addErrorRef.current = addError
@@ -89,6 +88,7 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
 
   const handleScrollToBottom = useCallback(() => {
     terminalRef.current?.scrollToBottom()
+    isFollowingRef.current = true
     setShowScrollButton(false)
   }, [])
 
@@ -157,41 +157,58 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
 
     const isAtBottom = () => {
       const buffer = terminal.buffer.active
-      return buffer.viewportY >= buffer.baseY - 3
+      return buffer.viewportY >= buffer.baseY - 1
     }
 
-    // Detect spurious scroll jumps: if we were at bottom and suddenly aren't,
-    // and the user didn't scroll via mouse/touchpad recently, snap back.
-    terminal.onRender(() => {
-      const atBottom = isAtBottom()
-      const buffer = terminal.buffer.active
-      const userScrolledRecently = Date.now() - userScrollTimestampRef.current < 500
-      const jumpDistance = buffer.baseY - buffer.viewportY
+    // Track whether we just wrote data — helps diagnose desyncs
+    let lastWriteTime = 0
 
-      if (wasAtBottomRef.current && !atBottom && !userScrolledRecently && jumpDistance > 5) {
-        // Spurious jump detected — reset to bottom
+    // Update the scroll button visibility on render frames.
+    // Also log diagnostic info when a desync is detected while following.
+    terminal.onRender(() => {
+      const buffer = terminal.buffer.active
+      const atBottom = isAtBottom()
+      const wasFollowing = isFollowingRef.current
+
+      // Diagnostic: if we're supposed to be following but we're not at the bottom,
+      // something caused a desync. Log it so we can identify the root cause.
+      if (wasFollowing && !atBottom && buffer.baseY > 0) {
+        const gap = buffer.baseY - buffer.viewportY
+        const timeSinceWrite = Date.now() - lastWriteTime
+        console.warn('[Terminal scroll desync]', {
+          viewportY: buffer.viewportY,
+          baseY: buffer.baseY,
+          gap,
+          timeSinceWrite,
+          rows: terminal.rows,
+          cols: terminal.cols,
+        })
+        // Auto-correct: if we're following, snap back to bottom
         terminal.scrollToBottom()
-        wasAtBottomRef.current = true
-        setShowScrollButton(false)
-        return
       }
 
-      wasAtBottomRef.current = atBottom
-      setShowScrollButton(!atBottom && buffer.baseY > 0)
+      setShowScrollButton(!atBottom && terminal.buffer.active.baseY > 0)
     })
 
-    // Track user-initiated scrolls so we don't fight intentional scroll-up
-    const handleUserScroll = () => {
-      userScrollTimestampRef.current = Date.now()
+    // Track user-initiated scrolls to update following mode.
+    // After a user scroll, check if they ended up at the bottom:
+    //   - At bottom → re-engage following (auto-scroll on new output)
+    //   - Not at bottom → disengage following (user is reading scrollback)
+    const updateFollowingFromScroll = () => {
+      requestAnimationFrame(() => {
+        const atBottom = isAtBottom()
+        isFollowingRef.current = atBottom
+        setShowScrollButton(!atBottom && terminal.buffer.active.baseY > 0)
+      })
     }
     const handleKeyScroll = (e: KeyboardEvent) => {
       if (e.key === 'PageUp' || e.key === 'PageDown' ||
           (e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown'))) {
-        userScrollTimestampRef.current = Date.now()
+        updateFollowingFromScroll()
       }
     }
-    containerRef.current.addEventListener('wheel', handleUserScroll, { passive: true })
-    containerRef.current.addEventListener('touchmove', handleUserScroll, { passive: true })
+    containerRef.current.addEventListener('wheel', updateFollowingFromScroll, { passive: true })
+    containerRef.current.addEventListener('touchmove', updateFollowingFromScroll, { passive: true })
     containerRef.current.addEventListener('keydown', handleKeyScroll)
     const scrollContainer = containerRef.current
 
@@ -265,7 +282,14 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
         })
 
         const removeDataListener = window.pty.onData(id, (data) => {
-          terminal.write(data)
+          terminal.write(data, () => {
+            lastWriteTime = Date.now()
+            // After the write is parsed and applied to the buffer,
+            // scroll to bottom if we're in following mode.
+            if (isFollowingRef.current) {
+              terminal.scrollToBottom()
+            }
+          })
 
           // Plan file detection for agent terminals
           if (isAgent && sessionIdRef.current) {
@@ -338,7 +362,9 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
         return
       }
       try { fitAddon.fit() } catch { /* ignore */ }
-      terminal.scrollToBottom()
+      if (isFollowingRef.current) {
+        terminal.scrollToBottom()
+      }
       if (ptyResizeTimeout) clearTimeout(ptyResizeTimeout)
       ptyResizeTimeout = setTimeout(() => {
         if (ptyIdRef.current && terminal.cols > 0 && terminal.rows > 0) {
@@ -350,8 +376,8 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
     resizeObserver.observe(containerEl)
 
     return () => {
-      scrollContainer.removeEventListener('wheel', handleUserScroll)
-      scrollContainer.removeEventListener('touchmove', handleUserScroll)
+      scrollContainer.removeEventListener('wheel', updateFollowingFromScroll)
+      scrollContainer.removeEventListener('touchmove', updateFollowingFromScroll)
       scrollContainer.removeEventListener('keydown', handleKeyScroll)
       resizeObserver.disconnect()
       if (ptyResizeTimeout) clearTimeout(ptyResizeTimeout)
