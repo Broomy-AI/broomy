@@ -28,11 +28,11 @@ const features = [
   },
   {
     eyebrow: 'REVIEW',
-    title: 'Review before you commit',
+    title: 'Stay on top of what actually changed',
     description:
-      'Get a structured AI-generated review of your PR — change patterns, potential issues, and design decisions at a glance. Click through to diffs, add comments, and push them as a draft review to GitHub.',
+      'AI agents can generate code fast — but speed is worthless if the codebase turns into a mess. Broomy gives you an AI-assisted review that explains what changed and why, highlights potential issues, and lets you click through to diffs. Works just as well for reviewing PRs from teammates. The point is keeping humans in the loop, not rubber-stamping AI output.',
     screenshot: '/screenshots/review.png',
-    alt: 'Review panel showing AI-generated PR analysis with change patterns and potential issues',
+    alt: 'Review panel showing AI-assisted code review with change explanations and potential issues',
     direction: 'left' as const,
   },
   {
