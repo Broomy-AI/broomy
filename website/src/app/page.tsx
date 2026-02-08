@@ -23,8 +23,17 @@ const features = [
     description:
       'Broomy watches terminal output and understands agent state. Working, idle, waiting for input — you see it at a glance. When an agent finishes a task, you get a notification so nothing slips through.',
     screenshot: '/screenshots/status.png',
-    alt: 'Session showing Working status with spinner and tool output in the terminal',
+    alt: 'Session card showing idle status with PR OPEN badge and last message',
     direction: 'right' as const,
+  },
+  {
+    eyebrow: 'REVIEW',
+    title: 'Review before you commit',
+    description:
+      'Get a structured AI-generated review of your PR — change patterns, potential issues, and design decisions at a glance. Click through to diffs, add comments, and push them as a draft review to GitHub.',
+    screenshot: '/screenshots/review.png',
+    alt: 'Review panel showing AI-generated PR analysis with change patterns and potential issues',
+    direction: 'left' as const,
   },
   {
     eyebrow: 'FILES',
@@ -32,26 +41,8 @@ const features = [
     description:
       'Browse your repo, check git status, stage changes, and commit — without switching windows. See exactly what your agents changed, with file status badges showing modifications, additions, and deletions.',
     screenshot: '/screenshots/explorer.png',
-    alt: 'Explorer panel with file tree and source control view',
-    direction: 'left' as const,
-  },
-  {
-    eyebrow: 'REVIEW',
-    title: 'Review before you commit',
-    description:
-      'See side-by-side diffs of every change your agents made. Full syntax highlighting powered by Monaco Editor — the same engine behind VS Code. Catch issues before they hit your branch.',
-    screenshot: '/screenshots/diff.png',
-    alt: 'Diff view showing side-by-side code changes',
+    alt: 'Explorer panel with source control view showing changed files',
     direction: 'right' as const,
-  },
-  {
-    eyebrow: 'AGENTS',
-    title: 'Your agents, your way',
-    description:
-      'Configure Claude Code, Aider, or any CLI-based agent. Each session gets its own terminal, working directory, and branch. Set up different agents for different repos with custom environment variables.',
-    screenshot: '/screenshots/settings.png',
-    alt: 'Settings panel with agent configurations',
-    direction: 'left' as const,
   },
 ]
 

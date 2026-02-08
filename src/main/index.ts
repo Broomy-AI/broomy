@@ -938,6 +938,70 @@ ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
       lines.push('}')
       return lines.join('\n')
     }
+    // Screenshot mode: fake review data for ReviewPanel
+    if (isScreenshotMode && filePath.match(/\/tmp\/broomy-review-[^/]+\/review\.json$/)) {
+      return JSON.stringify({
+        version: 1,
+        generatedAt: '2025-01-15T10:30:00Z',
+        prNumber: 47,
+        prTitle: 'Add JWT authentication with session management',
+        overview: {
+          purpose: 'Replaces basic token auth with JWT-based authentication supporting refresh tokens, session tracking, and automatic token rotation.',
+          approach: 'Adds a TokenService for JWT signing/verification, a SessionStore for tracking active sessions, and updates the auth middleware to validate access tokens and check session revocation.',
+        },
+        changePatterns: [
+          {
+            id: 'cp1',
+            title: 'Auth middleware overhaul',
+            description: 'Converts synchronous token check to async JWT verification with session validation. Adds try/catch for token expiry handling.',
+            locations: [{ file: 'src/middleware/auth.ts', startLine: 12, endLine: 28 }],
+          },
+          {
+            id: 'cp2',
+            title: 'New token and session services',
+            description: 'Introduces TokenService (JWT sign/verify/rotate) and SessionStore (Redis-backed session tracking with revocation support).',
+            locations: [
+              { file: 'src/services/token.ts', startLine: 1, endLine: 45 },
+              { file: 'src/services/session.ts', startLine: 1, endLine: 38 },
+            ],
+          },
+          {
+            id: 'cp3',
+            title: 'Route updates for token refresh',
+            description: 'Adds POST /auth/refresh endpoint and updates existing auth routes to use new middleware.',
+            locations: [{ file: 'src/routes/auth.ts', startLine: 15, endLine: 42 }],
+          },
+        ],
+        potentialIssues: [
+          {
+            id: 'pi1',
+            severity: 'warning',
+            title: 'No token expiry grace period',
+            description: 'Access tokens are rejected immediately on expiry. Consider a small grace period (30s) to handle clock skew between services.',
+            locations: [{ file: 'src/services/token.ts', startLine: 22, endLine: 24 }],
+          },
+          {
+            id: 'pi2',
+            severity: 'concern',
+            title: 'Session revocation check on every request',
+            description: 'Every authenticated request hits Redis to check session revocation. Under high load this could become a bottleneck. Consider caching with a short TTL.',
+            locations: [{ file: 'src/middleware/auth.ts', startLine: 18, endLine: 21 }],
+          },
+        ],
+        designDecisions: [
+          {
+            id: 'dd1',
+            title: 'JWT with Redis sessions over stateless JWT',
+            description: 'Uses JWT for transport but backs it with server-side sessions, enabling immediate revocation at the cost of a Redis dependency.',
+            alternatives: ['Stateless JWT with token blacklist', 'Opaque session tokens', 'OAuth 2.0 with external provider'],
+            locations: [{ file: 'src/services/session.ts', startLine: 5, endLine: 12 }],
+          },
+        ],
+      })
+    }
+    if (isScreenshotMode && filePath.match(/\/tmp\/broomy-review-[^/]+\/comments\.json$/)) {
+      return '[]'
+    }
     return '// Mock file content for E2E tests\nexport const test = true;\n'
   }
 
@@ -982,6 +1046,10 @@ ipcMain.handle('fs:appendFile', async (_event, filePath: string, content: string
 })
 
 ipcMain.handle('fs:exists', async (_event, filePath: string) => {
+  // In screenshot mode, fake review data files exist
+  if (isScreenshotMode && filePath.match(/\/tmp\/broomy-review-[^/]+\/(review|comments)\.json$/)) {
+    return true
+  }
   return existsSync(filePath)
 })
 

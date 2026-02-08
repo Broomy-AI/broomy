@@ -16,14 +16,12 @@ export default function FeatureSection({
   direction,
 }: FeatureSectionProps) {
   const imageBlock = (
-    <div className="flex-[3]">
-      <div className="overflow-hidden rounded-xl border border-border-subtle shadow-[0_25px_50px_rgba(0,0,0,0.5)] transition-transform duration-200 hover:scale-[1.01]">
+    <div className="flex-[3] flex items-center justify-center">
+      <div className="inline-flex overflow-hidden rounded-xl border border-border-subtle shadow-[0_25px_50px_rgba(0,0,0,0.5)] transition-transform duration-200 hover:scale-[1.01]">
         <img
           src={screenshot}
           alt={alt}
-          className="w-full"
-          width={900}
-          height={580}
+          className="block h-auto max-h-[510px] w-auto max-w-full object-contain"
           loading="lazy"
         />
       </div>
