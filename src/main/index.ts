@@ -26,6 +26,9 @@ const isScreenshotMode = process.env.SCREENSHOT_MODE === 'true'
 // Mock shell for E2E tests - predictable, non-interactive output
 const E2E_MOCK_SHELL = process.env.E2E_MOCK_SHELL
 
+// Custom fake-claude script path for E2E tests (overrides the default)
+const FAKE_CLAUDE_SCRIPT = process.env.FAKE_CLAUDE_SCRIPT
+
 // PTY instances map
 const ptyProcesses = new Map<string, pty.IPty>()
 // File watchers map
@@ -156,7 +159,7 @@ ipcMain.handle('pty:create', (_event, options: { id: string; cwd: string; comman
           // Other sessions get the quick "idle" script for screenshots
           fakeClaude = join(__dirname, '../../scripts/fake-claude-screenshot-idle.sh')
         } else {
-          fakeClaude = join(__dirname, '../../scripts/fake-claude.sh')
+          fakeClaude = FAKE_CLAUDE_SCRIPT || join(__dirname, '../../scripts/fake-claude.sh')
         }
         initialCommand = `bash "${fakeClaude}"`
       } else {
