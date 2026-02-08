@@ -344,6 +344,19 @@ function AppContent() {
     }
   }
 
+  const handleSelectSession = useCallback((id: string) => {
+    setActiveSession(id)
+    // After React re-renders with the new session, focus the agent terminal panel
+    requestAnimationFrame(() => {
+      const container = document.querySelector(`[data-panel-id="${PANEL_IDS.AGENT_TERMINAL}"]`)
+      if (!container) return
+      const xtermTextarea = container.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null
+      if (xtermTextarea) {
+        xtermTextarea.focus()
+      }
+    })
+  }, [setActiveSession])
+
   const handleTogglePanel = useCallback((panelId: string) => {
     if (activeSessionId) {
       togglePanel(activeSessionId, panelId)
@@ -468,7 +481,7 @@ function AppContent() {
       <SessionList
         sessions={sessions}
         activeSessionId={activeSessionId}
-        onSelectSession={setActiveSession}
+        onSelectSession={handleSelectSession}
         onNewSession={handleNewSession}
         onDeleteSession={removeSession}
         onRefreshPrStatus={refreshPrStatus}
