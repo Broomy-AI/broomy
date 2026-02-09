@@ -11,6 +11,7 @@ import AgentSettings from './components/AgentSettings'
 import NewSessionDialog from './components/NewSessionDialog'
 import PanelPicker from './components/PanelPicker'
 import ProfileChip from './components/ProfileChip'
+import ErrorBoundary from './components/ErrorBoundary'
 import { useSessionStore, type Session, type SessionStatus, type LayoutSizes } from './store/sessions'
 import { useAgentStore } from './store/agents'
 import { useRepoStore } from './store/repos'
@@ -662,12 +663,14 @@ function App() {
   }, [])
 
   return (
-    <PanelProvider
-      toolbarPanels={toolbarPanels}
-      onToolbarPanelsChange={setToolbarPanels}
-    >
-      <AppContent />
-    </PanelProvider>
+    <ErrorBoundary>
+      <PanelProvider
+        toolbarPanels={toolbarPanels}
+        onToolbarPanelsChange={setToolbarPanels}
+      >
+        <AppContent />
+      </PanelProvider>
+    </ErrorBoundary>
   )
 }
 

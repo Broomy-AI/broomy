@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { ProfileData, ProfilesData } from '../../preload/index'
+import { useErrorStore } from './errors'
 
 export type { ProfileData }
 
@@ -67,7 +68,15 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
     const { profiles, currentProfileId } = get()
     const updatedProfiles = [...profiles, profile]
     set({ profiles: updatedProfiles })
-    await window.profiles.save({ profiles: updatedProfiles, lastProfileId: currentProfileId })
+    try {
+      await window.profiles.save({ profiles: updatedProfiles, lastProfileId: currentProfileId })
+    } catch (err) {
+      useErrorStore.getState().addError({
+        message: 'Failed to save profile',
+        category: 'config',
+        detail: err instanceof Error ? err.message : String(err),
+      })
+    }
     return profile
   },
 
@@ -77,7 +86,15 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
     if (profileId === currentProfileId) return
     const updatedProfiles = profiles.filter((p) => p.id !== profileId)
     set({ profiles: updatedProfiles })
-    await window.profiles.save({ profiles: updatedProfiles, lastProfileId: currentProfileId })
+    try {
+      await window.profiles.save({ profiles: updatedProfiles, lastProfileId: currentProfileId })
+    } catch (err) {
+      useErrorStore.getState().addError({
+        message: 'Failed to save profile',
+        category: 'config',
+        detail: err instanceof Error ? err.message : String(err),
+      })
+    }
   },
 
   updateProfile: async (profileId: string, updates: Partial<Omit<ProfileData, 'id'>>) => {
@@ -86,7 +103,15 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
       p.id === profileId ? { ...p, ...updates } : p
     )
     set({ profiles: updatedProfiles })
-    await window.profiles.save({ profiles: updatedProfiles, lastProfileId: currentProfileId })
+    try {
+      await window.profiles.save({ profiles: updatedProfiles, lastProfileId: currentProfileId })
+    } catch (err) {
+      useErrorStore.getState().addError({
+        message: 'Failed to save profile',
+        category: 'config',
+        detail: err instanceof Error ? err.message : String(err),
+      })
+    }
   },
 
   openProfileInNewWindow: async (profileId: string) => {

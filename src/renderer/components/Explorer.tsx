@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { FileEntry, GitFileStatus, GitStatusResult, SearchResult, GitHubPrStatus, GitCommitInfo } from '../../preload/index'
 import type { ExplorerFilter, BranchStatus, PrState } from '../store/sessions'
 import { useRepoStore } from '../store/repos'
+import { useErrorStore } from '../store/errors'
 import { statusLabel, getStatusColor, statusBadgeColor, prStateBadgeClass } from '../utils/explorerHelpers'
+import ErrorBanner from './ErrorBanner'
 
 // PR comment type from GitHub API
 type PrComment = {
@@ -551,15 +553,24 @@ export default function Explorer({
 
     const fullPath = `${inlineInput.parentPath}/${inlineInputValue.trim()}`
 
-    if (inlineInput.type === 'folder') {
-      await window.fs.mkdir(fullPath)
-    } else {
-      await window.fs.createFile(fullPath)
+    try {
+      if (inlineInput.type === 'folder') {
+        const result = await window.fs.mkdir(fullPath)
+        if (!result.success) {
+          useErrorStore.getState().addError(`Failed to create folder: ${result.error || 'Unknown error'}`)
+        }
+      } else {
+        const result = await window.fs.createFile(fullPath)
+        if (!result.success) {
+          useErrorStore.getState().addError(`Failed to create file: ${result.error || 'Unknown error'}`)
+        }
+      }
+    } catch (err) {
+      useErrorStore.getState().addError(`Failed to create ${inlineInput.type}: ${err instanceof Error ? err.message : String(err)}`)
     }
 
     setInlineInput(null)
     setInlineInputValue('')
-    // File watcher will handle refresh
   }
 
   // Source control computed values
@@ -598,19 +609,28 @@ export default function Explorer({
 
   const handleStage = async (filePath: string) => {
     if (!directory) return
-    await window.git.stage(directory, filePath)
+    const result = await window.git.stage(directory, filePath)
+    if (!result.success) {
+      useErrorStore.getState().addError(`Failed to stage ${filePath}: ${result.error || 'Unknown error'}`)
+    }
     onGitStatusRefresh?.()
   }
 
   const handleStageAll = async () => {
     if (!directory) return
-    await window.git.stageAll(directory)
+    const result = await window.git.stageAll(directory)
+    if (!result.success) {
+      useErrorStore.getState().addError(`Failed to stage all: ${result.error || 'Unknown error'}`)
+    }
     onGitStatusRefresh?.()
   }
 
   const handleUnstage = async (filePath: string) => {
     if (!directory) return
-    await window.git.unstage(directory, filePath)
+    const result = await window.git.unstage(directory, filePath)
+    if (!result.success) {
+      useErrorStore.getState().addError(`Failed to unstage ${filePath}: ${result.error || 'Unknown error'}`)
+    }
     onGitStatusRefresh?.()
   }
 
@@ -790,7 +810,11 @@ export default function Explorer({
         // Refresh comments
         const comments = await window.gh.prComments(directory, prStatus.number)
         setPrComments(comments)
+      } else {
+        useErrorStore.getState().addError(`Failed to reply to comment: ${result.error || 'Unknown error'}`)
       }
+    } catch (err) {
+      useErrorStore.getState().addError(`Failed to reply to comment: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setIsSubmittingReply(null)
     }
@@ -1065,29 +1089,12 @@ export default function Explorer({
 
     // Git operation error banner
     const gitOpErrorBanner = gitOpError ? (
-      <div className="px-3 py-2 border-b border-red-500/30 bg-red-500/10 flex items-center gap-2">
-        <div
-          className="flex-1 text-xs text-red-400 cursor-pointer hover:text-red-300 truncate"
-          title="Click to view full error"
-          onClick={async () => {
-            const errorContent = `${gitOpError.operation} failed\n${'='.repeat(40)}\n\n${gitOpError.message}`
-            const errorPath = '/tmp/broomy-git-error.txt'
-            await window.fs.writeFile(errorPath, errorContent)
-            onFileSelect?.(errorPath, false)
-          }}
-        >
-          {gitOpError.operation} failed: {gitOpError.message.length > 80
-            ? gitOpError.message.slice(0, 80) + '...'
-            : gitOpError.message}
-        </div>
-        <button
-          onClick={() => setGitOpError(null)}
-          className="text-red-400 hover:text-red-300 text-xs shrink-0 px-1"
-          title="Dismiss"
-        >
-          &times;
-        </button>
-      </div>
+      <ErrorBanner
+        message={`${gitOpError.operation} failed: ${gitOpError.message.length > 80 ? gitOpError.message.slice(0, 80) + '...' : gitOpError.message}`}
+        detail={gitOpError.message}
+        category="git"
+        onDismiss={() => setGitOpError(null)}
+      />
     ) : null
 
     // Comments view

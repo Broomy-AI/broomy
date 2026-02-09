@@ -1203,6 +1203,7 @@ ipcMain.handle('fs:readFileBase64', async (_event, filePath: string) => {
 ipcMain.handle('app:isDev', () => isDev)
 ipcMain.handle('app:homedir', () => homedir())
 ipcMain.handle('app:platform', () => process.platform)
+ipcMain.handle('app:version', () => app.getVersion())
 
 // Expand ~ to home directory
 const expandHomePath = (path: string) => {

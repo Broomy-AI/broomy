@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { basename } from 'path-browserify'
 import { PANEL_IDS, DEFAULT_TOOLBAR_PANELS } from '../panels/types'
 import type { BranchStatus, PrState } from '../utils/branchStatus'
+import { useErrorStore } from './errors'
 
 export type { BranchStatus, PrState }
 
@@ -237,6 +238,7 @@ const debouncedSave = async (
 ) => {
   if (saveTimeout) clearTimeout(saveTimeout)
   saveTimeout = setTimeout(async () => {
+    try {
     const config = await window.config.load(currentProfileId)
     await window.config.save({
       profileId: currentProfileId,
@@ -284,6 +286,13 @@ const debouncedSave = async (
       sidebarWidth,
       toolbarPanels,
     })
+    } catch (err) {
+      useErrorStore.getState().addError({
+        message: 'Failed to save session data. Your recent changes may not persist.',
+        category: 'config',
+        detail: err instanceof Error ? err.message : String(err),
+      })
+    }
   }, 500)
 }
 

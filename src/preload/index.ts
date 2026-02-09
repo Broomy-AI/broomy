@@ -392,6 +392,7 @@ export type AppApi = {
   isDev: () => Promise<boolean>
   homedir: () => Promise<string>
   platform: () => Promise<string>
+  version: () => Promise<string>
 }
 
 export type MenuItemDef = {
@@ -423,6 +424,7 @@ const appApi: AppApi = {
   isDev: () => ipcRenderer.invoke('app:isDev'),
   homedir: () => ipcRenderer.invoke('app:homedir'),
   platform: () => ipcRenderer.invoke('app:platform'),
+  version: () => ipcRenderer.invoke('app:version'),
 }
 
 const menuApi: MenuApi = {

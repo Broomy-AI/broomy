@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { ManagedRepo } from '../../preload/index'
+import { useErrorStore } from './errors'
 
 const generateId = () => `repo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
@@ -62,12 +63,20 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
     const updatedRepos = [...repos, repo]
     set({ repos: updatedRepos })
 
-    const config = await window.config.load(profileId)
-    await window.config.save({
-      ...config,
-      profileId,
-      repos: updatedRepos,
-    })
+    try {
+      const config = await window.config.load(profileId)
+      await window.config.save({
+        ...config,
+        profileId,
+        repos: updatedRepos,
+      })
+    } catch (err) {
+      useErrorStore.getState().addError({
+        message: 'Failed to save repository settings',
+        category: 'config',
+        detail: err instanceof Error ? err.message : String(err),
+      })
+    }
   },
 
   updateRepo: async (id, updates) => {
@@ -77,12 +86,20 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
     )
     set({ repos: updatedRepos })
 
-    const config = await window.config.load(profileId)
-    await window.config.save({
-      ...config,
-      profileId,
-      repos: updatedRepos,
-    })
+    try {
+      const config = await window.config.load(profileId)
+      await window.config.save({
+        ...config,
+        profileId,
+        repos: updatedRepos,
+      })
+    } catch (err) {
+      useErrorStore.getState().addError({
+        message: 'Failed to save repository settings',
+        category: 'config',
+        detail: err instanceof Error ? err.message : String(err),
+      })
+    }
   },
 
   removeRepo: async (id) => {
@@ -90,25 +107,41 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
     const updatedRepos = repos.filter((r) => r.id !== id)
     set({ repos: updatedRepos })
 
-    const config = await window.config.load(profileId)
-    await window.config.save({
-      ...config,
-      profileId,
-      repos: updatedRepos,
-    })
+    try {
+      const config = await window.config.load(profileId)
+      await window.config.save({
+        ...config,
+        profileId,
+        repos: updatedRepos,
+      })
+    } catch (err) {
+      useErrorStore.getState().addError({
+        message: 'Failed to save repository settings',
+        category: 'config',
+        detail: err instanceof Error ? err.message : String(err),
+      })
+    }
   },
 
   setDefaultCloneDir: async (dir) => {
     const resolved = await resolveHome(dir)
     set({ defaultCloneDir: resolved })
 
-    const { profileId } = get()
-    const config = await window.config.load(profileId)
-    await window.config.save({
-      ...config,
-      profileId,
-      defaultCloneDir: resolved,
-    })
+    try {
+      const { profileId } = get()
+      const config = await window.config.load(profileId)
+      await window.config.save({
+        ...config,
+        profileId,
+        defaultCloneDir: resolved,
+      })
+    } catch (err) {
+      useErrorStore.getState().addError({
+        message: 'Failed to save default clone directory',
+        category: 'config',
+        detail: err instanceof Error ? err.message : String(err),
+      })
+    }
   },
 
   checkGhAvailability: async () => {

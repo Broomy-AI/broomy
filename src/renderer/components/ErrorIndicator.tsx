@@ -1,8 +1,20 @@
 import { useState } from 'react'
 import { useErrorStore } from '../store/errors'
+import { openReportIssue } from '../utils/errorReporting'
+import type { ErrorCategory } from '../utils/errorMessages'
+
+const CATEGORY_COLORS: Record<ErrorCategory, string> = {
+  git: 'bg-orange-500/20 text-orange-400',
+  network: 'bg-blue-500/20 text-blue-400',
+  permissions: 'bg-yellow-500/20 text-yellow-400',
+  config: 'bg-purple-500/20 text-purple-400',
+  github: 'bg-green-500/20 text-green-400',
+  disk: 'bg-red-500/20 text-red-400',
+  unknown: 'bg-gray-500/20 text-gray-400',
+}
 
 export default function ErrorIndicator() {
-  const { errors, hasUnread, dismissError, clearAll, markRead } = useErrorStore()
+  const { errors, hasUnread, dismissError, clearAll, markRead, generateReportUrl } = useErrorStore()
   const [isOpen, setIsOpen] = useState(false)
 
   const handleToggle = () => {
@@ -19,6 +31,13 @@ export default function ErrorIndicator() {
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp)
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
+
+  const handleReportAll = () => {
+    const latestError = errors[0]
+    if (latestError) {
+      openReportIssue(latestError.detail || latestError.message, latestError.category)
+    }
   }
 
   return (
@@ -84,9 +103,33 @@ export default function ErrorIndicator() {
                   className="p-3 hover:bg-bg-tertiary group"
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm text-text-primary break-words flex-1">
-                      {error.message}
-                    </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[error.category]}`}>
+                          {error.category}
+                        </span>
+                        <span className="text-xs text-text-secondary">
+                          {formatTime(error.timestamp)}
+                        </span>
+                      </div>
+                      <p className="text-sm text-text-primary break-words">
+                        {error.message}
+                      </p>
+                      {error.suggestion && (
+                        <p className="text-xs text-text-secondary mt-0.5">
+                          {error.suggestion}
+                        </p>
+                      )}
+                      <button
+                        onClick={() => {
+                          const url = generateReportUrl(error.id)
+                          if (url) window.shell.openExternal(url)
+                        }}
+                        className="text-xs text-text-secondary hover:text-text-primary mt-1 underline"
+                      >
+                        Report Issue
+                      </button>
+                    </div>
                     <button
                       onClick={() => dismissError(error.id)}
                       className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-text-primary transition-opacity p-1 -m-1"
@@ -107,11 +150,18 @@ export default function ErrorIndicator() {
                       </svg>
                     </button>
                   </div>
-                  <span className="text-xs text-text-secondary mt-1 block">
-                    {formatTime(error.timestamp)}
-                  </span>
                 </div>
               ))}
+            </div>
+
+            {/* Footer */}
+            <div className="p-2 border-t border-border">
+              <button
+                onClick={handleReportAll}
+                className="w-full text-xs text-center text-text-secondary hover:text-text-primary py-1 transition-colors"
+              >
+                Report Issue
+              </button>
             </div>
           </div>
         </>

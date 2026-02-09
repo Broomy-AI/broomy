@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { AgentData } from '../../preload/index'
+import { useErrorStore } from './errors'
 
 export type AgentConfig = AgentData
 
@@ -44,13 +45,20 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     const updatedAgents = [...agents, agent]
     set({ agents: updatedAgents })
 
-    // Persist to config
-    const config = await window.config.load(profileId)
-    await window.config.save({
-      ...config,
-      profileId,
-      agents: updatedAgents,
-    })
+    try {
+      const config = await window.config.load(profileId)
+      await window.config.save({
+        ...config,
+        profileId,
+        agents: updatedAgents,
+      })
+    } catch (err) {
+      useErrorStore.getState().addError({
+        message: 'Failed to save agent settings',
+        category: 'config',
+        detail: err instanceof Error ? err.message : String(err),
+      })
+    }
   },
 
   updateAgent: async (id, updates) => {
@@ -60,13 +68,20 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     )
     set({ agents: updatedAgents })
 
-    // Persist to config
-    const config = await window.config.load(profileId)
-    await window.config.save({
-      ...config,
-      profileId,
-      agents: updatedAgents,
-    })
+    try {
+      const config = await window.config.load(profileId)
+      await window.config.save({
+        ...config,
+        profileId,
+        agents: updatedAgents,
+      })
+    } catch (err) {
+      useErrorStore.getState().addError({
+        message: 'Failed to save agent settings',
+        category: 'config',
+        detail: err instanceof Error ? err.message : String(err),
+      })
+    }
   },
 
   removeAgent: async (id) => {
@@ -74,12 +89,19 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     const updatedAgents = agents.filter((a) => a.id !== id)
     set({ agents: updatedAgents })
 
-    // Persist to config
-    const config = await window.config.load(profileId)
-    await window.config.save({
-      ...config,
-      profileId,
-      agents: updatedAgents,
-    })
+    try {
+      const config = await window.config.load(profileId)
+      await window.config.save({
+        ...config,
+        profileId,
+        agents: updatedAgents,
+      })
+    } catch (err) {
+      useErrorStore.getState().addError({
+        message: 'Failed to save agent settings',
+        category: 'config',
+        detail: err instanceof Error ? err.message : String(err),
+      })
+    }
   },
 }))
