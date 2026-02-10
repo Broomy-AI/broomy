@@ -130,7 +130,7 @@ function SessionCard({
           {session.branch}
         </span>
         {session.sessionType === 'review' ? (
-          <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-purple-500/20 text-purple-400 flex-shrink-0">
+          <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-cyan-500/20 text-cyan-400 flex-shrink-0">
             Review
           </span>
         ) : (

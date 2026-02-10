@@ -398,12 +398,13 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
     }
   }, [sessionId]) // Only recreate terminal when session identity changes
 
-  // Fit when terminal becomes visible (e.g., tab switch)
+  // Fit and focus when terminal becomes visible (e.g., tab switch or session selection)
   useEffect(() => {
     lastInteractionRef.current = Date.now()
-    if (isActive && fitAddonRef.current) {
+    if (isActive) {
       requestAnimationFrame(() => {
         try { fitAddonRef.current?.fit() } catch { /* ignore */ }
+        terminalRef.current?.focus()
       })
     }
   }, [isActive])
