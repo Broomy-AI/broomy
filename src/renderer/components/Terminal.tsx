@@ -5,8 +5,9 @@ import { SerializeAddon } from '@xterm/addon-serialize'
 import { useErrorStore } from '../store/errors'
 import { useSessionStore } from '../store/sessions'
 import { terminalBufferRegistry } from '../utils/terminalBufferRegistry'
-import { stripAnsi } from '../utils/stripAnsi'
 import { evaluateActivity } from '../utils/terminalActivityDetector'
+import { useTerminalKeyboard } from '../hooks/useTerminalKeyboard'
+import { usePlanDetection } from '../hooks/usePlanDetection'
 import '@xterm/xterm/css/xterm.css'
 
 interface TerminalProps {
@@ -55,12 +56,11 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
   const setPlanFileRef = useRef(setPlanFile)
   setPlanFileRef.current = setPlanFile
 
-  // Rolling buffer for plan file detection (agent terminals only)
-  const planDetectionBufferRef = useRef('')
-  const lastDetectedPlanRef = useRef<string | null>(null)
-
   const sessionIdRef = useRef(sessionId)
   sessionIdRef.current = sessionId
+
+  const handleKeyEvent = useTerminalKeyboard(ptyIdRef)
+  const processPlanDetection = usePlanDetection(sessionIdRef, setPlanFileRef)
 
   const pendingUpdateRef = useRef<{ status?: 'working' | 'idle' | 'error'; lastMessage?: string } | null>(null)
 
@@ -220,45 +220,7 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
     })
 
     // Keyboard shortcuts
-    terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === 'Tab') {
-        return false
-      }
-      if (e.shiftKey && e.key === 'Enter') {
-        if (e.type === 'keydown' && ptyIdRef.current) {
-          window.pty.write(ptyIdRef.current, '\x1b[13;2u')
-        }
-        return false
-      }
-      if (e.metaKey && e.key === 'ArrowLeft') {
-        if (e.type === 'keydown' && ptyIdRef.current) {
-          window.pty.write(ptyIdRef.current, '\x01')
-        }
-        return false
-      }
-      if (e.metaKey && e.key === 'ArrowRight') {
-        if (e.type === 'keydown' && ptyIdRef.current) {
-          window.pty.write(ptyIdRef.current, '\x05')
-        }
-        return false
-      }
-      if (e.type !== 'keydown') return true
-      if (e.metaKey && e.key === 'Backspace') {
-        if (ptyIdRef.current) {
-          window.pty.write(ptyIdRef.current, '\x15')
-        }
-        return false
-      }
-      if (e.metaKey || e.ctrlKey) {
-        if (['1', '2', '3', '4', '5', '6'].includes(e.key)) {
-          window.dispatchEvent(new CustomEvent('app:toggle-panel', {
-            detail: { key: e.key }
-          }))
-          return false
-        }
-      }
-      return true
-    })
+    terminal.attachCustomKeyEventHandler(handleKeyEvent)
 
     terminalRef.current = terminal
     fitAddonRef.current = fitAddon
@@ -292,17 +254,8 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
           })
 
           // Plan file detection for agent terminals
-          if (isAgent && sessionIdRef.current) {
-            const stripped = stripAnsi(data)
-            planDetectionBufferRef.current += stripped
-            if (planDetectionBufferRef.current.length > 1000) {
-              planDetectionBufferRef.current = planDetectionBufferRef.current.slice(-1000)
-            }
-            const planMatch = planDetectionBufferRef.current.match(/\/[^\s)]+\.claude-personal\/plans\/[^\s)]+\.md/)
-            if (planMatch && planMatch[0] !== lastDetectedPlanRef.current) {
-              lastDetectedPlanRef.current = planMatch[0]
-              setPlanFileRef.current(sessionIdRef.current, planMatch[0])
-            }
+          if (isAgent) {
+            processPlanDetection(data)
           }
 
           // Activity detection for agent terminals

@@ -1,9 +1,10 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { basename } from 'path-browserify'
-import { getViewersForFile, isTextContent } from './fileViewers'
 import MonacoDiffViewer from './fileViewers/MonacoDiffViewer'
-import type { FileViewerPlugin } from './fileViewers'
 import type { EditorActions } from './fileViewers/types'
+import { useFileLoading } from '../hooks/useFileLoading'
+import { useFileDiff } from '../hooks/useFileDiff'
+import { useFileWatcher } from '../hooks/useFileWatcher'
 
 export type FileViewerPosition = 'top' | 'left'
 export type ViewMode = 'latest' | 'diff'
@@ -32,233 +33,46 @@ interface FileViewerProps {
 export default function FileViewer({ filePath, position = 'top', onPositionChange, onClose, fileStatus, directory, onSaveComplete, initialViewMode = 'latest', scrollToLine, searchHighlight, onDirtyStateChange, saveRef, diffBaseRef, diffCurrentRef, diffLabel, reviewContext, onOpenFile }: FileViewerProps) {
   // Show diff for modified/deleted files, or when a base ref is provided (branch changes), or when viewing a specific commit
   const canShowDiff = fileStatus === 'modified' || fileStatus === 'deleted' || !!diffBaseRef || !!diffCurrentRef
-  const [content, setContent] = useState<string>('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [availableViewers, setAvailableViewers] = useState<FileViewerPlugin[]>([])
   const [selectedViewerId, setSelectedViewerId] = useState<string | null>(null)
   const [isDirty, setIsDirty] = useState(false)
   const [editedContent, setEditedContent] = useState<string>('')
   const [isSaving, setIsSaving] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('latest')
-  const [originalContent, setOriginalContent] = useState<string>('')
   const [diffSideBySide, setDiffSideBySide] = useState(true)
-  const [diffModifiedContent, setDiffModifiedContent] = useState<string | null>(null)
-  const [fileChangedOnDisk, setFileChangedOnDisk] = useState(false)
   const [editorActions, setEditorActions] = useState<EditorActions | null>(null)
-  const contentRef = useRef(content)
 
+  const { content, setContent, isLoading, error, availableViewers } = useFileLoading({
+    filePath,
+    fileStatus,
+    directory,
+    initialViewMode,
+    scrollToLine,
+    selectedViewerId,
+    setSelectedViewerId,
+  })
+
+  const { originalContent, diffModifiedContent } = useFileDiff({
+    filePath,
+    directory,
+    canShowDiff,
+    viewMode,
+    diffBaseRef,
+    diffCurrentRef,
+  })
+
+  const { fileChangedOnDisk, handleKeepLocalChanges, handleLoadDiskVersion } = useFileWatcher({
+    filePath,
+    content,
+    setContent,
+    isDirty,
+    onDirtyStateChange,
+    setIsDirty,
+  })
+
+  // Reset editorActions when file changes
   useEffect(() => {
-    if (!filePath) {
-      setContent('')
-      setIsLoading(false)
-      setError(null)
-      setAvailableViewers([])
-      setSelectedViewerId(null)
-      return
-    }
-
-    let cancelled = false
-
-    const loadFile = async () => {
-      setIsLoading(true)
-      setError(null)
-
-      // Get viewers that can handle this file based on extension
-      let viewers = getViewersForFile(filePath)
-
-      // Check if any non-text viewer (like image) can handle this file
-      const hasNonTextViewer = viewers.some(v => v.id === 'image')
-
-      let data = ''
-      let readError: Error | null = null
-
-      // Try to read as text (may fail for binary or deleted files)
-      try {
-        data = await window.fs.readFile(filePath)
-      } catch (err) {
-        readError = err instanceof Error ? err : new Error('Failed to read file')
-      }
-
-      if (cancelled) return
-
-      // If file doesn't exist and is deleted, load the old version from git
-      if (readError && fileStatus === 'deleted' && directory) {
-        try {
-          const relativePath = filePath.startsWith(directory + '/')
-            ? filePath.slice(directory.length + 1)
-            : filePath
-          data = await window.git.show(directory, relativePath)
-          readError = null
-        } catch {
-          // Still failed
-        }
-      }
-
-      if (cancelled) return
-
-      // If we couldn't read as text but have a non-text viewer, that's OK
-      if (readError && !hasNonTextViewer) {
-        setError(readError.message)
-        setIsLoading(false)
-        return
-      }
-
-      setContent(data)
-
-      // Filter viewers based on content
-      viewers = viewers.filter(viewer => {
-        // Image viewer doesn't need text content
-        if (viewer.id === 'image') return true
-        // Monaco viewer can handle any text content (including empty files)
-        if (viewer.id === 'monaco') {
-          return isTextContent(data)
-        }
-        // Other viewers need content
-        return !!data
-      })
-
-      setAvailableViewers(viewers)
-
-      // Select viewer: prefer Monaco when opening from changes list or search result
-      if (viewers.length > 0) {
-        const currentStillAvailable = viewers.find(v => v.id === selectedViewerId)
-        if (!currentStillAvailable) {
-          if (initialViewMode === 'diff' || scrollToLine) {
-            // When coming from changes list or search result, prefer code view over preview
-            const monacoViewer = viewers.find(v => v.id === 'monaco')
-            setSelectedViewerId(monacoViewer?.id ?? viewers[0].id)
-          } else {
-            setSelectedViewerId(viewers[0].id)
-          }
-        }
-      } else {
-        setSelectedViewerId(null)
-      }
-
-      setIsLoading(false)
-    }
-
-    loadFile()
-
-    return () => {
-      cancelled = true
-    }
-  }, [filePath])
-
-  // Load original content from git when in diff mode
-  useEffect(() => {
-    if (!filePath || !directory || !canShowDiff || viewMode !== 'diff') {
-      setOriginalContent('')
-      return
-    }
-
-    const loadOriginal = async () => {
-      try {
-        // Convert absolute path to relative path for git show
-        const relativePath = filePath.startsWith(directory + '/')
-          ? filePath.slice(directory.length + 1)
-          : filePath
-        // Use diffBaseRef if provided (for branch changes), otherwise HEAD (for working changes)
-        const original = await window.git.show(directory, relativePath, diffBaseRef || 'HEAD')
-        setOriginalContent(original)
-      } catch {
-        setOriginalContent('')
-      }
-    }
-
-    loadOriginal()
-  }, [filePath, directory, canShowDiff, viewMode, diffBaseRef])
-
-  // Load modified content from git when diffCurrentRef is set (commit diffs)
-  useEffect(() => {
-    if (!filePath || !directory || !diffCurrentRef || viewMode !== 'diff') {
-      setDiffModifiedContent(null)
-      return
-    }
-
-    let cancelled = false
-    const loadModified = async () => {
-      try {
-        const relativePath = filePath.startsWith(directory + '/')
-          ? filePath.slice(directory.length + 1)
-          : filePath
-        const modified = await window.git.show(directory, relativePath, diffCurrentRef)
-        if (!cancelled) setDiffModifiedContent(modified)
-      } catch {
-        if (!cancelled) setDiffModifiedContent('')
-      }
-    }
-
-    loadModified()
-    return () => { cancelled = true }
-  }, [filePath, directory, diffCurrentRef, viewMode])
-
-  // Keep contentRef in sync
-  useEffect(() => {
-    contentRef.current = content
-  }, [content])
-
-  // Watch file for external changes
-  useEffect(() => {
-    if (!filePath) return
-
-    const watcherId = `fileviewer-${filePath}`
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null
-
-    window.fs.watch(watcherId, filePath)
-    const removeListener = window.fs.onChange(watcherId, () => {
-      // Debounce to avoid multiple triggers
-      if (debounceTimer) clearTimeout(debounceTimer)
-      debounceTimer = setTimeout(async () => {
-        try {
-          const newContent = await window.fs.readFile(filePath)
-          // Only trigger if content actually changed
-          if (newContent !== contentRef.current) {
-            if (isDirty) {
-              setFileChangedOnDisk(true)
-            } else {
-              setContent(newContent)
-              contentRef.current = newContent
-            }
-          }
-        } catch {
-          // File might have been deleted
-        }
-      }, 300)
-    })
-
-    return () => {
-      if (debounceTimer) clearTimeout(debounceTimer)
-      removeListener()
-      window.fs.unwatch(watcherId)
-    }
-  }, [filePath, isDirty])
-
-  // Reset fileChangedOnDisk and editorActions when file changes
-  useEffect(() => {
-    setFileChangedOnDisk(false)
     setEditorActions(null)
   }, [filePath])
-
-  // Handle file-changed-on-disk responses
-  const handleKeepLocalChanges = useCallback(() => {
-    setFileChangedOnDisk(false)
-  }, [])
-
-  const handleLoadDiskVersion = useCallback(async () => {
-    if (!filePath) return
-    try {
-      const newContent = await window.fs.readFile(filePath)
-      setContent(newContent)
-      contentRef.current = newContent
-      setIsDirty(false)
-      onDirtyStateChange?.(false)
-      setFileChangedOnDisk(false)
-    } catch {
-      setFileChangedOnDisk(false)
-    }
-  }, [filePath, onDirtyStateChange])
 
   // Switch to Monaco code view when scrollToLine is set (e.g. from search results)
   useEffect(() => {
