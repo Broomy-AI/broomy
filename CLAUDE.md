@@ -23,9 +23,9 @@ pnpm dist            # Build and package for macOS
 
 ## Troubleshooting
 
-**"Electron uninstall" error**: `rm -rf node_modules && pnpm install`
+`pnpm dev` runs preflight checks automatically and fixes common issues (missing Electron binary, native module problems). If preflight can't fix something, it tells you what to do.
 
-**"posix_spawnp failed" terminal errors**: `npx @electron/rebuild`
+**Nuclear option**: `rm -rf node_modules && pnpm install`
 
 **Important**: This project enforces pnpm via a preinstall script. Do not use npm or yarn.
 
