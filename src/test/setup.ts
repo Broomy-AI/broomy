@@ -16,6 +16,7 @@ const mockGit = {
   stage: vi.fn().mockResolvedValue({ success: true }),
   stageAll: vi.fn().mockResolvedValue({ success: true }),
   unstage: vi.fn().mockResolvedValue({ success: true }),
+  checkoutFile: vi.fn().mockResolvedValue({ success: true }),
   commit: vi.fn().mockResolvedValue({ success: true }),
   push: vi.fn().mockResolvedValue({ success: true }),
   pull: vi.fn().mockResolvedValue({ success: true }),

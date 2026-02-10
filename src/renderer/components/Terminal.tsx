@@ -86,6 +86,22 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
     }
   }, [flushUpdate])
 
+  const handleContextMenu = useCallback(async (e: React.MouseEvent) => {
+    e.preventDefault()
+    const hasSelection = terminalRef.current?.hasSelection() ?? false
+    const result = await window.menu.popup([
+      { id: 'copy', label: 'Copy', enabled: hasSelection },
+      { id: 'paste', label: 'Paste' },
+    ])
+    if (result === 'copy' && terminalRef.current) {
+      const text = terminalRef.current.getSelection()
+      if (text) navigator.clipboard.writeText(text)
+    } else if (result === 'paste' && ptyIdRef.current) {
+      const text = await navigator.clipboard.readText()
+      if (text) window.pty.write(ptyIdRef.current, text)
+    }
+  }, [])
+
   const handleScrollToBottom = useCallback(() => {
     terminalRef.current?.scrollToBottom()
     isFollowingRef.current = true
@@ -430,7 +446,7 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
   }
 
   return (
-    <div className="h-full w-full p-2 relative">
+    <div className="h-full w-full p-2 relative" onContextMenu={handleContextMenu}>
       <div ref={containerRef} className="h-full w-full" />
       {showScrollButton && (
         <button
