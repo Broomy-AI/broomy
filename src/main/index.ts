@@ -1440,12 +1440,11 @@ ipcMain.handle('git:isMergedInto', async (_event, repoPath: string, ref: string)
         return true
       }
       const fileList = changedFiles.split('\n')
-      // Check if origin/ref has the same content for all files changed on this branch
-      const diffOutput = await git.raw(['diff', '--quiet', `origin/${ref}`, 'HEAD', '--', ...fileList])
-      // diff --quiet exits 0 (no output) when files match
-      return true
+      // Check if origin/ref has the same content for all files changed on this branch.
+      // Use --name-only instead of --quiet because simple-git doesn't throw on exit code 1.
+      const diffOutput = (await git.raw(['diff', '--name-only', `origin/${ref}`, 'HEAD', '--', ...fileList])).trim()
+      return diffOutput.length === 0
     } catch {
-      // diff --quiet exits non-zero when files differ, which simple-git throws as error
       return false
     }
   } catch {

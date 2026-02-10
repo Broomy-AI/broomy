@@ -111,10 +111,6 @@ function AppContent() {
     try {
       const status = await window.git.status(activeSession.directory)
       const normalized = normalizeGitStatus(status)
-      setGitStatusBySession(prev => ({
-        ...prev,
-        [activeSession.id]: normalized
-      }))
 
       // Track if the session has ever had commits ahead of remote
       if (normalized.ahead > 0) {
@@ -122,28 +118,34 @@ function AppContent() {
       }
 
       // Check if branch is merged into the default branch
+      let merged = false
       const isOnMain = normalized.current === 'main' || normalized.current === 'master'
       if (!isOnMain && normalized.current) {
         const repo = repos.find(r => r.id === activeSession.repoId)
         const defaultBranch = repo?.defaultBranch || 'main'
-        const [merged, hasBranchCommitsResult] = await Promise.all([
+        const [mergedResult, hasBranchCommitsResult] = await Promise.all([
           window.git.isMergedInto(activeSession.directory, defaultBranch),
           window.git.hasBranchCommits(activeSession.directory, defaultBranch),
         ])
-        setIsMergedBySession(prev => ({
-          ...prev,
-          [activeSession.id]: merged
-        }))
+        merged = mergedResult
         // Also mark hasHadCommits if the branch has diverged from main
         if (hasBranchCommitsResult) {
           markHasHadCommits(activeSession.id)
         }
-      } else {
-        setIsMergedBySession(prev => ({
-          ...prev,
-          [activeSession.id]: false
-        }))
       }
+
+      // Update both states in the same synchronous block so React batches
+      // them into one render. Previously gitStatus was set before the
+      // isMergedInto check, creating a window where ahead=0 (fresh) paired
+      // with a stale isMergedToMain=true would incorrectly show 'merged'.
+      setGitStatusBySession(prev => ({
+        ...prev,
+        [activeSession.id]: normalized
+      }))
+      setIsMergedBySession(prev => ({
+        ...prev,
+        [activeSession.id]: merged
+      }))
     } catch {
       // Ignore errors
     }
