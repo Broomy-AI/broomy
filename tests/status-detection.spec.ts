@@ -1,7 +1,6 @@
 import { test, expect, _electron as electron, ElectronApplication, Page } from '@playwright/test'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { execSync } from 'child_process'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -10,9 +9,6 @@ let electronApp: ElectronApplication
 let page: Page
 
 test.beforeAll(async () => {
-  // Build the app first
-  execSync('pnpm build', { cwd: path.join(__dirname, '..'), stdio: 'inherit' })
-
   // Launch Electron app with E2E test mode
   electronApp = await electron.launch({
     args: [path.join(__dirname, '..', 'out', 'main', 'index.js')],

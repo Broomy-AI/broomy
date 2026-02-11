@@ -1,7 +1,6 @@
 import { test, expect, _electron as electron, ElectronApplication, Page } from '@playwright/test'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { execSync } from 'child_process'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -33,9 +32,6 @@ async function getTerminalText(page: Page) {
 }
 
 test.beforeAll(async () => {
-  // Build the app first
-  execSync('pnpm build', { cwd: path.join(__dirname, '..'), stdio: 'inherit' })
-
   // Use the fake-claude-plan script that outputs a large block of text
   const fakeClaude = path.join(__dirname, '..', 'scripts', 'fake-claude-plan.sh')
 
