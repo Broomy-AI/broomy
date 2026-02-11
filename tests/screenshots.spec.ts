@@ -1,8 +1,6 @@
 import { test, _electron as electron, ElectronApplication, Page } from '@playwright/test'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { execSync } from 'child_process'
-import { existsSync } from 'fs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -13,15 +11,11 @@ const SCREENSHOT_DIR = path.join(__dirname, '..', 'website', 'public', 'screensh
 let electronApp: ElectronApplication
 let page: Page
 
-// Increase timeout for the entire test suite - builds + app startup take a while
+// Increase timeout for the entire test suite - app startup takes a while
 test.setTimeout(120000)
 
 test.beforeAll(async () => {
-  // Build the app if needed
   const mainJs = path.join(__dirname, '..', 'out', 'main', 'index.js')
-  if (!existsSync(mainJs)) {
-    execSync('pnpm build', { cwd: path.join(__dirname, '..'), stdio: 'inherit' })
-  }
 
   // Launch Electron app in screenshot mode
   electronApp = await electron.launch({

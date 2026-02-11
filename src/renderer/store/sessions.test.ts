@@ -202,6 +202,18 @@ describe('useSessionStore', () => {
       expect(useSessionStore.getState().sessions[0].name).toBe('Custom Name')
     })
 
+    it('derives name from git remote URL when no name provided', async () => {
+      vi.mocked(window.git.remoteUrl).mockResolvedValue('git@github.com:org/my-project.git')
+      await useSessionStore.getState().addSession('/test/repo', null)
+      expect(useSessionStore.getState().sessions[0].name).toBe('my-project')
+    })
+
+    it('falls back to basename when remote URL is unavailable', async () => {
+      vi.mocked(window.git.remoteUrl).mockResolvedValue(null)
+      await useSessionStore.getState().addSession('/test/repo', null)
+      expect(useSessionStore.getState().sessions[0].name).toBe('repo')
+    })
+
     it('throws if directory is not a git repo', async () => {
       vi.mocked(window.git.isGitRepo).mockResolvedValue(false)
       await expect(

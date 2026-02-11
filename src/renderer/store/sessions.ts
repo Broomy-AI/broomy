@@ -389,7 +389,18 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
 
     const branch = await window.git.getBranch(directory)
-    const name = extra?.name || basename(directory)
+    let name = extra?.name || basename(directory)
+    if (!extra?.name) {
+      try {
+        const remoteUrl = await window.git.remoteUrl(directory)
+        if (remoteUrl) {
+          const repoName = remoteUrl.replace(/\.git$/, '').split('/').pop()?.replace(/[^a-zA-Z0-9._-]/g, '')
+          if (repoName) name = repoName
+        }
+      } catch {
+        // Fall back to basename
+      }
+    }
     const id = generateId()
 
     const isReview = extra?.sessionType === 'review'
