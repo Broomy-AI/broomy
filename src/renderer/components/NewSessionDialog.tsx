@@ -881,6 +881,11 @@ function ExistingBranchView({
   const [error, setError] = useState<string | null>(null)
   const [selectedBranch, setSelectedBranch] = useState<BranchInfo | null>(null)
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(repo.defaultAgentId || agents[0]?.id || null)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const filteredBranches = branches.filter(b =>
+    b.name.toLowerCase().includes(searchQuery.toLowerCase())
+  )
 
   useEffect(() => {
     const fetchBranches = async () => {
@@ -937,14 +942,11 @@ function ExistingBranchView({
           })
         }
 
-        // Sort: worktrees first, then by name
-        branchInfos.sort((a, b) => {
-          if (a.hasWorktree && !b.hasWorktree) return -1
-          if (!a.hasWorktree && b.hasWorktree) return 1
-          return a.name.localeCompare(b.name)
-        })
+        // Sort: worktrees first, preserve time order (git returns most recent first)
+        const worktreeBranches = branchInfos.filter(b => b.hasWorktree)
+        const otherBranches = branchInfos.filter(b => !b.hasWorktree)
 
-        setBranches(branchInfos)
+        setBranches([...worktreeBranches, ...otherBranches])
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err))
       } finally {
@@ -1099,29 +1101,58 @@ function ExistingBranchView({
         )}
 
         {!loading && !error && branches.length > 0 && (
-          <div className="space-y-1 max-h-80 overflow-y-auto">
-            {branches.map((branch) => (
-              <button
-                key={branch.name}
-                onClick={() => handleOpen(branch)}
-                className="w-full flex items-center gap-3 p-2 rounded border border-border bg-bg-primary hover:bg-bg-tertiary hover:border-accent transition-colors text-left"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-mono text-text-primary truncate">{branch.name}</div>
-                  <div className="text-xs text-text-secondary">
-                    {branch.hasWorktree ? (
-                      <span className="text-green-400">Has worktree</span>
-                    ) : (
-                      <span className="text-yellow-400">Remote only - will create worktree</span>
-                    )}
-                  </div>
-                </div>
-                <svg className="w-4 h-4 text-text-secondary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="relative mb-2">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search branches..."
+                className="w-full px-3 py-2 text-sm rounded border border-border bg-bg-primary text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent"
+                autoFocus
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            {filteredBranches.length === 0 ? (
+              <div className="text-center text-text-secondary text-sm py-8">
+                No matching branches found.
+              </div>
+            ) : (
+              <div className="space-y-1 max-h-72 overflow-y-auto">
+                {filteredBranches.map((branch) => (
+                  <button
+                    key={branch.name}
+                    onClick={() => handleOpen(branch)}
+                    className="w-full flex items-center gap-3 p-2 rounded border border-border bg-bg-primary hover:bg-bg-tertiary hover:border-accent transition-colors text-left"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-mono text-text-primary truncate">{branch.name}</div>
+                      <div className="text-xs text-text-secondary">
+                        {branch.hasWorktree ? (
+                          <span className="text-green-400">Has worktree</span>
+                        ) : (
+                          <span className="text-yellow-400">Remote only - will create worktree</span>
+                        )}
+                      </div>
+                    </div>
+                    <svg className="w-4 h-4 text-text-secondary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 
