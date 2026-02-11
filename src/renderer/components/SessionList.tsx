@@ -129,13 +129,6 @@ function SessionCard({
         }`}>
           {session.branch}
         </span>
-        {session.sessionType === 'review' ? (
-          <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-cyan-500/20 text-cyan-400 flex-shrink-0">
-            Review
-          </span>
-        ) : (
-          <BranchStatusChip status={session.branchStatus} />
-        )}
         <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity">
           {onArchive && (
             <button
@@ -183,7 +176,14 @@ function SessionCard({
         </div>
       </div>
       <div className="flex items-center gap-2 text-xs text-text-secondary">
-        <span className="truncate">{session.name}</span>
+        <span className="truncate flex-1">{session.name}</span>
+        {session.sessionType === 'review' ? (
+          <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-cyan-500/20 text-cyan-400 flex-shrink-0">
+            Review
+          </span>
+        ) : (
+          <BranchStatusChip status={session.branchStatus} />
+        )}
         {session.prNumber && (
           <span className="text-purple-400 flex-shrink-0">PR #{session.prNumber}</span>
         )}
