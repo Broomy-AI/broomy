@@ -61,6 +61,7 @@ function AppContent() {
     updatePrState,
     archiveSession,
     unarchiveSession,
+    setPanelVisibility,
   } = useSessionStore()
 
   const { agents, loadAgents } = useAgentStore()
@@ -305,6 +306,19 @@ function AppContent() {
         onUpdatePrState={(prState, prNumber, prUrl) => activeSessionId && updatePrState(activeSessionId, prState, prNumber, prUrl)}
         repoId={activeSession?.repoId}
         agentPtyId={activeSession?.agentPtyId}
+        onOpenReview={() => {
+          if (activeSessionId) {
+            setPanelVisibility(activeSessionId, PANEL_IDS.REVIEW, true)
+            const { toolbarPanels } = useSessionStore.getState()
+            if (!toolbarPanels.includes(PANEL_IDS.REVIEW)) {
+              const settingsIdx = toolbarPanels.indexOf(PANEL_IDS.SETTINGS)
+              const updated = [...toolbarPanels]
+              if (settingsIdx >= 0) updated.splice(settingsIdx, 0, PANEL_IDS.REVIEW)
+              else updated.push(PANEL_IDS.REVIEW)
+              setToolbarPanels(updated)
+            }
+          }
+        }}
       />
     ) : null,
     [PANEL_IDS.FILE_VIEWER]: activeSession?.showFileViewer ? (

@@ -790,11 +790,6 @@ describe('useSessionStore', () => {
     })
 
     it('addSession with sessionType review does not duplicate review in toolbar', async () => {
-      // Pre-set toolbar with review already present
-      useSessionStore.setState({
-        toolbarPanels: [...DEFAULT_TOOLBAR_PANELS, PANEL_IDS.REVIEW],
-      })
-
       await useSessionStore.getState().addSession('/test/repo', 'agent-1', {
         sessionType: 'review',
       })
@@ -811,10 +806,10 @@ describe('useSessionStore', () => {
       expect(session.panelVisibility[PANEL_IDS.REVIEW]).toBeUndefined()
     })
 
-    it('addSession without sessionType does not add review to toolbar', async () => {
+    it('addSession without sessionType keeps review in default toolbar', async () => {
       await useSessionStore.getState().addSession('/test/repo', 'agent-1')
       const state = useSessionStore.getState()
-      expect(state.toolbarPanels).not.toContain(PANEL_IDS.REVIEW)
+      expect(state.toolbarPanels).toContain(PANEL_IDS.REVIEW)
     })
 
     it('loadSessions preserves review panelVisibility from config', async () => {

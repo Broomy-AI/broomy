@@ -25,6 +25,7 @@ export default function Explorer({
   onUpdatePrState,
   repoId,
   agentPtyId,
+  onOpenReview,
 }: ExplorerProps) {
   if (!directory) {
     return (
@@ -134,6 +135,7 @@ export default function Explorer({
           pushedToMainCommit={pushedToMainCommit}
           onRecordPushToMain={onRecordPushToMain}
           onClearPushToMain={onClearPushToMain}
+          onOpenReview={onOpenReview}
         />
       )}
 

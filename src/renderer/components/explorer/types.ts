@@ -37,6 +37,7 @@ export interface ExplorerProps {
   onUpdatePrState?: (prState: PrState, prNumber?: number, prUrl?: string) => void
   repoId?: string
   agentPtyId?: string
+  onOpenReview?: () => void
 }
 
 export interface TreeNode extends FileEntry {

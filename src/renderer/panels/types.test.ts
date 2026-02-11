@@ -21,6 +21,7 @@ describe('DEFAULT_TOOLBAR_PANELS', () => {
     expect(DEFAULT_TOOLBAR_PANELS).toEqual([
       'sidebar',
       'explorer',
+      'review',
       'fileViewer',
       'agentTerminal',
       'userTerminal',

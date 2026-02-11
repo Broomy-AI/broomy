@@ -20,6 +20,7 @@ interface SourceControlProps {
   pushedToMainCommit?: string
   onRecordPushToMain?: (commitHash: string) => void
   onClearPushToMain?: () => void
+  onOpenReview?: () => void
 }
 
 export function SourceControl({
@@ -36,6 +37,7 @@ export function SourceControl({
   pushedToMainCommit,
   onRecordPushToMain,
   onClearPushToMain,
+  onOpenReview,
 }: SourceControlProps) {
   // Source control state
   const [commitMessage, setCommitMessage] = useState('')
@@ -774,7 +776,17 @@ export function SourceControl({
               )}
             </div>
           ) : branchStatus && branchStatus !== 'in-progress' ? (
-            <BranchStatusCard status={branchStatus} />
+            <>
+              <BranchStatusCard status={branchStatus} />
+              {branchStatus === 'open' && onOpenReview && (
+                <button
+                  onClick={onOpenReview}
+                  className="px-4 py-1.5 text-xs rounded bg-purple-600 text-white hover:bg-purple-500 transition-colors"
+                >
+                  Get AI Review
+                </button>
+              )}
+            </>
           ) : (
             <div className="text-sm text-text-secondary">Up to date</div>
           )}
