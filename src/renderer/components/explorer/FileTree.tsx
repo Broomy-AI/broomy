@@ -112,7 +112,7 @@ export function FileTree({
     return gitStatus.find((s) => s.path === relativePath)
   }
 
-  // Context menu handler
+  // Context menu handler for directories
   const handleContextMenu = async (e: React.MouseEvent, parentPath: string) => {
     e.preventDefault()
     e.stopPropagation()
@@ -139,6 +139,22 @@ export function FileTree({
 
       setInlineInput({ parentPath, type: result === 'new-file' ? 'file' : 'folder' })
       setInlineInputValue('')
+    }
+  }
+
+  // Context menu handler for files
+  const handleFileContextMenu = async (e: React.MouseEvent, filePath: string, fileName: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const result = await window.menu.popup([
+      { id: 'delete', label: `Delete "${fileName}"` },
+    ])
+
+    if (result === 'delete') {
+      if (window.confirm(`Delete "${fileName}"? This cannot be undone.`)) {
+        await window.fs.rm(filePath)
+      }
     }
   }
 
@@ -278,7 +294,7 @@ export function FileTree({
               if (items && items.length > 0) (items[items.length - 1] as HTMLElement).focus()
             }
           }}
-          onContextMenu={node.isDirectory ? (e) => handleContextMenu(e, node.path) : undefined}
+          onContextMenu={node.isDirectory ? (e) => handleContextMenu(e, node.path) : (e) => handleFileContextMenu(e, node.path, node.name)}
           className={`flex items-center gap-2 py-1 px-2 rounded cursor-pointer outline-none focus:bg-accent/15 ${statusColor} ${
             isSelected ? 'bg-accent/20 ring-1 ring-accent/50' : 'hover:bg-bg-tertiary'
           }`}

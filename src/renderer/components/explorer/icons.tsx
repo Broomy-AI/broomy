@@ -42,7 +42,7 @@ export function BranchStatusCard({ status }: { status: BranchStatus }) {
     pushed: {
       label: 'PUSHED',
       chipClasses: 'bg-blue-500/20 text-blue-400',
-      description: 'Changes pushed to remote. Consider creating a PR.',
+      description: 'Changes pushed to remote.',
     },
     empty: {
       label: 'EMPTY',

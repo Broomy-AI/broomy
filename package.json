@@ -8,7 +8,7 @@
   "main": "out/main/index.js",
   "scripts": {
     "preinstall": "npx only-allow pnpm",
-    "dev": "electron-vite dev",
+    "dev": "node scripts/dev-preflight.cjs",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "dist": "pnpm build && electron-builder --mac",

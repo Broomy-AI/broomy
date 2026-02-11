@@ -40,6 +40,7 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
   const cwdRef = useRef(cwd)
   cwdRef.current = cwd
   const [showScrollButton, setShowScrollButton] = useState(false)
+  const [restartKey, setRestartKey] = useState(0)
   const isFollowingRef = useRef(true)
   const { addError } = useErrorStore()
   const addErrorRef = useRef(addError)
@@ -85,6 +86,29 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
       updateTimeoutRef.current = setTimeout(flushUpdate, 300)
     }
   }, [flushUpdate])
+
+  const handleContextMenu = useCallback(async (e: React.MouseEvent) => {
+    e.preventDefault()
+    const hasSelection = terminalRef.current?.hasSelection() ?? false
+    const items = [
+      { id: 'copy', label: 'Copy', enabled: hasSelection },
+      { id: 'paste', label: 'Paste' },
+      ...(isAgentTerminal ? [
+        { id: 'sep', label: '', type: 'separator' as const },
+        { id: 'restart-agent', label: 'Restart Agent' },
+      ] : []),
+    ]
+    const result = await window.menu.popup(items)
+    if (result === 'copy' && terminalRef.current) {
+      const text = terminalRef.current.getSelection()
+      if (text) navigator.clipboard.writeText(text)
+    } else if (result === 'paste' && ptyIdRef.current) {
+      const text = await navigator.clipboard.readText()
+      if (text) window.pty.write(ptyIdRef.current, text)
+    } else if (result === 'restart-agent') {
+      setRestartKey((k) => k + 1)
+    }
+  }, [isAgentTerminal])
 
   const handleScrollToBottom = useCallback(() => {
     terminalRef.current?.scrollToBottom()
@@ -349,14 +373,15 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
         terminalBufferRegistry.unregister(sessionId)
       }
     }
-  }, [sessionId]) // Only recreate terminal when session identity changes
+  }, [sessionId, restartKey]) // Recreate terminal when session identity changes or on restart
 
-  // Fit when terminal becomes visible (e.g., tab switch)
+  // Fit and focus when terminal becomes visible (e.g., tab switch or session selection)
   useEffect(() => {
     lastInteractionRef.current = Date.now()
-    if (isActive && fitAddonRef.current) {
+    if (isActive) {
       requestAnimationFrame(() => {
         try { fitAddonRef.current?.fit() } catch { /* ignore */ }
+        terminalRef.current?.focus()
       })
     }
   }, [isActive])
@@ -383,7 +408,7 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
   }
 
   return (
-    <div className="h-full w-full p-2 relative">
+    <div className="h-full w-full p-2 relative" onContextMenu={handleContextMenu}>
       <div ref={containerRef} className="h-full w-full" />
       {showScrollButton && (
         <button

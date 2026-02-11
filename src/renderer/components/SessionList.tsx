@@ -113,7 +113,7 @@ function SessionCard({
           const prev = (e.currentTarget as HTMLElement).previousElementSibling as HTMLElement
           if (prev?.tabIndex >= 0) prev.focus()
         } else if (e.key === 'Delete' || e.key === 'Backspace') {
-          if (window.confirm(`Close session "${session.name}"?`)) {
+          if (window.confirm(`Close session "${session.branch}" (${session.name})?`)) {
             onDelete(e as unknown as React.MouseEvent)
           }
         }
@@ -130,7 +130,7 @@ function SessionCard({
           {session.branch}
         </span>
         {session.sessionType === 'review' ? (
-          <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-purple-500/20 text-purple-400 flex-shrink-0">
+          <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-cyan-500/20 text-cyan-400 flex-shrink-0">
             Review
           </span>
         ) : (
@@ -231,7 +231,7 @@ export default function SessionList({
 
   const handleDelete = (e: React.MouseEvent, session: Session) => {
     e.stopPropagation()
-    if (window.confirm(`Close session "${session.name}"?`)) {
+    if (window.confirm(`Close session "${session.branch}" (${session.name})?`)) {
       onDeleteSession(session.id)
     }
   }

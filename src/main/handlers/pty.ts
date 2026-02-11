@@ -55,6 +55,12 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     } else {
       shell = getDefaultShell()
       shellArgs = []
+      // Pass agent command as shell args so it runs after the shell profile loads,
+      // instead of writing it to the PTY after a blind delay.
+      if (initialCommand && !isWindows) {
+        shellArgs = ['-l', '-i', '-c', initialCommand]
+        initialCommand = undefined
+      }
     }
 
     // Start with process.env, but remove env vars that should be explicitly configured

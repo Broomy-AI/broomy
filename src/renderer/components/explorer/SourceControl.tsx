@@ -215,6 +215,13 @@ export function SourceControl({
     }
   }, [pushedToMainAt, hasChangesSincePush, onClearPushToMain])
 
+  const handleRevertFile = async (filePath: string) => {
+    if (!directory) return
+    if (!window.confirm(`Revert changes to "${filePath}"? This cannot be undone.`)) return
+    await window.git.checkoutFile(directory, filePath)
+    onGitStatusRefresh?.()
+  }
+
   const handleStage = async (filePath: string) => {
     if (!directory) return
     await window.git.stage(directory, filePath)
@@ -495,38 +502,6 @@ export function SourceControl({
           <span className="text-xs text-text-secondary">
             Branch merged to {branchBaseName}
           </span>
-        </div>
-      ) : syncStatus?.current && syncStatus.current !== branchBaseName ? (
-        <div className="flex flex-col gap-2">
-          <div className="text-xs text-text-secondary">
-            No PR for this branch
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={handleCreatePr}
-              className="px-2 py-1 text-xs rounded bg-accent text-white hover:bg-accent/80"
-            >
-              Create PR
-            </button>
-            {(hasWriteAccess || currentRepo?.allowPushToMain) && (
-              <button
-                onClick={handlePushToMain}
-                disabled={isPushingToMain}
-                className="px-2 py-1 text-xs rounded bg-bg-tertiary text-text-primary hover:bg-bg-secondary disabled:opacity-50"
-              >
-                {isPushingToMain ? 'Pushing...' : `Push to ${branchBaseName}`}
-              </button>
-            )}
-            {gitStatus.length === 0 && (
-              <button
-                onClick={handleSyncWithMain}
-                disabled={isSyncingWithMain}
-                className="px-2 py-1 text-xs rounded bg-bg-tertiary text-text-primary hover:bg-bg-secondary disabled:opacity-50"
-              >
-                {isSyncingWithMain ? 'Syncing...' : `Sync with ${branchBaseName}`}
-              </button>
-            )}
-          </div>
         </div>
       ) : null}
     </div>
