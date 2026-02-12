@@ -69,7 +69,7 @@ export function useReviewData(sessionId: string, sessionDirectory: string, prBas
   useEffect(() => {
     if (!sessionDirectory) return
     const baseBranch = prBaseBranch || undefined
-    window.git.branchChanges(sessionDirectory, baseBranch).then((result) => {
+    window.git.branchChanges(sessionDirectory, baseBranch).then((result: { mergeBase: string }) => {
       setMergeBase(result.mergeBase)
     }).catch(() => {
       setMergeBase('')

@@ -343,7 +343,7 @@ export function useTerminalSetup(
       })
     }
 
-    const viewportEl = containerRef.current.querySelector('.xterm-viewport')
+    const viewportEl = containerRef.current.querySelector<HTMLElement>('.xterm-viewport')
     const helpers = createViewportHelpers(terminal, viewportEl)
     const scrollTracking = createScrollTracking(terminal, viewportEl, helpers, s.isFollowingRef, s.setShowScrollButton)
 
@@ -379,10 +379,10 @@ export function useTerminalSetup(
         terminal.onData((data) => {
           s.lastUserInputRef.current = Date.now()
           if (s.sessionIdRef.current) s.markSessionReadRef.current(s.sessionIdRef.current)
-          window.pty.write(id, data)
+          void window.pty.write(id, data)
         })
 
-        const removeDataListener = window.pty.onData(id, (data) => {
+        const removeDataListener = window.pty.onData(id, (data: string) => {
           terminal.write(data, () => {
             if (s.isFollowingRef.current) {
               terminal.scrollToBottom()
@@ -428,7 +428,7 @@ export function useTerminalSetup(
           }
         })
 
-        const removeExitListener = window.pty.onExit(id, (exitCode) => {
+        const removeExitListener = window.pty.onExit(id, (exitCode: number) => {
           terminal.write(`\r\n[Process exited with code ${exitCode}]\r\n`)
           if (isAgent && s.sessionIdRef.current) {
             s.lastStatusRef.current = 'idle'
@@ -438,11 +438,11 @@ export function useTerminalSetup(
 
         s.cleanupRef.current = () => { removeDataListener(); removeExitListener() }
       })
-      .catch((err) => {
-        const errorMsg = `Failed to start terminal: ${err.message || err}`
+      .catch((err: unknown) => {
+        const errorMsg = `Failed to start terminal: ${err instanceof Error ? err.message : String(err)}`
         s.addErrorRef.current(errorMsg)
         terminal.write(`\r\n\x1b[31mError: Failed to start terminal\x1b[0m\r\n`)
-        terminal.write(`\x1b[33m${err.message || err}\x1b[0m\r\n`)
+        terminal.write(`\x1b[33m${err instanceof Error ? err.message : String(err)}\x1b[0m\r\n`)
       })
 
     let ptyResizeTimeout: ReturnType<typeof setTimeout> | null = null
@@ -462,7 +462,7 @@ export function useTerminalSetup(
       if (ptyResizeTimeout) clearTimeout(ptyResizeTimeout)
       ptyResizeTimeout = setTimeout(() => {
         if (s.ptyIdRef.current && terminal.cols > 0 && terminal.rows > 0) {
-          window.pty.resize(s.ptyIdRef.current, terminal.cols, terminal.rows)
+          void window.pty.resize(s.ptyIdRef.current, terminal.cols, terminal.rows)
         }
       }, 100)
     })
@@ -478,7 +478,7 @@ export function useTerminalSetup(
       if (syncCheckTimeout) clearTimeout(syncCheckTimeout)
       if (scrollTracking.state.pendingScrollRAF) cancelAnimationFrame(scrollTracking.state.pendingScrollRAF)
       s.cleanupRef.current?.()
-      if (s.ptyIdRef.current) { window.pty.kill(s.ptyIdRef.current); s.ptyIdRef.current = null }
+      if (s.ptyIdRef.current) { void window.pty.kill(s.ptyIdRef.current); s.ptyIdRef.current = null }
       terminal.dispose()
       if (s.updateTimeoutRef.current) clearTimeout(s.updateTimeoutRef.current)
       if (s.idleTimeoutRef.current) clearTimeout(s.idleTimeoutRef.current)

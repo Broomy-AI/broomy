@@ -8,16 +8,18 @@ import AgentSettings from '../components/AgentSettings'
 import SessionList from '../components/SessionList'
 import { useSessionStore, type Session } from '../store/sessions'
 import { PANEL_IDS } from '../panels'
+import type { FileStatus } from '../components/FileViewer'
 import type { GitFileStatus, GitStatusResult, ManagedRepo } from '../../preload/index'
+import type { ExplorerFilter, PrState } from '../store/sessions'
 import type { NavigationTarget } from '../utils/fileNavigation'
 
 interface PanelsMapConfig {
   sessions: Session[]
-  activeSessionId: string | undefined
+  activeSessionId: string | null
   activeSession: Session | undefined
   activeSessionGitStatus: GitFileStatus[]
   activeSessionGitStatusResult: GitStatusResult | null
-  selectedFileStatus: string | null | undefined
+  selectedFileStatus: FileStatus | undefined
   navigateToFile: (target: NavigationTarget) => void
   openFileInDiffMode: boolean
   scrollToLine: number | undefined
@@ -29,7 +31,7 @@ interface PanelsMapConfig {
   saveCurrentFileRef: React.MutableRefObject<(() => Promise<void>) | null>
   handleSelectSession: (id: string) => void
   handleNewSession: () => void
-  removeSession: (id: string) => Promise<void>
+  removeSession: (id: string, deleteWorktree: boolean) => void
   refreshPrStatus: () => Promise<void>
   archiveSession: (id: string) => void
   unarchiveSession: (id: string) => void
@@ -41,10 +43,10 @@ interface PanelsMapConfig {
   globalPanelVisibility: Record<string, boolean>
   toggleGlobalPanel: (panelId: string) => void
   selectFile: (sessionId: string, filePath: string) => void
-  setExplorerFilter: (sessionId: string, filter: string) => void
+  setExplorerFilter: (sessionId: string, filter: ExplorerFilter) => void
   recordPushToMain: (sessionId: string, commitHash: string) => void
   clearPushToMain: (sessionId: string) => void
-  updatePrState: (sessionId: string, prState: string | null, prNumber?: number, prUrl?: string) => void
+  updatePrState: (sessionId: string, prState: PrState, prNumber?: number, prUrl?: string) => void
   setPanelVisibility: (sessionId: string, panelId: string, visible: boolean) => void
   setToolbarPanels: (panels: string[]) => void
   repos: ManagedRepo[]
@@ -53,7 +55,7 @@ interface PanelsMapConfig {
 function useExplorerPanel(config: PanelsMapConfig) {
   const {
     activeSessionId, activeSession, activeSessionGitStatus, activeSessionGitStatusResult,
-    navigateToFile, fetchGitStatus, selectFile, setExplorerFilter,
+    navigateToFile, fetchGitStatus, setExplorerFilter,
     recordPushToMain, clearPushToMain, updatePrState, setPanelVisibility, setToolbarPanels,
   } = config
 
@@ -197,6 +199,7 @@ export function usePanelsMap(config: PanelsMapConfig) {
       <SessionList
         sessions={sessions}
         activeSessionId={activeSessionId}
+        repos={repos}
         onSelectSession={handleSelectSession}
         onNewSession={handleNewSession}
         onDeleteSession={removeSession}

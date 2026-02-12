@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import type { PrComment } from './types'
 import type { GitFileStatus, GitStatusResult, GitHubPrStatus, GitCommitInfo } from '../../../preload/index'
-import type { BranchStatus, PrState } from '../../store/sessions'
+import type { PrState } from '../../store/sessions'
 import { useRepoStore } from '../../store/repos'
 
 export interface SourceControlDataProps {
@@ -195,7 +195,7 @@ export function useSourceControlData({
     let cancelled = false
     setIsBranchLoading(true)
 
-    window.git.branchChanges(directory).then((result) => {
+    window.git.branchChanges(directory).then((result: { files: { path: string; status: string }[]; baseBranch: string; mergeBase: string }) => {
       if (cancelled) return
       setBranchChanges(result.files)
       setBranchBaseName(result.baseBranch)
@@ -218,7 +218,7 @@ export function useSourceControlData({
     let cancelled = false
     setIsCommitsLoading(true)
 
-    window.git.branchCommits(directory).then((result) => {
+    window.git.branchCommits(directory).then((result: { commits: GitCommitInfo[]; baseBranch: string }) => {
       if (cancelled) return
       setBranchCommits(result.commits)
       setBranchBaseName(result.baseBranch)

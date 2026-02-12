@@ -9,7 +9,7 @@ async function createReviewWorktree(repo: ManagedRepo, pr: GitHubPrForReview): P
 
   // Check if worktree already exists
   const worktrees = await window.git.worktreeList(mainDir)
-  const existingWorktree = worktrees.find(wt => wt.branch === branchName)
+  const existingWorktree = worktrees.find((wt: { path: string; branch: string }) => wt.branch === branchName)
 
   if (existingWorktree) {
     return { worktreePath: existingWorktree.path }

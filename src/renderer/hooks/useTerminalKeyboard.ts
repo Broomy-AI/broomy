@@ -13,26 +13,26 @@ export function useTerminalKeyboard(ptyIdRef: React.MutableRefObject<string | nu
       }
       if (e.shiftKey && e.key === 'Enter') {
         if (e.type === 'keydown' && ptyIdRef.current) {
-          window.pty.write(ptyIdRef.current, '\x1b[13;2u')
+          void window.pty.write(ptyIdRef.current, '\x1b[13;2u')
         }
         return false
       }
       if (e.metaKey && e.key === 'ArrowLeft') {
         if (e.type === 'keydown' && ptyIdRef.current) {
-          window.pty.write(ptyIdRef.current, '\x01')
+          void window.pty.write(ptyIdRef.current, '\x01')
         }
         return false
       }
       if (e.metaKey && e.key === 'ArrowRight') {
         if (e.type === 'keydown' && ptyIdRef.current) {
-          window.pty.write(ptyIdRef.current, '\x05')
+          void window.pty.write(ptyIdRef.current, '\x05')
         }
         return false
       }
       if (e.type !== 'keydown') return true
       if (e.metaKey && e.key === 'Backspace') {
         if (ptyIdRef.current) {
-          window.pty.write(ptyIdRef.current, '\x15')
+          void window.pty.write(ptyIdRef.current, '\x15')
         }
         return false
       }

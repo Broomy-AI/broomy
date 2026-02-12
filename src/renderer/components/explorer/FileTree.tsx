@@ -61,7 +61,7 @@ export function FileTree({
     if (!directory) return
     const watcherId = `explorer-${directory}`
     let refreshTimeout: ReturnType<typeof setTimeout> | null = null
-    window.fs.watch(watcherId, directory)
+    void window.fs.watch(watcherId, directory)
     const removeListener = window.fs.onChange(watcherId, () => {
       if (refreshTimeout) clearTimeout(refreshTimeout)
       refreshTimeout = setTimeout(() => { void refreshTree() }, 500)
@@ -69,7 +69,7 @@ export function FileTree({
     return () => {
       if (refreshTimeout) clearTimeout(refreshTimeout)
       removeListener()
-      window.fs.unwatch(watcherId)
+      void window.fs.unwatch(watcherId)
     }
   }, [directory, refreshTree])
 
@@ -149,7 +149,7 @@ export function FileTree({
                 // Move to parent — find the closest ancestor tree item
                 const container = (e.currentTarget as HTMLElement).closest('[data-panel-id]')
                 if (container) {
-                  const items = Array.from(container.querySelectorAll('[data-tree-item]'))
+                  const items = Array.from(container.querySelectorAll<HTMLElement>('[data-tree-item]'))
                   const idx = items.indexOf(e.currentTarget as HTMLElement)
                   // Walk backwards to find parent (item with less indentation)
                   for (let i = idx - 1; i >= 0; i--) {

@@ -45,7 +45,7 @@ export function useFileTree({ directory, onFileSelect, gitStatus = [] }: UseFile
   const loadDirectory = useCallback(async (dirPath: string): Promise<TreeNode[]> => {
     try {
       const entries = await window.fs.readDir(dirPath)
-      return entries.map((entry) => ({
+      return entries.map((entry: { name: string; isDirectory: boolean; path: string }) => ({
         ...entry,
         isExpanded: false,
       }))

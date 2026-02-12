@@ -10,7 +10,7 @@ interface AgentSettingsAgentTabProps {
   command: string
   color: string
   env: Record<string, string>
-  envEditorRef: RefObject<EnvVarEditorRef | null>
+  envEditorRef: RefObject<EnvVarEditorRef>
   onNameChange: (v: string) => void
   onCommandChange: (v: string) => void
   onColorChange: (v: string) => void
@@ -164,7 +164,7 @@ function AgentEditForm({
   command: string
   color: string
   env: Record<string, string>
-  envEditorRef: RefObject<EnvVarEditorRef | null>
+  envEditorRef: RefObject<EnvVarEditorRef>
   onNameChange: (v: string) => void
   onCommandChange: (v: string) => void
   onColorChange: (v: string) => void

@@ -38,7 +38,7 @@ export function useFileWatcher({
     const watcherId = `fileviewer-${filePath}`
     let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
-    window.fs.watch(watcherId, filePath)
+    void window.fs.watch(watcherId, filePath)
     const removeListener = window.fs.onChange(watcherId, () => {
       // Debounce to avoid multiple triggers
       if (debounceTimer) clearTimeout(debounceTimer)
@@ -65,7 +65,7 @@ export function useFileWatcher({
     return () => {
       if (debounceTimer) clearTimeout(debounceTimer)
       removeListener()
-      window.fs.unwatch(watcherId)
+      void window.fs.unwatch(watcherId)
     }
   }, [filePath, isDirty])
 

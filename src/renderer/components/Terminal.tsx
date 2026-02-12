@@ -56,7 +56,7 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
       if (text) void navigator.clipboard.writeText(text)
     } else if (result === 'paste' && ptyIdRef.current) {
       const text = await navigator.clipboard.readText()
-      if (text) window.pty.write(ptyIdRef.current, text)
+      if (text) void window.pty.write(ptyIdRef.current, text)
     } else if (result === 'restart-agent') {
       setRestartKey((k) => k + 1)
     }

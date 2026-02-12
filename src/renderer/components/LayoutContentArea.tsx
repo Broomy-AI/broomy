@@ -111,7 +111,7 @@ function TerminalsPanel({
 }
 
 interface LayoutContentAreaProps {
-  containerRef: RefObject<HTMLDivElement | null>
+  containerRef: RefObject<HTMLDivElement>
   showSettings: boolean
   showFileViewer: boolean
   showAgentTerminal: boolean

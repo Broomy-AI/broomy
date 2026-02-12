@@ -26,7 +26,6 @@ export function useReviewActions(
     comments,
     mergeBase,
     broomyDir,
-    reviewFilePath,
     commentsFilePath,
     historyFilePath,
     promptFilePath,
@@ -46,8 +45,8 @@ export function useReviewActions(
       if (!exists) return false
 
       const content = await window.fs.readFile(gitignorePath)
-      const lines = content.split('\n').map(l => l.trim())
-      return lines.some(line => line === '.broomy' || line === '.broomy/' || line === '/.broomy' || line === '/.broomy/')
+      const lines = content.split('\n').map((l: string) => l.trim())
+      return lines.some((line: string) => line === '.broomy' || line === '.broomy/' || line === '/.broomy' || line === '/.broomy/')
     } catch {
       return false
     }

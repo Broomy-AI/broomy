@@ -59,7 +59,7 @@ export default function Layout({
 
   // Check if we're in dev mode on mount
   useEffect(() => {
-    window.app.isDev().then(setIsDev)
+    void window.app.isDev().then(setIsDev)
   }, [])
 
   // Get visibility for a panel, considering global vs session state

@@ -22,6 +22,15 @@ export type { ConfigApi, ProfilesApi, AgentsApi, ReposApi } from './apis/config'
 export type { ShellApi, DialogApi, AppApi } from './apis/shell'
 export type { MenuApi, TsApi } from './apis/menu'
 
+// Import types for Window interface augmentation
+import type { PtyApi } from './apis/pty'
+import type { FsApi } from './apis/fs'
+import type { GitApi } from './apis/git'
+import type { GhApi } from './apis/gh'
+import type { ConfigApi, ProfilesApi, AgentsApi, ReposApi } from './apis/config'
+import type { ShellApi, DialogApi, AppApi } from './apis/shell'
+import type { MenuApi, TsApi } from './apis/menu'
+
 // Import API implementations
 import { ptyApi } from './apis/pty'
 import { fsApi } from './apis/fs'

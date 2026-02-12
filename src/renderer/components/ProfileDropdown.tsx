@@ -32,7 +32,7 @@ interface ProfileDropdownProps {
   onStartEdit: () => void
   onSaveEdit: () => void
   onDelete: (profileId: string) => void
-  dropdownRef: React.RefObject<HTMLDivElement | null>
+  dropdownRef: React.RefObject<HTMLDivElement>
 }
 
 export default function ProfileDropdown({

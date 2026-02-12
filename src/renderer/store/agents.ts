@@ -36,7 +36,7 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
     const pid = profileId ?? get().profileId
     try {
       const config = await window.config.load(pid)
-      set({ agents: config.agents || [], isLoading: false, profileId: pid })
+      set({ agents: config.agents, isLoading: false, profileId: pid })
     } catch {
       set({ agents: [], isLoading: false })
     }

@@ -89,7 +89,7 @@ export function useSessionLifecycle({
       const timeout = setTimeout(() => {
         const container = document.querySelector(`[data-panel-id="${PANEL_IDS.AGENT_TERMINAL}"]`)
         if (!container) return
-        const xtermTextarea = container.querySelector('.xterm-helper-textarea')
+        const xtermTextarea = container.querySelector<HTMLElement>('.xterm-helper-textarea')
         if (xtermTextarea) xtermTextarea.focus()
       }, 100)
       return () => clearTimeout(timeout)

@@ -23,7 +23,7 @@ async function validateWorktreeFolder(folder: string): Promise<{ worktrees: { pa
     const worktreeList = await window.git.worktreeList(mainDir)
 
     // Verify all worktrees are in this folder
-    const validWorktrees = worktreeList.filter(wt => wt.path.startsWith(folder))
+    const validWorktrees = worktreeList.filter((wt: { path: string; branch: string }) => wt.path.startsWith(folder))
 
     if (validWorktrees.length === 0) {
       return { worktrees: [], error: 'No worktrees found in this folder.' }
@@ -51,7 +51,7 @@ async function validateWorktreeFolder(folder: string): Promise<{ worktrees: { pa
     }
 
     return {
-      worktrees: validWorktrees.map(wt => ({
+      worktrees: validWorktrees.map((wt: { path: string; branch: string }) => ({
         path: wt.path,
         branch: wt.branch,
       })),

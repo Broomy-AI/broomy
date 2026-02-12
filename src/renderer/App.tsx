@@ -7,7 +7,7 @@
  * manages file navigation with unsaved-changes guards and global keyboard shortcuts.
  * The outer App component wraps AppContent in the PanelProvider context.
  */
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Layout from './components/Layout'
 import NewSessionDialog from './components/NewSessionDialog'
 import PanelPicker from './components/PanelPicker'
@@ -83,6 +83,7 @@ function AppContent() {
     updatePrState,
     archiveSession,
     unarchiveSession,
+    setPanelVisibility,
   } = useSessionStore()
 
   const { agents, loadAgents } = useAgentStore()
@@ -97,7 +98,6 @@ function AppContent() {
 
   // Git polling hook
   const {
-    gitStatusBySession,
     activeSessionGitStatus,
     activeSessionGitStatusResult,
     selectedFileStatus,
@@ -157,6 +157,7 @@ function AppContent() {
     handleNewSession,
     handleNewSessionComplete,
     handleCancelNewSession,
+    handleDeleteSession,
     refreshPrStatus,
     getAgentCommand,
     getAgentEnv,
@@ -169,7 +170,9 @@ function AppContent() {
     sessions,
     activeSessionId,
     agents,
+    repos,
     addSession,
+    removeSession,
     setActiveSession,
     togglePanel,
     updateLayoutSize,
@@ -197,7 +200,7 @@ function AppContent() {
     saveCurrentFileRef,
     handleSelectSession,
     handleNewSession,
-    removeSession,
+    removeSession: (id, deleteWorktree) => { void handleDeleteSession(id, deleteWorktree) },
     refreshPrStatus,
     archiveSession,
     unarchiveSession,
@@ -274,7 +277,7 @@ function App() {
 
   // Expose store for Playwright screenshot manipulation
   useEffect(() => {
-    (window as Record<string, unknown>).__sessionStore = useSessionStore
+    (window as unknown as Record<string, unknown>).__sessionStore = useSessionStore
   }, [])
 
   return (

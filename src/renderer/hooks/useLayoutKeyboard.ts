@@ -23,21 +23,21 @@ export function useLayoutKeyboard({
     if (!container) return
 
     // For terminals: focus the xterm helper textarea
-    const xtermTextarea = container.querySelector('.xterm-helper-textarea')
+    const xtermTextarea = container.querySelector<HTMLElement>('.xterm-helper-textarea')
     if (xtermTextarea) {
       xtermTextarea.focus()
       return
     }
 
     // For Monaco editor: focus the editor textarea
-    const monacoTextarea = container.querySelector('textarea.inputarea')
+    const monacoTextarea = container.querySelector<HTMLElement>('textarea.inputarea')
     if (monacoTextarea) {
       monacoTextarea.focus()
       return
     }
 
     // Fallback: focus any focusable element inside
-    const focusable = container.querySelector('input, textarea, button, [tabindex]')
+    const focusable = container.querySelector<HTMLElement>('input, textarea, button, [tabindex]')
     if (focusable) {
       focusable.focus()
       return

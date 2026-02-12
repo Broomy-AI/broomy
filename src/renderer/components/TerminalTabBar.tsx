@@ -50,9 +50,9 @@ interface TerminalTabBarProps {
   handleAddTab: () => void
   setEditingName: (name: string) => void
   setShowDropdown: (show: boolean) => void
-  editInputRef: React.RefObject<HTMLInputElement | null>
-  dropdownRef: React.RefObject<HTMLDivElement | null>
-  tabsContainerRef: React.RefObject<HTMLDivElement | null>
+  editInputRef: React.RefObject<HTMLInputElement>
+  dropdownRef: React.RefObject<HTMLDivElement>
+  tabsContainerRef: React.RefObject<HTMLDivElement>
 }
 
 export default function TerminalTabBar({

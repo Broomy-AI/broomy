@@ -114,7 +114,7 @@ function createGitActions(
     if (!directory) return
     const url = await window.gh.getPrCreateUrl(directory)
     if (url) {
-      window.shell.openExternal(url)
+      void window.shell.openExternal(url)
     }
   }
 

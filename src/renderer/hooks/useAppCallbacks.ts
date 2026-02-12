@@ -1,19 +1,22 @@
 import { useCallback } from 'react'
-import { useSessionStore, type Session, type LayoutSizes } from '../store/sessions'
+import { type Session, type LayoutSizes } from '../store/sessions'
 import { useErrorStore } from '../store/errors'
 import { PANEL_IDS } from '../panels'
 import type { AgentConfig } from '../store/agents'
+import type { PrState } from '../utils/branchStatus'
 
 interface AppCallbacksDeps {
   sessions: Session[]
-  activeSessionId: string | undefined
+  activeSessionId: string | null
   agents: AgentConfig[]
+  repos: { id: string; rootDir: string; defaultBranch: string }[]
   addSession: (directory: string, agentId: string | null, extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; name?: string; sessionType?: 'default' | 'review'; prNumber?: number; prTitle?: string; prUrl?: string; prBaseBranch?: string }) => Promise<void>
+  removeSession: (id: string) => void
   setActiveSession: (id: string | null) => void
   togglePanel: (sessionId: string, panelId: string) => void
   updateLayoutSize: (id: string, key: keyof LayoutSizes, value: number) => void
   setFileViewerPosition: (id: string, position: 'top' | 'left') => void
-  updatePrState: (sessionId: string, prState: string | null, prNumber?: number, prUrl?: string) => void
+  updatePrState: (sessionId: string, prState: PrState, prNumber?: number, prUrl?: string) => void
   setShowNewSessionDialog: (show: boolean) => void
 }
 
@@ -21,7 +24,9 @@ export function useAppCallbacks({
   sessions,
   activeSessionId,
   agents,
+  repos,
   addSession,
+  removeSession,
   setActiveSession,
   togglePanel,
   updateLayoutSize,
@@ -96,12 +101,33 @@ export function useAppCallbacks({
     requestAnimationFrame(() => {
       const container = document.querySelector(`[data-panel-id="${PANEL_IDS.AGENT_TERMINAL}"]`)
       if (!container) return
-      const xtermTextarea = container.querySelector('.xterm-helper-textarea')
+      const xtermTextarea = container.querySelector<HTMLElement>('.xterm-helper-textarea')
       if (xtermTextarea) {
         xtermTextarea.focus()
       }
     })
   }, [setActiveSession])
+
+  const handleDeleteSession = useCallback(async (id: string, deleteWorktree: boolean) => {
+    if (deleteWorktree) {
+      const session = sessions.find(s => s.id === id)
+      if (session?.repoId) {
+        const repo = repos.find(r => r.id === session.repoId)
+        if (repo) {
+          const mainDir = `${repo.rootDir}/${repo.defaultBranch}`
+          const removeResult = await window.git.worktreeRemove(mainDir, session.directory)
+          if (!removeResult.success) {
+            addError(`Failed to remove worktree: ${removeResult.error}`)
+          }
+          const branchResult = await window.git.deleteBranch(mainDir, session.branch)
+          if (!branchResult.success) {
+            addError(`Failed to delete branch: ${branchResult.error}`)
+          }
+        }
+      }
+    }
+    removeSession(id)
+  }, [sessions, repos, removeSession, addError])
 
   const handleTogglePanel = useCallback((panelId: string) => {
     if (activeSessionId) {
@@ -119,6 +145,7 @@ export function useAppCallbacks({
     handleNewSession,
     handleNewSessionComplete,
     handleCancelNewSession,
+    handleDeleteSession,
     refreshPrStatus,
     getAgentCommand,
     getAgentEnv,

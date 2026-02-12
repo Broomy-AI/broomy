@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import type { GitStatusResult } from '../../preload/index'
-import type { Session } from '../store/sessions'
+import type { Session, BranchStatus } from '../store/sessions'
 import type { ManagedRepo } from '../../preload/index'
 import { normalizeGitStatus } from '../utils/gitStatusNormalizer'
 import { computeBranchStatus } from '../utils/branchStatus'
@@ -16,7 +16,7 @@ export function useGitPolling({
   activeSession: Session | undefined
   repos: ManagedRepo[]
   markHasHadCommits: (sessionId: string) => void
-  updateBranchStatus: (sessionId: string, status: string) => void
+  updateBranchStatus: (sessionId: string, status: BranchStatus) => void
 }) {
   const [gitStatusBySession, setGitStatusBySession] = useState<Record<string, GitStatusResult | undefined>>({})
   const [isMergedBySession, setIsMergedBySession] = useState<Record<string, boolean | undefined>>({})

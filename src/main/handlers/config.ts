@@ -174,7 +174,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     }
   })
 
-  ipcMain.handle('config:save', (_event, config: { profileId?: string; agents?: unknown[]; sessions: unknown[]; repos?: unknown[]; defaultCloneDir?: string; showSidebar?: boolean; sidebarWidth?: number; toolbarPanels?: string[] }) => {
+  ipcMain.handle('config:save', async (_event, config: { profileId?: string; agents?: unknown[]; sessions: unknown[]; repos?: unknown[]; defaultCloneDir?: string; showSidebar?: boolean; sidebarWidth?: number; toolbarPanels?: string[] }) => {
     // Don't save config during E2E tests to avoid polluting real config
     if (ctx.isE2ETest) {
       return { success: true }
