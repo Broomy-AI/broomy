@@ -26,6 +26,7 @@ interface LayoutProps {
   onTogglePanel: (panelId: string) => void
   onToggleGlobalPanel: (panelId: string) => void
   onOpenPanelPicker?: () => void
+  onSearchFiles?: () => void
 }
 
 // Keyboard shortcut helper
@@ -34,7 +35,7 @@ const formatShortcut = (key: string) => {
   return `${modifier}${key}`
 }
 
-type DividerType = 'sidebar' | 'explorer' | 'review' | 'fileViewer' | 'userTerminal' | null
+type DividerType = 'sidebar' | 'explorer' | 'review' | 'fileViewer' | 'userTerminal' | 'tutorial' | null
 
 export default function Layout({
   panels,
@@ -51,6 +52,7 @@ export default function Layout({
   onTogglePanel,
   onToggleGlobalPanel,
   onOpenPanelPicker,
+  onSearchFiles,
 }: LayoutProps) {
   const [draggingDivider, setDraggingDivider] = useState<DividerType>(null)
   const [isDev, setIsDev] = useState(false)
@@ -84,6 +86,7 @@ export default function Layout({
   const showAgentTerminal = isPanelVisible(PANEL_IDS.AGENT_TERMINAL)
   const showUserTerminal = isPanelVisible(PANEL_IDS.USER_TERMINAL)
   const showSettings = isPanelVisible(PANEL_IDS.SETTINGS)
+  const showTutorial = isPanelVisible(PANEL_IDS.TUTORIAL)
 
   // Handle toggle for any panel
   const handleToggle = useCallback((panelId: string) => {
@@ -148,6 +151,12 @@ export default function Layout({
           if (!centerRect) return
           const newHeight = centerRect.bottom - e.clientY
           onLayoutSizeChange('userTerminalHeight', Math.max(100, Math.min(newHeight, 500)))
+          break
+        }
+        case 'tutorial': {
+          if (!mainRect) return
+          const newWidth = mainRect.right - e.clientX
+          onLayoutSizeChange('tutorialPanelWidth', Math.max(280, Math.min(newWidth, 400)))
           break
         }
       }
@@ -262,6 +271,14 @@ export default function Layout({
 
       if (!(e.metaKey || e.ctrlKey)) return
 
+      // Cmd/Ctrl+P — handle before textarea check since it's app-wide
+      if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        onSearchFiles?.()
+        return
+      }
+
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return
       }
@@ -285,7 +302,7 @@ export default function Layout({
       window.removeEventListener('keydown', handleKeyDown, true)
       window.removeEventListener('app:toggle-panel', handleCustomToggle)
     }
-  }, [handleToggleByKey, handleCyclePanel])
+  }, [handleToggleByKey, handleCyclePanel, onSearchFiles])
 
   // Get toolbar panels info with visibility status
   const toolbarPanelInfo = useMemo(() => {
@@ -327,20 +344,20 @@ export default function Layout({
 
   // Render a toolbar button for a panel
   const renderToolbarButton = (panel: PanelDefinition & { shortcutKey: string | null; isVisible: boolean }) => {
-    const isSettings = panel.id === PANEL_IDS.SETTINGS
+    const isIconOnly = panel.id === PANEL_IDS.SETTINGS || panel.id === PANEL_IDS.TUTORIAL
 
     return (
       <button
         key={panel.id}
         onClick={() => handleToggle(panel.id)}
-        className={`${isSettings ? 'p-1.5' : 'px-3 py-1 text-xs'} rounded transition-colors ${
+        className={`${isIconOnly ? 'p-1.5' : 'px-3 py-1 text-xs'} rounded transition-colors ${
           panel.isVisible
             ? 'bg-accent text-white'
             : 'bg-bg-tertiary text-text-secondary hover:text-text-primary'
         }`}
         title={`${panel.name}${panel.shortcutKey ? ` (${formatShortcut(panel.shortcutKey)})` : ''}`}
       >
-        {isSettings ? panel.icon : panel.name}
+        {isIconOnly ? panel.icon : panel.name}
       </button>
     )
   }
@@ -359,6 +376,7 @@ export default function Layout({
   const agentTerminal = panels[PANEL_IDS.AGENT_TERMINAL]
   const userTerminal = panels[PANEL_IDS.USER_TERMINAL]
   const settingsPanel = panels[PANEL_IDS.SETTINGS]
+  const tutorialPanel = panels[PANEL_IDS.TUTORIAL]
 
   // Determine if we should show terminals (considering all visibility states)
   const terminalsVisible = showAgentTerminal || showUserTerminal
@@ -482,7 +500,7 @@ export default function Layout({
 
             {/* Center: file viewer + terminals + settings
                 Always rendered (hidden when error) to keep terminals mounted */}
-            <div ref={containerRef} className={`flex-1 min-w-0 flex flex-col ${errorMessage ? 'hidden' : ''}`}>
+            <div ref={containerRef} className={`flex-1 min-w-0 min-h-0 flex flex-col ${errorMessage ? 'hidden' : ''}`}>
               {/* Settings panel - uses hidden/visible instead of ternary to avoid unmounting terminals */}
               <div
                 data-panel-id={PANEL_IDS.SETTINGS}
@@ -560,6 +578,22 @@ export default function Layout({
                 )}
               </div>
             </div>
+
+            {/* Tutorial panel (right side) - hidden when error */}
+            {!errorMessage && showTutorial && tutorialPanel && (
+              <>
+                <Divider type="tutorial" direction="vertical" />
+                <div
+                  data-panel-id={PANEL_IDS.TUTORIAL}
+                  tabIndex={-1}
+                  className="relative flex-shrink-0 bg-bg-secondary overflow-y-auto outline-none"
+                  style={{ width: layoutSizes.tutorialPanelWidth ?? 320 }}
+                >
+                  <FlashOverlay panelId={PANEL_IDS.TUTORIAL} />
+                  {tutorialPanel}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

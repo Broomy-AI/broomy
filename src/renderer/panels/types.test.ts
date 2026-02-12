@@ -9,10 +9,11 @@ describe('PANEL_IDS', () => {
     expect(PANEL_IDS.AGENT_TERMINAL).toBe('agentTerminal')
     expect(PANEL_IDS.USER_TERMINAL).toBe('userTerminal')
     expect(PANEL_IDS.SETTINGS).toBe('settings')
+    expect(PANEL_IDS.TUTORIAL).toBe('tutorial')
   })
 
-  it('has 7 panel IDs', () => {
-    expect(Object.keys(PANEL_IDS)).toHaveLength(7)
+  it('has 8 panel IDs', () => {
+    expect(Object.keys(PANEL_IDS)).toHaveLength(8)
   })
 })
 
@@ -24,6 +25,7 @@ describe('DEFAULT_TOOLBAR_PANELS', () => {
       'fileViewer',
       'agentTerminal',
       'userTerminal',
+      'tutorial',
       'settings',
     ])
   })

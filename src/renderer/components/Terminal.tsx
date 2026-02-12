@@ -16,9 +16,10 @@ interface TerminalProps {
   env?: Record<string, string>
   isAgentTerminal?: boolean
   isActive?: boolean
+  onUserInput?: () => void
 }
 
-export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal = false, isActive = false }: TerminalProps) {
+export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal = false, isActive = false, onUserInput }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -61,6 +62,9 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
 
   const sessionIdRef = useRef(sessionId)
   sessionIdRef.current = sessionId
+  const onUserInputRef = useRef(onUserInput)
+  onUserInputRef.current = onUserInput
+  const hasNotifiedUserInputRef = useRef(false)
 
   const pendingUpdateRef = useRef<{ status?: 'working' | 'idle' | 'error'; lastMessage?: string } | null>(null)
 
@@ -277,6 +281,12 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
           lastUserInputRef.current = Date.now()
           if (sessionIdRef.current) {
             markSessionReadRef.current(sessionIdRef.current)
+          }
+          // Only count printable characters or Enter as real user input
+          // (ignore escape sequence responses like terminal identification)
+          if (onUserInputRef.current && !hasNotifiedUserInputRef.current && /[\x20-\x7e\r]/.test(data)) {
+            hasNotifiedUserInputRef.current = true
+            try { onUserInputRef.current() } catch { /* ignore */ }
           }
           window.pty.write(id, data)
         })

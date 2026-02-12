@@ -460,7 +460,7 @@ ipcMain.handle('config:load', async (_event, profileId?: string) => {
   }
 })
 
-ipcMain.handle('config:save', async (_event, config: { profileId?: string; agents?: unknown[]; sessions: unknown[]; repos?: unknown[]; defaultCloneDir?: string; showSidebar?: boolean; sidebarWidth?: number; toolbarPanels?: string[] }) => {
+ipcMain.handle('config:save', async (_event, config: { profileId?: string; agents?: unknown[]; sessions: unknown[]; repos?: unknown[]; defaultCloneDir?: string; showSidebar?: boolean; sidebarWidth?: number; toolbarPanels?: string[]; tutorialProgress?: { completedSteps: string[] } }) => {
   // Don't save config during E2E tests to avoid polluting real config
   if (isE2ETest) {
     return { success: true }
@@ -493,6 +493,7 @@ ipcMain.handle('config:save', async (_event, config: { profileId?: string; agent
     if (config.showSidebar !== undefined) configToSave.showSidebar = config.showSidebar
     if (config.sidebarWidth !== undefined) configToSave.sidebarWidth = config.sidebarWidth
     if (config.toolbarPanels !== undefined) configToSave.toolbarPanels = config.toolbarPanels
+    if (config.tutorialProgress !== undefined) configToSave.tutorialProgress = config.tutorialProgress
     writeFileSync(configFile, JSON.stringify(configToSave, null, 2))
     return { success: true }
   } catch (error) {
@@ -2382,8 +2383,113 @@ ipcMain.handle('ts:getProjectContext', async (_event, projectRoot: string) => {
   return { projectRoot, compilerOptions, files }
 })
 
+// Build application menu with Help menu
+function buildAppMenu() {
+  const menuTemplate: Electron.MenuItemConstructorOptions[] = [
+    ...(isMac ? [{
+      label: app.name,
+      submenu: [
+        { role: 'about' as const },
+        { type: 'separator' as const },
+        { role: 'services' as const },
+        { type: 'separator' as const },
+        { role: 'hide' as const },
+        { role: 'hideOthers' as const },
+        { role: 'unhide' as const },
+        { type: 'separator' as const },
+        { role: 'quit' as const },
+      ],
+    }] : []),
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+      ],
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+      ],
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        ...(isMac ? [
+          { type: 'separator' as const },
+          { role: 'front' as const },
+        ] : [
+          { role: 'close' as const },
+        ]),
+      ],
+    },
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'Getting Started',
+          click: () => {
+            const focusedWindow = BrowserWindow.getFocusedWindow()
+            if (focusedWindow) {
+              focusedWindow.webContents.send('help:menu', 'getting-started')
+            }
+          },
+        },
+        {
+          label: 'Keyboard Shortcuts',
+          click: () => {
+            const focusedWindow = BrowserWindow.getFocusedWindow()
+            if (focusedWindow) {
+              focusedWindow.webContents.send('help:menu', 'shortcuts')
+            }
+          },
+        },
+        { type: 'separator' },
+        {
+          label: 'Reset Tutorial Progress',
+          click: () => {
+            const focusedWindow = BrowserWindow.getFocusedWindow()
+            if (focusedWindow) {
+              focusedWindow.webContents.send('help:menu', 'reset-tutorial')
+            }
+          },
+        },
+        { type: 'separator' },
+        {
+          label: 'Report Issue...',
+          click: () => {
+            shell.openExternal('https://github.com/Broomy-AI/broomy/issues')
+          },
+        },
+      ],
+    },
+  ]
+
+  const menu = Menu.buildFromTemplate(menuTemplate)
+  Menu.setApplicationMenu(menu)
+}
+
 // App lifecycle
 app.whenReady().then(() => {
+  // Build the application menu
+  buildAppMenu()
+
   // Determine the initial profile to open
   let initialProfileId = 'default'
   if (!isE2ETest) {

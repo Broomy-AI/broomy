@@ -92,6 +92,11 @@ const mockAgents = {
   isInstalled: vi.fn().mockResolvedValue(true),
 }
 
+// Mock window.help
+const mockHelp = {
+  onHelpMenu: vi.fn().mockReturnValue(() => {}),
+}
+
 // Mock window.menu
 const mockMenu = {
   popup: vi.fn().mockResolvedValue(null),
@@ -139,6 +144,7 @@ const broomyMocks = {
   shell: mockShell,
   repos: mockRepos,
   agents: mockAgents,
+  help: mockHelp,
   menu: mockMenu,
   ts: mockTs,
   fs: mockFs,

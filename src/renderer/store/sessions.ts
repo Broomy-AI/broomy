@@ -25,6 +25,7 @@ export interface LayoutSizes {
   userTerminalHeight: number
   diffPanelWidth: number
   reviewPanelWidth: number
+  tutorialPanelWidth: number
 }
 
 export type ExplorerFilter = 'files' | 'source-control' | 'search' | 'recent'
@@ -94,6 +95,7 @@ const DEFAULT_LAYOUT_SIZES: LayoutSizes = {
   userTerminalHeight: 192, // 12rem = 192px
   diffPanelWidth: 320, // 20rem = 320px
   reviewPanelWidth: 320,
+  tutorialPanelWidth: 320,
 }
 
 const DEFAULT_SIDEBAR_WIDTH = 224 // 14rem = 224px
@@ -124,10 +126,11 @@ const REVIEW_PANEL_VISIBILITY: PanelVisibility = {
   [PANEL_IDS.REVIEW]: true,
 }
 
-// Global panel visibility (sidebar, settings)
+// Global panel visibility (sidebar, settings, tutorial)
 const DEFAULT_GLOBAL_PANEL_VISIBILITY: PanelVisibility = {
   [PANEL_IDS.SIDEBAR]: true,
   [PANEL_IDS.SETTINGS]: false,
+  [PANEL_IDS.TUTORIAL]: false,
 }
 
 interface SessionStore {
@@ -366,6 +369,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const globalPanelVisibility = {
         [PANEL_IDS.SIDEBAR]: config.showSidebar ?? true,
         [PANEL_IDS.SETTINGS]: false,
+        [PANEL_IDS.TUTORIAL]: false,
       }
 
       set({

@@ -209,6 +209,15 @@ export default function Explorer({
   const [isSearching, setIsSearching] = useState(false)
   const [collapsedSearchGroups, setCollapsedSearchGroups] = useState<Set<string>>(new Set())
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  // Auto-focus search input when switching to search filter
+  useEffect(() => {
+    if (filter === 'search') {
+      // Small delay to ensure the input is rendered
+      requestAnimationFrame(() => searchInputRef.current?.focus())
+    }
+  }, [filter])
 
   // Reset source control state when directory (session) changes
   useEffect(() => {
@@ -1566,6 +1575,7 @@ export default function Explorer({
       <div className="flex flex-col h-full">
         <div className="px-3 py-2 border-b border-border">
           <input
+            ref={searchInputRef}
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}

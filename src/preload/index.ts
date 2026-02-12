@@ -193,6 +193,7 @@ export type LayoutSizesData = {
   userTerminalHeight: number
   diffPanelWidth: number
   reviewPanelWidth: number
+  tutorialPanelWidth: number
 }
 
 export type PanelVisibility = Record<string, boolean>
@@ -236,6 +237,10 @@ export type SessionData = {
   isArchived?: boolean
 }
 
+export type TutorialProgressData = {
+  completedSteps: string[]
+}
+
 export type ConfigData = {
   agents: AgentData[]
   sessions: SessionData[]
@@ -245,6 +250,7 @@ export type ConfigData = {
   repos?: ManagedRepo[]
   defaultCloneDir?: string
   profileId?: string
+  tutorialProgress?: TutorialProgressData
 }
 
 export type ConfigApi = {
@@ -272,6 +278,12 @@ export type ProfilesApi = {
 
 export type AgentsApi = {
   isInstalled: (command: string) => Promise<boolean>
+}
+
+export type HelpMenuEvent = 'getting-started' | 'shortcuts' | 'reset-tutorial'
+
+export type HelpApi = {
+  onHelpMenu: (callback: (event: HelpMenuEvent) => void) => () => void
 }
 
 const ptyApi: PtyApi = {
@@ -388,6 +400,14 @@ const agentsApi: AgentsApi = {
   isInstalled: (command) => ipcRenderer.invoke('agent:isInstalled', command),
 }
 
+const helpApi: HelpApi = {
+  onHelpMenu: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, menuEvent: HelpMenuEvent) => callback(menuEvent)
+    ipcRenderer.on('help:menu', handler)
+    return () => ipcRenderer.removeListener('help:menu', handler)
+  },
+}
+
 export type AppApi = {
   isDev: () => Promise<boolean>
   homedir: () => Promise<string>
@@ -444,6 +464,7 @@ contextBridge.exposeInMainWorld('shell', shellApi)
 contextBridge.exposeInMainWorld('profiles', profilesApi)
 contextBridge.exposeInMainWorld('agents', agentsApi)
 contextBridge.exposeInMainWorld('ts', tsApi)
+contextBridge.exposeInMainWorld('help', helpApi)
 
 declare global {
   interface Window {
@@ -461,5 +482,6 @@ declare global {
     profiles: ProfilesApi
     agents: AgentsApi
     ts: TsApi
+    help: HelpApi
   }
 }

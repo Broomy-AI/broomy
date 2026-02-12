@@ -8,6 +8,7 @@ export type PanelPosition =
   | 'center-left'  // Left of terminals (file viewer in left mode)
   | 'center-main'  // Main terminal area
   | 'center-bottom'// Below main terminal
+  | 'right'        // Right edge (tutorial/guide panel)
   | 'overlay'      // Replaces center content (settings)
 
 // Panel definition
@@ -34,6 +35,7 @@ export const PANEL_IDS = {
   AGENT_TERMINAL: 'agentTerminal',
   USER_TERMINAL: 'userTerminal',
   SETTINGS: 'settings',
+  TUTORIAL: 'tutorial',
 } as const
 
 export type PanelId = typeof PANEL_IDS[keyof typeof PANEL_IDS]
@@ -45,6 +47,7 @@ export const DEFAULT_TOOLBAR_PANELS: string[] = [
   PANEL_IDS.FILE_VIEWER,
   PANEL_IDS.AGENT_TERMINAL,
   PANEL_IDS.USER_TERMINAL,
+  PANEL_IDS.TUTORIAL,
   PANEL_IDS.SETTINGS,
 ]
 

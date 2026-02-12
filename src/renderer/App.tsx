@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react'
-import type { GitStatusResult } from '../preload/index'
+import type { GitStatusResult, HelpMenuEvent } from '../preload/index'
 import Layout from './components/Layout'
 import SessionList from './components/SessionList'
 import Terminal from './components/Terminal'
@@ -11,11 +11,16 @@ import AgentSettings from './components/AgentSettings'
 import NewSessionDialog from './components/NewSessionDialog'
 import PanelPicker from './components/PanelPicker'
 import ProfileChip from './components/ProfileChip'
+import WelcomeScreen from './components/WelcomeScreen'
+import TutorialPanel from './components/TutorialPanel'
+import HelpModal from './components/HelpModal'
+import ShortcutsModal from './components/ShortcutsModal'
 import { useSessionStore, type Session, type SessionStatus, type LayoutSizes } from './store/sessions'
 import { useAgentStore } from './store/agents'
 import { useRepoStore } from './store/repos'
 import { useProfileStore } from './store/profiles'
 import { useErrorStore } from './store/errors'
+import { useTutorialStore } from './store/tutorial'
 import { PanelProvider, PANEL_IDS } from './panels'
 import { terminalBufferRegistry } from './utils/terminalBufferRegistry'
 import { computeBranchStatus } from './utils/branchStatus'
@@ -33,6 +38,7 @@ const DEFAULT_LAYOUT_SIZES: LayoutSizes = {
   userTerminalHeight: 192,
   diffPanelWidth: 320,
   reviewPanelWidth: 320,
+  tutorialPanelWidth: 320,
 }
 
 function AppContent() {
@@ -70,9 +76,12 @@ function AppContent() {
   const { repos, loadRepos, checkGhAvailability } = useRepoStore()
   const { currentProfileId, profiles, loadProfiles, switchProfile } = useProfileStore()
   const { addError } = useErrorStore()
+  const { loadTutorial, markStepComplete, resetProgress: resetTutorial } = useTutorialStore()
   const currentProfile = profiles.find((p) => p.id === currentProfileId)
 
   const [showNewSessionDialog, setShowNewSessionDialog] = useState(false)
+  const [showHelpModal, setShowHelpModal] = useState(false)
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false)
   const [gitStatusBySession, setGitStatusBySession] = useState<Record<string, GitStatusResult>>({})
   const [isMergedBySession, setIsMergedBySession] = useState<Record<string, boolean>>({})
   const [directoryExists, setDirectoryExists] = useState<Record<string, boolean>>({})
@@ -200,8 +209,23 @@ function AppContent() {
       loadSessions(currentProfileId)
       loadAgents(currentProfileId)
       loadRepos(currentProfileId)
+      loadTutorial(currentProfileId)
       checkGhAvailability()
     })
+  }, [])
+
+  // Listen for help menu events from main process
+  useEffect(() => {
+    const unsubscribe = window.help.onHelpMenu((event: HelpMenuEvent) => {
+      if (event === 'getting-started') {
+        setShowHelpModal(true)
+      } else if (event === 'shortcuts') {
+        setShowShortcutsModal(true)
+      } else if (event === 'reset-tutorial') {
+        resetTutorial()
+      }
+    })
+    return unsubscribe
   }, [])  
 
   // Handle profile switching: open the profile in a new window
@@ -292,6 +316,10 @@ function AppContent() {
   ) => {
     try {
       await addSession(directory, agentId, extra)
+      markStepComplete('created-session')
+      if (extra?.sessionType === 'review') {
+        markStepComplete('used-review')
+      }
     } catch (error) {
       addError(`Failed to add session: ${error instanceof Error ? error.message : error}`)
     }
@@ -360,14 +388,29 @@ function AppContent() {
   const handleTogglePanel = useCallback((panelId: string) => {
     if (activeSessionId) {
       togglePanel(activeSessionId, panelId)
+      markStepComplete('toggled-panel')
+      if (panelId === PANEL_IDS.EXPLORER) {
+        markStepComplete('viewed-explorer')
+      }
     }
-  }, [activeSessionId, togglePanel])
+  }, [activeSessionId, togglePanel, markStepComplete])
 
   const handleToggleFileViewer = useCallback(() => {
     if (activeSessionId) {
       togglePanel(activeSessionId, PANEL_IDS.FILE_VIEWER)
     }
   }, [activeSessionId, togglePanel])
+
+  const handleSearchFiles = useCallback(() => {
+    if (!activeSessionId) return
+    // Ensure explorer is visible
+    const session = sessions.find(s => s.id === activeSessionId)
+    if (session && !session.panelVisibility?.[PANEL_IDS.EXPLORER]) {
+      togglePanel(activeSessionId, PANEL_IDS.EXPLORER)
+    }
+    // Switch to search filter
+    setExplorerFilter(activeSessionId, 'search')
+  }, [activeSessionId, sessions, togglePanel, setExplorerFilter])
 
   // Navigate to a file, checking for unsaved changes first
   const navigateToFile = useCallback((filePath: string, openInDiffMode: boolean, scrollToLine?: number, searchHighlight?: string, diffBaseRef?: string, diffCurrentRef?: string, diffLabel?: string) => {
@@ -385,11 +428,12 @@ function AppContent() {
     }
     if (result.action === 'navigate') {
       selectFile(activeSessionId, result.filePath)
+      markStepComplete('viewed-file')
     }
     if (result.action === 'pending') {
       setPendingNavigation(result.target)
     }
-  }, [activeSessionId, activeSession?.selectedFilePath, isFileViewerDirty, selectFile])
+  }, [activeSessionId, activeSession?.selectedFilePath, isFileViewerDirty, selectFile, markStepComplete])
 
   const handlePendingSave = useCallback(async () => {
     if (saveCurrentFileRef.current) {
@@ -444,19 +488,15 @@ function AppContent() {
             env={getAgentEnv(session)}
             isAgentTerminal={!!getAgentCommand(session)}
             isActive={session.id === activeSessionId}
+            onUserInput={() => markStepComplete('used-agent')}
           />
         </div>
       ))}
       {sessions.length === 0 && (
-        <div className="h-full w-full flex items-center justify-center text-text-secondary">
-          <div className="text-center">
-            <p>No sessions yet.</p>
-            <p className="text-sm mt-2">Click "+ New Session" to add a git repository.</p>
-          </div>
-        </div>
+        <WelcomeScreen onNewSession={handleNewSession} />
       )}
     </div>
-  ), [sessions, activeSessionId, getAgentCommand, getAgentEnv])
+  ), [sessions, activeSessionId, getAgentCommand, getAgentEnv, markStepComplete, handleNewSession])
 
   const userTerminalPanel = useMemo(() => (
     <div className="h-full w-full relative">
@@ -469,11 +509,12 @@ function AppContent() {
             sessionId={session.id}
             cwd={session.directory}
             isActive={session.id === activeSessionId}
+            onUserInput={() => markStepComplete('used-terminal')}
           />
         </div>
       ))}
     </div>
-  ), [sessions, activeSessionId])
+  ), [sessions, activeSessionId, markStepComplete])
 
   // Build panels map - terminals use stable memoized components
   const panelsMap = useMemo(() => ({
@@ -550,8 +591,14 @@ function AppContent() {
       />
     ) : null,
     [PANEL_IDS.SETTINGS]: globalPanelVisibility[PANEL_IDS.SETTINGS] ? (
-      <AgentSettings onClose={() => toggleGlobalPanel(PANEL_IDS.SETTINGS)} />
+      <AgentSettings onClose={() => {
+        toggleGlobalPanel(PANEL_IDS.SETTINGS)
+        markStepComplete('viewed-settings')
+      }} />
     ) : null,
+    [PANEL_IDS.TUTORIAL]: (
+      <TutorialPanel />
+    ),
   }), [
     sessions,
     activeSessionId,
@@ -597,8 +644,14 @@ function AppContent() {
         title={activeSession ? activeSession.name : undefined}
         profileChip={<ProfileChip onSwitchProfile={handleSwitchProfile} />}
         onTogglePanel={handleTogglePanel}
-        onToggleGlobalPanel={toggleGlobalPanel}
+        onToggleGlobalPanel={(panelId: string) => {
+          toggleGlobalPanel(panelId)
+          if (panelId === PANEL_IDS.TUTORIAL) {
+            markStepComplete('toggled-tutorial')
+          }
+        }}
         onOpenPanelPicker={() => setShowPanelPicker(true)}
+        onSearchFiles={handleSearchFiles}
       />
 
       {/* New Session Dialog */}
@@ -648,6 +701,16 @@ function AppContent() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Help Modal */}
+      {showHelpModal && (
+        <HelpModal onClose={() => setShowHelpModal(false)} />
+      )}
+
+      {/* Shortcuts Modal */}
+      {showShortcutsModal && (
+        <ShortcutsModal onClose={() => setShowShortcutsModal(false)} />
       )}
     </>
   )
