@@ -1,5 +1,6 @@
 import { IpcMain } from 'electron'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, readdirSync } from 'fs'
+import { readFile, writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { makeExecutable } from '../platform'
 import {
@@ -184,13 +185,13 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
 
     try {
       if (!existsSync(configDir)) {
-        mkdirSync(configDir, { recursive: true })
+        await mkdir(configDir, { recursive: true })
       }
       // Read existing config to preserve fields we don't explicitly set
       let existingConfig: Record<string, unknown> = {}
       if (existsSync(configFile)) {
         try {
-          existingConfig = JSON.parse(readFileSync(configFile, 'utf-8'))
+          existingConfig = JSON.parse(await readFile(configFile, 'utf-8'))
         } catch {
           // ignore
         }
@@ -206,7 +207,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
       if (config.showSidebar !== undefined) configToSave.showSidebar = config.showSidebar
       if (config.sidebarWidth !== undefined) configToSave.sidebarWidth = config.sidebarWidth
       if (config.toolbarPanels !== undefined) configToSave.toolbarPanels = config.toolbarPanels
-      writeFileSync(configFile, JSON.stringify(configToSave, null, 2))
+      await writeFile(configFile, JSON.stringify(configToSave, null, 2))
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }
