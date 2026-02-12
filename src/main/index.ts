@@ -99,14 +99,27 @@ function createWindow(profileId?: string): BrowserWindow {
     if (profileId) {
       profileWindows.delete(profileId)
     }
-    // Kill PTY processes belonging to this window
-    for (const [id, ptyProcess] of ptyProcesses) {
-      ptyProcess.kill()
-      ptyProcesses.delete(id)
+    // Kill PTY processes belonging to this window only
+    for (const [id, owner] of ptyOwnerWindows) {
+      if (owner === window) {
+        const ptyProcess = ptyProcesses.get(id)
+        if (ptyProcess) {
+          ptyProcess.kill()
+          ptyProcesses.delete(id)
+        }
+        ptyOwnerWindows.delete(id)
+      }
     }
-    for (const [id, watcher] of fileWatchers) {
-      watcher.close()
-      fileWatchers.delete(id)
+    // Close file watchers belonging to this window only
+    for (const [id, owner] of watcherOwnerWindows) {
+      if (owner === window) {
+        const watcher = fileWatchers.get(id)
+        if (watcher) {
+          watcher.close()
+          fileWatchers.delete(id)
+        }
+        watcherOwnerWindows.delete(id)
+      }
     }
     if (window === mainWindow) {
       mainWindow = null
