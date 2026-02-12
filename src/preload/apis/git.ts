@@ -1,0 +1,70 @@
+import { ipcRenderer } from 'electron'
+import type { GitStatusResult, GitCommitInfo, WorktreeInfo } from './types'
+
+export type GitApi = {
+  getBranch: (path: string) => Promise<string>
+  isGitRepo: (path: string) => Promise<boolean>
+  status: (path: string) => Promise<GitStatusResult>
+  diff: (repoPath: string, filePath?: string) => Promise<string>
+  show: (repoPath: string, filePath: string, ref?: string) => Promise<string>
+  stage: (repoPath: string, filePath: string) => Promise<{ success: boolean; error?: string }>
+  stageAll: (repoPath: string) => Promise<{ success: boolean; error?: string }>
+  unstage: (repoPath: string, filePath: string) => Promise<{ success: boolean; error?: string }>
+  checkoutFile: (repoPath: string, filePath: string) => Promise<{ success: boolean; error?: string }>
+  commit: (repoPath: string, message: string) => Promise<{ success: boolean; error?: string }>
+  push: (repoPath: string) => Promise<{ success: boolean; error?: string }>
+  pull: (repoPath: string) => Promise<{ success: boolean; error?: string }>
+  clone: (url: string, targetDir: string) => Promise<{ success: boolean; error?: string }>
+  worktreeAdd: (repoPath: string, worktreePath: string, branchName: string, baseBranch: string) => Promise<{ success: boolean; error?: string }>
+  worktreeList: (repoPath: string) => Promise<WorktreeInfo[]>
+  pushNewBranch: (repoPath: string, branchName: string) => Promise<{ success: boolean; error?: string }>
+  defaultBranch: (repoPath: string) => Promise<string>
+  remoteUrl: (repoPath: string) => Promise<string | null>
+  branchChanges: (repoPath: string, baseBranch?: string) => Promise<{ files: { path: string; status: string }[]; baseBranch: string; mergeBase: string }>
+  branchCommits: (repoPath: string, baseBranch?: string) => Promise<{ commits: GitCommitInfo[]; baseBranch: string }>
+  commitFiles: (repoPath: string, commitHash: string) => Promise<{ path: string; status: string }[]>
+  headCommit: (repoPath: string) => Promise<string | null>
+  listBranches: (repoPath: string) => Promise<{ name: string; isRemote: boolean; current: boolean }[]>
+  fetchBranch: (repoPath: string, branchName: string) => Promise<{ success: boolean; error?: string }>
+  fetchPrHead: (repoPath: string, prNumber: number) => Promise<{ success: boolean; error?: string }>
+  isMergedInto: (repoPath: string, ref: string) => Promise<boolean>
+  hasBranchCommits: (repoPath: string, ref: string) => Promise<boolean>
+  pullOriginMain: (repoPath: string) => Promise<{ success: boolean; hasConflicts?: boolean; error?: string }>
+  isBehindMain: (repoPath: string) => Promise<{ behind: number; defaultBranch: string }>
+  getConfig: (repoPath: string, key: string) => Promise<string | null>
+  setConfig: (repoPath: string, key: string, value: string) => Promise<{ success: boolean; error?: string }>
+}
+
+export const gitApi: GitApi = {
+  getBranch: (path) => ipcRenderer.invoke('git:getBranch', path),
+  isGitRepo: (path) => ipcRenderer.invoke('git:isGitRepo', path),
+  status: (path) => ipcRenderer.invoke('git:status', path),
+  diff: (repoPath, filePath) => ipcRenderer.invoke('git:diff', repoPath, filePath),
+  show: (repoPath, filePath, ref) => ipcRenderer.invoke('git:show', repoPath, filePath, ref),
+  stage: (repoPath, filePath) => ipcRenderer.invoke('git:stage', repoPath, filePath),
+  stageAll: (repoPath) => ipcRenderer.invoke('git:stageAll', repoPath),
+  unstage: (repoPath, filePath) => ipcRenderer.invoke('git:unstage', repoPath, filePath),
+  checkoutFile: (repoPath, filePath) => ipcRenderer.invoke('git:checkoutFile', repoPath, filePath),
+  commit: (repoPath, message) => ipcRenderer.invoke('git:commit', repoPath, message),
+  push: (repoPath) => ipcRenderer.invoke('git:push', repoPath),
+  pull: (repoPath) => ipcRenderer.invoke('git:pull', repoPath),
+  clone: (url, targetDir) => ipcRenderer.invoke('git:clone', url, targetDir),
+  worktreeAdd: (repoPath, worktreePath, branchName, baseBranch) => ipcRenderer.invoke('git:worktreeAdd', repoPath, worktreePath, branchName, baseBranch),
+  worktreeList: (repoPath) => ipcRenderer.invoke('git:worktreeList', repoPath),
+  pushNewBranch: (repoPath, branchName) => ipcRenderer.invoke('git:pushNewBranch', repoPath, branchName),
+  defaultBranch: (repoPath) => ipcRenderer.invoke('git:defaultBranch', repoPath),
+  remoteUrl: (repoPath) => ipcRenderer.invoke('git:remoteUrl', repoPath),
+  branchChanges: (repoPath, baseBranch) => ipcRenderer.invoke('git:branchChanges', repoPath, baseBranch),
+  branchCommits: (repoPath, baseBranch) => ipcRenderer.invoke('git:branchCommits', repoPath, baseBranch),
+  commitFiles: (repoPath, commitHash) => ipcRenderer.invoke('git:commitFiles', repoPath, commitHash),
+  headCommit: (repoPath) => ipcRenderer.invoke('git:headCommit', repoPath),
+  listBranches: (repoPath) => ipcRenderer.invoke('git:listBranches', repoPath),
+  fetchBranch: (repoPath, branchName) => ipcRenderer.invoke('git:fetchBranch', repoPath, branchName),
+  fetchPrHead: (repoPath, prNumber) => ipcRenderer.invoke('git:fetchPrHead', repoPath, prNumber),
+  isMergedInto: (repoPath, ref) => ipcRenderer.invoke('git:isMergedInto', repoPath, ref),
+  hasBranchCommits: (repoPath, ref) => ipcRenderer.invoke('git:hasBranchCommits', repoPath, ref),
+  pullOriginMain: (repoPath) => ipcRenderer.invoke('git:pullOriginMain', repoPath),
+  isBehindMain: (repoPath) => ipcRenderer.invoke('git:isBehindMain', repoPath),
+  getConfig: (repoPath, key) => ipcRenderer.invoke('git:getConfig', repoPath, key),
+  setConfig: (repoPath, key, value) => ipcRenderer.invoke('git:setConfig', repoPath, key, value),
+}
