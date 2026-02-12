@@ -323,40 +323,48 @@ export default function ReviewPanel({ session, repo, onSelectFile }: ReviewPanel
     const watcherId = `review-${session.id}`
     let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
-    window.fs.watch(watcherId, reviewFilePath)
-    const removeListener = window.fs.onChange(watcherId, () => {
+    const loadReviewData = async () => {
+      try {
+        const exists = await window.fs.exists(reviewFilePath)
+        if (exists) {
+          const content = await window.fs.readFile(reviewFilePath)
+          const data = JSON.parse(content) as ReviewData
+
+          // Only update if content actually changed
+          if (JSON.stringify(data) !== JSON.stringify(reviewDataRef.current)) {
+            // Add head commit if not present
+            if (!data.headCommit) {
+              const headCommit = await window.git.headCommit(session.directory)
+              if (headCommit) {
+                data.headCommit = headCommit
+                await window.fs.writeFile(reviewFilePath, JSON.stringify(data, null, 2))
+              }
+            }
+
+            await updateReviewHistory(data)
+            setReviewData(data)
+            setWaitingForAgent(false)
+          }
+        } else if (reviewDataRef.current !== null) {
+          // File was deleted
+          setReviewData(null)
+        }
+      } catch {
+        // File may be partially written or invalid JSON
+      }
+    }
+
+    // Watch the .broomy directory (not the file) since fs.watch uses recursive directory watching
+    // Also watch the repo directory in case .broomy doesn't exist yet
+    window.fs.watch(watcherId, session.directory)
+    const removeListener = window.fs.onChange(watcherId, (event) => {
+      // Filter for changes to review.json (filename includes path relative to watched dir)
+      const filename = event.filename || ''
+      if (!filename.includes('review.json') && !filename.includes('.broomy')) return
+
       // Debounce to avoid multiple triggers from partial writes
       if (debounceTimer) clearTimeout(debounceTimer)
-      debounceTimer = setTimeout(async () => {
-        try {
-          const exists = await window.fs.exists(reviewFilePath)
-          if (exists) {
-            const content = await window.fs.readFile(reviewFilePath)
-            const data = JSON.parse(content) as ReviewData
-
-            // Only update if content actually changed
-            if (JSON.stringify(data) !== JSON.stringify(reviewDataRef.current)) {
-              // Add head commit if not present
-              if (!data.headCommit) {
-                const headCommit = await window.git.headCommit(session.directory)
-                if (headCommit) {
-                  data.headCommit = headCommit
-                  await window.fs.writeFile(reviewFilePath, JSON.stringify(data, null, 2))
-                }
-              }
-
-              await updateReviewHistory(data)
-              setReviewData(data)
-              setWaitingForAgent(false)
-            }
-          } else {
-            // File was deleted
-            setReviewData(null)
-          }
-        } catch {
-          // File may be partially written or invalid JSON
-        }
-      }, 300)
+      debounceTimer = setTimeout(loadReviewData, 300)
     })
 
     return () => {
@@ -448,6 +456,10 @@ export default function ReviewPanel({ session, repo, onSelectFile }: ReviewPanel
     try {
       // Create .broomy directory
       await window.fs.mkdir(broomyDir)
+
+      // Delete old review.json so polling doesn't find stale data
+      await window.fs.rm(reviewFilePath)
+      setReviewData(null)
 
       // Get previous review history for comparison
       let previousRequestedChanges: RequestedChange[] = []
