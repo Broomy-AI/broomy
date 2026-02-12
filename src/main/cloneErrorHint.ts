@@ -1,4 +1,15 @@
 /**
+ * Git clone error diagnosis and user-facing hint generation.
+ *
+ * Inspects the stderr output from a failed `git clone` to detect HTTPS
+ * authentication failures (missing credentials, terminal prompts disabled)
+ * and SSH authentication failures (public key denied, host verification,
+ * connection refused/timed out). When a match is found, it returns a
+ * multi-line hint suggesting the alternative protocol URL and relevant
+ * setup commands (e.g. `gh auth setup-git`, `ssh -T git@github.com`).
+ */
+
+/**
  * Detects common git clone authentication errors and returns actionable hints.
  * Covers both HTTPS-when-SSH-is-needed and SSH-when-HTTPS-is-needed cases.
  */

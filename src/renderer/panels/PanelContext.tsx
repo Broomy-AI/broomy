@@ -1,3 +1,13 @@
+/**
+ * React context provider and hooks for the panel system.
+ *
+ * Initializes the global panel registry with built-in panels on import, then
+ * exposes the registry, toolbar panel order, and keyboard shortcut mappings
+ * through React context. Provides hooks for reading panel visibility (respecting
+ * global vs per-session scope), creating toggle callbacks, and querying toolbar
+ * panel metadata. This is the primary interface components use to interact with
+ * the panel system.
+ */
 import { createContext, useContext, useCallback, useMemo, ReactNode } from 'react'
 import { PanelDefinition, PANEL_IDS, DEFAULT_TOOLBAR_PANELS, MAX_SHORTCUT_PANELS } from './types'
 import { panelRegistry } from './registry'

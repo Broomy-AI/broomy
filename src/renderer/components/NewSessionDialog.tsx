@@ -1,3 +1,12 @@
+/**
+ * Multi-step dialog for creating new agent sessions from repositories, branches, or issues.
+ *
+ * Implements a state-machine navigation between views: home (repo list with clone/add/folder
+ * actions), clone (git clone a URL), add-existing-repo, new-branch (with optional GitHub
+ * issue pre-fill), existing-branch picker, repo settings, GitHub issues browser, PR review
+ * picker, and agent picker. Each terminal view calls onComplete with the chosen directory,
+ * agent ID, and optional metadata (repo ID, issue info, PR details, session type).
+ */
 import { useState, useEffect } from 'react'
 import { useAgentStore } from '../store/agents'
 import { useRepoStore } from '../store/repos'

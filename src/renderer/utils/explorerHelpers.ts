@@ -1,4 +1,13 @@
 /**
+ * Display helpers for git file statuses in the Explorer panel.
+ *
+ * Provides pure functions that map git status strings (modified, added, deleted,
+ * untracked, renamed) to human-readable labels, Tailwind CSS color classes, and
+ * single-letter badges. Also includes helpers for splitting staged/unstaged files,
+ * PR state badge styling, error message truncation, and push-to-main visibility logic.
+ */
+
+/**
  * Returns a human-readable label for a git file status.
  */
 export function statusLabel(status: string): string {

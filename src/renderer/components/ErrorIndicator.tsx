@@ -1,3 +1,11 @@
+/**
+ * Error display button and dropdown shown in the toolbar when errors are present.
+ *
+ * Renders a small icon button that pulses when there are unread errors. Clicking toggles
+ * a dropdown listing all accumulated errors with timestamps, individual dismiss buttons,
+ * and a clear-all action. The component reads from and writes to the error Zustand store,
+ * marking errors as read when the dropdown is opened.
+ */
 import { useState } from 'react'
 import { useErrorStore } from '../store/errors'
 

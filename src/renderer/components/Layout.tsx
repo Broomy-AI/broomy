@@ -1,3 +1,12 @@
+/**
+ * Main application layout with a toolbar, sidebar, and drag-to-resize panel regions.
+ *
+ * Renders a title bar with configurable toolbar buttons (mapped from the panel registry),
+ * then a horizontal arrangement of sidebar, explorer, review panel, and a center area that
+ * stacks the file viewer and terminals. Each boundary between panels is a draggable divider
+ * that updates persisted layout sizes via mouse events. Keyboard shortcuts (Cmd+1-6) toggle
+ * panels, and Ctrl+Tab cycles focus between visible panels.
+ */
 import { ReactNode, useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import ErrorIndicator from './ErrorIndicator'
 import type { LayoutSizes, FileViewerPosition } from '../store/sessions'

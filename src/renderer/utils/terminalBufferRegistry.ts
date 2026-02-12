@@ -1,5 +1,11 @@
-// Registry for accessing terminal buffers from outside the Terminal component
-// Used for copying terminal content via keyboard shortcut
+/**
+ * Global registry for accessing terminal buffer content from outside Terminal components.
+ *
+ * Terminal components register a getter function keyed by session ID on mount and
+ * unregister on unmount. Other parts of the app (e.g. keyboard shortcut handlers)
+ * can retrieve the full buffer or the last N lines for a given session without
+ * needing a direct reference to the xterm.js Terminal instance.
+ */
 
 type BufferGetter = () => string
 

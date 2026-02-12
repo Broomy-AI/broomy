@@ -1,3 +1,11 @@
+/**
+ * Markdown preview viewer using react-markdown with GitHub Flavored Markdown support.
+ *
+ * Renders markdown content with dark-theme-styled custom components for headings,
+ * links, code blocks, blockquotes, tables, images, and lists. Uses remark-gfm for
+ * tables, strikethrough, and other GFM extensions. Registered at higher priority than
+ * Monaco for .md/.markdown/.mdx files so preview is the default view.
+ */
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { FileViewerPlugin, FileViewerComponentProps } from './types'

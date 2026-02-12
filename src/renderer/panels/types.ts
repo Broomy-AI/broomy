@@ -1,3 +1,12 @@
+/**
+ * Panel system type definitions and constants.
+ *
+ * Defines the panel position taxonomy (sidebar, left, center-top, center-left,
+ * center-main, center-bottom, overlay), the PanelDefinition interface that every
+ * panel must conform to, and the PANEL_IDS constants used throughout the codebase
+ * for type-safe panel references. Also declares the default toolbar order and the
+ * maximum number of panels that can have keyboard shortcuts.
+ */
 import { ReactNode } from 'react'
 
 // Panel position types

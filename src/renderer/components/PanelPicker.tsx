@@ -1,3 +1,11 @@
+/**
+ * Toolbar configuration overlay for adding, removing, and reordering panel buttons.
+ *
+ * Displays all registered panels split into two sections: those currently in the toolbar
+ * (with drag-to-reorder and move up/down buttons) and available panels not yet added.
+ * The first N panels in the toolbar receive keyboard shortcut badges (Cmd+1 through Cmd+N).
+ * Changes are persisted immediately via the onToolbarPanelsChange callback.
+ */
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { usePanelRegistry, MAX_SHORTCUT_PANELS } from '../panels'
 

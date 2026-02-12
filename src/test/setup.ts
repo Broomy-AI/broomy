@@ -1,3 +1,12 @@
+/**
+ * Vitest setup file that mocks all Electron preload APIs on the window object.
+ *
+ * Every IPC channel exposed by the preload script (config, git, gh, fs, pty, etc.)
+ * is replaced with a Vitest mock that returns sensible defaults. The file detects
+ * whether it's running in a DOM environment (jsdom/happy-dom) or plain Node: in DOM
+ * mode it extends the existing window object, in Node mode it creates a minimal
+ * window mock with location, navigator, and event listener stubs.
+ */
 import { vi } from 'vitest'
 
 // Mock window.config

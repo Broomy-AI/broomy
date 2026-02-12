@@ -1,3 +1,11 @@
+/**
+ * Managed repositories store for tracking git repos available to sessions.
+ *
+ * Stores the list of repositories (each with a name, remote URL, root directory,
+ * and default branch), the default clone directory, and GitHub CLI availability.
+ * Supports tilde expansion for paths via the main process. Every mutation persists
+ * immediately to the profile's config file.
+ */
 import { create } from 'zustand'
 import type { ManagedRepo } from '../../preload/index'
 

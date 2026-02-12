@@ -1,3 +1,11 @@
+/**
+ * Agent definitions store for managing AI coding agent configurations.
+ *
+ * Stores the list of available agents (each with a name and shell command) and
+ * provides CRUD actions. Every mutation updates Zustand state immediately, then
+ * persists the full agent list to the profile's config file via IPC. The store
+ * is scoped to a profile ID, set during loadAgents.
+ */
 import { create } from 'zustand'
 import type { AgentData } from '../../preload/index'
 

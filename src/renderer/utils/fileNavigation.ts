@@ -1,5 +1,11 @@
 /**
  * File navigation state machine for handling dirty-file checks and pending navigation.
+ *
+ * When the user navigates to a file, this module determines the correct action:
+ * update scroll/highlight if it is the same file, navigate immediately if the file
+ * viewer is clean, or queue a pending navigation if the viewer has unsaved changes
+ * (prompting the user to save, discard, or cancel). Supports diff-mode parameters
+ * including base/current refs and labels.
  */
 
 export interface NavigationTarget {

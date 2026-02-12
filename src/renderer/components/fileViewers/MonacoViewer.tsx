@@ -1,3 +1,12 @@
+/**
+ * Monaco Editor-based file viewer and editor for text files.
+ *
+ * Configures Monaco workers for Vite, maps file extensions to language IDs, and renders
+ * a full Monaco editor instance with a dark theme, read-write editing, Cmd+S save support,
+ * scroll-to-line navigation, search-text highlighting via decorations, go-to-definition
+ * with Cmd+Click, and an outline/symbol quick-open dialog. Registers as the lowest-priority
+ * fallback viewer, accepting any file with a known text extension or text-like content.
+ */
 import { useRef, useEffect, useState, useCallback } from 'react'
 import Editor, { loader, Monaco } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor'

@@ -1,3 +1,11 @@
+/**
+ * Profile indicator chip displayed in the title bar with a dropdown for profile management.
+ *
+ * Shows the current profile name as a colored chip. Clicking opens a dropdown listing
+ * other profiles (click to switch, which opens a new window), an edit form for the
+ * current profile's name and color, and a create-new-profile form. Each profile gets
+ * a color from a fixed palette, displayed as a tinted background on the chip.
+ */
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useProfileStore } from '../store/profiles'
 

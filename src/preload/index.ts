@@ -1,3 +1,15 @@
+/**
+ * Preload script: context bridge API definitions and IPC wiring.
+ *
+ * Defines TypeScript types for every API surface the renderer can access
+ * (PTY, filesystem, git, GitHub CLI, config, profiles, shell, dialog, menu,
+ * agents, and TypeScript project context), then creates implementation objects
+ * that delegate each call to `ipcRenderer.invoke()` or `ipcRenderer.on()`.
+ * These objects are exposed on the global `window` via
+ * `contextBridge.exposeInMainWorld()`, and the file ends with a `declare global`
+ * block that augments the Window interface so the renderer gets full type
+ * safety without importing anything from this file.
+ */
 import { contextBridge, ipcRenderer } from 'electron'
 
 export type PtyApi = {

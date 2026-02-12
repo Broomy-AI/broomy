@@ -1,3 +1,14 @@
+/**
+ * Session state management -- the largest and most central Zustand store.
+ *
+ * Each session represents an AI coding agent working in a git repository. The store
+ * manages session CRUD, per-session panel visibility, layout sizes, terminal tabs,
+ * agent activity monitoring (working/idle/unread), branch status, PR state tracking,
+ * and session archiving. State mutations are applied in-memory instantly, then
+ * persisted to the config file via a 500ms debounced save to avoid excessive I/O.
+ * Runtime-only fields (status, isUnread, lastMessage, branchStatus) are never written
+ * to disk.
+ */
 import { create } from 'zustand'
 import { basename } from 'path-browserify'
 import { PANEL_IDS, DEFAULT_TOOLBAR_PANELS } from '../panels/types'

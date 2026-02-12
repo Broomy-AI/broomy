@@ -1,6 +1,10 @@
 /**
- * Check if content appears to be text rather than binary.
- * Returns true for empty content.
+ * Heuristic detection of text vs binary file content.
+ *
+ * Checks for null bytes (a strong binary indicator) and then computes the ratio
+ * of printable characters to total characters. Content is considered text if at
+ * least 85% of characters are printable (ASCII 32-126, common whitespace, or
+ * extended Latin). Empty content is treated as text.
  */
 export function isTextContent(content: string): boolean {
   if (!content || content.length === 0) return true

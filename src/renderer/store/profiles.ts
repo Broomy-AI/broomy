@@ -1,3 +1,12 @@
+/**
+ * Multi-window profile store for managing named workspace profiles.
+ *
+ * Each profile gets its own Electron window with isolated sessions, agents, and
+ * repos. The current profile ID is read from the URL query parameter (?profile=...).
+ * Switching profiles opens a new window via `window.profiles.openWindow`. Profile
+ * metadata (name, color) is stored in a shared profiles file, separate from the
+ * per-profile config.
+ */
 import { create } from 'zustand'
 import type { ProfileData, ProfilesData } from '../../preload/index'
 

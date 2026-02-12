@@ -1,8 +1,12 @@
 /**
- * Terminal activity detection logic.
+ * Terminal activity detection logic for determining agent working/idle status.
  *
- * Determines whether an agent terminal is 'working' or 'idle' based on
- * timing heuristics rather than parsing terminal output content.
+ * Uses timing heuristics rather than parsing terminal output content. The detector
+ * has three phases: a warmup period (ignores the first N ms after creation), an
+ * input suppression window (pauses detection briefly after user input or window
+ * interaction to avoid false positives), and steady-state detection where any
+ * terminal data means "working" and silence means "idle". The evaluateActivity
+ * function is pure -- it takes state and config, returns a result with no side effects.
  */
 
 export type ActivityStatus = 'working' | 'idle'

@@ -1,3 +1,11 @@
+/**
+ * Image file viewer with zoom and pan controls.
+ *
+ * Loads image files as base64 data URLs via IPC, renders them centered in a container,
+ * and provides zoom in/out/reset buttons plus Ctrl+scroll wheel zooming. When zoomed
+ * beyond 100%, drag-to-pan is enabled. Supports PNG, JPEG, GIF, WebP, BMP, ICO, and
+ * SVG formats with correct MIME type mapping.
+ */
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { FileViewerPlugin, FileViewerComponentProps } from './types'
 import { matchesExtensions, getFileExtension } from './types'

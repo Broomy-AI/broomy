@@ -1,3 +1,11 @@
+/**
+ * Type definitions and utility functions for the file viewer plugin system.
+ *
+ * Defines the FileViewerPlugin interface that each viewer must implement (id, name,
+ * canHandle predicate, priority, and a React component), the FileViewerComponentProps
+ * passed to viewer components (file path, content, save callback, scroll/highlight
+ * options, review context), and helper functions for file extension matching.
+ */
 export interface FileViewerPlugin {
   /** Unique identifier for this viewer */
   id: string

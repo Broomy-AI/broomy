@@ -1,3 +1,14 @@
+/**
+ * File content viewer that delegates rendering to a plugin-based viewer registry.
+ *
+ * Loads file content via IPC, determines available viewers (Monaco, image, markdown)
+ * using the fileViewers registry, and renders the selected viewer with a toolbar for
+ * switching between viewers and toggling diff mode. Supports latest vs. diff view
+ * (comparing against HEAD or a custom base ref), inline editing with dirty-state
+ * tracking, save/discard confirmation, file-watcher-driven reload prompts, and
+ * scroll-to-line navigation. The diff view uses MonacoDiffViewer with side-by-side
+ * or inline layout.
+ */
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { basename } from 'path-browserify'
 import { getViewersForFile, isTextContent } from './fileViewers'

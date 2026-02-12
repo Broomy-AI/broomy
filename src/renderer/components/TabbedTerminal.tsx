@@ -1,3 +1,12 @@
+/**
+ * Tabbed container for user terminal instances within a session.
+ *
+ * Renders a minimal tab bar with add, close, rename (double-click), drag-to-reorder,
+ * and overflow dropdown support. Each tab maps to a separate Terminal instance sharing
+ * the same working directory. Tab state (names, order, active tab) is persisted in the
+ * session store. Context menu provides rename, close, close-others, and close-to-right
+ * actions.
+ */
 import { useState, useRef, useCallback, useEffect } from 'react'
 import Terminal from './Terminal'
 import { useSessionStore } from '../store/sessions'

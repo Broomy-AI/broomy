@@ -1,3 +1,13 @@
+/**
+ * Code review panel that generates, displays, and tracks AI-powered review feedback.
+ *
+ * Reads and writes review data from a .broomy folder in the session repository. The
+ * panel generates a review prompt from branch changes, sends it to the agent terminal
+ * via PTY write, then watches for the resulting review.json to appear. Displays findings
+ * organized by severity with collapsible sections, inline code location links that open
+ * the diff viewer, and pending user comments. Supports review history with comparison
+ * tracking to show which requested changes have been addressed across iterations.
+ */
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { ReviewData, PendingComment, CodeLocation, ReviewHistory, ReviewComparison, RequestedChange } from '../types/review'
 import type { Session } from '../store/sessions'

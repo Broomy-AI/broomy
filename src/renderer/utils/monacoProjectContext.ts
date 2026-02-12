@@ -1,3 +1,13 @@
+/**
+ * Loads a project's TypeScript context into Monaco's language service for cross-file IntelliSense.
+ *
+ * Reads the project's tsconfig compiler options and source files via IPC, maps tsconfig
+ * string values to Monaco's TypeScript enum equivalents, registers source files as extra
+ * libs in the TypeScript language service, and forces open models to re-analyze. Manages
+ * a disposable lifecycle so switching projects properly cleans up previous registrations.
+ * Diagnostic codes for missing node_modules types are suppressed since we load project
+ * files but not external type declarations.
+ */
 import * as monaco from 'monaco-editor'
 
 let currentProjectRoot: string | null = null

@@ -1,3 +1,12 @@
+/**
+ * Branch status computation from git state and persisted PR information.
+ *
+ * Implements a priority-based rule chain that maps a combination of local git
+ * state (uncommitted files, ahead count, tracking branch, merge status) and
+ * persisted PR state into one of six statuses: in-progress, pushed, empty, open,
+ * merged, or closed. The `hasHadCommits` sticky flag distinguishes genuinely
+ * merged branches from fresh/empty ones that have zero commits ahead of main.
+ */
 export type BranchStatus = 'in-progress' | 'pushed' | 'empty' | 'open' | 'merged' | 'closed'
 
 export type PrState = 'OPEN' | 'MERGED' | 'CLOSED' | null

@@ -1,3 +1,12 @@
+/**
+ * Sidebar list of sessions with status indicators, branch chips, and archive support.
+ *
+ * Renders each session as a card showing agent activity status (spinner for working,
+ * glow dot for unread idle, plain dot for read idle), the branch name, repository name,
+ * branch status chip (pushed, PR open, merged, etc.), and the last agent message preview.
+ * Sessions can be archived to collapse them into a toggleable section. Keyboard navigation
+ * with arrow keys, Enter to select, and Delete to remove is supported.
+ */
 import { useState } from 'react'
 import type { Session, SessionStatus, BranchStatus } from '../store/sessions'
 

@@ -1,3 +1,12 @@
+/**
+ * Agent and repository configuration panel rendered as a global settings overlay.
+ *
+ * Provides CRUD for agent definitions (name, command, environment variables) and
+ * per-repository settings (default agent, allow-push-to-main flag, init script).
+ * The EnvVarEditor sub-component manages key-value environment variable pairs with
+ * suggested variables based on the agent command. Repo settings include an init script
+ * editor for commands that run when a new worktree is created for that repository.
+ */
 import { useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react'
 import { useAgentStore, type AgentConfig } from '../store/agents'
 import { useRepoStore } from '../store/repos'

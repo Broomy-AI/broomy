@@ -1,3 +1,11 @@
+/**
+ * Global styles for the renderer process.
+ *
+ * Imports Tailwind CSS base/components/utilities layers, then adds global resets
+ * (box-sizing, zero margins), dark-theme scrollbar styling, a focus-within border
+ * indicator for panel containers, Monaco search highlight decorations, and the
+ * macOS-style draggable title bar region rules.
+ */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

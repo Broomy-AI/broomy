@@ -1,5 +1,11 @@
-// Comprehensive ANSI/terminal escape sequence stripping
-// Shared utility extracted for reuse across components
+/**
+ * Strips ANSI escape sequences and terminal control characters from text.
+ *
+ * Uses a two-pass regex approach: the first pass removes CSI, OSC, DCS, SS2/SS3,
+ * and other escape sequences; the second pass cleans up leftover remnants that
+ * incomplete sequences can leave behind. A final pass removes non-printable
+ * control characters. Shared across components that need plain text from terminal output.
+ */
 
 const ANSI_REGEX = new RegExp([
   // CSI sequences (most common): ESC [ ... letter

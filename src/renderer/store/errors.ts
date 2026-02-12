@@ -1,3 +1,10 @@
+/**
+ * Application error tracking store.
+ *
+ * Collects runtime errors into a capped list (max 50) with timestamps and an
+ * unread indicator. Errors are logged to console and displayed in the UI.
+ * This store is purely in-memory and never persisted to disk.
+ */
 import { create } from 'zustand'
 
 export interface AppError {

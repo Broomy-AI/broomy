@@ -1,3 +1,11 @@
+/**
+ * File viewer plugin registry and content-type detection utilities.
+ *
+ * Maintains an ordered list of viewer plugins (Image, Markdown, Monaco) and provides
+ * lookup functions that match a file path against each plugin's canHandle predicate,
+ * returning viewers sorted by priority. Also exports an isTextContent heuristic that
+ * checks for null bytes and printable-character ratio to distinguish text from binary.
+ */
 import type { FileViewerPlugin } from './types'
 import { MonacoViewer } from './MonacoViewer'
 import { ImageViewer } from './ImageViewer'

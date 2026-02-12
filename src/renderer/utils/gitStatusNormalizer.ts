@@ -1,3 +1,12 @@
+/**
+ * Normalizes git status responses between old and new IPC formats.
+ *
+ * The git status IPC handler evolved from returning a flat array of file statuses
+ * to returning an object with files, ahead/behind counts, tracking branch, and
+ * current branch. This normalizer accepts either format and always returns the
+ * new object format with safe defaults for missing fields, ensuring downstream
+ * consumers do not need format-aware branching logic.
+ */
 import type { GitFileStatus, GitStatusResult } from '../../preload/index'
 
 /**

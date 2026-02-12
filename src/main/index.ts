@@ -1,3 +1,15 @@
+/**
+ * Main process entry point for the Broomy Electron app.
+ *
+ * Creates the BrowserWindow, registers every IPC handler the renderer can call,
+ * and manages application lifecycle (PTY processes, file watchers, window cleanup).
+ * Handlers are organized into groups: PTY management (node-pty), config/profile
+ * persistence (~/.broomy/), git operations (simple-git), GitHub CLI wrappers (gh),
+ * filesystem I/O, shell execution, native context menus, and TypeScript project
+ * context collection. Every handler checks the `isE2ETest` flag and returns
+ * deterministic mock data during Playwright tests so no real repos, APIs, or
+ * config files are touched.
+ */
 import { app, BrowserWindow, ipcMain, dialog, Menu, shell } from 'electron'
 import { join } from 'path'
 import { homedir, tmpdir } from 'os'

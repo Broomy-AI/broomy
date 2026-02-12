@@ -1,4 +1,13 @@
 /**
+ * Git status parsing and GitHub URL helpers.
+ *
+ * Converts single-character git status codes (M, A, D, R, ?) into readable
+ * strings, splits a file entry from `git status` into separate staged and
+ * unstaged records when both exist, and builds properly-encoded GitHub PR
+ * creation URLs from a repo slug and branch names.
+ */
+
+/**
  * Parses git status character codes into human-readable status strings.
  */
 export function statusFromChar(c: string): string {

@@ -1,3 +1,10 @@
+/**
+ * Panel registry implementation backed by a Map.
+ *
+ * Provides registration and lookup for panel definitions. Panels can be queried
+ * by ID, by layout position, or by default state (visible, in-toolbar). A global
+ * singleton instance is exported for use across the application.
+ */
 import { PanelDefinition, PanelPosition } from './types'
 
 export class PanelRegistry {

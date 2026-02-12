@@ -1,3 +1,11 @@
+/**
+ * Monaco Diff Editor wrapper for side-by-side or inline file comparison.
+ *
+ * Renders a read-only Monaco DiffEditor with original and modified content,
+ * automatic language detection from the file extension, configurable side-by-side
+ * or inline layout, and scroll-to-line support that positions the modified editor
+ * at the requested line on mount and when the scrollToLine prop changes.
+ */
 import { useEffect, useRef } from 'react'
 import { DiffEditor, loader } from '@monaco-editor/react'
 import * as monacoEditor from 'monaco-editor'

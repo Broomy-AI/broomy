@@ -1,3 +1,13 @@
+/**
+ * File tree and source control panel with multiple filterable views.
+ *
+ * Provides four tab views: a file tree browser, a source control panel (working changes,
+ * branch changes, commits, and PR comments), a regex-capable code search, and a recent
+ * files list. The file tree is loaded lazily by expanding directories via IPC, with git
+ * status badges overlaid. The source control view handles staging, committing, syncing
+ * with remote, push-to-main operations, and PR status checks via the GitHub CLI. Branch
+ * changes and per-commit file diffs are fetched on demand and open in the diff viewer.
+ */
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { FileEntry, GitFileStatus, GitStatusResult, SearchResult, GitHubPrStatus, GitCommitInfo } from '../../preload/index'
 import type { ExplorerFilter, BranchStatus, PrState } from '../store/sessions'

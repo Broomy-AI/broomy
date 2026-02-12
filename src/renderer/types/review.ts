@@ -1,3 +1,12 @@
+/**
+ * Type definitions for the code review system.
+ *
+ * Defines the structure of AI-generated code reviews (ReviewData), including overview,
+ * change patterns with source locations, potential issues with severity levels, design
+ * decisions with alternatives, and requested changes. Also defines ReviewComparison for
+ * tracking changes between successive reviews, PendingComment for draft PR comments,
+ * and ReviewHistory for the full chain of reviews on a PR.
+ */
 export interface CodeLocation {
   file: string
   startLine: number

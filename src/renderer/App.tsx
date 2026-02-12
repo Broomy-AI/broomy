@@ -1,3 +1,12 @@
+/**
+ * Root application component that orchestrates all stores, effects, and panel wiring.
+ *
+ * AppContent initializes the four Zustand stores (sessions, agents, repos, profiles) on mount,
+ * polls git status every 2 seconds for the active session, computes derived branch status,
+ * and builds a memoized panel map that Layout renders into the drag-to-resize shell. It also
+ * manages file navigation with unsaved-changes guards and global keyboard shortcuts.
+ * The outer App component wraps AppContent in the PanelProvider context.
+ */
 import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import type { GitStatusResult } from '../preload/index'
 import Layout from './components/Layout'
