@@ -84,7 +84,7 @@ export const BUILTIN_PANELS: PanelDefinition[] = [
     icon: <ReviewIcon />,
     position: 'center-left',
     defaultVisible: false,
-    defaultInToolbar: false,
+    defaultInToolbar: true,
     resizable: true,
     minSize: 250,
     maxSize: 600,

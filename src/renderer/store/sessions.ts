@@ -2,6 +2,15 @@ import { create } from 'zustand'
 import { basename } from 'path-browserify'
 import { PANEL_IDS, DEFAULT_TOOLBAR_PANELS } from '../panels/types'
 import type { BranchStatus, PrState } from '../utils/branchStatus'
+import {
+  debouncedSave,
+  syncLegacyFields,
+  createPanelVisibilityFromLegacy,
+  setCurrentProfileId,
+  getCurrentProfileId,
+  setLoadedSessionCount,
+} from './sessionPersistence'
+import { createTerminalTabActions } from './sessionTerminalTabs'
 
 export type { BranchStatus, PrState }
 
@@ -190,104 +199,31 @@ interface SessionStore {
   unarchiveSession: (sessionId: string) => void
 }
 
+// Ensure saved toolbar panels include all known panels (e.g. 'review' added later).
+// Returns DEFAULT_TOOLBAR_PANELS if no saved value, otherwise adds missing panels.
+function migrateToolbarPanels(saved: string[] | undefined): string[] {
+  if (!saved || saved.length === 0) return [...DEFAULT_TOOLBAR_PANELS]
+  const missing = DEFAULT_TOOLBAR_PANELS.filter((p) => !saved.includes(p))
+  if (missing.length === 0) return saved
+  // Insert missing panels before settings (last item) to keep settings at the end
+  const result = [...saved]
+  const settingsIdx = result.indexOf(PANEL_IDS.SETTINGS)
+  for (const p of missing) {
+    if (settingsIdx >= 0) {
+      result.splice(settingsIdx, 0, p)
+    } else {
+      result.push(p)
+    }
+  }
+  return result
+}
+
 const generateId = () => `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
-// Helper to sync legacy fields from panelVisibility
-function syncLegacyFields(session: Session): Session {
+export const useSessionStore = create<SessionStore>((set, get) => {
+  const terminalTabActions = createTerminalTabActions(get, set)
+
   return {
-    ...session,
-    showAgentTerminal: session.panelVisibility[PANEL_IDS.AGENT_TERMINAL] ?? true,
-    showUserTerminal: session.panelVisibility[PANEL_IDS.USER_TERMINAL] ?? false,
-    showExplorer: session.panelVisibility[PANEL_IDS.EXPLORER] ?? false,
-    showFileViewer: session.panelVisibility[PANEL_IDS.FILE_VIEWER] ?? false,
-  }
-}
-
-// Helper to create panelVisibility from legacy fields
-function createPanelVisibilityFromLegacy(data: {
-  showAgentTerminal?: boolean
-  showUserTerminal?: boolean
-  showExplorer?: boolean
-  showFileViewer?: boolean
-  panelVisibility?: PanelVisibility
-}): PanelVisibility {
-  // If panelVisibility exists, use it
-  if (data.panelVisibility) {
-    return data.panelVisibility
-  }
-  // Otherwise, create from legacy fields
-  return {
-    [PANEL_IDS.AGENT_TERMINAL]: data.showAgentTerminal ?? true,
-    [PANEL_IDS.USER_TERMINAL]: data.showUserTerminal ?? false,
-    [PANEL_IDS.EXPLORER]: data.showExplorer ?? false,
-    [PANEL_IDS.FILE_VIEWER]: data.showFileViewer ?? false,
-  }
-}
-
-// Current profile ID for saves - set by loadSessions
-let currentProfileId: string | undefined
-
-// Debounced save to avoid too many writes during dragging
-let saveTimeout: ReturnType<typeof setTimeout> | null = null
-const debouncedSave = async (
-  sessions: Session[],
-  globalPanelVisibility: PanelVisibility,
-  sidebarWidth: number,
-  toolbarPanels: string[]
-) => {
-  if (saveTimeout) clearTimeout(saveTimeout)
-  saveTimeout = setTimeout(async () => {
-    const config = await window.config.load(currentProfileId)
-    await window.config.save({
-      profileId: currentProfileId,
-      agents: config.agents,
-      sessions: sessions.map((s) => ({
-        id: s.id,
-        name: s.name,
-        directory: s.directory,
-        agentId: s.agentId,
-        repoId: s.repoId,
-        issueNumber: s.issueNumber,
-        issueTitle: s.issueTitle,
-        // Save new panelVisibility format
-        panelVisibility: s.panelVisibility,
-        // Review session fields
-        sessionType: s.sessionType,
-        prNumber: s.prNumber,
-        prTitle: s.prTitle,
-        prUrl: s.prUrl,
-        prBaseBranch: s.prBaseBranch,
-        // Also save legacy fields for backwards compat
-        showAgentTerminal: s.showAgentTerminal,
-        showUserTerminal: s.showUserTerminal,
-        showExplorer: s.showExplorer,
-        showFileViewer: s.showFileViewer,
-        showDiff: s.showDiff,
-        fileViewerPosition: s.fileViewerPosition,
-        layoutSizes: s.layoutSizes,
-        explorerFilter: s.explorerFilter,
-        terminalTabs: s.terminalTabs,
-        // Push to main tracking
-        pushedToMainAt: s.pushedToMainAt,
-        pushedToMainCommit: s.pushedToMainCommit,
-        // Commit tracking
-        hasHadCommits: s.hasHadCommits || undefined,
-        // PR state tracking
-        lastKnownPrState: s.lastKnownPrState,
-        lastKnownPrNumber: s.lastKnownPrNumber,
-        lastKnownPrUrl: s.lastKnownPrUrl,
-        // Archive state
-        isArchived: s.isArchived || undefined,
-      })),
-      // Global state
-      showSidebar: globalPanelVisibility[PANEL_IDS.SIDEBAR] ?? true,
-      sidebarWidth,
-      toolbarPanels,
-    })
-  }, 500)
-}
-
-export const useSessionStore = create<SessionStore>((set, get) => ({
   sessions: [],
   activeSessionId: null,
   isLoading: true,
@@ -299,14 +235,26 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   loadSessions: async (profileId?: string) => {
     if (profileId !== undefined) {
-      currentProfileId = profileId
+      setCurrentProfileId(profileId)
     }
     try {
-      const config = await window.config.load(currentProfileId)
+      const config = await window.config.load(getCurrentProfileId())
       const sessions: Session[] = []
 
       for (const sessionData of config.sessions) {
-        const branch = await window.git.getBranch(sessionData.directory)
+        // Per-session try-catch: a single session's git failure must not
+        // prevent other sessions from loading. Branch is transient data
+        // refreshed on load; core session identity comes from the config.
+        let branch: string
+        try {
+          branch = await window.git.getBranch(sessionData.directory)
+        } catch {
+          console.warn(
+            `[sessions] Failed to get branch for session "${sessionData.name}" ` +
+            `(${sessionData.directory}), using "unknown"`
+          )
+          branch = 'unknown'
+        }
         const panelVisibility = createPanelVisibilityFromLegacy(sessionData)
 
         const session: Session = {
@@ -368,16 +316,22 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         [PANEL_IDS.SETTINGS]: false,
       }
 
+      setLoadedSessionCount(sessions.length)
+
       set({
         sessions,
         activeSessionId: (sessions.find((s) => !s.isArchived) ?? sessions[0])?.id ?? null,
         isLoading: false,
         showSidebar: config.showSidebar ?? true,
         sidebarWidth: config.sidebarWidth ?? DEFAULT_SIDEBAR_WIDTH,
-        toolbarPanels: config.toolbarPanels ?? [...DEFAULT_TOOLBAR_PANELS],
+        toolbarPanels: migrateToolbarPanels(config.toolbarPanels),
         globalPanelVisibility,
       })
-    } catch {
+    } catch (err) {
+      // Config load failed entirely. Set empty UI state but do NOT update
+      // loadedSessionCount — the save guard will prevent debouncedSave from
+      // persisting this empty state over real data on disk.
+      console.warn('[sessions] Failed to load sessions config:', err)
       set({ sessions: [], activeSessionId: null, isLoading: false })
     }
   },
@@ -685,148 +639,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     // Don't persist runtime monitoring state
   },
 
-  // Terminal tab actions
-  addTerminalTab: (sessionId: string, name?: string) => {
-    const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
-    const tabId = `tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-    const session = sessions.find((s) => s.id === sessionId)
-    const tabNumber = session ? session.terminalTabs.tabs.length + 1 : 1
-    const tabName = name || `Terminal ${tabNumber}`
-
-    const updatedSessions = sessions.map((s) => {
-      if (s.id !== sessionId) return s
-      return {
-        ...s,
-        terminalTabs: {
-          tabs: [...s.terminalTabs.tabs, { id: tabId, name: tabName }],
-          activeTabId: tabId,
-        },
-      }
-    })
-    set({ sessions: updatedSessions })
-    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
-    return tabId
-  },
-
-  removeTerminalTab: (sessionId: string, tabId: string) => {
-    const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
-    const updatedSessions = sessions.map((s) => {
-      if (s.id !== sessionId) return s
-      const tabIndex = s.terminalTabs.tabs.findIndex((t) => t.id === tabId)
-      const newTabs = s.terminalTabs.tabs.filter((t) => t.id !== tabId)
-
-      // Don't allow closing the last tab
-      if (newTabs.length === 0) return s
-
-      // If closing the active tab, select an adjacent one
-      let newActiveId = s.terminalTabs.activeTabId
-      if (s.terminalTabs.activeTabId === tabId) {
-        // Prefer the tab to the right, or the one to the left if closing the rightmost
-        const newIndex = Math.min(tabIndex, newTabs.length - 1)
-        newActiveId = newTabs[newIndex].id
-      }
-
-      return {
-        ...s,
-        terminalTabs: {
-          tabs: newTabs,
-          activeTabId: newActiveId,
-        },
-      }
-    })
-    set({ sessions: updatedSessions })
-    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
-  },
-
-  renameTerminalTab: (sessionId: string, tabId: string, name: string) => {
-    const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
-    const updatedSessions = sessions.map((s) => {
-      if (s.id !== sessionId) return s
-      return {
-        ...s,
-        terminalTabs: {
-          ...s.terminalTabs,
-          tabs: s.terminalTabs.tabs.map((t) =>
-            t.id === tabId ? { ...t, name } : t
-          ),
-        },
-      }
-    })
-    set({ sessions: updatedSessions })
-    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
-  },
-
-  reorderTerminalTabs: (sessionId: string, tabs: TerminalTab[]) => {
-    const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
-    const updatedSessions = sessions.map((s) => {
-      if (s.id !== sessionId) return s
-      return {
-        ...s,
-        terminalTabs: {
-          ...s.terminalTabs,
-          tabs,
-        },
-      }
-    })
-    set({ sessions: updatedSessions })
-    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
-  },
-
-  setActiveTerminalTab: (sessionId: string, tabId: string) => {
-    const { sessions } = get()
-    const updatedSessions = sessions.map((s) => {
-      if (s.id !== sessionId) return s
-      return {
-        ...s,
-        terminalTabs: {
-          ...s.terminalTabs,
-          activeTabId: tabId,
-        },
-      }
-    })
-    set({ sessions: updatedSessions })
-    // Don't persist active tab - it's runtime state
-  },
-
-  closeOtherTerminalTabs: (sessionId: string, tabId: string) => {
-    const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
-    const updatedSessions = sessions.map((s) => {
-      if (s.id !== sessionId) return s
-      const tab = s.terminalTabs.tabs.find((t) => t.id === tabId)
-      if (!tab) return s
-      return {
-        ...s,
-        terminalTabs: {
-          tabs: [tab],
-          activeTabId: tabId,
-        },
-      }
-    })
-    set({ sessions: updatedSessions })
-    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
-  },
-
-  closeTerminalTabsToRight: (sessionId: string, tabId: string) => {
-    const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
-    const updatedSessions = sessions.map((s) => {
-      if (s.id !== sessionId) return s
-      const tabIndex = s.terminalTabs.tabs.findIndex((t) => t.id === tabId)
-      if (tabIndex === -1) return s
-      const newTabs = s.terminalTabs.tabs.slice(0, tabIndex + 1)
-      // If active tab was to the right, select the clicked tab
-      const activeIndex = s.terminalTabs.tabs.findIndex((t) => t.id === s.terminalTabs.activeTabId)
-      const newActiveId = activeIndex > tabIndex ? tabId : s.terminalTabs.activeTabId
-      return {
-        ...s,
-        terminalTabs: {
-          tabs: newTabs,
-          activeTabId: newActiveId,
-        },
-      }
-    })
-    set({ sessions: updatedSessions })
-    debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
-  },
+  // Terminal tab actions (delegated)
+  ...terminalTabActions,
 
   setAgentPtyId: (sessionId: string, ptyId: string) => {
     const { sessions } = get()
@@ -918,4 +732,4 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set({ sessions: updatedSessions })
     debouncedSave(updatedSessions, globalPanelVisibility, sidebarWidth, toolbarPanels)
   },
-}))
+}})

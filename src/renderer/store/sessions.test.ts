@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { useSessionStore } from './sessions'
 import { PANEL_IDS, DEFAULT_TOOLBAR_PANELS } from '../panels/types'
+import { setLoadedSessionCount, getLoadedSessionCount } from './sessionPersistence'
 
 describe('useSessionStore', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    setLoadedSessionCount(0)
     useSessionStore.setState({
       sessions: [],
       activeSessionId: null,
@@ -172,17 +174,59 @@ describe('useSessionStore', () => {
       const state = useSessionStore.getState()
       expect(state.showSidebar).toBe(false)
       expect(state.sidebarWidth).toBe(300)
-      expect(state.toolbarPanels).toEqual(['sidebar', 'explorer'])
+      // Saved toolbar panels are migrated to include any missing default panels
+      expect(state.toolbarPanels).toContain('sidebar')
+      expect(state.toolbarPanels).toContain('explorer')
+      expect(state.toolbarPanels.indexOf('sidebar')).toBeLessThan(state.toolbarPanels.indexOf('explorer'))
     })
 
-    it('sets empty state on error', async () => {
-      vi.mocked(window.config.load).mockRejectedValue(new Error('fail'))
-
+    it('sets empty UI state on config.load failure without updating loadedSessionCount', async () => {
+      // First load some sessions so loadedSessionCount > 0
+      vi.mocked(window.config.load).mockResolvedValue({
+        agents: [],
+        sessions: [{ id: 's1', name: 'S', directory: '/d' }],
+      })
       await useSessionStore.getState().loadSessions()
+      expect(getLoadedSessionCount()).toBe(1)
+
+      // Now simulate a config.load failure on reload
+      vi.mocked(window.config.load).mockRejectedValue(new Error('fail'))
+      await useSessionStore.getState().loadSessions()
+
       const state = useSessionStore.getState()
+      // UI shows empty state
       expect(state.sessions).toEqual([])
       expect(state.activeSessionId).toBeNull()
       expect(state.isLoading).toBe(false)
+      // loadedSessionCount is NOT reset — save guard will protect disk data
+      expect(getLoadedSessionCount()).toBe(1)
+    })
+
+    it('loads remaining sessions when git.getBranch fails for one session', async () => {
+      vi.mocked(window.config.load).mockResolvedValue({
+        agents: [],
+        sessions: [
+          { id: 's1', name: 'Good Session', directory: '/good-repo' },
+          { id: 's2', name: 'Bad Session', directory: '/missing-repo' },
+        ],
+      })
+      vi.mocked(window.git.getBranch).mockImplementation(async (dir: string) => {
+        if (dir === '/missing-repo') throw new Error('not a git repo')
+        return 'feature/test'
+      })
+
+      await useSessionStore.getState().loadSessions()
+      const state = useSessionStore.getState()
+
+      // Both sessions loaded
+      expect(state.sessions).toHaveLength(2)
+      // Good session has the real branch
+      expect(state.sessions[0].branch).toBe('feature/test')
+      expect(state.sessions[0].name).toBe('Good Session')
+      // Bad session loaded with fallback branch
+      expect(state.sessions[1].branch).toBe('unknown')
+      expect(state.sessions[1].name).toBe('Bad Session')
+      expect(state.sessions[1].directory).toBe('/missing-repo')
     })
   })
 
@@ -790,11 +834,6 @@ describe('useSessionStore', () => {
     })
 
     it('addSession with sessionType review does not duplicate review in toolbar', async () => {
-      // Pre-set toolbar with review already present
-      useSessionStore.setState({
-        toolbarPanels: [...DEFAULT_TOOLBAR_PANELS, PANEL_IDS.REVIEW],
-      })
-
       await useSessionStore.getState().addSession('/test/repo', 'agent-1', {
         sessionType: 'review',
       })
@@ -811,10 +850,10 @@ describe('useSessionStore', () => {
       expect(session.panelVisibility[PANEL_IDS.REVIEW]).toBeUndefined()
     })
 
-    it('addSession without sessionType does not add review to toolbar', async () => {
+    it('addSession without sessionType keeps review in default toolbar', async () => {
       await useSessionStore.getState().addSession('/test/repo', 'agent-1')
       const state = useSessionStore.getState()
-      expect(state.toolbarPanels).not.toContain(PANEL_IDS.REVIEW)
+      expect(state.toolbarPanels).toContain(PANEL_IDS.REVIEW)
     })
 
     it('loadSessions preserves review panelVisibility from config', async () => {
@@ -954,6 +993,32 @@ describe('useSessionStore', () => {
 
       expect(window.config.load).toHaveBeenCalled()
       expect(window.config.save).toHaveBeenCalled()
+    })
+
+    it('refuses to save empty sessions when sessions were previously loaded', async () => {
+      // Load 2 sessions from config
+      vi.mocked(window.config.load).mockResolvedValue({
+        agents: [],
+        sessions: [
+          { id: 's1', name: 'S1', directory: '/d1' },
+          { id: 's2', name: 'S2', directory: '/d2' },
+        ],
+      })
+      await useSessionStore.getState().loadSessions()
+      expect(getLoadedSessionCount()).toBe(2)
+
+      // Simulate a bug that wipes sessions from store
+      useSessionStore.setState({ sessions: [] })
+      vi.mocked(window.config.save).mockClear()
+
+      // Trigger a save via sidebar toggle (modifies global state which calls debouncedSave)
+      useSessionStore.getState().toggleSidebar()
+
+      // Advance past debounce
+      await vi.advanceTimersByTimeAsync(600)
+
+      // Save guard should have prevented the save
+      expect(window.config.save).not.toHaveBeenCalled()
     })
   })
 })

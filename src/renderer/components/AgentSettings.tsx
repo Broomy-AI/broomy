@@ -1,267 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAgentStore, type AgentConfig } from '../store/agents'
 import { useRepoStore } from '../store/repos'
 import type { ManagedRepo } from '../../preload/index'
+import { EnvVarEditor, type EnvVarEditorRef } from './EnvVarEditor'
+import { RepoSettingsEditor } from './RepoSettingsEditor'
 
 interface AgentSettingsProps {
   onClose: () => void
 }
 
-// Suggested env vars for different commands
-const ENV_SUGGESTIONS: Record<string, { key: string; description: string }[]> = {
-  claude: [
-    { key: 'CLAUDE_CONFIG_DIR', description: 'Config directory (default: ~/.claude)' },
-  ],
-}
-
-function EnvVarEditor({
-  env,
-  onChange,
-  command,
-}: {
-  env: Record<string, string>
-  onChange: (env: Record<string, string>) => void
-  command: string
-}) {
-  const [newKey, setNewKey] = useState('')
-  const [newValue, setNewValue] = useState('')
-
-  const entries = Object.entries(env)
-  const suggestions = ENV_SUGGESTIONS[command] || []
-  const unusedSuggestions = suggestions.filter(s => !(s.key in env))
-
-  const handleAdd = () => {
-    if (!newKey.trim()) return
-    onChange({ ...env, [newKey.trim()]: newValue })
-    setNewKey('')
-    setNewValue('')
-  }
-
-  const handleRemove = (key: string) => {
-    const { [key]: _, ...newEnv } = env
-    onChange(newEnv)
-  }
-
-  const handleChange = (key: string, value: string) => {
-    onChange({ ...env, [key]: value })
-  }
-
-  const handleAddSuggestion = (key: string) => {
-    setNewKey(key)
-  }
-
-  return (
-    <div className="space-y-2">
-      <div className="text-xs text-text-secondary">Environment Variables</div>
-
-      {/* Existing env vars */}
-      {entries.map(([key, value]) => (
-        <div key={key} className="flex gap-2">
-          <input
-            type="text"
-            value={key}
-            disabled
-            className="w-1/3 px-2 py-1.5 bg-bg-tertiary border border-border rounded text-xs text-text-secondary font-mono"
-          />
-          <input
-            type="text"
-            value={value}
-            onChange={(e) => handleChange(key, e.target.value)}
-            className="flex-1 px-2 py-1.5 bg-bg-secondary border border-border rounded text-xs text-text-primary font-mono focus:outline-none focus:border-accent"
-            placeholder="Value"
-          />
-          <button
-            onClick={() => handleRemove(key)}
-            className="p-1.5 text-text-secondary hover:text-status-error transition-colors"
-            title="Remove"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 6L6 18" />
-              <path d="M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      ))}
-
-      {/* Add new env var */}
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={newKey}
-          onChange={(e) => setNewKey(e.target.value)}
-          className="w-1/3 px-2 py-1.5 bg-bg-secondary border border-border rounded text-xs text-text-primary font-mono focus:outline-none focus:border-accent"
-          placeholder="KEY"
-        />
-        <input
-          type="text"
-          value={newValue}
-          onChange={(e) => setNewValue(e.target.value)}
-          className="flex-1 px-2 py-1.5 bg-bg-secondary border border-border rounded text-xs text-text-primary font-mono focus:outline-none focus:border-accent"
-          placeholder="value"
-        />
-        <button
-          onClick={handleAdd}
-          disabled={!newKey.trim()}
-          className="px-2 py-1.5 bg-bg-tertiary text-text-secondary text-xs rounded hover:text-text-primary disabled:opacity-50 transition-colors"
-        >
-          Add
-        </button>
-      </div>
-
-      {/* Suggestions */}
-      {unusedSuggestions.length > 0 && (
-        <div className="flex flex-wrap gap-1 pt-1">
-          {unusedSuggestions.map(suggestion => (
-            <button
-              key={suggestion.key}
-              onClick={() => handleAddSuggestion(suggestion.key)}
-              className="px-2 py-0.5 text-xs bg-accent/20 text-accent rounded hover:bg-accent/30 transition-colors"
-              title={suggestion.description}
-            >
-              + {suggestion.key}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Repo settings editor component
-function RepoSettingsEditor({
-  repo,
-  agents,
-  onUpdate,
-  onClose,
-}: {
-  repo: ManagedRepo
-  agents: AgentConfig[]
-  onUpdate: (updates: Partial<Omit<ManagedRepo, 'id'>>) => Promise<void>
-  onClose: () => void
-}) {
-  const [defaultAgentId, setDefaultAgentId] = useState(repo.defaultAgentId || '')
-  const [allowPushToMain, setAllowPushToMain] = useState(repo.allowPushToMain ?? false)
-  const [initScript, setInitScript] = useState('')
-  const [loadingScript, setLoadingScript] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [pushToMainError, setPushToMainError] = useState<string | null>(null)
-
-  useEffect(() => {
-    async function loadScript() {
-      setLoadingScript(true)
-      try {
-        const script = await window.repos.getInitScript(repo.id)
-        setInitScript(script || '')
-      } catch {
-        setInitScript('')
-      }
-      setLoadingScript(false)
-    }
-    loadScript()
-  }, [repo.id])
-
-  const handleSave = async () => {
-    setSaving(true)
-    try {
-      await onUpdate({ defaultAgentId: defaultAgentId || undefined, allowPushToMain })
-      await window.repos.saveInitScript(repo.id, initScript)
-      onClose()
-    } catch (err) {
-      console.error('Failed to save repo settings:', err)
-    }
-    setSaving(false)
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="text-sm font-medium text-text-primary">{repo.name}</div>
-      <div className="text-xs text-text-secondary font-mono">{repo.rootDir}</div>
-
-      <div className="space-y-2">
-        <label className="text-xs text-text-secondary">Default Agent</label>
-        <select
-          value={defaultAgentId}
-          onChange={(e) => setDefaultAgentId(e.target.value)}
-          className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary focus:outline-none focus:border-accent"
-        >
-          <option value="">No default (ask each time)</option>
-          {agents.map((agent) => (
-            <option key={agent.id} value={agent.id}>
-              {agent.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="space-y-2">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={allowPushToMain}
-            onChange={async (e) => {
-              const checked = e.target.checked
-              if (checked) {
-                setPushToMainError(null)
-                try {
-                  const hasAccess = await window.gh.hasWriteAccess(repo.rootDir)
-                  if (!hasAccess) {
-                    setPushToMainError('You do not have write access to this repository.')
-                    return
-                  }
-                } catch {
-                  setPushToMainError('Failed to check write access. Is gh CLI installed?')
-                  return
-                }
-              }
-              setAllowPushToMain(checked)
-              setPushToMainError(null)
-            }}
-            className="rounded border-border"
-          />
-          <span className="text-xs text-text-secondary">Allow "Push to main" button</span>
-        </label>
-        {pushToMainError && (
-          <div className="text-xs text-red-400">{pushToMainError}</div>
-        )}
-      </div>
-
-      <div className="space-y-2">
-        <label className="text-xs text-text-secondary">Init Script (runs when session starts)</label>
-        {loadingScript ? (
-          <div className="text-xs text-text-secondary">Loading...</div>
-        ) : (
-          <textarea
-            value={initScript}
-            onChange={(e) => setInitScript(e.target.value)}
-            placeholder="# Commands to run when starting a session in this repo&#10;# e.g., source .venv/bin/activate"
-            className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary font-mono focus:outline-none focus:border-accent resize-y min-h-[80px]"
-            rows={4}
-          />
-        )}
-      </div>
-
-      <div className="flex gap-2">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="px-3 py-1.5 bg-accent text-white text-sm rounded hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {saving ? 'Saving...' : 'Save'}
-        </button>
-        <button
-          onClick={onClose}
-          className="px-3 py-1.5 bg-bg-tertiary text-text-secondary text-sm rounded hover:text-text-primary transition-colors"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  )
-}
-
 export default function AgentSettings({ onClose }: AgentSettingsProps) {
   const { agents, addAgent, updateAgent, removeAgent } = useAgentStore()
-  const { repos, loadRepos, updateRepo } = useRepoStore()
+  const { repos, loadRepos, updateRepo, defaultCloneDir, setDefaultCloneDir } = useRepoStore()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingRepoId, setEditingRepoId] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
@@ -276,6 +26,7 @@ export default function AgentSettings({ onClose }: AgentSettingsProps) {
   const [command, setCommand] = useState('')
   const [color, setColor] = useState('')
   const [env, setEnv] = useState<Record<string, string>>({})
+  const envEditorRef = useRef<EnvVarEditorRef>(null)
 
   const resetForm = () => {
     setName('')
@@ -289,11 +40,12 @@ export default function AgentSettings({ onClose }: AgentSettingsProps) {
   const handleAdd = async () => {
     if (!name.trim() || !command.trim()) return
 
+    const finalEnv = envEditorRef.current?.getPendingEnv() ?? env
     await addAgent({
       name: name.trim(),
       command: command.trim(),
       color: color.trim() || undefined,
-      env: Object.keys(env).length > 0 ? env : undefined,
+      env: Object.keys(finalEnv).length > 0 ? finalEnv : undefined,
     })
     resetForm()
   }
@@ -311,11 +63,12 @@ export default function AgentSettings({ onClose }: AgentSettingsProps) {
   const handleUpdate = async () => {
     if (!editingId || !name.trim() || !command.trim()) return
 
+    const finalEnv = envEditorRef.current?.getPendingEnv() ?? env
     await updateAgent(editingId, {
       name: name.trim(),
       command: command.trim(),
       color: color.trim() || undefined,
-      env: Object.keys(env).length > 0 ? env : undefined,
+      env: Object.keys(finalEnv).length > 0 ? finalEnv : undefined,
     })
     resetForm()
   }
@@ -356,8 +109,30 @@ export default function AgentSettings({ onClose }: AgentSettingsProps) {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4">
+        {/* General section */}
+        <h3 className="text-sm font-medium text-text-primary mb-3">General</h3>
+        <div className="space-y-2 mb-4">
+          <label className="text-xs text-text-secondary">Default Repo Folder</label>
+          <div className="flex gap-2">
+            <div className="flex-1 px-3 py-2 text-sm rounded border border-border bg-bg-primary text-text-primary font-mono truncate">
+              {defaultCloneDir || '~/repos'}
+            </div>
+            <button
+              onClick={async () => {
+                const folder = await window.dialog.openFolder()
+                if (folder) await setDefaultCloneDir(folder)
+              }}
+              className="px-3 py-2 text-sm rounded border border-border bg-bg-primary hover:bg-bg-tertiary text-text-secondary transition-colors"
+            >
+              Browse
+            </button>
+          </div>
+        </div>
+
         {/* Agents section */}
-        <h3 className="text-sm font-medium text-text-primary mb-3">Agents</h3>
+        <div className="mt-8 mb-4 border-t border-border pt-4">
+          <h3 className="text-sm font-medium text-text-primary mb-3">Agents</h3>
+        </div>
         <div className="space-y-2 mb-4">
           {agents.map((agent) => (
             <div
@@ -391,7 +166,7 @@ export default function AgentSettings({ onClose }: AgentSettingsProps) {
                     placeholder="Color (optional, e.g., #4a9eff)"
                     className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent"
                   />
-                  <EnvVarEditor env={env} onChange={setEnv} command={command} />
+                  <EnvVarEditor ref={envEditorRef} env={env} onChange={setEnv} command={command} />
                   <div className="flex gap-2">
                     <button
                       onClick={handleUpdate}
@@ -508,7 +283,7 @@ export default function AgentSettings({ onClose }: AgentSettingsProps) {
               placeholder="Color (optional, e.g., #4a9eff)"
               className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent"
             />
-            <EnvVarEditor env={env} onChange={setEnv} command={command} />
+            <EnvVarEditor ref={envEditorRef} env={env} onChange={setEnv} command={command} />
             <div className="flex gap-2">
               <button
                 onClick={handleAdd}

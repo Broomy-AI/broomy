@@ -26,7 +26,7 @@ const mockGit = {
   pushNewBranch: vi.fn().mockResolvedValue({ success: true }),
   defaultBranch: vi.fn().mockResolvedValue('main'),
   remoteUrl: vi.fn().mockResolvedValue(null),
-  branchChanges: vi.fn().mockResolvedValue({ files: [], baseBranch: 'main' }),
+  branchChanges: vi.fn().mockResolvedValue({ files: [], baseBranch: 'main', mergeBase: 'abc1234' }),
   branchCommits: vi.fn().mockResolvedValue({ commits: [], baseBranch: 'main' }),
   commitFiles: vi.fn().mockResolvedValue([]),
   headCommit: vi.fn().mockResolvedValue(null),

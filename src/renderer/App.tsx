@@ -1,10 +1,9 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react'
-import type { GitStatusResult } from '../preload/index'
 import Layout from './components/Layout'
 import SessionList from './components/SessionList'
 import Terminal from './components/Terminal'
 import TabbedTerminal from './components/TabbedTerminal'
-import Explorer from './components/Explorer'
+import Explorer from './components/explorer'
 import FileViewer from './components/FileViewer'
 import ReviewPanel from './components/ReviewPanel'
 import AgentSettings from './components/AgentSettings'
@@ -17,11 +16,9 @@ import { useRepoStore } from './store/repos'
 import { useProfileStore } from './store/profiles'
 import { useErrorStore } from './store/errors'
 import { PanelProvider, PANEL_IDS } from './panels'
-import { terminalBufferRegistry } from './utils/terminalBufferRegistry'
-import { computeBranchStatus } from './utils/branchStatus'
-import { normalizeGitStatus } from './utils/gitStatusNormalizer'
-import { resolveNavigation, applyPendingNavigation, type NavigationTarget } from './utils/fileNavigation'
-import { loadMonacoProjectContext } from './utils/monacoProjectContext'
+import { useGitPolling } from './hooks/useGitPolling'
+import { useFileNavigation } from './hooks/useFileNavigation'
+import { useSessionLifecycle } from './hooks/useSessionLifecycle'
 
 // Re-export types for backwards compatibility
 export type { Session, SessionStatus }
@@ -64,6 +61,7 @@ function AppContent() {
     updatePrState,
     archiveSession,
     unarchiveSession,
+    setPanelVisibility,
   } = useSessionStore()
 
   const { agents, loadAgents } = useAgentStore()
@@ -72,216 +70,67 @@ function AppContent() {
   const { addError } = useErrorStore()
   const currentProfile = profiles.find((p) => p.id === currentProfileId)
 
-  const [showNewSessionDialog, setShowNewSessionDialog] = useState(false)
-  const [gitStatusBySession, setGitStatusBySession] = useState<Record<string, GitStatusResult>>({})
-  const [isMergedBySession, setIsMergedBySession] = useState<Record<string, boolean>>({})
-  const [directoryExists, setDirectoryExists] = useState<Record<string, boolean>>({})
-  const [openFileInDiffMode, setOpenFileInDiffMode] = useState(false)
-  const [scrollToLine, setScrollToLine] = useState<number | undefined>(undefined)
-  const [searchHighlight, setSearchHighlight] = useState<string | undefined>(undefined)
-  const [diffBaseRef, setDiffBaseRef] = useState<string | undefined>(undefined)
-  const [diffCurrentRef, setDiffCurrentRef] = useState<string | undefined>(undefined)
-  const [diffLabel, setDiffLabel] = useState<string | undefined>(undefined)
-  const [showPanelPicker, setShowPanelPicker] = useState(false)
-  const [isFileViewerDirty, setIsFileViewerDirty] = useState(false)
-  const [pendingNavigation, setPendingNavigation] = useState<NavigationTarget | null>(null)
-  const saveCurrentFileRef = React.useRef<(() => Promise<void>) | null>(null)
-
   const activeSession = sessions.find((s) => s.id === activeSessionId)
-  const activeDirectoryExists = activeSession ? (directoryExists[activeSession.id] ?? true) : true
 
-  // Check if session directories exist
-  useEffect(() => {
-    const checkDirectories = async () => {
-      const results: Record<string, boolean> = {}
-      for (const session of sessions) {
-        results[session.id] = await window.fs.exists(session.directory)
-      }
-      setDirectoryExists(results)
-    }
+  const [showNewSessionDialog, setShowNewSessionDialog] = useState(false)
+  const [showPanelPicker, setShowPanelPicker] = useState(false)
 
-    if (sessions.length > 0) {
-      checkDirectories()
-    }
-  }, [sessions])
+  // Git polling hook
+  const {
+    activeSessionGitStatus,
+    activeSessionGitStatusResult,
+    selectedFileStatus,
+    fetchGitStatus,
+  } = useGitPolling({
+    sessions,
+    activeSession,
+    repos,
+    markHasHadCommits,
+    updateBranchStatus,
+  })
 
-  // Fetch git status for active session
-  const fetchGitStatus = useCallback(async () => {
-    if (!activeSession) return
-    try {
-      const status = await window.git.status(activeSession.directory)
-      const normalized = normalizeGitStatus(status)
+  // File navigation hook
+  const {
+    openFileInDiffMode,
+    scrollToLine,
+    searchHighlight,
+    diffBaseRef,
+    diffCurrentRef,
+    diffLabel,
+    isFileViewerDirty,
+    setIsFileViewerDirty,
+    pendingNavigation,
+    saveCurrentFileRef,
+    navigateToFile,
+    handlePendingSave,
+    handlePendingDiscard,
+    handlePendingCancel,
+  } = useFileNavigation({
+    activeSessionId: activeSessionId ?? null,
+    activeSessionSelectedFilePath: activeSession?.selectedFilePath ?? null,
+    selectFile,
+  })
 
-      // Track if the session has ever had commits ahead of remote
-      if (normalized.ahead > 0) {
-        markHasHadCommits(activeSession.id)
-      }
-
-      // Check if branch is merged into the default branch
-      let merged = false
-      const isOnMain = normalized.current === 'main' || normalized.current === 'master'
-      if (!isOnMain && normalized.current) {
-        const repo = repos.find(r => r.id === activeSession.repoId)
-        const defaultBranch = repo?.defaultBranch || 'main'
-        const [mergedResult, hasBranchCommitsResult] = await Promise.all([
-          window.git.isMergedInto(activeSession.directory, defaultBranch),
-          window.git.hasBranchCommits(activeSession.directory, defaultBranch),
-        ])
-        merged = mergedResult
-        // Also mark hasHadCommits if the branch has diverged from main
-        if (hasBranchCommitsResult) {
-          markHasHadCommits(activeSession.id)
-        }
-      }
-
-      // Update both states in the same synchronous block so React batches
-      // them into one render. Previously gitStatus was set before the
-      // isMergedInto check, creating a window where ahead=0 (fresh) paired
-      // with a stale isMergedToMain=true would incorrectly show 'merged'.
-      setGitStatusBySession(prev => ({
-        ...prev,
-        [activeSession.id]: normalized
-      }))
-      setIsMergedBySession(prev => ({
-        ...prev,
-        [activeSession.id]: merged
-      }))
-    } catch {
-      // Ignore errors
-    }
-  }, [activeSession?.id, activeSession?.directory, activeSession?.repoId, repos, markHasHadCommits])
-
-  // Poll git status every 2 seconds
-  useEffect(() => {
-    if (activeSession) {
-      fetchGitStatus()
-      const interval = setInterval(fetchGitStatus, 2000)
-      return () => clearInterval(interval)
-    }
-  }, [activeSession?.id, fetchGitStatus])
-
-  // Compute branch status whenever git status changes
-  useEffect(() => {
-    for (const session of sessions) {
-      const gitStatus = gitStatusBySession[session.id]
-      if (!gitStatus) continue
-
-      const status = computeBranchStatus({
-        uncommittedFiles: gitStatus.files.length,
-        ahead: gitStatus.ahead,
-        hasTrackingBranch: !!gitStatus.tracking,
-        isOnMainBranch: gitStatus.current === 'main' || gitStatus.current === 'master',
-        isMergedToMain: isMergedBySession[session.id] ?? false,
-        hasHadCommits: session.hasHadCommits ?? false,
-        lastKnownPrState: session.lastKnownPrState,
-      })
-
-      if (status !== session.branchStatus) {
-        updateBranchStatus(session.id, status)
-      }
-    }
-  }, [gitStatusBySession, isMergedBySession, sessions, updateBranchStatus])
-
-  // Get git status for the selected file
-  const selectedFileStatus = React.useMemo(() => {
-    if (!activeSession?.selectedFilePath || !activeSession?.directory) return null
-    const statusResult = gitStatusBySession[activeSession.id]
-    const files = statusResult?.files || []
-    const relativePath = activeSession.selectedFilePath.replace(activeSession.directory + '/', '')
-    const fileStatus = files.find(s => s.path === relativePath)
-    return fileStatus?.status ?? null
-  }, [activeSession?.selectedFilePath, activeSession?.directory, activeSession?.id, gitStatusBySession])
-
-  // Get current git status for the active session
-  const activeSessionGitStatusResult = activeSession ? (gitStatusBySession[activeSession.id] || null) : null
-  const activeSessionGitStatus = activeSessionGitStatusResult?.files || []
-
-  // Load profiles, then sessions/agents/repos for the current profile
-  useEffect(() => {
-    loadProfiles().then(() => {
-      loadSessions(currentProfileId)
-      loadAgents(currentProfileId)
-      loadRepos(currentProfileId)
-      checkGhAvailability()
-    })
-  }, [])  
-
-  // Handle profile switching: open the profile in a new window
-  const handleSwitchProfile = useCallback(async (profileId: string) => {
-    await switchProfile(profileId)
-  }, [switchProfile])
-
-  // Update window title to show active session name and profile
-  useEffect(() => {
-    const profileLabel = currentProfile && profiles.length > 1 ? ` [${currentProfile.name}]` : ''
-    document.title = activeSession ? `${activeSession.name}${profileLabel} — Broomy` : `Broomy${profileLabel}`
-  }, [activeSession?.name, activeSession?.id, currentProfile?.name, profiles.length])
-
-  // Load TypeScript project context when active session changes
-  useEffect(() => {
-    if (activeSession?.directory) {
-      loadMonacoProjectContext(activeSession.directory)
-    }
-  }, [activeSession?.directory])
-
-  // Mark session as read when it becomes active, and focus agent terminal
-  useEffect(() => {
-    if (activeSessionId) {
-      markSessionRead(activeSessionId)
-      // Focus the agent terminal after a short delay to let it render
-      const timeout = setTimeout(() => {
-        const container = document.querySelector(`[data-panel-id="${PANEL_IDS.AGENT_TERMINAL}"]`)
-        if (!container) return
-        const xtermTextarea = container.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null
-        if (xtermTextarea) xtermTextarea.focus()
-      }, 100)
-      return () => clearTimeout(timeout)
-    }
-  }, [activeSessionId, markSessionRead])
-
-  // Poll for branch changes every 2 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (sessions.length > 0) {
-        refreshAllBranches()
-      }
-    }, 2000)
-
-    return () => clearInterval(interval)
-  }, [sessions.length, refreshAllBranches])
-
-  // Keyboard shortcut to copy terminal content + summary (Cmd+Shift+C)
-  useEffect(() => {
-    const handleCopyTerminal = async (e: KeyboardEvent) => {
-      // Cmd+Shift+C (Mac) or Ctrl+Shift+C (other)
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'c') {
-        if (!activeSession) return
-        e.preventDefault()
-
-        // Get terminal buffer (last 200 lines to keep it manageable)
-        const buffer = terminalBufferRegistry.getLastLines(activeSession.id, 200)
-
-        // Build the copy content with summary
-        let content = '=== Agent Session Debug Info ===\n\n'
-        content += `Session: ${activeSession.name}\n`
-        content += `Directory: ${activeSession.directory}\n`
-        content += `Status: ${activeSession.status}\n`
-        content += `Last Message: ${activeSession.lastMessage || '(none)'}\n`
-        content += '\n=== Terminal Output (last 200 lines) ===\n\n'
-        content += buffer || '(no content)'
-
-        try {
-          await navigator.clipboard.writeText(content)
-          // Could show a toast here, but keeping it simple
-        } catch (err) {
-          console.error('Failed to copy to clipboard:', err)
-        }
-      }
-    }
-
-    window.addEventListener('keydown', handleCopyTerminal)
-    return () => window.removeEventListener('keydown', handleCopyTerminal)
-  }, [activeSession])
+  // Session lifecycle hook
+  const {
+    activeDirectoryExists,
+    handleSwitchProfile,
+  } = useSessionLifecycle({
+    sessions,
+    activeSession,
+    activeSessionId: activeSessionId ?? null,
+    currentProfileId,
+    currentProfile,
+    profiles,
+    loadProfiles,
+    loadSessions,
+    loadAgents,
+    loadRepos,
+    checkGhAvailability,
+    switchProfile,
+    markSessionRead,
+    refreshAllBranches,
+  })
 
   const handleNewSession = () => {
     setShowNewSessionDialog(true)
@@ -371,65 +220,6 @@ function AppContent() {
     }
   }, [activeSessionId, togglePanel])
 
-  // Navigate to a file, checking for unsaved changes first
-  const navigateToFile = useCallback((filePath: string, openInDiffMode: boolean, scrollToLine?: number, searchHighlight?: string, diffBaseRef?: string, diffCurrentRef?: string, diffLabel?: string) => {
-    if (!activeSessionId) return
-    const target: NavigationTarget = { filePath, openInDiffMode, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel }
-    const result = resolveNavigation(target, activeSession?.selectedFilePath ?? null, isFileViewerDirty)
-
-    if (result.action === 'update-scroll' || result.action === 'navigate') {
-      setOpenFileInDiffMode(result.state.openFileInDiffMode)
-      setScrollToLine(result.state.scrollToLine)
-      setSearchHighlight(result.state.searchHighlight)
-      setDiffBaseRef(result.state.diffBaseRef)
-      setDiffCurrentRef(result.state.diffCurrentRef)
-      setDiffLabel(result.state.diffLabel)
-    }
-    if (result.action === 'navigate') {
-      selectFile(activeSessionId, result.filePath)
-    }
-    if (result.action === 'pending') {
-      setPendingNavigation(result.target)
-    }
-  }, [activeSessionId, activeSession?.selectedFilePath, isFileViewerDirty, selectFile])
-
-  const handlePendingSave = useCallback(async () => {
-    if (saveCurrentFileRef.current) {
-      await saveCurrentFileRef.current()
-    }
-    if (pendingNavigation && activeSessionId) {
-      const { state, filePath } = applyPendingNavigation(pendingNavigation)
-      setOpenFileInDiffMode(state.openFileInDiffMode)
-      setScrollToLine(state.scrollToLine)
-      setSearchHighlight(state.searchHighlight)
-      setDiffBaseRef(state.diffBaseRef)
-      setDiffCurrentRef(state.diffCurrentRef)
-      setDiffLabel(state.diffLabel)
-      selectFile(activeSessionId, filePath)
-    }
-    setPendingNavigation(null)
-    setIsFileViewerDirty(false)
-  }, [pendingNavigation, activeSessionId, selectFile])
-
-  const handlePendingDiscard = useCallback(() => {
-    if (pendingNavigation && activeSessionId) {
-      const { state, filePath } = applyPendingNavigation(pendingNavigation)
-      setOpenFileInDiffMode(state.openFileInDiffMode)
-      setScrollToLine(state.scrollToLine)
-      setSearchHighlight(state.searchHighlight)
-      setDiffBaseRef(state.diffBaseRef)
-      setDiffCurrentRef(state.diffCurrentRef)
-      setDiffLabel(state.diffLabel)
-      setIsFileViewerDirty(false)
-      selectFile(activeSessionId, filePath)
-    }
-    setPendingNavigation(null)
-  }, [pendingNavigation, activeSessionId, selectFile])
-
-  const handlePendingCancel = useCallback(() => {
-    setPendingNavigation(null)
-  }, [])
-
   // Memoize terminal panels separately to ensure stability
   // Only depends on sessions and agents (for command), not on activeSessionId
   const agentTerminalPanel = useMemo(() => (
@@ -516,6 +306,19 @@ function AppContent() {
         onUpdatePrState={(prState, prNumber, prUrl) => activeSessionId && updatePrState(activeSessionId, prState, prNumber, prUrl)}
         repoId={activeSession?.repoId}
         agentPtyId={activeSession?.agentPtyId}
+        onOpenReview={() => {
+          if (activeSessionId) {
+            setPanelVisibility(activeSessionId, PANEL_IDS.REVIEW, true)
+            const { toolbarPanels } = useSessionStore.getState()
+            if (!toolbarPanels.includes(PANEL_IDS.REVIEW)) {
+              const explorerIdx = toolbarPanels.indexOf(PANEL_IDS.EXPLORER)
+              const updated = [...toolbarPanels]
+              if (explorerIdx >= 0) updated.splice(explorerIdx + 1, 0, PANEL_IDS.REVIEW)
+              else updated.push(PANEL_IDS.REVIEW)
+              setToolbarPanels(updated)
+            }
+          }
+        }}
       />
     ) : null,
     [PANEL_IDS.FILE_VIEWER]: activeSession?.showFileViewer ? (

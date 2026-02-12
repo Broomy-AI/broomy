@@ -1,7 +1,6 @@
 import { test, expect, _electron as electron, ElectronApplication, Page } from '@playwright/test'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { execSync } from 'child_process'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -51,9 +50,6 @@ async function scrollViewportTo(page: Page, scrollTop: number) {
 
 test.beforeAll(async () => {
   test.setTimeout(120000)
-  if (!process.env.SKIP_BUILD) {
-    execSync('pnpm build', { cwd: path.join(__dirname, '..'), stdio: 'inherit' })
-  }
 
   const fakeClaude = path.join(__dirname, '..', 'scripts', 'fake-claude-bigplan.sh')
   electronApp = await electron.launch({
