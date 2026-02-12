@@ -379,6 +379,34 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     }
   })
 
+  ipcMain.handle('git:worktreeRemove', async (_event, repoPath: string, worktreePath: string) => {
+    if (ctx.isE2ETest) {
+      return { success: true }
+    }
+
+    try {
+      const git = simpleGit(expandHomePath(repoPath))
+      await git.raw(['worktree', 'remove', '--force', expandHomePath(worktreePath)])
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
+  ipcMain.handle('git:deleteBranch', async (_event, repoPath: string, branchName: string) => {
+    if (ctx.isE2ETest) {
+      return { success: true }
+    }
+
+    try {
+      const git = simpleGit(expandHomePath(repoPath))
+      await git.raw(['branch', '-D', branchName])
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: String(error) }
+    }
+  })
+
   ipcMain.handle('git:pushNewBranch', async (_event, repoPath: string, branchName: string) => {
     if (ctx.isE2ETest) {
       return { success: true }

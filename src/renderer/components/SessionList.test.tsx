@@ -46,6 +46,7 @@ function makeProps(overrides: Record<string, unknown> = {}) {
   return {
     sessions: [] as Session[],
     activeSessionId: null as string | null,
+    repos: [] as { id: string; name: string; remoteUrl: string; rootDir: string; defaultBranch: string }[],
     onSelectSession: vi.fn(),
     onNewSession: vi.fn(),
     onDeleteSession: vi.fn(),

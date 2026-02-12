@@ -32,6 +32,8 @@ const mockGit = {
   clone: vi.fn().mockResolvedValue({ success: true }),
   worktreeAdd: vi.fn().mockResolvedValue({ success: true }),
   worktreeList: vi.fn().mockResolvedValue([]),
+  worktreeRemove: vi.fn().mockResolvedValue({ success: true }),
+  deleteBranch: vi.fn().mockResolvedValue({ success: true }),
   pushNewBranch: vi.fn().mockResolvedValue({ success: true }),
   defaultBranch: vi.fn().mockResolvedValue('main'),
   remoteUrl: vi.fn().mockResolvedValue(null),

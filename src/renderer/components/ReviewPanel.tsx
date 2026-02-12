@@ -311,6 +311,61 @@ export default function ReviewPanel({ session, repo, onSelectFile }: ReviewPanel
     return () => clearInterval(interval)
   }, [waitingForAgent, reviewFilePath, session.directory])
 
+  // Watch for review.json changes (e.g., when agent writes it independently)
+  const reviewDataRef = useRef<ReviewData | null>(null)
+  useEffect(() => {
+    reviewDataRef.current = reviewData
+  }, [reviewData])
+
+  useEffect(() => {
+    if (!session.directory) return
+
+    const watcherId = `review-${session.id}`
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
+
+    window.fs.watch(watcherId, reviewFilePath)
+    const removeListener = window.fs.onChange(watcherId, () => {
+      // Debounce to avoid multiple triggers from partial writes
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(async () => {
+        try {
+          const exists = await window.fs.exists(reviewFilePath)
+          if (exists) {
+            const content = await window.fs.readFile(reviewFilePath)
+            const data = JSON.parse(content) as ReviewData
+
+            // Only update if content actually changed
+            if (JSON.stringify(data) !== JSON.stringify(reviewDataRef.current)) {
+              // Add head commit if not present
+              if (!data.headCommit) {
+                const headCommit = await window.git.headCommit(session.directory)
+                if (headCommit) {
+                  data.headCommit = headCommit
+                  await window.fs.writeFile(reviewFilePath, JSON.stringify(data, null, 2))
+                }
+              }
+
+              await updateReviewHistory(data)
+              setReviewData(data)
+              setWaitingForAgent(false)
+            }
+          } else {
+            // File was deleted
+            setReviewData(null)
+          }
+        } catch {
+          // File may be partially written or invalid JSON
+        }
+      }, 300)
+    })
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer)
+      removeListener()
+      window.fs.unwatch(watcherId)
+    }
+  }, [session.id, session.directory, reviewFilePath])
+
   const updateReviewHistory = async (data: ReviewData) => {
     try {
       let history: ReviewHistory = { reviews: [] }
