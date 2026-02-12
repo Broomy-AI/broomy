@@ -22,7 +22,7 @@
     "start:dist": "pnpm dist:dir && open dist/mac-arm64/Broomy.app",
     "test": "playwright test",
     "test:headed": "E2E_HEADLESS=false playwright test",
-    "screenshots": "playwright test tests/screenshots.spec.ts",
+    "screenshots": "GENERATE_SCREENSHOTS=true playwright test tests/screenshots.spec.ts",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
     "test:unit:coverage": "vitest run --coverage",
