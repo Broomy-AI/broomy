@@ -70,7 +70,6 @@ function AppContent() {
     updatePrState,
     archiveSession,
     unarchiveSession,
-    setPanelVisibility,
   } = useSessionStore()
 
   const { agents, loadAgents } = useAgentStore()
@@ -86,6 +85,7 @@ function AppContent() {
 
   // Git polling hook
   const {
+    gitStatusBySession,
     activeSessionGitStatus,
     activeSessionGitStatusResult,
     selectedFileStatus,
@@ -204,6 +204,27 @@ function AppContent() {
     }
   }
 
+  const handleDeleteSession = useCallback(async (id: string, deleteWorktree: boolean) => {
+    if (deleteWorktree) {
+      const session = sessions.find(s => s.id === id)
+      if (session?.repoId) {
+        const repo = repos.find(r => r.id === session.repoId)
+        if (repo) {
+          const mainDir = `${repo.rootDir}/${repo.defaultBranch}`
+          const removeResult = await window.git.worktreeRemove(mainDir, session.directory)
+          if (!removeResult.success) {
+            addError(`Failed to remove worktree: ${removeResult.error}`)
+          }
+          const branchResult = await window.git.deleteBranch(mainDir, session.branch)
+          if (!branchResult.success) {
+            addError(`Failed to delete branch: ${branchResult.error}`)
+          }
+        }
+      }
+    }
+    removeSession(id)
+  }, [sessions, repos, removeSession, addError])
+
   const handleSelectSession = useCallback((id: string) => {
     setActiveSession(id)
     // After React re-renders with the new session, focus the agent terminal panel
@@ -276,15 +297,120 @@ function AppContent() {
     </div>
   ), [sessions, activeSessionId])
 
-  // Build panels map - terminals use stable memoized components
+  // Memoize Explorer panel per-session to preserve tree/expanded state across session switches
+  const explorerPanel = useMemo(() => (
+    <div className="h-full w-full relative">
+      {sessions.map((session) => (
+        <div
+          key={`explorer-${session.id}`}
+          className={`absolute inset-0 ${session.id === activeSessionId ? '' : 'hidden'}`}
+        >
+          <Explorer
+            directory={session.directory}
+            onFileSelect={(filePath, openInDiffMode, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel) => {
+              navigateToFile(filePath, openInDiffMode, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel)
+            }}
+            selectedFilePath={session.selectedFilePath}
+            gitStatus={gitStatusBySession[session.id]?.files || []}
+            syncStatus={gitStatusBySession[session.id] || null}
+            filter={session.explorerFilter ?? 'files'}
+            onFilterChange={(filter) => setExplorerFilter(session.id, filter)}
+            onGitStatusRefresh={fetchGitStatus}
+            recentFiles={session.recentFiles}
+            sessionId={session.id}
+            pushedToMainAt={session.pushedToMainAt}
+            pushedToMainCommit={session.pushedToMainCommit}
+            onRecordPushToMain={(commitHash) => recordPushToMain(session.id, commitHash)}
+            onClearPushToMain={() => clearPushToMain(session.id)}
+            planFilePath={session.planFilePath}
+            branchStatus={session.branchStatus ?? 'in-progress'}
+            onUpdatePrState={(prState, prNumber, prUrl) => updatePrState(session.id, prState, prNumber, prUrl)}
+            repoId={session.repoId}
+            agentPtyId={session.agentPtyId}
+          />
+        </div>
+      ))}
+    </div>
+  ), [sessions, activeSessionId, gitStatusBySession, fetchGitStatus, navigateToFile, setExplorerFilter, recordPushToMain, clearPushToMain, updatePrState])
+
+  // Memoize FileViewer panel per-session to preserve editor state across session switches
+  const fileViewerPanel = useMemo(() => (
+    <div className="h-full w-full relative">
+      {sessions.map((session) => {
+        const isActive = session.id === activeSessionId
+        // Compute per-session file status from git data
+        const sessionGitFiles = gitStatusBySession[session.id]?.files || []
+        const relativePath = session.selectedFilePath && session.directory
+          ? session.selectedFilePath.replace(session.directory + '/', '')
+          : null
+        const fileStatus = relativePath
+          ? (sessionGitFiles.find(s => s.path === relativePath)?.status ?? null)
+          : null
+        return (
+          <div
+            key={`fv-${session.id}`}
+            className={`absolute inset-0 ${isActive ? '' : 'hidden'}`}
+          >
+            {session.selectedFilePath ? (
+              <FileViewer
+                filePath={session.selectedFilePath}
+                position={session.fileViewerPosition ?? 'top'}
+                onPositionChange={isActive ? handleFileViewerPositionChange : undefined}
+                onClose={isActive ? handleToggleFileViewer : undefined}
+                fileStatus={fileStatus}
+                directory={session.directory}
+                onSaveComplete={isActive ? fetchGitStatus : undefined}
+                initialViewMode={isActive ? (openFileInDiffMode ? 'diff' : 'latest') : undefined}
+                scrollToLine={isActive ? scrollToLine : undefined}
+                searchHighlight={isActive ? searchHighlight : undefined}
+                onDirtyStateChange={isActive ? setIsFileViewerDirty : undefined}
+                saveRef={isActive ? saveCurrentFileRef : undefined}
+                diffBaseRef={isActive ? diffBaseRef : undefined}
+                diffCurrentRef={isActive ? diffCurrentRef : undefined}
+                diffLabel={isActive ? diffLabel : undefined}
+                reviewContext={session.sessionType === 'review' ? {
+                  sessionDirectory: session.directory,
+                  commentsFilePath: `/tmp/broomy-review-${session.id}/comments.json`,
+                } : undefined}
+                onOpenFile={isActive ? (targetPath, line) => navigateToFile(targetPath, false, line) : undefined}
+              />
+            ) : null}
+          </div>
+        )
+      })}
+    </div>
+  ), [sessions, activeSessionId, gitStatusBySession, openFileInDiffMode, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel, fetchGitStatus, handleFileViewerPositionChange, handleToggleFileViewer, navigateToFile])
+
+  // Memoize ReviewPanel per-session to preserve expanded sections across session switches
+  const reviewPanel = useMemo(() => (
+    <div className="h-full w-full relative">
+      {sessions.map((session) => (
+        <div
+          key={`review-${session.id}`}
+          className={`absolute inset-0 ${session.id === activeSessionId ? '' : 'hidden'}`}
+        >
+          <ReviewPanel
+            session={session}
+            repo={repos.find(r => r.id === session.repoId)}
+            onSelectFile={(filePath, openInDiffMode, scrollToLine, diffBaseRef) => {
+              navigateToFile(filePath, openInDiffMode, scrollToLine, undefined, diffBaseRef)
+            }}
+          />
+        </div>
+      ))}
+    </div>
+  ), [sessions, activeSessionId, repos, navigateToFile])
+
+  // Build panels map - all per-session panels use stable memoized components
   const panelsMap = useMemo(() => ({
     [PANEL_IDS.SIDEBAR]: (
       <SessionList
         sessions={sessions}
         activeSessionId={activeSessionId}
+        repos={repos}
         onSelectSession={handleSelectSession}
         onNewSession={handleNewSession}
-        onDeleteSession={removeSession}
+        onDeleteSession={handleDeleteSession}
         onRefreshPrStatus={refreshPrStatus}
         onArchiveSession={archiveSession}
         onUnarchiveSession={unarchiveSession}
@@ -292,100 +418,21 @@ function AppContent() {
     ),
     [PANEL_IDS.AGENT_TERMINAL]: agentTerminalPanel,
     [PANEL_IDS.USER_TERMINAL]: userTerminalPanel,
-    [PANEL_IDS.EXPLORER]: activeSession?.showExplorer ? (
-      <Explorer
-        directory={activeSession?.directory}
-        onFileSelect={(filePath, openInDiffMode, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel) => {
-          navigateToFile(filePath, openInDiffMode, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel)
-        }}
-        selectedFilePath={activeSession?.selectedFilePath}
-        gitStatus={activeSessionGitStatus}
-        syncStatus={activeSessionGitStatusResult}
-        filter={activeSession?.explorerFilter ?? 'files'}
-        onFilterChange={(filter) => activeSessionId && setExplorerFilter(activeSessionId, filter)}
-        onGitStatusRefresh={fetchGitStatus}
-        recentFiles={activeSession?.recentFiles}
-        sessionId={activeSessionId ?? undefined}
-        pushedToMainAt={activeSession?.pushedToMainAt}
-        pushedToMainCommit={activeSession?.pushedToMainCommit}
-        onRecordPushToMain={(commitHash) => activeSessionId && recordPushToMain(activeSessionId, commitHash)}
-        onClearPushToMain={() => activeSessionId && clearPushToMain(activeSessionId)}
-        planFilePath={activeSession?.planFilePath}
-        branchStatus={activeSession?.branchStatus ?? 'in-progress'}
-        onUpdatePrState={(prState, prNumber, prUrl) => activeSessionId && updatePrState(activeSessionId, prState, prNumber, prUrl)}
-        repoId={activeSession?.repoId}
-        agentPtyId={activeSession?.agentPtyId}
-        onOpenReview={() => {
-          if (activeSessionId) {
-            setPanelVisibility(activeSessionId, PANEL_IDS.REVIEW, true)
-            const { toolbarPanels } = useSessionStore.getState()
-            if (!toolbarPanels.includes(PANEL_IDS.REVIEW)) {
-              const explorerIdx = toolbarPanels.indexOf(PANEL_IDS.EXPLORER)
-              const updated = [...toolbarPanels]
-              if (explorerIdx >= 0) updated.splice(explorerIdx + 1, 0, PANEL_IDS.REVIEW)
-              else updated.push(PANEL_IDS.REVIEW)
-              setToolbarPanels(updated)
-            }
-          }
-        }}
-      />
-    ) : null,
-    [PANEL_IDS.FILE_VIEWER]: activeSession?.showFileViewer ? (
-      <FileViewer
-        filePath={activeSession?.selectedFilePath ?? null}
-        position={activeSession?.fileViewerPosition ?? 'top'}
-        onPositionChange={handleFileViewerPositionChange}
-        onClose={handleToggleFileViewer}
-        fileStatus={selectedFileStatus}
-        directory={activeSession?.directory}
-        onSaveComplete={fetchGitStatus}
-        initialViewMode={openFileInDiffMode ? 'diff' : 'latest'}
-        scrollToLine={scrollToLine}
-        searchHighlight={searchHighlight}
-        onDirtyStateChange={setIsFileViewerDirty}
-        saveRef={saveCurrentFileRef}
-        diffBaseRef={diffBaseRef}
-        diffCurrentRef={diffCurrentRef}
-        diffLabel={diffLabel}
-        reviewContext={activeSession?.sessionType === 'review' ? {
-          sessionDirectory: activeSession.directory,
-          commentsFilePath: `/tmp/broomy-review-${activeSession.id}/comments.json`,
-        } : undefined}
-        onOpenFile={(targetPath, line) => navigateToFile(targetPath, false, line)}
-      />
-    ) : null,
-    [PANEL_IDS.REVIEW]: activeSession ? (
-      <ReviewPanel
-        session={activeSession}
-        repo={repos.find(r => r.id === activeSession.repoId)}
-        onSelectFile={(filePath, openInDiffMode, scrollToLine, diffBaseRef) => {
-          navigateToFile(filePath, openInDiffMode, scrollToLine, undefined, diffBaseRef)
-        }}
-      />
-    ) : null,
+    [PANEL_IDS.EXPLORER]: explorerPanel,
+    [PANEL_IDS.FILE_VIEWER]: fileViewerPanel,
+    [PANEL_IDS.REVIEW]: reviewPanel,
     [PANEL_IDS.SETTINGS]: globalPanelVisibility[PANEL_IDS.SETTINGS] ? (
       <AgentSettings onClose={() => toggleGlobalPanel(PANEL_IDS.SETTINGS)} />
     ) : null,
   }), [
     sessions,
     activeSessionId,
-    activeSession,
-    activeSessionGitStatus,
-    activeSessionGitStatusResult,
-    selectedFileStatus,
-    openFileInDiffMode,
-    scrollToLine,
-    searchHighlight,
-    diffBaseRef,
-    diffCurrentRef,
-    diffLabel,
     globalPanelVisibility,
-    fetchGitStatus,
     agentTerminalPanel,
     userTerminalPanel,
-    handleToggleFileViewer,
-    navigateToFile,
-    repos,
+    explorerPanel,
+    fileViewerPanel,
+    reviewPanel,
   ])
 
   if (isLoading) {
