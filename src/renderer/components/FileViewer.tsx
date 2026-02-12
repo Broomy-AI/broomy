@@ -132,13 +132,19 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
       />
       <div className="flex-1 min-h-0">
         {viewer.viewMode === 'diff' ? (
-          <MonacoDiffViewer
-            filePath={filePath}
-            originalContent={viewer.originalContent}
-            modifiedContent={viewer.diffModifiedContent !== null ? viewer.diffModifiedContent : (fileStatus === 'deleted' ? '' : viewer.content)}
-            sideBySide={viewer.diffSideBySide}
-            scrollToLine={scrollToLine}
-          />
+          viewer.isLoadingDiff ? (
+            <div className="h-full flex items-center justify-center text-text-secondary text-sm">
+              Loading diff...
+            </div>
+          ) : (
+            <MonacoDiffViewer
+              filePath={filePath}
+              originalContent={viewer.originalContent}
+              modifiedContent={viewer.diffModifiedContent !== null ? viewer.diffModifiedContent : (fileStatus === 'deleted' ? '' : viewer.content)}
+              sideBySide={viewer.diffSideBySide}
+              scrollToLine={scrollToLine}
+            />
+          )
         ) : (
           <ViewerComponent
             filePath={filePath}

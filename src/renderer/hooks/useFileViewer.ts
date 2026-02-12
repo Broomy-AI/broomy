@@ -50,7 +50,7 @@ export function useFileViewer({
     setSelectedViewerId,
   })
 
-  const { originalContent, diffModifiedContent } = useFileDiff({
+  const { originalContent, diffModifiedContent, isLoadingDiff } = useFileDiff({
     filePath,
     directory,
     canShowDiff,
@@ -150,6 +150,7 @@ export function useFileViewer({
     availableViewers,
     originalContent,
     diffModifiedContent,
+    isLoadingDiff,
     fileChangedOnDisk,
     selectedViewer,
     // Actions
