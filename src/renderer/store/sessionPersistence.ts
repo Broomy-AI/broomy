@@ -1,28 +1,14 @@
 import { PANEL_IDS } from '../panels/types'
 import type { Session, PanelVisibility } from './sessions'
+import { scheduleSave } from './configPersistence'
 
-// Current profile ID for saves - set by loadSessions
-let currentProfileId: string | undefined
-
-export function setCurrentProfileId(profileId: string | undefined) {
-  currentProfileId = profileId
-}
-
-export function getCurrentProfileId(): string | undefined {
-  return currentProfileId
-}
-
-// Track how many sessions were loaded from disk.
-// Used by the save guard to prevent accidentally persisting an empty array.
-let loadedSessionCount = 0
-
-export function setLoadedSessionCount(count: number) {
-  loadedSessionCount = count
-}
-
-export function getLoadedSessionCount(): number {
-  return loadedSessionCount
-}
+// Re-export from configPersistence for backwards compatibility
+export {
+  setCurrentProfileId,
+  getCurrentProfileId,
+  setLoadedSessionCount,
+  getLoadedSessionCount,
+} from './configPersistence'
 
 // Helper to sync legacy fields from panelVisibility
 export function syncLegacyFields(session: Session): Session {
@@ -56,74 +42,14 @@ export function createPanelVisibilityFromLegacy(data: {
   }
 }
 
-// Debounced save to avoid too many writes during dragging
-let saveTimeout: ReturnType<typeof setTimeout> | null = null
+// Debounced save — delegates to the unified configPersistence module.
+// The signature is kept for compatibility with existing callers but the
+// arguments are ignored; configPersistence reads current state from all stores.
 export const debouncedSave = (
-  sessions: Session[],
-  globalPanelVisibility: PanelVisibility,
-  sidebarWidth: number,
-  toolbarPanels: string[]
+  _sessions: Session[],
+  _globalPanelVisibility: PanelVisibility,
+  _sidebarWidth: number,
+  _toolbarPanels: string[]
 ) => {
-  if (saveTimeout) clearTimeout(saveTimeout)
-  saveTimeout = setTimeout(() => {
-    void (async () => {
-      // Save guard: refuse to persist an empty sessions array when we previously
-      // loaded real sessions. This prevents bugs (e.g. a failed loadSessions)
-      // from accidentally wiping all persisted session data.
-      if (sessions.length === 0 && loadedSessionCount > 0) {
-        console.warn(
-          `[sessionPersistence] Save guard: refusing to save empty sessions array ` +
-          `(${loadedSessionCount} sessions were loaded from disk)`
-        )
-        return
-      }
-      const config = await window.config.load(currentProfileId)
-      await window.config.save({
-        profileId: currentProfileId,
-        agents: config.agents,
-        sessions: sessions.map((s) => ({
-          id: s.id,
-          name: s.name,
-          directory: s.directory,
-          agentId: s.agentId,
-          repoId: s.repoId,
-          issueNumber: s.issueNumber,
-          issueTitle: s.issueTitle,
-          // Save new panelVisibility format
-          panelVisibility: s.panelVisibility,
-          // Review session fields
-          sessionType: s.sessionType,
-          prNumber: s.prNumber,
-          prTitle: s.prTitle,
-          prUrl: s.prUrl,
-          prBaseBranch: s.prBaseBranch,
-          // Also save legacy fields for backwards compat
-          showAgentTerminal: s.showAgentTerminal,
-          showUserTerminal: s.showUserTerminal,
-          showExplorer: s.showExplorer,
-          showFileViewer: s.showFileViewer,
-          showDiff: s.showDiff,
-          fileViewerPosition: s.fileViewerPosition,
-          layoutSizes: s.layoutSizes,
-          explorerFilter: s.explorerFilter,
-          terminalTabs: s.terminalTabs,
-          // Push to main tracking
-          pushedToMainAt: s.pushedToMainAt,
-          pushedToMainCommit: s.pushedToMainCommit,
-          // Commit tracking
-          hasHadCommits: s.hasHadCommits || undefined,
-          // PR state tracking
-          lastKnownPrState: s.lastKnownPrState,
-          lastKnownPrNumber: s.lastKnownPrNumber,
-          lastKnownPrUrl: s.lastKnownPrUrl,
-          // Archive state
-          isArchived: s.isArchived || undefined,
-        })),
-        // Global state
-        showSidebar: globalPanelVisibility[PANEL_IDS.SIDEBAR] ?? true,
-        sidebarWidth,
-        toolbarPanels,
-      })
-    })()
-  }, 500)
+  scheduleSave()
 }

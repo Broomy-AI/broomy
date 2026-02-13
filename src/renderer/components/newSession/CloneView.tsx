@@ -55,7 +55,7 @@ export function CloneView({
       }
 
       // Save managed repo with default agent
-      await addRepo({
+      addRepo({
         name: repoName,
         remoteUrl,
         rootDir,

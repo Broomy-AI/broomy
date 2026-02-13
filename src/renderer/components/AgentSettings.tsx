@@ -46,11 +46,11 @@ export default function AgentSettings({ onClose }: AgentSettingsProps) {
     setEditingId(null)
   }
 
-  const handleAdd = async () => {
+  const handleAdd = () => {
     if (!name.trim() || !command.trim()) return
 
     const finalEnv = envEditorRef.current?.getPendingEnv() ?? env
-    await addAgent({
+    addAgent({
       name: name.trim(),
       command: command.trim(),
       color: color.trim() || undefined,
@@ -69,11 +69,11 @@ export default function AgentSettings({ onClose }: AgentSettingsProps) {
     setShowAddForm(false)
   }
 
-  const handleUpdate = async () => {
+  const handleUpdate = () => {
     if (!editingId || !name.trim() || !command.trim()) return
 
     const finalEnv = envEditorRef.current?.getPendingEnv() ?? env
-    await updateAgent(editingId, {
+    updateAgent(editingId, {
       name: name.trim(),
       command: command.trim(),
       color: color.trim() || undefined,
@@ -82,8 +82,8 @@ export default function AgentSettings({ onClose }: AgentSettingsProps) {
     resetForm()
   }
 
-  const handleDelete = async (id: string) => {
-    await removeAgent(id)
+  const handleDelete = (id: string) => {
+    removeAgent(id)
     if (editingId === id) {
       resetForm()
     }

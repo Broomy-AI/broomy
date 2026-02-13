@@ -126,7 +126,7 @@ export function AddExistingRepoView({
         // gh CLI not available or other error - default to false
       }
 
-      await addRepo({
+      addRepo({
         name: repoName || rootDir.split('/').pop() || 'unknown',
         remoteUrl,
         rootDir,

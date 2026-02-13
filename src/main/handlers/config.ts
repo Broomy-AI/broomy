@@ -1,6 +1,6 @@
 import { IpcMain } from 'electron'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, readdirSync } from 'fs'
-import { readFile, writeFile, mkdir } from 'fs/promises'
+import { readFile, writeFile, rename, copyFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { makeExecutable } from '../platform'
 import {
@@ -137,6 +137,16 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     return openProfiles
   })
 
+  // Serialized write queue per config file path — prevents concurrent writes
+  const writeQueues = new Map<string, Promise<void>>()
+
+  function enqueueWrite(configFile: string, fn: () => Promise<void>): Promise<void> {
+    const prev = writeQueues.get(configFile) ?? Promise.resolve()
+    const next = prev.then(fn, fn) // run even if previous write failed
+    writeQueues.set(configFile, next)
+    return next
+  }
+
   // Config IPC handlers - now profile-aware
   ipcMain.handle('config:load', (_event, profileId?: string) => {
     // In E2E test mode, return demo sessions for consistent testing
@@ -170,6 +180,21 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
       }
       return config
     } catch {
+      // Primary config failed to parse — try backup
+      const backupFile = `${configFile}.backup`
+      try {
+        if (existsSync(backupFile)) {
+          console.warn(`[config:load] Primary config corrupt, falling back to backup: ${backupFile}`)
+          const data = readFileSync(backupFile, 'utf-8')
+          const config = JSON.parse(data)
+          if (!config.agents || config.agents.length === 0) {
+            config.agents = DEFAULT_AGENTS
+          }
+          return config
+        }
+      } catch {
+        // backup also failed
+      }
       return { agents: DEFAULT_AGENTS, sessions: [] }
     }
   })
@@ -184,30 +209,43 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     const configDir = config.profileId ? join(PROFILES_DIR, config.profileId) : CONFIG_DIR
 
     try {
-      if (!existsSync(configDir)) {
-        await mkdir(configDir, { recursive: true })
-      }
-      // Read existing config to preserve fields we don't explicitly set
-      let existingConfig: Record<string, unknown> = {}
-      if (existsSync(configFile)) {
-        try {
-          existingConfig = JSON.parse(await readFile(configFile, 'utf-8'))
-        } catch {
-          // ignore
+      await enqueueWrite(configFile, async () => {
+        if (!existsSync(configDir)) {
+          await mkdir(configDir, { recursive: true })
         }
-      }
-      const configToSave: Record<string, unknown> = {
-        ...existingConfig,
-        agents: config.agents || DEFAULT_AGENTS,
-        sessions: config.sessions,
-      }
-      // Only overwrite these if provided
-      if (config.repos !== undefined) configToSave.repos = config.repos
-      if (config.defaultCloneDir !== undefined) configToSave.defaultCloneDir = config.defaultCloneDir
-      if (config.showSidebar !== undefined) configToSave.showSidebar = config.showSidebar
-      if (config.sidebarWidth !== undefined) configToSave.sidebarWidth = config.sidebarWidth
-      if (config.toolbarPanels !== undefined) configToSave.toolbarPanels = config.toolbarPanels
-      await writeFile(configFile, JSON.stringify(configToSave, null, 2))
+        // Read existing config to preserve unknown fields (future-proofing)
+        let existingConfig: Record<string, unknown> = {}
+        if (existsSync(configFile)) {
+          try {
+            existingConfig = JSON.parse(await readFile(configFile, 'utf-8'))
+          } catch {
+            // ignore corrupt file — we'll overwrite it
+          }
+        }
+        const configToSave: Record<string, unknown> = {
+          ...existingConfig,
+          agents: config.agents || DEFAULT_AGENTS,
+          sessions: config.sessions,
+        }
+        // Renderer now sends complete state for these fields
+        if (config.repos !== undefined) configToSave.repos = config.repos
+        if (config.defaultCloneDir !== undefined) configToSave.defaultCloneDir = config.defaultCloneDir
+        if (config.showSidebar !== undefined) configToSave.showSidebar = config.showSidebar
+        if (config.sidebarWidth !== undefined) configToSave.sidebarWidth = config.sidebarWidth
+        if (config.toolbarPanels !== undefined) configToSave.toolbarPanels = config.toolbarPanels
+
+        const tmpFile = `${configFile}.tmp`
+        const backupFile = `${configFile}.backup`
+
+        // Atomic write: write to tmp, backup current, rename tmp → config
+        await writeFile(tmpFile, JSON.stringify(configToSave, null, 2))
+
+        if (existsSync(configFile)) {
+          await copyFile(configFile, backupFile)
+        }
+
+        await rename(tmpFile, configFile)
+      })
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }

@@ -11,7 +11,7 @@ export function RepoSettingsEditor({
 }: {
   repo: ManagedRepo
   agents: AgentConfig[]
-  onUpdate: (updates: Partial<Omit<ManagedRepo, 'id'>>) => Promise<void>
+  onUpdate: (updates: Partial<Omit<ManagedRepo, 'id'>>) => void
   onClose: () => void
 }) {
   const [defaultAgentId, setDefaultAgentId] = useState(repo.defaultAgentId || '')
@@ -39,7 +39,7 @@ export function RepoSettingsEditor({
   const handleSave = async () => {
     setSaving(true)
     try {
-      await onUpdate({ defaultAgentId: defaultAgentId || undefined, allowPushToMain })
+      onUpdate({ defaultAgentId: defaultAgentId || undefined, allowPushToMain })
       await window.repos.saveInitScript(repo.id, initScript)
       onClose()
     } catch (err) {

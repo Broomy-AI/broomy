@@ -41,7 +41,7 @@ export function RepoSettingsView({
 
     try {
       // Update repo default agent and review instructions
-      await updateRepo(repo.id, {
+      updateRepo(repo.id, {
         defaultAgentId: defaultAgentId || undefined,
         reviewInstructions: reviewInstructions || undefined,
       })
@@ -61,7 +61,7 @@ export function RepoSettingsView({
       { id: 'delete', label: `Remove "${repo.name}" from managed repos` },
     ])
     if (confirmed === 'delete') {
-      await removeRepo(repo.id)
+      removeRepo(repo.id)
       onBack()
     }
   }

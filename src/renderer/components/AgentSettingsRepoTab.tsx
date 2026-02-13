@@ -7,7 +7,7 @@ interface AgentSettingsRepoTabProps {
   agents: AgentConfig[]
   editingRepoId: string | null
   onEditRepo: (repoId: string) => void
-  onUpdateRepo: (repoId: string, updates: Partial<Omit<ManagedRepo, 'id'>>) => Promise<void>
+  onUpdateRepo: (repoId: string, updates: Partial<Omit<ManagedRepo, 'id'>>) => void
   onCloseRepoEditor: () => void
 }
 
@@ -41,8 +41,8 @@ export function AgentSettingsRepoTab({
               <RepoSettingsEditor
                 repo={repo}
                 agents={agents}
-                onUpdate={async (updates) => {
-                  await onUpdateRepo(repo.id, updates)
+                onUpdate={(updates) => {
+                  onUpdateRepo(repo.id, updates)
                 }}
                 onClose={onCloseRepoEditor}
               />
