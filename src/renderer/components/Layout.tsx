@@ -205,7 +205,7 @@ export default function Layout({
                 <div
                   data-panel-id={PANEL_IDS.EXPLORER}
                   tabIndex={-1}
-                  className="relative flex-shrink-0 bg-bg-secondary overflow-y-auto outline-none"
+                  className="relative flex-shrink-0 bg-bg-secondary overflow-hidden outline-none"
                   style={{ width: layoutSizes.explorerWidth }}
                 >
                   <FlashOverlay panelId={PANEL_IDS.EXPLORER} />
