@@ -39,3 +39,6 @@ coverage/
 *.png
 !build/icon.png
 !website/public/screenshots/*.png
+
+# Broomy review data
+.broomy/
