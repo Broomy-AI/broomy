@@ -38,4 +38,8 @@ playwright-report/
 coverage/
 *.png
 !build/icon.png
-!website/public/screenshots/*.png
+!website/public/**/*.png
+!website/public/*.png
+
+# Broomy review data
+.broomy/

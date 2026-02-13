@@ -2,6 +2,62 @@ import { useState, useEffect } from 'react'
 import { useAgentStore } from '../../store/agents'
 import type { ManagedRepo, GitHubPrForReview } from '../../../preload/index'
 
+async function createReviewWorktree(repo: ManagedRepo, pr: GitHubPrForReview): Promise<{ worktreePath: string; error?: string }> {
+  const mainDir = `${repo.rootDir}/main`
+  const branchName = pr.headRefName
+  const worktreePath = `${repo.rootDir}/${branchName}`
+
+  // Check if worktree already exists
+  const worktrees = await window.git.worktreeList(mainDir)
+  const existingWorktree = worktrees.find((wt: { path: string; branch: string }) => wt.branch === branchName)
+
+  if (existingWorktree) {
+    // Worktree exists - fetch latest changes before opening
+    try {
+      await window.git.pullPrBranch(existingWorktree.path, branchName, pr.number)
+    } catch {
+      // Non-fatal - might not have network
+    }
+    return { worktreePath: existingWorktree.path }
+  }
+
+  // Try to fetch the branch by name first (same-repo PRs get tracking for free)
+  const fetchBranchResult = await window.git.fetchBranch(mainDir, branchName)
+  const isFork = !fetchBranchResult.success
+
+  if (isFork) {
+    // Fork PR - fetch into a named remote-tracking ref so origin/${branchName} exists
+    const fetchResult = await window.git.fetchPrHead(mainDir, pr.number, branchName)
+    if (!fetchResult.success) {
+      return { worktreePath: '', error: fetchResult.error || 'Failed to fetch PR head' }
+    }
+  }
+
+  // Both cases: origin/${branchName} exists, worktree gets tracking automatically
+  const result = await window.git.worktreeAdd(mainDir, worktreePath, branchName, `origin/${branchName}`)
+  if (!result.success) {
+    return { worktreePath: '', error: result.error || 'Failed to create worktree' }
+  }
+
+  // For fork PRs, configure git pull to use the PR ref
+  if (isFork) {
+    await window.git.setConfig(worktreePath, `branch.${branchName}.remote`, 'origin')
+    await window.git.setConfig(worktreePath, `branch.${branchName}.merge`, `refs/pull/${pr.number}/head`)
+  }
+
+  // Run init script if exists (non-fatal)
+  try {
+    const initScript = await window.repos.getInitScript(repo.id)
+    if (initScript) {
+      await window.shell.exec(initScript, worktreePath)
+    }
+  } catch {
+    // Non-fatal
+  }
+
+  return { worktreePath }
+}
+
 export function ReviewPrsView({
   repo,
   onBack,
@@ -32,10 +88,10 @@ export function ReviewPrsView({
         setLoading(false)
       }
     }
-    fetchPrs()
+    void fetchPrs()
   }, [repo])
 
-  const handleSelectPr = async (pr: GitHubPrForReview) => {
+  const handleSelectPr = (pr: GitHubPrForReview) => {
     setSelectedPr(pr)
   }
 
@@ -45,51 +101,12 @@ export function ReviewPrsView({
     setError(null)
 
     try {
-      const mainDir = `${repo.rootDir}/main`
-      const branchName = selectedPr.headRefName
-      const worktreePath = `${repo.rootDir}/${branchName}`
-
-      // Check if worktree already exists
-      const worktrees = await window.git.worktreeList(mainDir)
-      const existingWorktree = worktrees.find(wt => wt.branch === branchName)
-
-      if (existingWorktree) {
-        // Worktree exists, just open it
-        onComplete(existingWorktree.path, selectedAgentId, {
-          repoId: repo.id,
-          name: repo.name,
-          sessionType: 'review',
-          prNumber: selectedPr.number,
-          prTitle: selectedPr.title,
-          prUrl: selectedPr.url,
-          prBaseBranch: selectedPr.baseRefName,
-        })
-        return
+      const result = await createReviewWorktree(repo, selectedPr)
+      if (result.error) {
+        throw new Error(result.error)
       }
 
-      // Fetch the PR head ref (works for both same-repo and fork PRs)
-      const fetchResult = await window.git.fetchPrHead(mainDir, selectedPr.number)
-      if (!fetchResult.success) {
-        throw new Error(fetchResult.error || 'Failed to fetch PR head')
-      }
-
-      // Create worktree for the PR branch from FETCH_HEAD
-      const result = await window.git.worktreeAdd(mainDir, worktreePath, branchName, 'FETCH_HEAD')
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to create worktree')
-      }
-
-      // Run init script if exists (non-fatal)
-      try {
-        const initScript = await window.repos.getInitScript(repo.id)
-        if (initScript) {
-          await window.shell.exec(initScript, worktreePath)
-        }
-      } catch {
-        // Non-fatal
-      }
-
-      onComplete(worktreePath, selectedAgentId, {
+      onComplete(result.worktreePath, selectedAgentId, {
         repoId: repo.id,
         name: repo.name,
         sessionType: 'review',

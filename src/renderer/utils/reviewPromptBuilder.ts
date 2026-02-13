@@ -1,8 +1,36 @@
 import type { Session } from '../store/sessions'
 import type { RequestedChange } from '../types/review'
 
+export interface PrComment {
+  body: string
+  path?: string
+  line?: number
+  author: string
+}
+
 // Build the review generation prompt
-export function buildReviewPrompt(session: Session, reviewInstructions: string, previousRequestedChanges: RequestedChange[]): string {
+export function buildReviewPrompt(
+  session: Session,
+  reviewInstructions: string,
+  previousRequestedChanges: RequestedChange[],
+  previousHeadCommit?: string,
+  prComments?: PrComment[],
+): string {
+  const hasPreviousReview = previousRequestedChanges.length > 0 || !!previousHeadCommit
+
+  const changesSinceLastReviewSchema = `  "changesSinceLastReview": {
+    "summary": "<1-3 sentence overview of what changed since the last review>",
+    "responsesToComments": [
+      {
+        "comment": "<summary of the reviewer's comment>",
+        "response": "<what was done to address it, or 'Not addressed'>"
+      }
+    ],
+    "otherNotableChanges": [
+      "<description of other significant changes not related to review comments>"
+    ]
+  }`
+
   const schema = `{
   "version": 1,
   "generatedAt": "<ISO 8601 timestamp>",
@@ -46,7 +74,7 @@ export function buildReviewPrompt(session: Session, reviewInstructions: string, 
       "file": "<optional: specific file>",
       "line": <optional: specific line number>
     }
-  ]
+  ]${hasPreviousReview ? `,\n${changesSinceLastReviewSchema}` : ''}
 }`
 
   const comparisonSchema = `{
@@ -116,6 +144,31 @@ ${comparisonSchema}
 To find commits since the last review, check \`.broomy/review-history.json\` for the previous headCommit and run:
 \`git log <previous-commit>..HEAD --format="%H"\`
 `
+  }
+
+  // Add changes-since-last-review section when we have a previous review
+  if (hasPreviousReview) {
+    prompt += `
+## Changes Since Last Review
+
+This is a re-review. The previous review was at commit \`${previousHeadCommit || 'unknown'}\`.
+
+Populate the \`changesSinceLastReview\` field in your review JSON. To do this:
+${previousHeadCommit ? `\n1. Run \`git log ${previousHeadCommit}..HEAD --oneline\` to see what commits were added since the last review` : ''}
+${previousHeadCommit ? `2. Run \`git diff ${previousHeadCommit}..HEAD --stat\` to see what files changed` : ''}
+${previousHeadCommit ? '3. ' : '1. '}Pay particular attention to what was done in response to the reviewer's comments below
+${previousHeadCommit ? '4. ' : '2. '}Note any other significant changes not related to review feedback
+`
+
+    if (prComments && prComments.length > 0) {
+      prompt += `
+### Reviewer Comments on This PR
+
+The following comments were left by reviewers. Assess whether each has been addressed:
+
+${prComments.map((c, i) => `${i + 1}. ${c.author}: "${c.body}"${c.path ? ` (${c.path}${c.line ? `:${c.line}` : ''})` : ''}`).join('\n')}
+`
+    }
   }
 
   if (reviewInstructions) {

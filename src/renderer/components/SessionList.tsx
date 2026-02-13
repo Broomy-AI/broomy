@@ -9,13 +9,15 @@
  */
 import { useState } from 'react'
 import type { Session, SessionStatus, BranchStatus } from '../store/sessions'
+import type { ManagedRepo } from '../../preload/index'
 
 interface SessionListProps {
   sessions: Session[]
   activeSessionId: string | null
+  repos: ManagedRepo[]
   onSelectSession: (id: string) => void
   onNewSession: () => void
-  onDeleteSession: (id: string) => void
+  onDeleteSession: (id: string, deleteWorktree: boolean) => void
   onRefreshPrStatus?: () => Promise<void>
   onArchiveSession: (id: string) => void
   onUnarchiveSession: (id: string) => void
@@ -104,7 +106,7 @@ function SessionCard({
   onDelete: (e: React.MouseEvent) => void
   onArchive?: (e: React.MouseEvent) => void
 }) {
-  const isUnread = session.isUnread === true
+  const isUnread = session.isUnread
 
   return (
     <div
@@ -115,12 +117,12 @@ function SessionCard({
           onSelect()
         } else if (e.key === 'ArrowDown') {
           e.preventDefault()
-          const next = (e.currentTarget as HTMLElement).nextElementSibling as HTMLElement
-          if (next?.tabIndex >= 0) next.focus()
+          const next = (e.currentTarget as HTMLElement).nextElementSibling as HTMLElement | null
+          if (next && next.tabIndex >= 0) next.focus()
         } else if (e.key === 'ArrowUp') {
           e.preventDefault()
-          const prev = (e.currentTarget as HTMLElement).previousElementSibling as HTMLElement
-          if (prev?.tabIndex >= 0) prev.focus()
+          const prev = (e.currentTarget as HTMLElement).previousElementSibling as HTMLElement | null
+          if (prev && prev.tabIndex >= 0) prev.focus()
         } else if (e.key === 'Delete' || e.key === 'Backspace') {
           onDelete(e as unknown as React.MouseEvent)
         }
@@ -213,6 +215,7 @@ function SessionCard({
 export default function SessionList({
   sessions,
   activeSessionId,
+  repos,
   onSelectSession,
   onNewSession,
   onDeleteSession,
@@ -237,9 +240,11 @@ export default function SessionList({
   }
 
   const [pendingDeleteSession, setPendingDeleteSession] = useState<Session | null>(null)
+  const [deleteWorktree, setDeleteWorktree] = useState(true)
 
   const handleDelete = (e: React.MouseEvent | React.KeyboardEvent, session: Session) => {
     e.stopPropagation()
+    setDeleteWorktree(true)
     setPendingDeleteSession(session)
   }
 
@@ -354,33 +359,58 @@ export default function SessionList({
       </div>
 
       {/* Delete confirmation dialog */}
-      {pendingDeleteSession && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-bg-secondary border border-border rounded-lg shadow-xl p-4 max-w-sm mx-4">
-            <h3 className="text-sm font-medium text-text-primary mb-2">Close Session</h3>
-            <p className="text-xs text-text-secondary mb-4">
-              Close session "{pendingDeleteSession.branch}" ({pendingDeleteSession.name})?
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setPendingDeleteSession(null)}
-                className="px-3 py-1.5 text-xs rounded bg-bg-tertiary text-text-secondary hover:text-text-primary transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  onDeleteSession(pendingDeleteSession.id)
-                  setPendingDeleteSession(null)
-                }}
-                className="px-3 py-1.5 text-xs rounded bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors"
-              >
-                Close
-              </button>
+      {pendingDeleteSession && (() => {
+        const repo = repos.find(r => r.id === pendingDeleteSession.repoId)
+        const isManagedWorktree = !!pendingDeleteSession.repoId && !!repo && pendingDeleteSession.branch !== repo.defaultBranch
+        const isSafeToDelete = ['closed', 'merged', 'empty'].includes(pendingDeleteSession.branchStatus) || pendingDeleteSession.sessionType === 'review'
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-bg-secondary border border-border rounded-lg shadow-xl p-4 max-w-sm mx-4">
+              <h3 className="text-sm font-medium text-text-primary mb-2">Delete Session</h3>
+              <p className="text-xs text-text-secondary mb-3">
+                Delete session "{pendingDeleteSession.branch}" ({pendingDeleteSession.name})?
+              </p>
+
+              {isManagedWorktree && (
+                <label className="flex items-start gap-2 mb-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={deleteWorktree}
+                    onChange={(e) => setDeleteWorktree(e.target.checked)}
+                    className="mt-0.5 accent-accent"
+                  />
+                  <span className="text-xs text-text-primary">Delete worktree and folder</span>
+                </label>
+              )}
+
+              {isManagedWorktree && deleteWorktree && !isSafeToDelete && (
+                <div className="text-xs text-yellow-400 bg-yellow-400/10 rounded px-3 py-2 mb-3">
+                  This session has work in progress. The worktree folder and local branch will be permanently deleted.
+                </div>
+              )}
+
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setPendingDeleteSession(null)}
+                  className="px-3 py-1.5 text-xs rounded bg-bg-tertiary text-text-secondary hover:text-text-primary transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    onDeleteSession(pendingDeleteSession.id, isManagedWorktree && deleteWorktree)
+                    setPendingDeleteSession(null)
+                  }}
+                  className="px-3 py-1.5 text-xs rounded bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

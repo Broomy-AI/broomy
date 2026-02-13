@@ -7,38 +7,28 @@
  * manages file navigation with unsaved-changes guards and global keyboard shortcuts.
  * The outer App component wraps AppContent in the PanelProvider context.
  */
-import React, { useEffect, useState, useCallback, useMemo } from 'react'
-import type { HelpMenuEvent } from '../preload/index'
+import { useEffect, useState, useCallback } from 'react'
 import Layout from './components/Layout'
-import SessionList from './components/SessionList'
-import Terminal from './components/Terminal'
-import TabbedTerminal from './components/TabbedTerminal'
-import Explorer from './components/explorer'
-import FileViewer from './components/FileViewer'
-import ReviewPanel from './components/ReviewPanel'
-import AgentSettings from './components/AgentSettings'
 import NewSessionDialog from './components/NewSessionDialog'
 import PanelPicker from './components/PanelPicker'
 import ProfileChip from './components/ProfileChip'
-import WelcomeScreen from './components/WelcomeScreen'
-import TutorialPanel from './components/TutorialPanel'
 import HelpModal from './components/HelpModal'
 import ShortcutsModal from './components/ShortcutsModal'
 import { useSessionStore, type Session, type SessionStatus, type LayoutSizes } from './store/sessions'
 import { useAgentStore } from './store/agents'
 import { useRepoStore } from './store/repos'
 import { useProfileStore } from './store/profiles'
-import { useErrorStore } from './store/errors'
-import { useTutorialStore } from './store/tutorial'
 import { PanelProvider, PANEL_IDS } from './panels'
 import { useGitPolling } from './hooks/useGitPolling'
 import { useFileNavigation } from './hooks/useFileNavigation'
 import { useSessionLifecycle } from './hooks/useSessionLifecycle'
+import { useAppCallbacks } from './hooks/useAppCallbacks'
+import { usePanelsMap } from './hooks/usePanelsMap'
+import { useHelpMenu } from './hooks/useHelpMenu'
 
 // Re-export types for backwards compatibility
 export type { Session, SessionStatus }
 
-// Default layout sizes for when there's no active session
 const DEFAULT_LAYOUT_SIZES: LayoutSizes = {
   explorerWidth: 256,
   fileViewerSize: 300,
@@ -46,6 +36,26 @@ const DEFAULT_LAYOUT_SIZES: LayoutSizes = {
   diffPanelWidth: 320,
   reviewPanelWidth: 320,
   tutorialPanelWidth: 320,
+}
+
+function UnsavedChangesDialog({ onCancel, onDiscard, onSave }: {
+  onCancel: () => void; onDiscard: () => void; onSave: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-bg-secondary border border-border rounded-lg shadow-xl p-4 max-w-sm mx-4">
+        <h3 className="text-sm font-medium text-text-primary mb-2">Unsaved Changes</h3>
+        <p className="text-xs text-text-secondary mb-4">
+          You have unsaved changes. What would you like to do?
+        </p>
+        <div className="flex gap-2 justify-end">
+          <button onClick={onCancel} className="px-3 py-1.5 text-xs rounded bg-bg-tertiary text-text-secondary hover:text-text-primary transition-colors">Cancel</button>
+          <button onClick={onDiscard} className="px-3 py-1.5 text-xs rounded bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors">Discard</button>
+          <button onClick={onSave} className="px-3 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/80 transition-colors">Save</button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function AppContent() {
@@ -83,12 +93,8 @@ function AppContent() {
   const { agents, loadAgents } = useAgentStore()
   const { repos, loadRepos, checkGhAvailability } = useRepoStore()
   const { currentProfileId, profiles, loadProfiles, switchProfile } = useProfileStore()
-  const { addError } = useErrorStore()
-  const { loadTutorial, markStepComplete, resetProgress: resetTutorial } = useTutorialStore()
+  const { showHelpModal, setShowHelpModal, showShortcutsModal, setShowShortcutsModal, markStepComplete } = useHelpMenu(currentProfileId)
   const currentProfile = profiles.find((p) => p.id === currentProfileId)
-
-  const [showHelpModal, setShowHelpModal] = useState(false)
-  const [showShortcutsModal, setShowShortcutsModal] = useState(false)
 
   const activeSession = sessions.find((s) => s.id === activeSessionId)
 
@@ -117,7 +123,6 @@ function AppContent() {
     diffBaseRef,
     diffCurrentRef,
     diffLabel,
-    isFileViewerDirty,
     setIsFileViewerDirty,
     pendingNavigation,
     saveCurrentFileRef,
@@ -152,293 +157,61 @@ function AppContent() {
     refreshAllBranches,
   })
 
-  // Load tutorial data on mount
-  useEffect(() => {
-    loadTutorial(currentProfileId)
-  }, [])
-
-  // Listen for help menu events from main process
-  useEffect(() => {
-    const unsubscribe = window.help.onHelpMenu((event: HelpMenuEvent) => {
-      if (event === 'getting-started') {
-        setShowHelpModal(true)
-      } else if (event === 'shortcuts') {
-        setShowShortcutsModal(true)
-      } else if (event === 'reset-tutorial') {
-        resetTutorial()
-      }
-    })
-    return unsubscribe
-  }, [])
-
-  const handleNewSession = () => {
-    setShowNewSessionDialog(true)
-  }
-
-  const handleNewSessionComplete = async (
-    directory: string,
-    agentId: string | null,
-    extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; name?: string; sessionType?: 'default' | 'review'; prNumber?: number; prTitle?: string; prUrl?: string; prBaseBranch?: string }
-  ) => {
-    try {
-      await addSession(directory, agentId, extra)
-      markStepComplete('created-session')
-      if (extra?.sessionType === 'review') {
-        markStepComplete('used-review')
-      }
-    } catch (error) {
-      addError(`Failed to add session: ${error instanceof Error ? error.message : error}`)
-    }
-    setShowNewSessionDialog(false)
-  }
-
-  const handleCancelNewSession = () => {
-    setShowNewSessionDialog(false)
-  }
-
-  // Refresh PR status for all sessions
-  const refreshPrStatus = useCallback(async () => {
-    for (const session of sessions) {
-      try {
-        const prResult = await window.gh.prStatus(session.directory)
-        if (prResult) {
-          updatePrState(session.id, prResult.state, prResult.number, prResult.url)
-        } else {
-          updatePrState(session.id, null)
-        }
-      } catch {
-        // Ignore errors for individual sessions
-      }
-    }
-  }, [sessions, updatePrState])
-
-  // Memoize getAgentCommand to ensure stable values
-  const getAgentCommand = useCallback((session: Session) => {
-    if (!session.agentId) return undefined
-    const agent = agents.find((a) => a.id === session.agentId)
-    return agent?.command
-  }, [agents])
-
-  // Get agent env vars
-  const getAgentEnv = useCallback((session: Session) => {
-    if (!session.agentId) return undefined
-    const agent = agents.find((a) => a.id === session.agentId)
-    return agent?.env
-  }, [agents])
-
-  const handleLayoutSizeChange = (key: keyof LayoutSizes, value: number) => {
-    if (activeSessionId) {
-      updateLayoutSize(activeSessionId, key, value)
-    }
-  }
-
-  const handleFileViewerPositionChange = (position: 'top' | 'left') => {
-    if (activeSessionId) {
-      setFileViewerPosition(activeSessionId, position)
-    }
-  }
-
-  const handleSelectSession = useCallback((id: string) => {
-    setActiveSession(id)
-    // After React re-renders with the new session, focus the agent terminal panel
-    requestAnimationFrame(() => {
-      const container = document.querySelector(`[data-panel-id="${PANEL_IDS.AGENT_TERMINAL}"]`)
-      if (!container) return
-      const xtermTextarea = container.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null
-      if (xtermTextarea) {
-        xtermTextarea.focus()
-      }
-    })
-  }, [setActiveSession])
-
-  const handleTogglePanel = useCallback((panelId: string) => {
-    if (activeSessionId) {
-      togglePanel(activeSessionId, panelId)
-      markStepComplete('toggled-panel')
-      if (panelId === PANEL_IDS.EXPLORER) {
-        markStepComplete('viewed-explorer')
-      }
-    }
-  }, [activeSessionId, togglePanel, markStepComplete])
-
-  const handleToggleFileViewer = useCallback(() => {
-    if (activeSessionId) {
-      togglePanel(activeSessionId, PANEL_IDS.FILE_VIEWER)
-    }
-  }, [activeSessionId, togglePanel])
+  // App callbacks hook
+  const {
+    handleNewSession,
+    handleNewSessionComplete,
+    handleCancelNewSession,
+    handleDeleteSession,
+    refreshPrStatus,
+    getAgentCommand,
+    getAgentEnv,
+    handleLayoutSizeChange,
+    handleFileViewerPositionChange,
+    handleSelectSession,
+    handleTogglePanel,
+    handleToggleFileViewer,
+  } = useAppCallbacks({
+    sessions,
+    activeSessionId,
+    agents,
+    repos,
+    addSession,
+    removeSession,
+    setActiveSession,
+    togglePanel,
+    updateLayoutSize,
+    setFileViewerPosition,
+    updatePrState,
+    setShowNewSessionDialog,
+  })
 
   const handleSearchFiles = useCallback(() => {
     if (!activeSessionId) return
-    // Ensure explorer is visible
-    const session = sessions.find(s => s.id === activeSessionId)
-    if (session && !session.panelVisibility?.[PANEL_IDS.EXPLORER]) {
-      togglePanel(activeSessionId, PANEL_IDS.EXPLORER)
-    }
-    // Switch to search filter
+    if (!activeSession?.panelVisibility[PANEL_IDS.EXPLORER]) togglePanel(activeSessionId, PANEL_IDS.EXPLORER)
     setExplorerFilter(activeSessionId, 'search')
-  }, [activeSessionId, sessions, togglePanel, setExplorerFilter])
+  }, [activeSessionId, activeSession, togglePanel, setExplorerFilter])
 
-  // Memoize terminal panels separately to ensure stability
-  // Only depends on sessions and agents (for command), not on activeSessionId
-  const agentTerminalPanel = useMemo(() => (
-    <div className="h-full w-full relative">
-      {sessions.map((session) => (
-        <div
-          key={session.id}
-          className={`absolute inset-0 ${session.id === activeSessionId ? '' : 'hidden'}`}
-        >
-          <Terminal
-            sessionId={session.id}
-            cwd={session.directory}
-            command={getAgentCommand(session)}
-            env={getAgentEnv(session)}
-            isAgentTerminal={!!getAgentCommand(session)}
-            isActive={session.id === activeSessionId}
-            onUserInput={() => markStepComplete('used-agent')}
-          />
-        </div>
-      ))}
-      {sessions.length === 0 && (
-        <WelcomeScreen onNewSession={handleNewSession} />
-      )}
-    </div>
-  ), [sessions, activeSessionId, getAgentCommand, getAgentEnv, markStepComplete, handleNewSession])
+  const handleToggleGlobalPanel = useCallback((panelId: string) => {
+    toggleGlobalPanel(panelId)
+    if (panelId === PANEL_IDS.TUTORIAL) markStepComplete('toggled-tutorial')
+  }, [toggleGlobalPanel, markStepComplete])
 
-  const userTerminalPanel = useMemo(() => (
-    <div className="h-full w-full relative">
-      {sessions.map((session) => (
-        <div
-          key={`user-${session.id}`}
-          className={`absolute inset-0 ${session.id === activeSessionId ? '' : 'hidden'}`}
-        >
-          <TabbedTerminal
-            sessionId={session.id}
-            cwd={session.directory}
-            isActive={session.id === activeSessionId}
-            onUserInput={() => markStepComplete('used-terminal')}
-          />
-        </div>
-      ))}
-    </div>
-  ), [sessions, activeSessionId, markStepComplete])
-
-  // Build panels map - terminals use stable memoized components
-  const panelsMap = useMemo(() => ({
-    [PANEL_IDS.SIDEBAR]: (
-      <SessionList
-        sessions={sessions}
-        activeSessionId={activeSessionId}
-        onSelectSession={handleSelectSession}
-        onNewSession={handleNewSession}
-        onDeleteSession={removeSession}
-        onRefreshPrStatus={refreshPrStatus}
-        onArchiveSession={archiveSession}
-        onUnarchiveSession={unarchiveSession}
-      />
-    ),
-    [PANEL_IDS.AGENT_TERMINAL]: agentTerminalPanel,
-    [PANEL_IDS.USER_TERMINAL]: userTerminalPanel,
-    [PANEL_IDS.EXPLORER]: activeSession?.showExplorer ? (
-      <Explorer
-        directory={activeSession?.directory}
-        onFileSelect={(filePath, openInDiffMode, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel) => {
-          navigateToFile(filePath, openInDiffMode, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel)
-        }}
-        selectedFilePath={activeSession?.selectedFilePath}
-        gitStatus={activeSessionGitStatus}
-        syncStatus={activeSessionGitStatusResult}
-        filter={activeSession?.explorerFilter ?? 'files'}
-        onFilterChange={(filter) => activeSessionId && setExplorerFilter(activeSessionId, filter)}
-        onGitStatusRefresh={fetchGitStatus}
-        recentFiles={activeSession?.recentFiles}
-        sessionId={activeSessionId ?? undefined}
-        pushedToMainAt={activeSession?.pushedToMainAt}
-        pushedToMainCommit={activeSession?.pushedToMainCommit}
-        onRecordPushToMain={(commitHash) => activeSessionId && recordPushToMain(activeSessionId, commitHash)}
-        onClearPushToMain={() => activeSessionId && clearPushToMain(activeSessionId)}
-        planFilePath={activeSession?.planFilePath}
-        branchStatus={activeSession?.branchStatus ?? 'in-progress'}
-        onUpdatePrState={(prState, prNumber, prUrl) => activeSessionId && updatePrState(activeSessionId, prState, prNumber, prUrl)}
-        repoId={activeSession?.repoId}
-        agentPtyId={activeSession?.agentPtyId}
-        onOpenReview={() => {
-          if (activeSessionId) {
-            setPanelVisibility(activeSessionId, PANEL_IDS.REVIEW, true)
-            const { toolbarPanels } = useSessionStore.getState()
-            if (!toolbarPanels.includes(PANEL_IDS.REVIEW)) {
-              const explorerIdx = toolbarPanels.indexOf(PANEL_IDS.EXPLORER)
-              const updated = [...toolbarPanels]
-              if (explorerIdx >= 0) updated.splice(explorerIdx + 1, 0, PANEL_IDS.REVIEW)
-              else updated.push(PANEL_IDS.REVIEW)
-              setToolbarPanels(updated)
-            }
-          }
-        }}
-      />
-    ) : null,
-    [PANEL_IDS.FILE_VIEWER]: activeSession?.showFileViewer ? (
-      <FileViewer
-        filePath={activeSession?.selectedFilePath ?? null}
-        position={activeSession?.fileViewerPosition ?? 'top'}
-        onPositionChange={handleFileViewerPositionChange}
-        onClose={handleToggleFileViewer}
-        fileStatus={selectedFileStatus}
-        directory={activeSession?.directory}
-        onSaveComplete={fetchGitStatus}
-        initialViewMode={openFileInDiffMode ? 'diff' : 'latest'}
-        scrollToLine={scrollToLine}
-        searchHighlight={searchHighlight}
-        onDirtyStateChange={setIsFileViewerDirty}
-        saveRef={saveCurrentFileRef}
-        diffBaseRef={diffBaseRef}
-        diffCurrentRef={diffCurrentRef}
-        diffLabel={diffLabel}
-        reviewContext={activeSession?.sessionType === 'review' ? {
-          sessionDirectory: activeSession.directory,
-          commentsFilePath: `/tmp/broomy-review-${activeSession.id}/comments.json`,
-        } : undefined}
-        onOpenFile={(targetPath, line) => navigateToFile(targetPath, false, line)}
-      />
-    ) : null,
-    [PANEL_IDS.REVIEW]: activeSession ? (
-      <ReviewPanel
-        session={activeSession}
-        repo={repos.find(r => r.id === activeSession.repoId)}
-        onSelectFile={(filePath, openInDiffMode, scrollToLine, diffBaseRef) => {
-          navigateToFile(filePath, openInDiffMode, scrollToLine, undefined, diffBaseRef)
-        }}
-      />
-    ) : null,
-    [PANEL_IDS.SETTINGS]: globalPanelVisibility[PANEL_IDS.SETTINGS] ? (
-      <AgentSettings onClose={() => {
-        toggleGlobalPanel(PANEL_IDS.SETTINGS)
-        markStepComplete('viewed-settings')
-      }} />
-    ) : null,
-    [PANEL_IDS.TUTORIAL]: (
-      <TutorialPanel />
-    ),
-  }), [
-    sessions,
-    activeSessionId,
-    activeSession,
-    activeSessionGitStatus,
-    activeSessionGitStatusResult,
-    selectedFileStatus,
-    openFileInDiffMode,
-    scrollToLine,
-    searchHighlight,
-    diffBaseRef,
-    diffCurrentRef,
-    diffLabel,
-    globalPanelVisibility,
-    fetchGitStatus,
-    agentTerminalPanel,
-    userTerminalPanel,
-    handleToggleFileViewer,
-    navigateToFile,
-    repos,
-  ])
+  // Panels map hook
+  const panelsMap = usePanelsMap({
+    sessions, activeSessionId, activeSession,
+    activeSessionGitStatus, activeSessionGitStatusResult, selectedFileStatus,
+    navigateToFile, openFileInDiffMode, scrollToLine, searchHighlight,
+    diffBaseRef, diffCurrentRef, diffLabel, setIsFileViewerDirty, saveCurrentFileRef,
+    handleSelectSession, handleNewSession,
+    removeSession: (id, deleteWorktree) => { handleDeleteSession(id, deleteWorktree) },
+    refreshPrStatus, archiveSession, unarchiveSession,
+    handleToggleFileViewer, handleFileViewerPositionChange,
+    fetchGitStatus, getAgentCommand, getAgentEnv,
+    globalPanelVisibility, toggleGlobalPanel, selectFile, setExplorerFilter,
+    recordPushToMain, clearPushToMain, updatePrState,
+    setPanelVisibility, setToolbarPanels, repos, markStepComplete,
+  })
 
   if (isLoading) {
     return (
@@ -463,12 +236,7 @@ function AppContent() {
         title={activeSession ? activeSession.name : undefined}
         profileChip={<ProfileChip onSwitchProfile={handleSwitchProfile} />}
         onTogglePanel={handleTogglePanel}
-        onToggleGlobalPanel={(panelId: string) => {
-          toggleGlobalPanel(panelId)
-          if (panelId === PANEL_IDS.TUTORIAL) {
-            markStepComplete('toggled-tutorial')
-          }
-        }}
+        onToggleGlobalPanel={handleToggleGlobalPanel}
         onOpenPanelPicker={() => setShowPanelPicker(true)}
         onSearchFiles={handleSearchFiles}
       />
@@ -490,36 +258,8 @@ function AppContent() {
         />
       )}
 
-      {/* Unsaved changes confirmation dialog */}
       {pendingNavigation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-bg-secondary border border-border rounded-lg shadow-xl p-4 max-w-sm mx-4">
-            <h3 className="text-sm font-medium text-text-primary mb-2">Unsaved Changes</h3>
-            <p className="text-xs text-text-secondary mb-4">
-              You have unsaved changes. What would you like to do?
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={handlePendingCancel}
-                className="px-3 py-1.5 text-xs rounded bg-bg-tertiary text-text-secondary hover:text-text-primary transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handlePendingDiscard}
-                className="px-3 py-1.5 text-xs rounded bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors"
-              >
-                Discard
-              </button>
-              <button
-                onClick={handlePendingSave}
-                className="px-3 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/80 transition-colors"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
+        <UnsavedChangesDialog onCancel={handlePendingCancel} onDiscard={handlePendingDiscard} onSave={handlePendingSave} />
       )}
 
       {/* Help Modal */}
@@ -540,7 +280,7 @@ function App() {
 
   // Expose store for Playwright screenshot manipulation
   useEffect(() => {
-    (window as Record<string, unknown>).__sessionStore = useSessionStore
+    (window as unknown as Record<string, unknown>).__sessionStore = useSessionStore
   }, [])
 
   return (

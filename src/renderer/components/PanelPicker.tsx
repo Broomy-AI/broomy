@@ -8,6 +8,7 @@
  */
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { usePanelRegistry, MAX_SHORTCUT_PANELS } from '../panels'
+import type { PanelDefinition } from '../panels'
 
 interface PanelPickerProps {
   toolbarPanels: string[]
@@ -16,10 +17,111 @@ interface PanelPickerProps {
 }
 
 // Detect if we're on Mac for keyboard shortcut display
-const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
+const isMac = navigator.userAgent.includes('Mac')
 const formatShortcut = (key: string) => {
   const modifier = isMac ? '⌘' : 'Ctrl+'
   return `${modifier}${key}`
+}
+
+function ToolbarPanelRow({
+  panel,
+  index,
+  totalCount,
+  isDragOver,
+  isDragged,
+  onDragStart,
+  onDragOver,
+  onDragEnd,
+  onMoveUp,
+  onMoveDown,
+  onRemove,
+}: {
+  panel: PanelDefinition
+  index: number
+  totalCount: number
+  isDragOver: boolean
+  isDragged: boolean
+  onDragStart: (e: React.DragEvent) => void
+  onDragOver: (e: React.DragEvent) => void
+  onDragEnd: () => void
+  onMoveUp: () => void
+  onMoveDown: () => void
+  onRemove: () => void
+}) {
+  const shortcutKey = index < MAX_SHORTCUT_PANELS ? String(index + 1) : null
+
+  return (
+    <div
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDragEnd={onDragEnd}
+      className={`flex items-center gap-2 px-2 py-2 rounded hover:bg-bg-tertiary cursor-move group ${
+        isDragOver ? 'bg-accent/20' : ''
+      } ${isDragged ? 'opacity-50' : ''}`}
+    >
+      {/* Drag handle */}
+      <div className="text-text-secondary opacity-50 group-hover:opacity-100">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="9" cy="6" r="2" />
+          <circle cx="15" cy="6" r="2" />
+          <circle cx="9" cy="12" r="2" />
+          <circle cx="15" cy="12" r="2" />
+          <circle cx="9" cy="18" r="2" />
+          <circle cx="15" cy="18" r="2" />
+        </svg>
+      </div>
+
+      {/* Icon */}
+      <span className="text-text-secondary">{panel.icon}</span>
+
+      {/* Name */}
+      <span className="flex-1 text-sm text-text-primary">{panel.name}</span>
+
+      {/* Shortcut badge */}
+      {shortcutKey && (
+        <span className="text-xs px-1.5 py-0.5 rounded bg-bg-tertiary text-text-secondary">
+          {formatShortcut(shortcutKey)}
+        </span>
+      )}
+
+      {/* Move buttons */}
+      <div className="flex opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={(e) => { e.stopPropagation(); onMoveUp() }}
+          disabled={index === 0}
+          className="p-0.5 text-text-secondary hover:text-text-primary disabled:opacity-30"
+          title="Move up"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="18 15 12 9 6 15" />
+          </svg>
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onMoveDown() }}
+          disabled={index === totalCount - 1}
+          className="p-0.5 text-text-secondary hover:text-text-primary disabled:opacity-30"
+          title="Move down"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Remove button */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onRemove() }}
+        className="p-0.5 text-text-secondary hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+        title="Remove from toolbar"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
+    </div>
+  )
 }
 
 export default function PanelPicker({
@@ -136,80 +238,22 @@ export default function PanelPicker({
             {toolbarPanels.map((panelId, index) => {
               const panel = registry.get(panelId)
               if (!panel) return null
-              const shortcutKey = index < MAX_SHORTCUT_PANELS ? String(index + 1) : null
 
               return (
-                <div
+                <ToolbarPanelRow
                   key={panelId}
-                  draggable
+                  panel={panel}
+                  index={index}
+                  totalCount={toolbarPanels.length}
+                  isDragOver={dragOverIndex === index}
+                  isDragged={draggedPanel === panelId}
                   onDragStart={(e) => handleDragStart(e, panelId)}
                   onDragOver={(e) => handleDragOver(e, index)}
                   onDragEnd={handleDragEnd}
-                  className={`flex items-center gap-2 px-2 py-2 rounded hover:bg-bg-tertiary cursor-move group ${
-                    dragOverIndex === index ? 'bg-accent/20' : ''
-                  } ${draggedPanel === panelId ? 'opacity-50' : ''}`}
-                >
-                  {/* Drag handle */}
-                  <div className="text-text-secondary opacity-50 group-hover:opacity-100">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                      <circle cx="9" cy="6" r="2" />
-                      <circle cx="15" cy="6" r="2" />
-                      <circle cx="9" cy="12" r="2" />
-                      <circle cx="15" cy="12" r="2" />
-                      <circle cx="9" cy="18" r="2" />
-                      <circle cx="15" cy="18" r="2" />
-                    </svg>
-                  </div>
-
-                  {/* Icon */}
-                  <span className="text-text-secondary">{panel.icon}</span>
-
-                  {/* Name */}
-                  <span className="flex-1 text-sm text-text-primary">{panel.name}</span>
-
-                  {/* Shortcut badge */}
-                  {shortcutKey && (
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-bg-tertiary text-text-secondary">
-                      {formatShortcut(shortcutKey)}
-                    </span>
-                  )}
-
-                  {/* Move buttons */}
-                  <div className="flex opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); moveUp(panelId) }}
-                      disabled={index === 0}
-                      className="p-0.5 text-text-secondary hover:text-text-primary disabled:opacity-30"
-                      title="Move up"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <polyline points="18 15 12 9 6 15" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); moveDown(panelId) }}
-                      disabled={index === toolbarPanels.length - 1}
-                      className="p-0.5 text-text-secondary hover:text-text-primary disabled:opacity-30"
-                      title="Move down"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                    </button>
-                  </div>
-
-                  {/* Remove button */}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); toggleInToolbar(panelId) }}
-                    className="p-0.5 text-text-secondary hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Remove from toolbar"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <line x1="18" y1="6" x2="6" y2="18" />
-                      <line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                  </button>
-                </div>
+                  onMoveUp={() => moveUp(panelId)}
+                  onMoveDown={() => moveDown(panelId)}
+                  onRemove={() => toggleInToolbar(panelId)}
+                />
               )
             })}
             {toolbarPanels.length === 0 && (

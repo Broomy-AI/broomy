@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import type { SearchResult } from '../../../preload/index'
 import type { SearchTreeNode } from './types'
+import type { NavigationTarget } from '../../utils/fileNavigation'
 
 interface SearchPanelProps {
   directory?: string
-  onFileSelect?: (filePath: string, openInDiffMode: boolean, scrollToLine?: number, searchHighlight?: string) => void
+  onFileSelect?: (target: NavigationTarget) => void
 }
 
 export function SearchPanel({ directory, onFileSelect }: SearchPanelProps) {
@@ -60,14 +61,16 @@ export function SearchPanel({ directory, onFileSelect }: SearchPanelProps) {
     }
 
     setIsSearching(true)
-    searchTimeoutRef.current = setTimeout(async () => {
-      try {
-        const results = await window.fs.search(directory, searchQuery)
-        setSearchResults(results)
-      } catch {
-        setSearchResults([])
-      }
-      setIsSearching(false)
+    searchTimeoutRef.current = setTimeout(() => {
+      void (async () => {
+        try {
+          const results = await window.fs.search(directory, searchQuery)
+          setSearchResults(results)
+        } catch {
+          setSearchResults([])
+        }
+        setIsSearching(false)
+      })()
     }, 300)
 
     return () => {
@@ -89,7 +92,7 @@ export function SearchPanel({ directory, onFileSelect }: SearchPanelProps) {
     })
   }
 
-  const renderSearchTreeNode = (node: SearchTreeNode, depth: number): JSX.Element | null => {
+  const renderSearchTreeNode = (node: SearchTreeNode, depth: number): React.JSX.Element | null => {
     const isCollapsed = collapsedSearchGroups.has(node.path)
     const isRoot = node.path === ''
 
@@ -113,7 +116,7 @@ export function SearchPanel({ directory, onFileSelect }: SearchPanelProps) {
                 <div
                   className="py-1 hover:bg-bg-tertiary cursor-pointer flex items-center gap-2"
                   style={{ paddingLeft: `${(isRoot ? depth : depth + 1) * 16 + 8}px` }}
-                  onClick={() => onFileSelect?.(result.path, false)}
+                  onClick={() => onFileSelect?.({ filePath: result.path, openInDiffMode: false })}
                 >
                   <span className="w-3" />
                   <span className="text-xs truncate text-text-primary">{result.name}</span>
@@ -126,7 +129,7 @@ export function SearchPanel({ directory, onFileSelect }: SearchPanelProps) {
                     key={`${result.path}-${match.line}-${i}`}
                     className="py-0.5 hover:bg-bg-tertiary cursor-pointer text-xs text-text-secondary truncate"
                     style={{ paddingLeft: `${(isRoot ? depth : depth + 1) * 16 + 28}px` }}
-                    onClick={() => onFileSelect?.(result.path, false, match.line, searchQuery)}
+                    onClick={() => onFileSelect?.({ filePath: result.path, openInDiffMode: false, scrollToLine: match.line, searchHighlight: searchQuery })}
                     title={`${match.line}: ${match.text}`}
                   >
                     <span className="text-text-secondary opacity-60 mr-2">{match.line}:</span>

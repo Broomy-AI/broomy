@@ -21,9 +21,8 @@ export function useFileNavigation({
   const saveCurrentFileRef = React.useRef<(() => Promise<void>) | null>(null)
 
   // Navigate to a file, checking for unsaved changes first
-  const navigateToFile = useCallback((filePath: string, openInDiffMode: boolean, scrollToLine?: number, searchHighlight?: string, diffBaseRef?: string, diffCurrentRef?: string, diffLabel?: string) => {
+  const navigateToFile = useCallback((target: NavigationTarget) => {
     if (!activeSessionId) return
-    const target: NavigationTarget = { filePath, openInDiffMode, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel }
     const result = resolveNavigation(target, activeSessionSelectedFilePath, isFileViewerDirty)
 
     if (result.action === 'update-scroll' || result.action === 'navigate') {

@@ -78,7 +78,9 @@ Session store debounces saves with 500ms delay. Runtime-only state (`status`, `i
 
 ## Testing
 
-**Always run tests before considering work done.**
+**Always confirm these checks pass before considering work done: `pnpm lint`, `pnpm typecheck`, `pnpm test:unit`, and `pnpm test` (E2E).**
+
+**IMPORTANT: Do NOT run E2E tests (`pnpm test`) without first asking the user for confirmation.** E2E tests launch Electron and are resource-intensive — running them from multiple agents simultaneously will hose the machine. Always run lint, typecheck, and unit tests first, then ask before running E2E.
 
 ### Unit Tests
 
@@ -102,9 +104,11 @@ Playwright tests in `tests/`. The test system:
 
 1. Make your code changes
 2. Write or update unit tests for any changed logic
-3. Run `pnpm test:unit` to verify all unit tests pass
-4. Run `pnpm test:unit:coverage` to confirm coverage stays above 90%
-5. Run `pnpm test` to verify E2E tests still pass
+3. Run `pnpm lint` to verify there are no lint errors
+4. Run `pnpm typecheck` to verify there are no type errors
+5. Run `pnpm test:unit` to verify all unit tests pass
+6. Run `pnpm test:unit:coverage` to confirm coverage stays above 90%
+7. **Ask the user for confirmation**, then run `pnpm test` to verify E2E tests still pass
 
 ## Adding New Features
 

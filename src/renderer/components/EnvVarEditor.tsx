@@ -1,7 +1,7 @@
 import { useState, useImperativeHandle, forwardRef } from 'react'
 
 // Suggested env vars for different commands
-const ENV_SUGGESTIONS: Record<string, { key: string; description: string }[]> = {
+const ENV_SUGGESTIONS: Partial<Record<string, { key: string; description: string }[]>> = {
   claude: [
     { key: 'CLAUDE_CONFIG_DIR', description: 'Config directory (default: ~/.claude)' },
   ],
@@ -32,7 +32,7 @@ export const EnvVarEditor = forwardRef<
   }))
 
   const entries = Object.entries(env)
-  const suggestions = ENV_SUGGESTIONS[command] || []
+  const suggestions = ENV_SUGGESTIONS[command] ?? []
   const unusedSuggestions = suggestions.filter(s => !(s.key in env))
 
   const handleAdd = () => {

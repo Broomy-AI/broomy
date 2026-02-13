@@ -38,7 +38,7 @@ export const StatusBadge = ({ status }: { status: string }) => {
 }
 
 export function BranchStatusCard({ status }: { status: BranchStatus }) {
-  const config: Record<string, { label: string; chipClasses: string; description: string }> = {
+  const config: Partial<Record<BranchStatus, { label: string; chipClasses: string; description: string }>> = {
     pushed: {
       label: 'PUSHED',
       chipClasses: 'bg-blue-500/20 text-blue-400',

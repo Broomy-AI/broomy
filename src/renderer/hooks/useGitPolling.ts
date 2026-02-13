@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import type { GitStatusResult } from '../../preload/index'
-import type { Session } from '../store/sessions'
+import type { Session, BranchStatus } from '../store/sessions'
 import type { ManagedRepo } from '../../preload/index'
 import { normalizeGitStatus } from '../utils/gitStatusNormalizer'
 import { computeBranchStatus } from '../utils/branchStatus'
@@ -16,10 +16,10 @@ export function useGitPolling({
   activeSession: Session | undefined
   repos: ManagedRepo[]
   markHasHadCommits: (sessionId: string) => void
-  updateBranchStatus: (sessionId: string, status: string) => void
+  updateBranchStatus: (sessionId: string, status: BranchStatus) => void
 }) {
-  const [gitStatusBySession, setGitStatusBySession] = useState<Record<string, GitStatusResult>>({})
-  const [isMergedBySession, setIsMergedBySession] = useState<Record<string, boolean>>({})
+  const [gitStatusBySession, setGitStatusBySession] = useState<Record<string, GitStatusResult | undefined>>({})
+  const [isMergedBySession, setIsMergedBySession] = useState<Record<string, boolean | undefined>>({})
 
   // Fetch git status for active session
   const fetchGitStatus = useCallback(async () => {
@@ -70,8 +70,8 @@ export function useGitPolling({
   // Poll git status every 2 seconds
   useEffect(() => {
     if (activeSession) {
-      fetchGitStatus()
-      const interval = setInterval(fetchGitStatus, 2000)
+      void fetchGitStatus()
+      const interval = setInterval(() => { void fetchGitStatus() }, 2000)
       return () => clearInterval(interval)
     }
   }, [activeSession?.id, fetchGitStatus])
@@ -100,10 +100,10 @@ export function useGitPolling({
 
   // Get git status for the selected file
   const selectedFileStatus = useMemo(() => {
-    if (!activeSession?.selectedFilePath || !activeSession?.directory) return null
+    if (!activeSession?.selectedFilePath || !activeSession.directory) return null
     const statusResult = gitStatusBySession[activeSession.id]
     const files = statusResult?.files || []
-    const relativePath = activeSession.selectedFilePath.replace(activeSession.directory + '/', '')
+    const relativePath = activeSession.selectedFilePath.replace(`${activeSession.directory  }/`, '')
     const fileStatus = files.find(s => s.path === relativePath)
     return fileStatus?.status ?? null
   }, [activeSession?.selectedFilePath, activeSession?.directory, activeSession?.id, gitStatusBySession])

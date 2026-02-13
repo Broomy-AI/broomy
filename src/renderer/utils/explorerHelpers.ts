@@ -61,7 +61,7 @@ export function statusBadgeColor(status: string): string {
  */
 export function truncateError(error: string, maxLength = 80): string {
   if (error.length <= maxLength) return error
-  return error.slice(0, maxLength) + '...'
+  return `${error.slice(0, maxLength)  }...`
 }
 
 /**

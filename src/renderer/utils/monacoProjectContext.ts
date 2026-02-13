@@ -98,7 +98,7 @@ function mapCompilerOptions(opts: Record<string, unknown>, projectRoot: string):
     // so everything (baseUrl, extra lib paths) must use plain paths to match.
     if (opts.baseUrl === '.' || opts.baseUrl === './') {
       result.baseUrl = projectRoot
-    } else if ((opts.baseUrl as string).startsWith('/')) {
+    } else if ((opts.baseUrl).startsWith('/')) {
       result.baseUrl = opts.baseUrl
     } else {
       result.baseUrl = `${projectRoot}/${opts.baseUrl}`

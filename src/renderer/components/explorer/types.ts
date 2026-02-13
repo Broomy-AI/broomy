@@ -1,5 +1,6 @@
 import type { FileEntry, GitFileStatus, GitStatusResult, SearchResult } from '../../../preload/index'
 import type { ExplorerFilter, BranchStatus, PrState } from '../../store/sessions'
+import type { NavigationTarget } from '../../utils/fileNavigation'
 
 // PR comment type from GitHub API
 export type PrComment = {
@@ -16,7 +17,7 @@ export type PrComment = {
 
 export interface ExplorerProps {
   directory?: string
-  onFileSelect?: (filePath: string, openInDiffMode: boolean, scrollToLine?: number, searchHighlight?: string, diffBaseRef?: string, diffCurrentRef?: string, diffLabel?: string) => void
+  onFileSelect?: (target: NavigationTarget) => void
   selectedFilePath?: string | null
   gitStatus?: GitFileStatus[]
   syncStatus?: GitStatusResult | null

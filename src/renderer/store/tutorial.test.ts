@@ -79,7 +79,7 @@ describe('useTutorialStore', () => {
   })
 
   describe('markStepComplete', () => {
-    it('marks a step as complete', async () => {
+    it('marks a step as complete', () => {
       useTutorialStore.getState().markStepComplete('created-session')
       const state = useTutorialStore.getState()
       expect(state.completedSteps).toContain('created-session')
@@ -102,7 +102,7 @@ describe('useTutorialStore', () => {
   })
 
   describe('resetProgress', () => {
-    it('clears all completed steps', async () => {
+    it('clears all completed steps', () => {
       useTutorialStore.setState({
         completedSteps: ['created-session', 'viewed-file'],
         isLoaded: true,

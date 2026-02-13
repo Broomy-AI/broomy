@@ -34,7 +34,7 @@ export function NewSessionDialog({ onComplete, onCancel }: NewSessionDialogProps
             onRepoSettings={(repo) => setView({ type: 'repo-settings', repo })}
             onIssues={(repo) => setView({ type: 'issues', repo })}
             onReviewPrs={(repo) => setView({ type: 'review-prs', repo })}
-            onOpenMain={(repo) => setView({ type: 'agent-picker', directory: repo.rootDir + '/main', repoId: repo.id, repoName: repo.name })}
+            onOpenMain={(repo) => setView({ type: 'agent-picker', directory: `${repo.rootDir  }/main`, repoId: repo.id, repoName: repo.name })}
             onCancel={onCancel}
           />
         )}

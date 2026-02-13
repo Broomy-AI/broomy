@@ -1,3 +1,5 @@
+import type { NavigationTarget } from '../../utils/fileNavigation'
+
 export function RecentFiles({
   recentFiles,
   onFileSelect,
@@ -5,7 +7,7 @@ export function RecentFiles({
   directory,
 }: {
   recentFiles: string[]
-  onFileSelect?: (filePath: string, openInDiffMode: boolean) => void
+  onFileSelect?: (target: NavigationTarget) => void
   selectedFilePath?: string | null
   directory?: string
 }) {
@@ -13,10 +15,10 @@ export function RecentFiles({
   const navigateTreeItem = (current: HTMLElement, direction: 'up' | 'down') => {
     const container = current.closest('[data-panel-id]')
     if (!container) return
-    const items = Array.from(container.querySelectorAll('[data-tree-item]')) as HTMLElement[]
+    const items = Array.from(container.querySelectorAll('[data-tree-item]'))
     const idx = items.indexOf(current)
-    const target = direction === 'down' ? items[idx + 1] : items[idx - 1]
-    if (target) target.focus()
+    const target = (direction === 'down' ? items[idx + 1] : items[idx - 1]) as Element | undefined
+    if (target) (target as HTMLElement).focus()
   }
 
   if (recentFiles.length === 0) {
@@ -31,7 +33,7 @@ export function RecentFiles({
     <div className="flex-1 overflow-y-auto text-sm">
       {recentFiles.map((filePath) => {
         const name = filePath.split('/').pop() || filePath
-        const relativePath = directory ? filePath.replace(directory + '/', '') : filePath
+        const relativePath = directory ? filePath.replace(`${directory  }/`, '') : filePath
         const isSelected = filePath === selectedFilePath
 
         return (
@@ -39,11 +41,11 @@ export function RecentFiles({
             key={filePath}
             data-tree-item
             tabIndex={0}
-            onClick={() => onFileSelect?.(filePath, false)}
+            onClick={() => onFileSelect?.({ filePath, openInDiffMode: false })}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault()
-                onFileSelect?.(filePath, false)
+                onFileSelect?.({ filePath, openInDiffMode: false })
               } else if (e.key === 'ArrowDown') {
                 e.preventDefault()
                 navigateTreeItem(e.currentTarget as HTMLElement, 'down')

@@ -50,6 +50,15 @@ export interface ReviewData {
   }[]
   // Requested changes from the reviewer (for tracking in follow-up reviews)
   requestedChanges?: RequestedChange[]
+  // Summary of changes since the previous review (only present on re-reviews)
+  changesSinceLastReview?: {
+    summary: string
+    responsesToComments: {
+      comment: string
+      response: string
+    }[]
+    otherNotableChanges: string[]
+  }
 }
 
 // Comparison of changes between reviews

@@ -32,6 +32,8 @@ const mockGit = {
   clone: vi.fn().mockResolvedValue({ success: true }),
   worktreeAdd: vi.fn().mockResolvedValue({ success: true }),
   worktreeList: vi.fn().mockResolvedValue([]),
+  worktreeRemove: vi.fn().mockResolvedValue({ success: true }),
+  deleteBranch: vi.fn().mockResolvedValue({ success: true }),
   pushNewBranch: vi.fn().mockResolvedValue({ success: true }),
   defaultBranch: vi.fn().mockResolvedValue('main'),
   remoteUrl: vi.fn().mockResolvedValue(null),
@@ -40,7 +42,9 @@ const mockGit = {
   commitFiles: vi.fn().mockResolvedValue([]),
   headCommit: vi.fn().mockResolvedValue(null),
   listBranches: vi.fn().mockResolvedValue([]),
+  fetchBranch: vi.fn().mockResolvedValue({ success: true }),
   fetchPrHead: vi.fn().mockResolvedValue({ success: true }),
+  pullPrBranch: vi.fn().mockResolvedValue({ success: true }),
   isMergedInto: vi.fn().mockResolvedValue(false),
   hasBranchCommits: vi.fn().mockResolvedValue(false),
   pullOriginMain: vi.fn().mockResolvedValue({ success: true }),
@@ -75,6 +79,8 @@ const mockGh = {
   getPrCreateUrl: vi.fn().mockResolvedValue(null),
   prComments: vi.fn().mockResolvedValue([]),
   replyToComment: vi.fn().mockResolvedValue({ success: true }),
+  prsToReview: vi.fn().mockResolvedValue([]),
+  submitDraftReview: vi.fn().mockResolvedValue({ success: true }),
 }
 
 // Mock window.shell
@@ -167,10 +173,8 @@ const broomyMocks = {
 if (typeof globalThis.window !== 'undefined' && typeof globalThis.document !== 'undefined') {
   // DOM environment — add Broomy APIs to the existing window
   Object.assign(globalThis.window, broomyMocks)
-  // Ensure confirm is mocked
-  if (!globalThis.window.confirm || typeof globalThis.window.confirm !== 'function') {
-    (globalThis.window as unknown as Record<string, unknown>).confirm = vi.fn().mockReturnValue(true)
-  }
+  // Always mock confirm so tests get a predictable stub
+  ;(globalThis.window as unknown as Record<string, unknown>).confirm = vi.fn().mockReturnValue(true)
 } else {
   // Node environment — create a minimal window object
   Object.defineProperty(globalThis, 'window', {

@@ -62,7 +62,7 @@ function ImageViewerComponent({ filePath }: FileViewerComponentProps) {
       }
     }
 
-    loadImage()
+    void loadImage()
 
     return () => {
       cancelled = true

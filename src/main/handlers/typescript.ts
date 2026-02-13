@@ -4,7 +4,7 @@ import { join } from 'path'
 import { HandlerContext } from './types'
 
 export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
-  ipcMain.handle('ts:getProjectContext', async (_event, projectRoot: string) => {
+  ipcMain.handle('ts:getProjectContext', (_event, projectRoot: string) => {
     if (ctx.isE2ETest) {
       return {
         projectRoot,
@@ -38,7 +38,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
             : join(projectRoot, 'node_modules', parsed.extends)
           // Add .json if not present
           const resolvedExtends = existsSync(extendsPath) ? extendsPath :
-            existsSync(extendsPath + '.json') ? extendsPath + '.json' : extendsPath
+            existsSync(`${extendsPath  }.json`) ? `${extendsPath  }.json` : extendsPath
           result = parseTsConfig(resolvedExtends, depth + 1)
         }
 
@@ -105,7 +105,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
             const stats = statSync(fullPath)
             if (stats.size > MAX_FILE_SIZE) continue
             const content = readFileSync(fullPath, 'utf-8')
-            const relativePath = fullPath.replace(projectRoot + '/', '')
+            const relativePath = fullPath.replace(`${projectRoot  }/`, '')
             files.push({ path: relativePath, content })
           } catch {
             // Skip unreadable files

@@ -2,6 +2,65 @@ import { useState } from 'react'
 import { useAgentStore } from '../../store/agents'
 import { useRepoStore } from '../../store/repos'
 
+async function validateWorktreeFolder(folder: string): Promise<{ worktrees: { path: string; branch: string }[]; error?: string }> {
+  try {
+    // Check if it's the root of a multi-worktree setup
+    // Look for a main/ subdirectory that's a git repo
+    const mainDir = `${folder}/main`
+    const isMainGitRepo = await window.git.isGitRepo(mainDir)
+
+    if (!isMainGitRepo) {
+      // Maybe the folder itself is a git repo?
+      const isFolderGitRepo = await window.git.isGitRepo(folder)
+      if (isFolderGitRepo) {
+        return { worktrees: [], error: 'This looks like a single git repo, not a multi-worktree folder. Use "Open Folder" instead, or select the parent folder that contains your worktrees.' }
+      } else {
+        return { worktrees: [], error: 'No git repository found. Expected a folder containing worktrees (e.g., main/, feature-x/, etc.)' }
+      }
+    }
+
+    // Get list of worktrees
+    const worktreeList = await window.git.worktreeList(mainDir)
+
+    // Verify all worktrees are in this folder
+    const validWorktrees = worktreeList.filter((wt: { path: string; branch: string }) => wt.path.startsWith(folder))
+
+    if (validWorktrees.length === 0) {
+      return { worktrees: [], error: 'No worktrees found in this folder.' }
+    }
+
+    // Check they're all for the same repo (same remote URL)
+    const mainRemote = await window.git.remoteUrl(mainDir)
+    let allSameRepo = true
+
+    for (const wt of validWorktrees) {
+      if (wt.path === mainDir) continue
+      try {
+        const wtRemote = await window.git.remoteUrl(wt.path)
+        if (wtRemote !== mainRemote) {
+          allSameRepo = false
+          break
+        }
+      } catch {
+        // Some worktrees might not have remote configured
+      }
+    }
+
+    if (!allSameRepo) {
+      return { worktrees: [], error: 'Worktrees in this folder appear to be from different repositories.' }
+    }
+
+    return {
+      worktrees: validWorktrees.map((wt: { path: string; branch: string }) => ({
+        path: wt.path,
+        branch: wt.branch,
+      })),
+    }
+  } catch (err) {
+    return { worktrees: [], error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
 export function AddExistingRepoView({
   onBack,
   onComplete,
@@ -28,7 +87,7 @@ export function AddExistingRepoView({
       setRepoName(folder.split('/').pop() || '')
       setValidated(false)
       setError(null)
-      validateFolder(folder)
+      void validateFolder(folder)
     }
   }
 
@@ -37,69 +96,16 @@ export function AddExistingRepoView({
     setError(null)
     setWorktrees([])
 
-    try {
-      // Check if it's the root of a multi-worktree setup
-      // Look for a main/ subdirectory that's a git repo
-      const mainDir = `${folder}/main`
-      const isMainGitRepo = await window.git.isGitRepo(mainDir)
+    const result = await validateWorktreeFolder(folder)
 
-      if (!isMainGitRepo) {
-        // Maybe the folder itself is a git repo?
-        const isFolderGitRepo = await window.git.isGitRepo(folder)
-        if (isFolderGitRepo) {
-          setError('This looks like a single git repo, not a multi-worktree folder. Use "Open Folder" instead, or select the parent folder that contains your worktrees.')
-        } else {
-          setError('No git repository found. Expected a folder containing worktrees (e.g., main/, feature-x/, etc.)')
-        }
-        setValidating(false)
-        return
-      }
-
-      // Get list of worktrees
-      const worktreeList = await window.git.worktreeList(mainDir)
-
-      // Verify all worktrees are in this folder
-      const validWorktrees = worktreeList.filter(wt => wt.path.startsWith(folder))
-
-      if (validWorktrees.length === 0) {
-        setError('No worktrees found in this folder.')
-        setValidating(false)
-        return
-      }
-
-      // Check they're all for the same repo (same remote URL)
-      const mainRemote = await window.git.remoteUrl(mainDir)
-      let allSameRepo = true
-
-      for (const wt of validWorktrees) {
-        if (wt.path === mainDir) continue
-        try {
-          const wtRemote = await window.git.remoteUrl(wt.path)
-          if (wtRemote !== mainRemote) {
-            allSameRepo = false
-            break
-          }
-        } catch {
-          // Some worktrees might not have remote configured
-        }
-      }
-
-      if (!allSameRepo) {
-        setError('Worktrees in this folder appear to be from different repositories.')
-        setValidating(false)
-        return
-      }
-
-      setWorktrees(validWorktrees.map(wt => ({
-        path: wt.path,
-        branch: wt.branch,
-      })))
+    if (result.error) {
+      setError(result.error)
+    } else {
+      setWorktrees(result.worktrees)
       setValidated(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setValidating(false)
     }
+
+    setValidating(false)
   }
 
   const handleAdd = async () => {
@@ -120,7 +126,7 @@ export function AddExistingRepoView({
         // gh CLI not available or other error - default to false
       }
 
-      await addRepo({
+      addRepo({
         name: repoName || rootDir.split('/').pop() || 'unknown',
         remoteUrl,
         rootDir,
@@ -196,7 +202,7 @@ export function AddExistingRepoView({
               <div className="text-xs text-text-secondary space-y-0.5">
                 {worktrees.slice(0, 5).map(wt => (
                   <div key={wt.path} className="font-mono truncate">
-                    {wt.branch} → {wt.path.replace(rootDir + '/', '')}
+                    {wt.branch} → {wt.path.replace(`${rootDir  }/`, '')}
                   </div>
                 ))}
                 {worktrees.length > 5 && (

@@ -3,7 +3,7 @@ interface ShortcutsModalProps {
 }
 
 // Detect if we're on Mac for keyboard shortcut display
-const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0
+const isMac = typeof navigator !== 'undefined' && navigator.userAgent.toUpperCase().includes('MAC')
 const modKey = isMac ? 'Cmd' : 'Ctrl'
 
 interface ShortcutGroup {

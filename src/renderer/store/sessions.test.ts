@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { useSessionStore } from './sessions'
 import { PANEL_IDS, DEFAULT_TOOLBAR_PANELS } from '../panels/types'
-import { setLoadedSessionCount, getLoadedSessionCount } from './sessionPersistence'
+import { getLoadedSessionCount } from './sessionPersistence'
+import { setLoadedCounts } from './configPersistence'
 
 describe('useSessionStore', () => {
   beforeEach(() => {
     vi.useFakeTimers()
-    setLoadedSessionCount(0)
+    setLoadedCounts({ sessions: 0, agents: 0, repos: 0 })
     useSessionStore.setState({
       sessions: [],
       activeSessionId: null,
@@ -210,9 +211,9 @@ describe('useSessionStore', () => {
           { id: 's2', name: 'Bad Session', directory: '/missing-repo' },
         ],
       })
-      vi.mocked(window.git.getBranch).mockImplementation(async (dir: string) => {
-        if (dir === '/missing-repo') throw new Error('not a git repo')
-        return 'feature/test'
+      vi.mocked(window.git.getBranch).mockImplementation((dir: string) => {
+        if (dir === '/missing-repo') return Promise.reject(new Error('not a git repo'))
+        return Promise.resolve('feature/test')
       })
 
       await useSessionStore.getState().loadSessions()
@@ -279,31 +280,31 @@ describe('useSessionStore', () => {
   })
 
   describe('removeSession', () => {
-    it('removes a session', async () => {
+    it('removes a session', () => {
       const s1 = createTestSession({ id: 's1' })
       const s2 = createTestSession({ id: 's2' })
       useSessionStore.setState({ sessions: [s1, s2], activeSessionId: 's2', isLoading: false })
 
-      await useSessionStore.getState().removeSession('s2')
+      useSessionStore.getState().removeSession('s2')
       const state = useSessionStore.getState()
       expect(state.sessions).toHaveLength(1)
       expect(state.sessions[0].id).toBe('s1')
     })
 
-    it('updates activeSessionId when removing active session', async () => {
+    it('updates activeSessionId when removing active session', () => {
       const s1 = createTestSession({ id: 's1' })
       const s2 = createTestSession({ id: 's2' })
       useSessionStore.setState({ sessions: [s1, s2], activeSessionId: 's1', isLoading: false })
 
-      await useSessionStore.getState().removeSession('s1')
+      useSessionStore.getState().removeSession('s1')
       expect(useSessionStore.getState().activeSessionId).toBe('s2')
     })
 
-    it('sets activeSessionId to null when removing last session', async () => {
+    it('sets activeSessionId to null when removing last session', () => {
       const s1 = createTestSession({ id: 's1' })
       useSessionStore.setState({ sessions: [s1], activeSessionId: 's1', isLoading: false })
 
-      await useSessionStore.getState().removeSession('s1')
+      useSessionStore.getState().removeSession('s1')
       expect(useSessionStore.getState().activeSessionId).toBeNull()
     })
   })
@@ -991,7 +992,7 @@ describe('useSessionStore', () => {
       // Advance timers past debounce
       await vi.advanceTimersByTimeAsync(600)
 
-      expect(window.config.load).toHaveBeenCalled()
+      // configPersistence reads from stores, not from disk
       expect(window.config.save).toHaveBeenCalled()
     })
 

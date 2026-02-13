@@ -3,6 +3,93 @@ import { useAgentStore } from '../../store/agents'
 import type { ManagedRepo } from '../../../preload/index'
 import type { BranchInfo } from './types'
 
+async function fetchBranchList(repo: ManagedRepo): Promise<{ branches: BranchInfo[]; error?: string }> {
+  try {
+    const mainDir = `${repo.rootDir}/main`
+
+    // Fetch remote to get latest branches
+    try {
+      await window.git.pull(mainDir)
+    } catch {
+      // Non-fatal - might not have network
+    }
+
+    // Get worktrees
+    const worktrees = await window.git.worktreeList(mainDir)
+    const worktreeMap = new Map<string, string>()
+    for (const wt of worktrees) {
+      if (wt.branch) {
+        worktreeMap.set(wt.branch, wt.path)
+      }
+    }
+
+    // Get all branches
+    const allBranches = await window.git.listBranches(mainDir)
+
+    // Build branch info list
+    const branchInfos: BranchInfo[] = []
+    const seenBranches = new Set<string>()
+
+    for (const branch of allBranches) {
+      // Clean up remote branch names (origin/main -> main)
+      let cleanName = branch.name
+      if (branch.isRemote && cleanName.startsWith('origin/')) {
+        cleanName = cleanName.replace('origin/', '')
+      }
+
+      // Skip if we've already seen this branch
+      if (seenBranches.has(cleanName)) continue
+      seenBranches.add(cleanName)
+
+      // Skip the default branch (use "Open" button for that)
+      if (cleanName === repo.defaultBranch) continue
+
+      const worktreePath = worktreeMap.get(cleanName)
+
+      branchInfos.push({
+        name: cleanName,
+        hasWorktree: !!worktreePath,
+        worktreePath,
+        isRemote: branch.isRemote && !worktreePath,
+      })
+    }
+
+    // Sort: worktrees first, then preserve time order
+    branchInfos.sort((a, b) => {
+      if (a.hasWorktree && !b.hasWorktree) return -1
+      if (!a.hasWorktree && b.hasWorktree) return 1
+      return 0
+    })
+
+    return { branches: branchInfos }
+  } catch (err) {
+    return { branches: [], error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+async function createWorktreeForBranch(repo: ManagedRepo, branchName: string): Promise<{ worktreePath: string; error?: string }> {
+  const mainDir = `${repo.rootDir}/main`
+  const worktreePath = `${repo.rootDir}/${branchName}`
+
+  // Create worktree for existing branch (don't create new branch)
+  const result = await window.git.worktreeAdd(mainDir, worktreePath, branchName, `origin/${branchName}`)
+  if (!result.success) {
+    return { worktreePath: '', error: result.error || 'Failed to create worktree' }
+  }
+
+  // Run init script if exists (non-fatal)
+  try {
+    const initScript = await window.repos.getInitScript(repo.id)
+    if (initScript) {
+      await window.shell.exec(initScript, worktreePath)
+    }
+  } catch {
+    // Non-fatal
+  }
+
+  return { worktreePath }
+}
+
 export function ExistingBranchView({
   repo,
   onBack,
@@ -13,7 +100,6 @@ export function ExistingBranchView({
   onComplete: (directory: string, agentId: string | null, extra?: { repoId?: string; name?: string }) => void
 }) {
   const { agents } = useAgentStore()
-
   const [branches, setBranches] = useState<BranchInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -23,84 +109,19 @@ export function ExistingBranchView({
   const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
-    const fetchBranches = async () => {
-      setLoading(true)
-      setError(null)
-
-      try {
-        const mainDir = `${repo.rootDir}/main`
-
-        // Fetch remote to get latest branches
-        try {
-          await window.git.pull(mainDir)
-        } catch {
-          // Non-fatal - might not have network
-        }
-
-        // Get worktrees
-        const worktrees = await window.git.worktreeList(mainDir)
-        const worktreeMap = new Map<string, string>()
-        for (const wt of worktrees) {
-          if (wt.branch) {
-            worktreeMap.set(wt.branch, wt.path)
-          }
-        }
-
-        // Get all branches
-        const allBranches = await window.git.listBranches(mainDir)
-
-        // Build branch info list
-        const branchInfos: BranchInfo[] = []
-        const seenBranches = new Set<string>()
-
-        for (const branch of allBranches) {
-          // Clean up remote branch names (origin/main -> main)
-          let cleanName = branch.name
-          if (branch.isRemote && cleanName.startsWith('origin/')) {
-            cleanName = cleanName.replace('origin/', '')
-          }
-
-          // Skip if we've already seen this branch
-          if (seenBranches.has(cleanName)) continue
-          seenBranches.add(cleanName)
-
-          // Skip the default branch (use "Open" button for that)
-          if (cleanName === repo.defaultBranch) continue
-
-          const worktreePath = worktreeMap.get(cleanName)
-
-          branchInfos.push({
-            name: cleanName,
-            hasWorktree: !!worktreePath,
-            worktreePath,
-            isRemote: branch.isRemote && !worktreePath,
-          })
-        }
-
-        // Sort: worktrees first, then preserve time order
-        branchInfos.sort((a, b) => {
-          if (a.hasWorktree && !b.hasWorktree) return -1
-          if (!a.hasWorktree && b.hasWorktree) return 1
-          return 0
-        })
-
-        setBranches(branchInfos)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err))
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchBranches()
+    setLoading(true)
+    setError(null)
+    void fetchBranchList(repo).then(({ branches: branchList, error: fetchError }) => {
+      setBranches(branchList)
+      if (fetchError) setError(fetchError)
+      setLoading(false)
+    })
   }, [repo])
 
-  const handleOpen = async (branch: BranchInfo) => {
+  const handleOpen = (branch: BranchInfo) => {
     if (branch.hasWorktree && branch.worktreePath) {
-      // Already has a worktree - just open it
       onComplete(branch.worktreePath, selectedAgentId, { repoId: repo.id, name: repo.name })
     } else {
-      // Need to create a worktree
       setSelectedBranch(branch)
     }
   }
@@ -109,28 +130,12 @@ export function ExistingBranchView({
     if (!selectedBranch) return
     setCreating(true)
     setError(null)
-
     try {
-      const mainDir = `${repo.rootDir}/main`
-      const worktreePath = `${repo.rootDir}/${selectedBranch.name}`
-
-      // Create worktree for existing branch (don't create new branch)
-      const result = await window.git.worktreeAdd(mainDir, worktreePath, selectedBranch.name, `origin/${selectedBranch.name}`)
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to create worktree')
+      const result = await createWorktreeForBranch(repo, selectedBranch.name)
+      if (result.error) {
+        throw new Error(result.error)
       }
-
-      // Run init script if exists (non-fatal)
-      try {
-        const initScript = await window.repos.getInitScript(repo.id)
-        if (initScript) {
-          await window.shell.exec(initScript, worktreePath)
-        }
-      } catch {
-        // Non-fatal
-      }
-
-      onComplete(worktreePath, selectedAgentId, { repoId: repo.id, name: repo.name })
+      onComplete(result.worktreePath, selectedAgentId, { repoId: repo.id, name: repo.name })
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       setCreating(false)
@@ -140,8 +145,6 @@ export function ExistingBranchView({
   const filteredBranches = searchQuery.trim()
     ? branches.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase()))
     : branches
-
-  // If we've selected a branch that needs a worktree, show confirmation
   if (selectedBranch && !selectedBranch.hasWorktree) {
     return (
       <>
@@ -164,11 +167,9 @@ export function ExistingBranchView({
               This branch exists on the remote but doesn't have a local worktree yet.
             </div>
           </div>
-
           <div className="text-xs text-text-secondary">
             Will create: <span className="font-mono text-text-primary">{repo.rootDir}/{selectedBranch.name}/</span>
           </div>
-
           <div>
             <label className="block text-xs font-medium text-text-secondary mb-1">Agent</label>
             <select
@@ -187,19 +188,9 @@ export function ExistingBranchView({
             <div className="text-xs text-red-400 bg-red-400/10 rounded px-3 py-2 whitespace-pre-wrap">{error}</div>
           )}
         </div>
-
         <div className="px-4 py-3 border-t border-border flex justify-end gap-2">
-          <button
-            onClick={() => setSelectedBranch(null)}
-            className="px-4 py-2 text-sm text-text-secondary hover:text-text-primary transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleCreateWorktree}
-            disabled={creating}
-            className="px-4 py-2 text-sm rounded bg-accent text-white hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
+          <button onClick={() => setSelectedBranch(null)} className="px-4 py-2 text-sm text-text-secondary hover:text-text-primary transition-colors">Cancel</button>
+          <button onClick={handleCreateWorktree} disabled={creating} className="px-4 py-2 text-sm rounded bg-accent text-white hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
             {creating ? 'Creating...' : 'Create Worktree'}
           </button>
         </div>

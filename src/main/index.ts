@@ -10,7 +10,7 @@
  * deterministic mock data during Playwright tests so no real repos, APIs, or
  * config files are touched.
  */
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, shell } from 'electron'
 import { join } from 'path'
 import { existsSync, readFileSync, FSWatcher } from 'fs'
 import * as pty from 'node-pty'
@@ -81,10 +81,10 @@ function createWindow(profileId?: string): BrowserWindow {
   // Load the renderer with profileId as query parameter
   const profileParam = profileId ? `?profile=${encodeURIComponent(profileId)}` : ''
   if (isDev && process.env.ELECTRON_RENDERER_URL) {
-    window.loadURL(`${process.env.ELECTRON_RENDERER_URL}${profileParam}`)
+    void window.loadURL(`${process.env.ELECTRON_RENDERER_URL}${profileParam}`)
     window.webContents.openDevTools()
   } else {
-    window.loadFile(join(__dirname, '../renderer/index.html'), {
+    void window.loadFile(join(__dirname, '../renderer/index.html'), {
       search: profileId ? `profile=${encodeURIComponent(profileId)}` : undefined,
     })
   }
@@ -92,7 +92,7 @@ function createWindow(profileId?: string): BrowserWindow {
   // Ensure window shows once ready (but not in headless E2E mode)
   if (!(isE2ETest && isHeadless)) {
     window.once('ready-to-show', () => {
-      window?.show()
+      window.show()
     })
   }
 
@@ -252,7 +252,7 @@ function buildAppMenu() {
         {
           label: 'Report Issue...',
           click: () => {
-            shell.openExternal('https://github.com/Broomy-AI/broomy/issues')
+            void shell.openExternal('https://github.com/Broomy-AI/broomy/issues')
           },
         },
       ],
@@ -264,10 +264,9 @@ function buildAppMenu() {
 }
 
 // App lifecycle
-app.whenReady().then(() => {
-  // Build the application menu
-  buildAppMenu()
-
+  void app.whenReady().then(() => {
+    // Build the application menu
+    buildAppMenu()
   // Determine the initial profile to open
   let initialProfileId = 'default'
   if (!isE2ETest) {

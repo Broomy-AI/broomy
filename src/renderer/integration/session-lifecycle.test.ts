@@ -83,7 +83,7 @@ describe('Session lifecycle integration', () => {
 
     // Second is active, delete it
     expect(useSessionStore.getState().activeSessionId).toBe(secondId)
-    await useSessionStore.getState().removeSession(secondId)
+    useSessionStore.getState().removeSession(secondId)
 
     const state = useSessionStore.getState()
     expect(state.sessions).toHaveLength(1)
@@ -95,7 +95,7 @@ describe('Session lifecycle integration', () => {
     await store.addSession('/repos/only', 'agent-1')
     const onlyId = useSessionStore.getState().sessions[0].id
 
-    await useSessionStore.getState().removeSession(onlyId)
+    useSessionStore.getState().removeSession(onlyId)
 
     const state = useSessionStore.getState()
     expect(state.sessions).toHaveLength(0)

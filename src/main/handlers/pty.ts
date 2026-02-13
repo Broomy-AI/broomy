@@ -133,7 +133,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     // If a command was specified (or in E2E test mode), run it after shell starts
     if (initialCommand) {
       setTimeout(() => {
-        ptyProcess.write(initialCommand + '\r')
+        ptyProcess.write(`${initialCommand  }\r`)
       }, 100)
     }
 

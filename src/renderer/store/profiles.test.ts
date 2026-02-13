@@ -16,7 +16,7 @@ describe('useProfileStore', () => {
     vi.mocked(window.profiles.openWindow).mockResolvedValue({ success: true, alreadyOpen: false })
     // Reset window.location.search for getProfileIdFromUrl
     Object.defineProperty(window, 'location', {
-      value: { ...window.location, search: '' },
+      value: { search: '' } as Location,
       writable: true,
     })
     vi.clearAllMocks()
@@ -38,7 +38,7 @@ describe('useProfileStore', () => {
 
     it('updates lastProfileId if different from URL', async () => {
       Object.defineProperty(window, 'location', {
-        value: { ...window.location, search: '?profile=custom' },
+        value: { search: '?profile=custom' } as Location,
         writable: true,
       })
       vi.mocked(window.profiles.list).mockResolvedValue({

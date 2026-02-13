@@ -26,7 +26,7 @@ export function IssuesView({
         setLoading(false)
       }
     }
-    fetchIssues()
+    void fetchIssues()
   }, [repo])
 
   return (

@@ -25,7 +25,7 @@ interface ProfileStore {
   openProfileInNewWindow: (profileId: string) => Promise<void>
 }
 
-const generateId = () => `profile-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+const generateId = () => `profile-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
 
 // Read the profile ID from the URL query parameter
 function getProfileIdFromUrl(): string {

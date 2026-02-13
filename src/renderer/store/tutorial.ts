@@ -82,17 +82,18 @@ let currentProfileId: string | undefined
 
 // Debounced save
 let saveTimeout: ReturnType<typeof setTimeout> | null = null
-const debouncedSave = async (completedSteps: string[]) => {
+const debouncedSave = (completedSteps: string[]) => {
   if (saveTimeout) clearTimeout(saveTimeout)
-  saveTimeout = setTimeout(async () => {
-    const config = await window.config.load(currentProfileId)
-    await window.config.save({
-      ...config,
-      profileId: currentProfileId,
-      tutorialProgress: {
-        completedSteps,
-      },
-    })
+  saveTimeout = setTimeout(() => {
+    void window.config.load(currentProfileId).then((config) =>
+      window.config.save({
+        ...config,
+        profileId: currentProfileId,
+        tutorialProgress: {
+          completedSteps,
+        },
+      })
+    )
   }, 500)
 }
 
@@ -118,7 +119,8 @@ export const useTutorialStore = create<TutorialStore>((set, get) => ({
 
   saveTutorial: async () => {
     const { completedSteps } = get()
-    await debouncedSave(completedSteps)
+    // debouncedSave is synchronous (schedules a timeout), awaited for interface conformance
+    await Promise.resolve(debouncedSave(completedSteps))
   },
 
   markStepComplete: (stepId: string) => {

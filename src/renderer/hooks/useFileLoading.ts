@@ -46,6 +46,7 @@ export function useFileLoading({
     }
 
     let cancelled = false
+    const isCancelled = () => cancelled
 
     const loadFile = async () => {
       setIsLoading(true)
@@ -67,12 +68,12 @@ export function useFileLoading({
         readError = err instanceof Error ? err : new Error('Failed to read file')
       }
 
-      if (cancelled) return
+      if (isCancelled()) return
 
       // If file doesn't exist and is deleted, load the old version from git
       if (readError && fileStatus === 'deleted' && directory) {
         try {
-          const relativePath = filePath.startsWith(directory + '/')
+          const relativePath = filePath.startsWith(`${directory  }/`)
             ? filePath.slice(directory.length + 1)
             : filePath
           data = await window.git.show(directory, relativePath)
@@ -82,7 +83,7 @@ export function useFileLoading({
         }
       }
 
-      if (cancelled) return
+      if (isCancelled()) return
 
       // If we couldn't read as text but have a non-text viewer, that's OK
       if (readError && !hasNonTextViewer) {
@@ -126,7 +127,7 @@ export function useFileLoading({
       setIsLoading(false)
     }
 
-    loadFile()
+    void loadFile()
 
     return () => {
       cancelled = true

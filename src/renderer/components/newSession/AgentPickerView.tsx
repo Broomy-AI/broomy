@@ -34,12 +34,12 @@ export function AgentPickerView({
       )
       if (!cancelled) setInstalledStatus(status)
     }
-    checkInstalled()
+    void checkInstalled()
     return () => { cancelled = true }
   }, [agents])
 
   const handleAgentClick = (agentId: string) => {
-    const isInstalled = installedStatus[agentId] !== false
+    const isInstalled = installedStatus[agentId]
     if (!isInstalled && warningAgentId !== agentId) {
       setWarningAgentId(agentId)
       return
@@ -63,7 +63,7 @@ export function AgentPickerView({
 
       <div className="p-4 space-y-2 max-h-80 overflow-y-auto">
         {agents.map((agent) => {
-          const isInstalled = installedStatus[agent.id] !== false
+          const isInstalled = installedStatus[agent.id]
           const showWarning = warningAgentId === agent.id
           return (
             <div key={agent.id}>

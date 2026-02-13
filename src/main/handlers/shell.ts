@@ -11,7 +11,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
 
     return new Promise<{ success: boolean; stdout: string; stderr: string; exitCode: number }>((resolve) => {
       exec(command, { cwd: expandHomePath(cwd), shell: getExecShell(), timeout: 300000 }, (error, stdout, stderr) => {
-        const exitCode = error ? (error as NodeJS.ErrnoException & { code?: number }).code || 1 : 0
+        const exitCode = error ? error.code ?? 1 : 0
         resolve({
           success: !error,
           stdout: stdout || '',

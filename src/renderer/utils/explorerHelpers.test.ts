@@ -116,7 +116,7 @@ describe('truncateError', () => {
   it('truncates long errors at default 80 chars', () => {
     const longError = 'A'.repeat(100)
     const result = truncateError(longError)
-    expect(result).toBe('A'.repeat(80) + '...')
+    expect(result).toBe(`${'A'.repeat(80)  }...`)
     expect(result.length).toBe(83)
   })
 

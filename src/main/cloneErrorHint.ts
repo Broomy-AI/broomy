@@ -15,14 +15,14 @@
  */
 export function getCloneErrorHint(errorStr: string, url: string): string | null {
   const isHttpsUrl = url.startsWith('https://') || url.startsWith('http://')
-  const isSshUrl = url.startsWith('git@') || !!url.match(/^ssh:\/\//)
+  const isSshUrl = url.startsWith('git@') || !!(/^ssh:\/\//.exec(url))
 
   // HTTPS auth failures — suggest SSH URL or credential setup
   const isHttpsAuthError = errorStr.includes('could not read Username')
     || errorStr.includes('Authentication failed')
     || errorStr.includes('terminal prompts disabled')
   if (isHttpsAuthError && isHttpsUrl) {
-    const ghMatch = url.match(/https?:\/\/github\.com\/([^/]+\/[^/.]+)/)
+    const ghMatch = /https?:\/\/github\.com\/([^/]+\/[^/.]+)/.exec(url)
     const sshUrl = ghMatch ? `git@github.com:${ghMatch[1]}.git` : null
     let hint = '\n\nGit could not authenticate over HTTPS.'
     hint += '\n\nTry one of:'
@@ -39,7 +39,7 @@ export function getCloneErrorHint(errorStr: string, url: string): string | null 
     || (errorStr.includes('Connection refused') && isSshUrl)
     || (errorStr.includes('Connection timed out') && isSshUrl)
   if (isSshAuthError && isSshUrl) {
-    const ghMatch = url.match(/git@github\.com:([^/]+\/[^/.]+?)(?:\.git)?$/)
+    const ghMatch = /git@github\.com:([^/]+\/[^/.]+?)(?:\.git)?$/.exec(url)
     const httpsUrl = ghMatch ? `https://github.com/${ghMatch[1]}.git` : null
     let hint = '\n\nGit could not authenticate over SSH.'
     hint += '\n\nTry one of:'

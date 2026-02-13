@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useState } from 'react'
 import type { Session } from '../store/sessions'
-import type { Profile } from '../store/profiles'
+import type { ProfileData } from '../store/profiles'
 import { PANEL_IDS } from '../panels'
 import { terminalBufferRegistry } from '../utils/terminalBufferRegistry'
 import { loadMonacoProjectContext } from '../utils/monacoProjectContext'
@@ -25,8 +25,8 @@ export function useSessionLifecycle({
   activeSession: Session | undefined
   activeSessionId: string | null
   currentProfileId: string
-  currentProfile: Profile | undefined
-  profiles: Profile[]
+  currentProfile: ProfileData | undefined
+  profiles: ProfileData[]
   loadProfiles: () => Promise<void>
   loadSessions: (profileId: string) => Promise<void>
   loadAgents: (profileId: string) => Promise<void>
@@ -34,7 +34,7 @@ export function useSessionLifecycle({
   checkGhAvailability: () => Promise<void>
   switchProfile: (profileId: string) => Promise<void>
   markSessionRead: (sessionId: string) => void
-  refreshAllBranches: () => void
+  refreshAllBranches: () => void | Promise<void>
 }) {
   const [directoryExists, setDirectoryExists] = useState<Record<string, boolean>>({})
 
@@ -49,17 +49,17 @@ export function useSessionLifecycle({
     }
 
     if (sessions.length > 0) {
-      checkDirectories()
+      void checkDirectories()
     }
   }, [sessions])
 
   // Load profiles, then sessions/agents/repos for the current profile
   useEffect(() => {
-    loadProfiles().then(() => {
-      loadSessions(currentProfileId)
-      loadAgents(currentProfileId)
-      loadRepos(currentProfileId)
-      checkGhAvailability()
+    void loadProfiles().then(() => {
+      void loadSessions(currentProfileId)
+      void loadAgents(currentProfileId)
+      void loadRepos(currentProfileId)
+      void checkGhAvailability()
     })
   }, [])
 
@@ -77,7 +77,7 @@ export function useSessionLifecycle({
   // Load TypeScript project context when active session changes
   useEffect(() => {
     if (activeSession?.directory) {
-      loadMonacoProjectContext(activeSession.directory)
+      void loadMonacoProjectContext(activeSession.directory)
     }
   }, [activeSession?.directory])
 
@@ -89,7 +89,7 @@ export function useSessionLifecycle({
       const timeout = setTimeout(() => {
         const container = document.querySelector(`[data-panel-id="${PANEL_IDS.AGENT_TERMINAL}"]`)
         if (!container) return
-        const xtermTextarea = container.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null
+        const xtermTextarea = container.querySelector<HTMLElement>('.xterm-helper-textarea')
         if (xtermTextarea) xtermTextarea.focus()
       }, 100)
       return () => clearTimeout(timeout)
@@ -100,7 +100,7 @@ export function useSessionLifecycle({
   useEffect(() => {
     const interval = setInterval(() => {
       if (sessions.length > 0) {
-        refreshAllBranches()
+        void refreshAllBranches()
       }
     }, 2000)
 
@@ -109,7 +109,7 @@ export function useSessionLifecycle({
 
   // Keyboard shortcut to copy terminal content + summary (Cmd+Shift+C)
   useEffect(() => {
-    const handleCopyTerminal = async (e: KeyboardEvent) => {
+    const handleCopyTerminal = (e: KeyboardEvent) => {
       // Cmd+Shift+C (Mac) or Ctrl+Shift+C (other)
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'c') {
         if (!activeSession) return
@@ -127,11 +127,9 @@ export function useSessionLifecycle({
         content += '\n=== Terminal Output (last 200 lines) ===\n\n'
         content += buffer || '(no content)'
 
-        try {
-          await navigator.clipboard.writeText(content)
-        } catch (err) {
+        void navigator.clipboard.writeText(content).catch((err: unknown) => {
           console.error('Failed to copy to clipboard:', err)
-        }
+        })
       }
     }
 

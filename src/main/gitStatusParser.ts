@@ -47,7 +47,7 @@ export function parseGitStatusFile(file: { path: string; index: string; working_
 
   if (hasWorkingDirChange || (!hasIndexChange && workingDirStatus === '?')) {
     entries.push({ path: file.path, status: statusFromChar(workingDirStatus), staged: false, indexStatus, workingDirStatus })
-  } else if (!hasIndexChange && !hasWorkingDirChange) {
+  } else if (!hasIndexChange) {
     // Shouldn't happen, but handle gracefully
     entries.push({ path: file.path, status: 'modified', staged: false, indexStatus, workingDirStatus })
   }

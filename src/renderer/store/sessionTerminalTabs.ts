@@ -13,7 +13,7 @@ export function createTerminalTabActions(get: StoreGet, set: StoreSet) {
   return {
     addTerminalTab: (sessionId: string, name?: string): string => {
       const { sessions, globalPanelVisibility, sidebarWidth, toolbarPanels } = get()
-      const tabId = `tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      const tabId = `tab-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
       const session = sessions.find((s) => s.id === sessionId)
       const tabNumber = session ? session.terminalTabs.tabs.length + 1 : 1
       const tabName = name || `Terminal ${tabNumber}`
