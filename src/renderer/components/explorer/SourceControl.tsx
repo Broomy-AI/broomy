@@ -168,6 +168,12 @@ export function SourceControl({
         onUnstage={actions.handleUnstage}
         onFileSelect={onFileSelect}
         onOpenReview={onOpenReview}
+        prStatus={data.prStatus}
+        hasWriteAccess={data.hasWriteAccess}
+        isPushingToMain={data.isPushingToMain}
+        allowPushToMain={data.currentRepo?.allowPushToMain ?? true}
+        onCreatePr={actions.handleCreatePr}
+        onPushToMain={actions.handlePushToMain}
       />
     </div>
   )

@@ -28,20 +28,41 @@ interface SCWorkingViewProps {
   onUnstage: (filePath: string) => void
   onFileSelect?: (target: NavigationTarget) => void
   onOpenReview?: () => void
+  // PR and push to main
+  prStatus: { number: number; state: string } | null
+  hasWriteAccess: boolean
+  isPushingToMain: boolean
+  allowPushToMain: boolean
+  onCreatePr: () => void
+  onPushToMain: () => void
 }
 
 function SyncStatusContent({
   ahead,
   behind,
   branchStatus,
+  branchBaseName,
   hasNoTracking,
   onOpenReview,
+  prStatus,
+  hasWriteAccess,
+  isPushingToMain,
+  allowPushToMain,
+  onCreatePr,
+  onPushToMain,
 }: {
   ahead: number
   behind: number
   branchStatus?: BranchStatus
+  branchBaseName: string
   hasNoTracking: boolean
   onOpenReview?: () => void
+  prStatus: { number: number; state: string } | null
+  hasWriteAccess: boolean
+  isPushingToMain: boolean
+  allowPushToMain: boolean
+  onCreatePr: () => void
+  onPushToMain: () => void
 }) {
   const hasRemoteChanges = ahead > 0 || behind > 0
 
@@ -68,6 +89,25 @@ function SyncStatusContent({
     return (
       <>
         <BranchStatusCard status={branchStatus} />
+        {branchStatus === 'pushed' && !prStatus && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={onCreatePr}
+              className="px-2 py-1 text-xs rounded bg-accent text-white hover:bg-accent/80"
+            >
+              Create PR
+            </button>
+            {hasWriteAccess && allowPushToMain && (
+              <button
+                onClick={onPushToMain}
+                disabled={isPushingToMain}
+                className="px-2 py-1 text-xs rounded bg-bg-tertiary text-text-primary hover:bg-bg-secondary disabled:opacity-50"
+              >
+                {isPushingToMain ? 'Pushing...' : `Push to ${branchBaseName}`}
+              </button>
+            )}
+          </div>
+        )}
         {(branchStatus === 'open' || branchStatus === 'pushed') && onOpenReview && (
           <button
             onClick={onOpenReview}
@@ -95,11 +135,18 @@ function SyncStatusContent({
 function SyncView({
   syncStatus,
   branchStatus,
+  branchBaseName,
   isSyncing,
   onSync,
   onPushNewBranch,
   onOpenReview,
-}: Pick<SCWorkingViewProps, 'syncStatus' | 'branchStatus' | 'isSyncing' | 'onSync' | 'onPushNewBranch' | 'onOpenReview'>) {
+  prStatus,
+  hasWriteAccess,
+  isPushingToMain,
+  allowPushToMain,
+  onCreatePr,
+  onPushToMain,
+}: Pick<SCWorkingViewProps, 'syncStatus' | 'branchStatus' | 'branchBaseName' | 'isSyncing' | 'onSync' | 'onPushNewBranch' | 'onOpenReview' | 'prStatus' | 'hasWriteAccess' | 'isPushingToMain' | 'allowPushToMain' | 'onCreatePr' | 'onPushToMain'>) {
   const ahead = syncStatus?.ahead ?? 0
   const behind = syncStatus?.behind ?? 0
   const hasRemoteChanges = ahead > 0 || behind > 0
@@ -119,8 +166,15 @@ function SyncView({
         ahead={ahead}
         behind={behind}
         branchStatus={branchStatus}
+        branchBaseName={branchBaseName}
         hasNoTracking={hasNoTracking}
         onOpenReview={onOpenReview}
+        prStatus={prStatus}
+        hasWriteAccess={hasWriteAccess}
+        isPushingToMain={isPushingToMain}
+        allowPushToMain={allowPushToMain}
+        onCreatePr={onCreatePr}
+        onPushToMain={onPushToMain}
       />
 
       {syncStatus?.tracking && branchStatus !== 'merged' && (
@@ -155,6 +209,7 @@ export function SCWorkingView({
   gitStatus,
   syncStatus,
   branchStatus,
+  branchBaseName,
   stagedFiles,
   unstagedFiles,
   commitMessage,
@@ -173,16 +228,29 @@ export function SCWorkingView({
   onUnstage,
   onFileSelect,
   onOpenReview,
+  prStatus,
+  hasWriteAccess,
+  isPushingToMain,
+  allowPushToMain,
+  onCreatePr,
+  onPushToMain,
 }: SCWorkingViewProps) {
   if (gitStatus.length === 0) {
     return (
       <SyncView
         syncStatus={syncStatus}
         branchStatus={branchStatus}
+        branchBaseName={branchBaseName}
         isSyncing={isSyncing}
         onSync={onSync}
         onPushNewBranch={onPushNewBranch}
         onOpenReview={onOpenReview}
+        prStatus={prStatus}
+        hasWriteAccess={hasWriteAccess}
+        isPushingToMain={isPushingToMain}
+        allowPushToMain={allowPushToMain}
+        onCreatePr={onCreatePr}
+        onPushToMain={onPushToMain}
       />
     )
   }
