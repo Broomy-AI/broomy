@@ -59,7 +59,7 @@ const mockApp = {
   isDev: vi.fn().mockResolvedValue(false),
   homedir: vi.fn().mockResolvedValue('/Users/test'),
   platform: vi.fn().mockResolvedValue('darwin'),
-  tmpdir: '/tmp',
+  tmpdir: vi.fn().mockResolvedValue('/tmp'),
 }
 
 // Mock window.profiles

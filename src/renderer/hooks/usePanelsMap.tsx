@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import Terminal from '../components/Terminal'
 import TabbedTerminal from '../components/TabbedTerminal'
 import Explorer from '../components/explorer'
@@ -107,6 +107,9 @@ function useFileViewerPanel(config: PanelsMapConfig) {
     handleToggleFileViewer, handleFileViewerPositionChange, selectedFileStatus, fetchGitStatus,
   } = config
 
+  const [tmpdir, setTmpdir] = useState('/tmp')
+  useEffect(() => { void window.app.tmpdir().then(setTmpdir) }, [])
+
   return useMemo(() => {
     if (!activeSession?.showFileViewer) return null
     return (
@@ -128,12 +131,12 @@ function useFileViewerPanel(config: PanelsMapConfig) {
         diffLabel={diffLabel}
         reviewContext={activeSession.sessionType === 'review' ? {
           sessionDirectory: activeSession.directory,
-          commentsFilePath: `${window.app.tmpdir}/broomy-review-${activeSession.id}/comments.json`,
+          commentsFilePath: `${tmpdir}/broomy-review-${activeSession.id}/comments.json`,
         } : undefined}
         onOpenFile={(targetPath, line) => navigateToFile({ filePath: targetPath, openInDiffMode: false, scrollToLine: line })}
       />
     )
-  }, [activeSession, selectedFileStatus, openFileInDiffMode, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel, fetchGitStatus, handleToggleFileViewer, navigateToFile])
+  }, [activeSession, selectedFileStatus, openFileInDiffMode, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel, fetchGitStatus, handleToggleFileViewer, navigateToFile, tmpdir])
 }
 
 export function usePanelsMap(config: PanelsMapConfig) {
