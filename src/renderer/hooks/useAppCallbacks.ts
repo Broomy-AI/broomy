@@ -108,25 +108,36 @@ export function useAppCallbacks({
     })
   }, [setActiveSession])
 
-  const handleDeleteSession = useCallback(async (id: string, deleteWorktree: boolean) => {
-    if (deleteWorktree) {
-      const session = sessions.find(s => s.id === id)
-      if (session?.repoId) {
-        const repo = repos.find(r => r.id === session.repoId)
-        if (repo) {
-          const mainDir = `${repo.rootDir}/${repo.defaultBranch}`
-          const removeResult = await window.git.worktreeRemove(mainDir, session.directory)
-          if (!removeResult.success) {
-            addError(`Failed to remove worktree: ${removeResult.error}`)
+  const handleDeleteSession = useCallback((id: string, deleteWorktree: boolean) => {
+    // Remove session immediately for responsive UI
+    const session = sessions.find(s => s.id === id)
+    removeSession(id)
+
+    // Clean up worktree and branch in background (non-blocking)
+    if (deleteWorktree && session?.repoId) {
+      const repo = repos.find(r => r.id === session.repoId)
+      if (repo) {
+        const mainDir = `${repo.rootDir}/${repo.defaultBranch}`
+        void (async () => {
+          try {
+            const removeResult = await window.git.worktreeRemove(mainDir, session.directory)
+            if (!removeResult.success) {
+              addError(`Failed to remove worktree: ${removeResult.error}`)
+            }
+          } catch (error) {
+            addError(`Failed to remove worktree: ${error instanceof Error ? error.message : String(error)}`)
           }
-          const branchResult = await window.git.deleteBranch(mainDir, session.branch)
-          if (!branchResult.success) {
-            addError(`Failed to delete branch: ${branchResult.error}`)
+          try {
+            const branchResult = await window.git.deleteBranch(mainDir, session.branch)
+            if (!branchResult.success) {
+              addError(`Failed to delete branch: ${branchResult.error}`)
+            }
+          } catch (error) {
+            addError(`Failed to delete branch: ${error instanceof Error ? error.message : String(error)}`)
           }
-        }
+        })()
       }
     }
-    removeSession(id)
   }, [sessions, repos, removeSession, addError])
 
   const handleTogglePanel = useCallback((panelId: string) => {

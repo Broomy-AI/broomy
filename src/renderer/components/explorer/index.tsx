@@ -110,50 +110,52 @@ export default function Explorer({
         </div>
       )}
 
-      {/* Tab content */}
-      {filter === 'files' && (
-        <FileTree
-          directory={directory}
-          onFileSelect={onFileSelect}
-          selectedFilePath={selectedFilePath}
-          gitStatus={gitStatus}
-        />
-      )}
+      {/* Tab content - scrollable area below pinned toolbar */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {filter === 'files' && (
+          <FileTree
+            directory={directory}
+            onFileSelect={onFileSelect}
+            selectedFilePath={selectedFilePath}
+            gitStatus={gitStatus}
+          />
+        )}
 
-      {filter === 'source-control' && (
-        <SourceControl
-          directory={directory}
-          gitStatus={gitStatus}
-          syncStatus={syncStatus}
-          onFileSelect={onFileSelect}
-          onGitStatusRefresh={onGitStatusRefresh}
-          branchStatus={branchStatus}
-          repoId={repoId}
-          agentPtyId={agentPtyId}
-          onUpdatePrState={onUpdatePrState}
-          pushedToMainAt={pushedToMainAt}
-          pushedToMainCommit={pushedToMainCommit}
-          onRecordPushToMain={onRecordPushToMain}
-          onClearPushToMain={onClearPushToMain}
-          onOpenReview={onOpenReview}
-        />
-      )}
+        {filter === 'source-control' && (
+          <SourceControl
+            directory={directory}
+            gitStatus={gitStatus}
+            syncStatus={syncStatus}
+            onFileSelect={onFileSelect}
+            onGitStatusRefresh={onGitStatusRefresh}
+            branchStatus={branchStatus}
+            repoId={repoId}
+            agentPtyId={agentPtyId}
+            onUpdatePrState={onUpdatePrState}
+            pushedToMainAt={pushedToMainAt}
+            pushedToMainCommit={pushedToMainCommit}
+            onRecordPushToMain={onRecordPushToMain}
+            onClearPushToMain={onClearPushToMain}
+            onOpenReview={onOpenReview}
+          />
+        )}
 
-      {filter === 'search' && (
-        <SearchPanel
-          directory={directory}
-          onFileSelect={onFileSelect}
-        />
-      )}
+        {filter === 'search' && (
+          <SearchPanel
+            directory={directory}
+            onFileSelect={onFileSelect}
+          />
+        )}
 
-      {filter === 'recent' && (
-        <RecentFiles
-          recentFiles={recentFiles}
-          onFileSelect={onFileSelect}
-          selectedFilePath={selectedFilePath}
-          directory={directory}
-        />
-      )}
+        {filter === 'recent' && (
+          <RecentFiles
+            recentFiles={recentFiles}
+            onFileSelect={onFileSelect}
+            selectedFilePath={selectedFilePath}
+            directory={directory}
+          />
+        )}
+      </div>
     </div>
   )
 }

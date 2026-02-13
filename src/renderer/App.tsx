@@ -200,7 +200,7 @@ function AppContent() {
     saveCurrentFileRef,
     handleSelectSession,
     handleNewSession,
-    removeSession: (id, deleteWorktree) => { void handleDeleteSession(id, deleteWorktree) },
+    removeSession: (id, deleteWorktree) => { handleDeleteSession(id, deleteWorktree) },
     refreshPrStatus,
     archiveSession,
     unarchiveSession,

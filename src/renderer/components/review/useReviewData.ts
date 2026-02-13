@@ -149,10 +149,16 @@ export function useReviewData(sessionId: string, sessionDirectory: string, prBas
     void loadComparison()
   }, [reviewData, historyFilePath, broomyDir])
 
-  // Poll for review.json when waiting for agent
-  useEffect(() => {
-    if (!waitingForAgent) return
+  // Poll for review.json and comments.json changes every second
+  const lastSeenGeneratedAtRef = useRef<string | null>(null)
+  const lastSeenCommentsRef = useRef<string | null>(null)
 
+  // Keep the ref in sync with loaded review data
+  useEffect(() => {
+    lastSeenGeneratedAtRef.current = reviewData?.generatedAt ?? null
+  }, [reviewData])
+
+  useEffect(() => {
     const updateReviewHistory = async (data: ReviewData) => {
       try {
         let history: ReviewHistory = { reviews: [] }
@@ -182,35 +188,54 @@ export function useReviewData(sessionId: string, sessionDirectory: string, prBas
 
     const interval = setInterval(() => {
       void (async () => {
+        // Check for review.json changes
         try {
           const exists = await window.fs.exists(reviewFilePath)
           if (exists) {
             const content = await window.fs.readFile(reviewFilePath)
             const data = JSON.parse(content) as ReviewData
 
-            // Add head commit if not present
-            if (!data.headCommit) {
-              const headCommit = await window.git.headCommit(sessionDirectory)
-              if (headCommit) {
-                data.headCommit = headCommit
-                await window.fs.writeFile(reviewFilePath, JSON.stringify(data, null, 2))
+            // Only update if the review has changed
+            if (data.generatedAt !== lastSeenGeneratedAtRef.current) {
+              // Add head commit if not present
+              if (!data.headCommit) {
+                const headCommit = await window.git.headCommit(sessionDirectory)
+                if (headCommit) {
+                  data.headCommit = headCommit
+                  await window.fs.writeFile(reviewFilePath, JSON.stringify(data, null, 2))
+                }
               }
+
+              await updateReviewHistory(data)
+              setReviewData(data)
+              setWaitingForAgent(false)
             }
-
-            // Update history
-            await updateReviewHistory(data)
-
-            setReviewData(data)
-            setWaitingForAgent(false)
+          } else if (lastSeenGeneratedAtRef.current !== null) {
+            // File was deleted
+            setReviewData(null)
           }
         } catch {
           // File may not exist yet or be partially written
+        }
+
+        // Check for comments.json changes
+        try {
+          const exists = await window.fs.exists(commentsFilePath)
+          if (exists) {
+            const content = await window.fs.readFile(commentsFilePath)
+            if (content !== lastSeenCommentsRef.current) {
+              lastSeenCommentsRef.current = content
+              setComments(JSON.parse(content))
+            }
+          }
+        } catch {
+          // Non-fatal
         }
       })()
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [waitingForAgent, reviewFilePath, sessionDirectory, historyFilePath])
+  }, [reviewFilePath, commentsFilePath, sessionDirectory, historyFilePath])
 
   const unpushedCount = comments.filter(c => !c.pushed).length
 

@@ -280,6 +280,34 @@ async function handleHasBranchCommits(ctx: HandlerContext, repoPath: string, ref
   }
 }
 
+async function handleWorktreeRemove(ctx: HandlerContext, repoPath: string, worktreePath: string) {
+  if (ctx.isE2ETest) {
+    return { success: true }
+  }
+
+  try {
+    const git = simpleGit(expandHomePath(repoPath))
+    await git.raw(['worktree', 'remove', '--force', expandHomePath(worktreePath)])
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+}
+
+async function handleDeleteBranch(ctx: HandlerContext, repoPath: string, branchName: string) {
+  if (ctx.isE2ETest) {
+    return { success: true }
+  }
+
+  try {
+    const git = simpleGit(expandHomePath(repoPath))
+    await git.branch(['-D', branchName])
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+}
+
 export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   ipcMain.handle('git:clone', (_event, url: string, targetDir: string) => handleClone(ctx, url, targetDir))
   ipcMain.handle('git:worktreeAdd', (_event, repoPath: string, worktreePath: string, branchName: string, baseBranch: string) => handleWorktreeAdd(ctx, repoPath, worktreePath, branchName, baseBranch))
@@ -294,4 +322,6 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   ipcMain.handle('git:pullPrBranch', (_event, repoPath: string, branchName: string, prNumber: number) => handlePullPrBranch(ctx, repoPath, branchName, prNumber))
   ipcMain.handle('git:isMergedInto', (_event, repoPath: string, ref: string) => handleIsMergedInto(ctx, repoPath, ref))
   ipcMain.handle('git:hasBranchCommits', (_event, repoPath: string, ref: string) => handleHasBranchCommits(ctx, repoPath, ref))
+  ipcMain.handle('git:worktreeRemove', (_event, repoPath: string, worktreePath: string) => handleWorktreeRemove(ctx, repoPath, worktreePath))
+  ipcMain.handle('git:deleteBranch', (_event, repoPath: string, branchName: string) => handleDeleteBranch(ctx, repoPath, branchName))
 }

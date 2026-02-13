@@ -362,7 +362,7 @@ export default function SessionList({
       {pendingDeleteSession && (() => {
         const repo = repos.find(r => r.id === pendingDeleteSession.repoId)
         const isManagedWorktree = !!pendingDeleteSession.repoId && !!repo && pendingDeleteSession.branch !== repo.defaultBranch
-        const isSafeToDelete = ['closed', 'merged', 'empty'].includes(pendingDeleteSession.branchStatus)
+        const isSafeToDelete = ['closed', 'merged', 'empty'].includes(pendingDeleteSession.branchStatus) || pendingDeleteSession.sessionType === 'review'
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">

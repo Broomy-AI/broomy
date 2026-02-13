@@ -74,6 +74,16 @@ export function useReviewActions(
     setError(null)
 
     try {
+      // Fetch the base branch so origin/<base> is up-to-date for the diff.
+      // Without this, a stale origin/main causes the review to include
+      // unrelated commits that were merged to main since we last fetched.
+      try {
+        const baseBranch = session.prBaseBranch || 'main'
+        await window.git.fetchBranch(session.directory, baseBranch)
+      } catch {
+        // Non-fatal - might not have network
+      }
+
       // Pull latest changes from the PR branch before reviewing
       if (session.prNumber) {
         try {
