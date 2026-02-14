@@ -17,7 +17,6 @@ export interface TerminalConfig {
   isAgentTerminal: boolean
   isActive: boolean
   restartKey: number
-  onUserInput?: () => void
 }
 
 export interface TerminalSetupResult {
@@ -211,7 +210,7 @@ function createScrollTracking(
 // ── Terminal state hook (refs, store wiring, callbacks) ──────────────
 
 function useTerminalState(config: TerminalConfig) {
-  const { sessionId, command, env, isAgentTerminal, cwd, onUserInput } = config
+  const { sessionId, command, env, isAgentTerminal, cwd } = config
 
   const terminalRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -252,9 +251,6 @@ function useTerminalState(config: TerminalConfig) {
 
   const sessionIdRef = useRef(sessionId)
   sessionIdRef.current = sessionId
-  const onUserInputRef = useRef(onUserInput)
-  onUserInputRef.current = onUserInput
-  const hasNotifiedUserInputRef = useRef(false)
 
   const handleKeyEvent = useTerminalKeyboard(ptyIdRef)
   const processPlanDetection = usePlanDetection(sessionIdRef, setPlanFileRef)
@@ -292,7 +288,6 @@ function useTerminalState(config: TerminalConfig) {
     commandRef, envRef, isAgentTerminalRef, cwdRef,
     addErrorRef, updateAgentMonitorRef, markSessionReadRef,
     sessionIdRef, setAgentPtyId,
-    onUserInputRef, hasNotifiedUserInputRef,
     handleKeyEvent, processPlanDetection,
     scheduleUpdate, handleScrollToBottom,
   }
@@ -384,10 +379,6 @@ export function useTerminalSetup(
         terminal.onData((data) => {
           s.lastUserInputRef.current = Date.now()
           if (s.sessionIdRef.current) s.markSessionReadRef.current(s.sessionIdRef.current)
-          if (s.onUserInputRef.current && !s.hasNotifiedUserInputRef.current && /[\x20-\x7e\r]/.test(data)) {
-            s.hasNotifiedUserInputRef.current = true
-            try { s.onUserInputRef.current() } catch { /* ignore */ }
-          }
           void window.pty.write(id, data)
         })
 

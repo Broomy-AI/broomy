@@ -105,6 +105,7 @@ export type LayoutSizesData = {
   userTerminalHeight: number
   diffPanelWidth: number
   reviewPanelWidth: number
+  tutorialPanelWidth: number
 }
 
 export type PanelVisibility = Record<string, boolean>
@@ -157,6 +158,9 @@ export type ConfigData = {
   repos?: ManagedRepo[]
   defaultCloneDir?: string
   profileId?: string
+  tutorialProgress?: {
+    completedSteps: string[]
+  }
 }
 
 export type ProfileData = {

@@ -21,10 +21,9 @@ interface TerminalProps {
   env?: Record<string, string>
   isAgentTerminal?: boolean
   isActive?: boolean
-  onUserInput?: () => void
 }
 
-export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal = false, isActive = false, onUserInput }: TerminalProps) {
+export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal = false, isActive = false }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [restartKey, setRestartKey] = useState(0)
 
@@ -36,7 +35,6 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
     isAgentTerminal,
     isActive,
     restartKey,
-    onUserInput,
   }
 
   const { terminalRef, ptyIdRef, showScrollButton, handleScrollToBottom } = useTerminalSetup(config, containerRef)

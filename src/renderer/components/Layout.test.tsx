@@ -42,6 +42,7 @@ function renderLayout(overrides: Record<string, unknown> = {}) {
       userTerminalHeight: 192,
       diffPanelWidth: 320,
       reviewPanelWidth: 320,
+      tutorialPanelWidth: 320,
     },
     errorMessage: null,
     title: 'Test Session',

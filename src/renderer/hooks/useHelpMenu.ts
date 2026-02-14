@@ -3,7 +3,7 @@ import type { HelpMenuEvent } from '../../preload/index'
 import { useTutorialStore } from '../store/tutorial'
 
 export function useHelpMenu(currentProfileId: string | undefined) {
-  const { loadTutorial, markStepComplete, resetProgress: resetTutorial } = useTutorialStore()
+  const { loadTutorial, resetProgress: resetTutorial } = useTutorialStore()
   const [showHelpModal, setShowHelpModal] = useState(false)
   const [showShortcutsModal, setShowShortcutsModal] = useState(false)
 
@@ -26,5 +26,5 @@ export function useHelpMenu(currentProfileId: string | undefined) {
     return unsubscribe
   }, [])
 
-  return { showHelpModal, setShowHelpModal, showShortcutsModal, setShowShortcutsModal, markStepComplete }
+  return { showHelpModal, setShowHelpModal, showShortcutsModal, setShowShortcutsModal }
 }

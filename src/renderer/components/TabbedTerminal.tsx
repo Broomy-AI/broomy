@@ -16,10 +16,9 @@ interface TabbedTerminalProps {
   sessionId: string
   cwd: string
   isActive: boolean
-  onUserInput?: () => void
 }
 
-export default function TabbedTerminal({ sessionId, cwd, isActive, onUserInput }: TabbedTerminalProps) {
+export default function TabbedTerminal({ sessionId, cwd, isActive }: TabbedTerminalProps) {
   const sessions = useSessionStore((state) => state.sessions)
   const addTerminalTab = useSessionStore((state) => state.addTerminalTab)
   const removeTerminalTab = useSessionStore((state) => state.removeTerminalTab)
@@ -238,7 +237,6 @@ export default function TabbedTerminal({ sessionId, cwd, isActive, onUserInput }
               sessionId={`user-${sessionId}-${tab.id}`}
               cwd={cwd}
               isActive={isActive && tab.id === activeTabId}
-              onUserInput={onUserInput}
             />
           </div>
         ))}

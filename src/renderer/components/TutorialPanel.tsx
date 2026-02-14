@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useTutorialStore, TUTORIAL_STEPS } from '../store/tutorial'
 
 export default function TutorialPanel() {
-  const { completedSteps, resetProgress } = useTutorialStore()
+  const { completedSteps, markStepComplete, markStepIncomplete } = useTutorialStore()
 
   const completedCount = completedSteps.length
   const totalCount = TUTORIAL_STEPS.length
@@ -23,18 +23,6 @@ export default function TutorialPanel() {
       el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     }
   }, [expandedIndex])
-
-  // When a step completes, advance to next incomplete step
-  const prevCompletedRef = useRef(completedSteps.length)
-  useEffect(() => {
-    if (completedSteps.length > prevCompletedRef.current) {
-      const nextIncomplete = TUTORIAL_STEPS.findIndex(s => !completedSteps.includes(s.id))
-      if (nextIncomplete >= 0) {
-        setExpandedIndex(nextIncomplete)
-      }
-    }
-    prevCompletedRef.current = completedSteps.length
-  }, [completedSteps])
 
   const handleToggleStep = useCallback((index: number) => {
     setExpandedIndex(prev => prev === index ? -1 : index)
@@ -115,7 +103,7 @@ export default function TutorialPanel() {
               {/* Expanded content */}
               {isExpanded && (
                 <div className="px-4 pb-4 pl-12">
-                  <p className="text-xs text-text-secondary leading-relaxed">
+                  <p className="text-xs text-text-secondary leading-relaxed mb-3">
                     {step.description}
                     {step.link && (
                       <>
@@ -124,6 +112,21 @@ export default function TutorialPanel() {
                       </>
                     )}
                   </p>
+                  {isComplete ? (
+                    <button
+                      onClick={() => markStepIncomplete(step.id)}
+                      className="text-xs px-2.5 py-1 rounded bg-bg-tertiary text-text-secondary hover:text-text-primary transition-colors"
+                    >
+                      Mark not done
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => markStepComplete(step.id)}
+                      className="text-xs px-2.5 py-1 rounded bg-accent text-white hover:bg-accent/80 transition-colors"
+                    >
+                      Done
+                    </button>
+                  )}
                 </div>
               )}
             </div>

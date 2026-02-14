@@ -28,6 +28,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
       userTerminalHeight: 192,
       diffPanelWidth: 320,
       reviewPanelWidth: 320,
+      tutorialPanelWidth: 320,
     },
     explorerFilter: 'files',
     lastMessage: null,

@@ -101,6 +101,31 @@ describe('useTutorialStore', () => {
     })
   })
 
+  describe('markStepIncomplete', () => {
+    it('marks a completed step as incomplete', () => {
+      useTutorialStore.setState({ completedSteps: ['created-session', 'viewed-file'], isLoaded: true })
+      useTutorialStore.getState().markStepIncomplete('created-session')
+      const state = useTutorialStore.getState()
+      expect(state.completedSteps).toEqual(['viewed-file'])
+    })
+
+    it('does nothing if step is not completed', () => {
+      useTutorialStore.setState({ completedSteps: ['viewed-file'], isLoaded: true })
+      useTutorialStore.getState().markStepIncomplete('created-session')
+      const state = useTutorialStore.getState()
+      expect(state.completedSteps).toEqual(['viewed-file'])
+    })
+
+    it('persists after debounce', async () => {
+      useTutorialStore.setState({ completedSteps: ['created-session'], isLoaded: true })
+      useTutorialStore.getState().markStepIncomplete('created-session')
+      expect(window.config.save).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(500)
+      expect(window.config.save).toHaveBeenCalled()
+    })
+  })
+
   describe('resetProgress', () => {
     it('clears all completed steps', () => {
       useTutorialStore.setState({

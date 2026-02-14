@@ -52,7 +52,6 @@ export interface PanelsMapConfig {
   setPanelVisibility: (sessionId: string, panelId: string, visible: boolean) => void
   setToolbarPanels: (panels: string[]) => void
   repos: ManagedRepo[]
-  markStepComplete?: (step: string) => void
 }
 
 function useExplorerPanel(config: PanelsMapConfig) {
@@ -60,7 +59,6 @@ function useExplorerPanel(config: PanelsMapConfig) {
     activeSessionId, activeSession, activeSessionGitStatus, activeSessionGitStatusResult,
     navigateToFile, fetchGitStatus, setExplorerFilter,
     recordPushToMain, clearPushToMain, updatePrState, setPanelVisibility, setToolbarPanels,
-    markStepComplete,
   } = config
 
   return useMemo(() => {
@@ -75,7 +73,6 @@ function useExplorerPanel(config: PanelsMapConfig) {
         filter={activeSession.explorerFilter}
         onFilterChange={(filter) => {
           if (activeSessionId) setExplorerFilter(activeSessionId, filter)
-          if (filter === 'recent') markStepComplete?.('viewed-recent-files')
         }}
         onGitStatusRefresh={fetchGitStatus}
         recentFiles={activeSession.recentFiles}
@@ -154,7 +151,6 @@ export function usePanelsMap(config: PanelsMapConfig) {
     getAgentCommand, getAgentEnv,
     globalPanelVisibility, toggleGlobalPanel,
     navigateToFile, repos,
-    markStepComplete,
   } = config
 
   const agentTerminalPanel = useMemo(() => (
@@ -171,7 +167,6 @@ export function usePanelsMap(config: PanelsMapConfig) {
             env={getAgentEnv(session)}
             isAgentTerminal={!!getAgentCommand(session)}
             isActive={session.id === activeSessionId}
-            onUserInput={() => markStepComplete?.('used-agent')}
           />
         </div>
       ))}
@@ -179,7 +174,7 @@ export function usePanelsMap(config: PanelsMapConfig) {
         <WelcomeScreen onNewSession={handleNewSession} />
       )}
     </div>
-  ), [sessions, activeSessionId, getAgentCommand, getAgentEnv, markStepComplete, handleNewSession])
+  ), [sessions, activeSessionId, getAgentCommand, getAgentEnv, handleNewSession])
 
   const userTerminalPanel = useMemo(() => (
     <div className="h-full w-full relative">
@@ -192,12 +187,11 @@ export function usePanelsMap(config: PanelsMapConfig) {
             sessionId={session.id}
             cwd={session.directory}
             isActive={session.id === activeSessionId}
-            onUserInput={() => markStepComplete?.('used-terminal')}
           />
         </div>
       ))}
     </div>
-  ), [sessions, activeSessionId, markStepComplete])
+  ), [sessions, activeSessionId])
 
   const explorerPanel = useExplorerPanel(config)
   const fileViewerPanel = useFileViewerPanel(config)
@@ -232,7 +226,6 @@ export function usePanelsMap(config: PanelsMapConfig) {
     [PANEL_IDS.SETTINGS]: globalPanelVisibility[PANEL_IDS.SETTINGS] ? (
       <AgentSettings onClose={() => {
         toggleGlobalPanel(PANEL_IDS.SETTINGS)
-        markStepComplete?.('viewed-settings')
       }} />
     ) : null,
     [PANEL_IDS.TUTORIAL]: (

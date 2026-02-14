@@ -107,7 +107,7 @@ function AppContent() {
   const { agents, loadAgents } = useAgentStore()
   const { repos, loadRepos, checkGhAvailability, checkGitAvailability } = useRepoStore()
   const { currentProfileId, profiles, loadProfiles, switchProfile } = useProfileStore()
-  const { showHelpModal, setShowHelpModal, showShortcutsModal, setShowShortcutsModal, markStepComplete } = useHelpMenu(currentProfileId)
+  const { showHelpModal, setShowHelpModal, showShortcutsModal, setShowShortcutsModal } = useHelpMenu(currentProfileId)
   const currentProfile = profiles.find((p) => p.id === currentProfileId)
 
   const activeSession = sessions.find((s) => s.id === activeSessionId)
@@ -208,8 +208,7 @@ function AppContent() {
 
   const handleToggleGlobalPanel = useCallback((panelId: string) => {
     toggleGlobalPanel(panelId)
-    if (panelId === PANEL_IDS.TUTORIAL) markStepComplete('toggled-tutorial')
-  }, [toggleGlobalPanel, markStepComplete])
+  }, [toggleGlobalPanel])
 
   // Panels map hook
   const panelsMap = usePanelsMap({
@@ -224,7 +223,7 @@ function AppContent() {
     fetchGitStatus, getAgentCommand, getAgentEnv,
     globalPanelVisibility, toggleGlobalPanel, selectFile, setExplorerFilter,
     recordPushToMain, clearPushToMain, updatePrState,
-    setPanelVisibility, setToolbarPanels, repos, markStepComplete,
+    setPanelVisibility, setToolbarPanels, repos,
   })
 
   if (isLoading) {
