@@ -142,6 +142,90 @@ describe('SearchPanel', () => {
     })
   })
 
+  it('handles search error gracefully', async () => {
+    vi.mocked(window.fs.search).mockRejectedValue(new Error('search failed'))
+
+    render(<SearchPanel directory="/repos/project" />)
+    fireEvent.change(screen.getByPlaceholderText('Search files...'), { target: { value: 'test' } })
+
+    await act(async () => {
+      vi.advanceTimersByTime(300)
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(screen.getByText('No results found')).toBeTruthy()
+  })
+
+  it('toggles folder collapse in search results', async () => {
+    vi.mocked(window.fs.search).mockResolvedValue([
+      {
+        name: 'index.ts',
+        path: '/repos/project/src/utils/index.ts',
+        relativePath: 'src/utils/index.ts',
+        matchType: 'content',
+        contentMatches: [{ line: 1, text: 'export const test = true' }],
+      },
+    ])
+
+    render(<SearchPanel directory="/repos/project" />)
+    fireEvent.change(screen.getByPlaceholderText('Search files...'), { target: { value: 'test' } })
+
+    await act(async () => {
+      vi.advanceTimersByTime(300)
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    // Folder node "src" should be visible
+    expect(screen.getByText('src')).toBeTruthy()
+    expect(screen.getByText('index.ts')).toBeTruthy()
+
+    // Collapse the folder
+    fireEvent.click(screen.getByText('src'))
+
+    // File should be hidden when folder is collapsed
+    expect(screen.queryByText('index.ts')).toBeNull()
+
+    // Expand again
+    fireEvent.click(screen.getByText('src'))
+    expect(screen.getByText('index.ts')).toBeTruthy()
+  })
+
+  it('calls onFileSelect with scrollToLine and searchHighlight for content matches', async () => {
+    const onFileSelect = vi.fn()
+    vi.mocked(window.fs.search).mockResolvedValue([
+      {
+        name: 'index.ts',
+        path: '/repos/project/src/index.ts',
+        relativePath: 'src/index.ts',
+        matchType: 'content',
+        contentMatches: [{ line: 42, text: 'const test = true' }],
+      },
+    ])
+
+    render(<SearchPanel directory="/repos/project" onFileSelect={onFileSelect} />)
+    fireEvent.change(screen.getByPlaceholderText('Search files...'), { target: { value: 'test' } })
+
+    await act(async () => {
+      vi.advanceTimersByTime(300)
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    // Click on the content match line
+    fireEvent.click(screen.getByText('const test = true'))
+    expect(onFileSelect).toHaveBeenCalledWith({
+      filePath: '/repos/project/src/index.ts',
+      openInDiffMode: false,
+      scrollToLine: 42,
+      searchHighlight: 'test',
+    })
+  })
+
   it('clears results when query is too short', async () => {
     vi.mocked(window.fs.search).mockResolvedValue([
       {

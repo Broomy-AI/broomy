@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import '../../../test/react-setup'
 
 // Mock useFileTree hook to avoid complex async filesystem calls
@@ -128,5 +128,89 @@ describe('FileTree', () => {
   it('calls loadDirectory on mount', () => {
     render(<FileTree directory="/repos/project" />)
     expect(mockUseFileTree.loadDirectory).toHaveBeenCalledWith('/repos/project')
+  })
+
+  describe('keyboard navigation', () => {
+    beforeEach(() => {
+      mockUseFileTree.tree = [
+        { name: 'src', path: '/repos/project/src', isDirectory: true },
+        { name: 'index.ts', path: '/repos/project/index.ts', isDirectory: false },
+      ]
+    })
+
+    it('calls handleFileClick on Enter key', () => {
+      render(<FileTree directory="/repos/project" />)
+      const items = screen.getAllByText(/(src|index\.ts)/)
+      const item = items[0].closest('[data-tree-item]')!
+      fireEvent.keyDown(item, { key: 'Enter' })
+      expect(mockUseFileTree.handleFileClick).toHaveBeenCalled()
+    })
+
+    it('calls navigateTreeItem on ArrowDown', () => {
+      render(<FileTree directory="/repos/project" />)
+      const item = screen.getByText('src').closest('[data-tree-item]')!
+      fireEvent.keyDown(item, { key: 'ArrowDown' })
+      expect(mockUseFileTree.navigateTreeItem).toHaveBeenCalled()
+    })
+
+    it('calls navigateTreeItem on ArrowUp', () => {
+      render(<FileTree directory="/repos/project" />)
+      const item = screen.getByText('index.ts').closest('[data-tree-item]')!
+      fireEvent.keyDown(item, { key: 'ArrowUp' })
+      expect(mockUseFileTree.navigateTreeItem).toHaveBeenCalled()
+    })
+
+    it('calls toggleExpand on ArrowRight for collapsed directory', () => {
+      render(<FileTree directory="/repos/project" />)
+      const item = screen.getByText('src').closest('[data-tree-item]')!
+      fireEvent.keyDown(item, { key: 'ArrowRight' })
+      expect(mockUseFileTree.toggleExpand).toHaveBeenCalled()
+    })
+
+    it('calls navigateTreeItem on ArrowRight for expanded directory', () => {
+      mockUseFileTree.expandedPaths = new Set(['/repos/project/src'])
+      render(<FileTree directory="/repos/project" />)
+      const item = screen.getByText('src').closest('[data-tree-item]')!
+      fireEvent.keyDown(item, { key: 'ArrowRight' })
+      expect(mockUseFileTree.navigateTreeItem).toHaveBeenCalled()
+    })
+
+    it('calls toggleExpand on ArrowLeft for expanded directory', () => {
+      mockUseFileTree.expandedPaths = new Set(['/repos/project/src'])
+      render(<FileTree directory="/repos/project" />)
+      const item = screen.getByText('src').closest('[data-tree-item]')!
+      fireEvent.keyDown(item, { key: 'ArrowLeft' })
+      expect(mockUseFileTree.toggleExpand).toHaveBeenCalled()
+    })
+
+    it('handles Home key', () => {
+      render(<FileTree directory="/repos/project" />)
+      const item = screen.getByText('index.ts').closest('[data-tree-item]')!
+      fireEvent.keyDown(item, { key: 'Home' })
+      // Should not throw
+    })
+
+    it('handles End key', () => {
+      render(<FileTree directory="/repos/project" />)
+      const item = screen.getByText('src').closest('[data-tree-item]')!
+      fireEvent.keyDown(item, { key: 'End' })
+      // Should not throw
+    })
+  })
+
+  it('renders inline input and submits on blur', () => {
+    mockUseFileTree.inlineInput = { type: 'file' as const, parentPath: '/repos/project' }
+    mockUseFileTree.inlineInputValue = 'test.ts'
+    render(<FileTree directory="/repos/project" />)
+    const input = screen.getByPlaceholderText('filename')
+    fireEvent.blur(input)
+    expect(mockUseFileTree.submitInlineInput).toHaveBeenCalled()
+  })
+
+  it('calls handleContextMenu on directory path right-click', () => {
+    render(<FileTree directory="/repos/project" />)
+    const pathEl = screen.getByText('/repos/project')
+    fireEvent.contextMenu(pathEl)
+    expect(mockUseFileTree.handleContextMenu).toHaveBeenCalled()
   })
 })

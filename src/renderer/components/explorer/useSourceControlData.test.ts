@@ -136,6 +136,37 @@ describe('useSourceControlData', () => {
     expect(result.current.branchCommits[0].hash).toBe('abc123')
   })
 
+  it('handles branch changes fetch error', async () => {
+    vi.mocked(window.git.branchChanges).mockRejectedValue(new Error('git error'))
+
+    const { result } = renderHook(() =>
+      useSourceControlData({ ...defaultProps, scView: 'branch' })
+    )
+
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 0))
+    })
+
+    expect(result.current.branchChanges).toEqual([])
+    expect(result.current.branchMergeBase).toBe('')
+    expect(result.current.isBranchLoading).toBe(false)
+  })
+
+  it('handles branch commits fetch error', async () => {
+    vi.mocked(window.git.branchCommits).mockRejectedValue(new Error('git error'))
+
+    const { result } = renderHook(() =>
+      useSourceControlData({ ...defaultProps, scView: 'commits' })
+    )
+
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 0))
+    })
+
+    expect(result.current.branchCommits).toEqual([])
+    expect(result.current.isCommitsLoading).toBe(false)
+  })
+
   it('resets state when directory changes', () => {
     const { result, rerender } = renderHook(
       (props) => useSourceControlData(props),

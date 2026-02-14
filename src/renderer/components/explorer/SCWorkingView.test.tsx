@@ -219,5 +219,41 @@ describe('SCWorkingView', () => {
       render(<SCWorkingView {...changesProps} unstagedFiles={[]} />)
       expect(screen.getByText('No changes')).toBeTruthy()
     })
+
+    it('calls onUnstage when unstage button is clicked on staged file', () => {
+      const onUnstage = vi.fn()
+      render(<SCWorkingView {...changesProps} onUnstage={onUnstage} />)
+      const unstageBtn = screen.getByTitle('Unstage')
+      fireEvent.click(unstageBtn)
+      expect(onUnstage).toHaveBeenCalledWith('src/app.ts')
+    })
+
+    it('calls onStage when stage button is clicked on unstaged file', () => {
+      const onStage = vi.fn()
+      render(<SCWorkingView {...changesProps} onStage={onStage} />)
+      const stageBtn = screen.getByTitle('Stage')
+      fireEvent.click(stageBtn)
+      expect(onStage).toHaveBeenCalledWith('src/index.ts')
+    })
+
+    it('calls onFileSelect when clicking an unstaged file', () => {
+      const onFileSelect = vi.fn()
+      render(<SCWorkingView {...changesProps} onFileSelect={onFileSelect} />)
+      fireEvent.click(screen.getByText('src/index.ts'))
+      expect(onFileSelect).toHaveBeenCalledWith({
+        filePath: '/repos/project/src/index.ts',
+        openInDiffMode: true,
+      })
+    })
+
+    it('shows context menu on Changes header', async () => {
+      vi.mocked(window.menu.popup).mockResolvedValue('stage-all')
+      const onStageAll = vi.fn()
+      render(<SCWorkingView {...changesProps} onStageAll={onStageAll} />)
+      const changesHeader = screen.getByText('Changes (1)')
+      await fireEvent.contextMenu(changesHeader)
+      // menu.popup should have been called
+      expect(window.menu.popup).toHaveBeenCalled()
+    })
   })
 })

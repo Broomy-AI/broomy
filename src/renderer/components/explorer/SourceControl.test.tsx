@@ -1,11 +1,19 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import '../../../test/react-setup'
 
 // Mock child components
 vi.mock('./SCViewToggle', () => ({
-  SCViewToggle: ({ scView }: { scView: string }) => <div data-testid="view-toggle">{scView}</div>,
+  SCViewToggle: ({ scView, setScView }: { scView: string; setScView: (v: string) => void }) => (
+    <div data-testid="view-toggle">
+      {scView}
+      <button data-testid="set-comments" onClick={() => setScView('comments')}>Comments</button>
+      <button data-testid="set-commits" onClick={() => setScView('commits')}>Commits</button>
+      <button data-testid="set-branch" onClick={() => setScView('branch')}>Branch</button>
+      <button data-testid="set-working" onClick={() => setScView('working')}>Working</button>
+    </div>
+  ),
 }))
 vi.mock('./SCPrBanner', () => ({
   SCPrBanner: () => <div data-testid="pr-banner">PRBanner</div>,
@@ -132,6 +140,30 @@ describe('SourceControl', () => {
     render(
       <SourceControl directory="/repos/project" gitStatus={[]} />
     )
-    expect(screen.getByTestId('view-toggle').textContent).toBe('working')
+    expect(screen.getByTestId('view-toggle').textContent).toContain('working')
+  })
+
+  it('shows comments view when toggled', () => {
+    render(
+      <SourceControl directory="/repos/project" gitStatus={[]} />
+    )
+    fireEvent.click(screen.getByTestId('set-comments'))
+    expect(screen.getByTestId('comments-view')).toBeTruthy()
+  })
+
+  it('shows commits view when toggled', () => {
+    render(
+      <SourceControl directory="/repos/project" gitStatus={[]} />
+    )
+    fireEvent.click(screen.getByTestId('set-commits'))
+    expect(screen.getByTestId('commits-view')).toBeTruthy()
+  })
+
+  it('shows branch view when toggled', () => {
+    render(
+      <SourceControl directory="/repos/project" gitStatus={[]} />
+    )
+    fireEvent.click(screen.getByTestId('set-branch'))
+    expect(screen.getByTestId('branch-view')).toBeTruthy()
   })
 })

@@ -73,4 +73,28 @@ describe('RecentFiles', () => {
     const item = screen.getByText('index.ts').closest('[data-tree-item]')!
     expect(item.getAttribute('title')).toBe('src/index.ts')
   })
+
+  it('handles ArrowDown keydown navigation', () => {
+    const recentFiles = ['/repos/project/src/index.ts', '/repos/project/src/app.tsx']
+    const { container } = render(
+      <div data-panel-id="explorer">
+        <RecentFiles recentFiles={recentFiles} />
+      </div>
+    )
+    const items = container.querySelectorAll('[data-tree-item]')
+    fireEvent.keyDown(items[0], { key: 'ArrowDown' })
+    // Should not throw
+  })
+
+  it('handles ArrowUp keydown navigation', () => {
+    const recentFiles = ['/repos/project/src/index.ts', '/repos/project/src/app.tsx']
+    const { container } = render(
+      <div data-panel-id="explorer">
+        <RecentFiles recentFiles={recentFiles} />
+      </div>
+    )
+    const items = container.querySelectorAll('[data-tree-item]')
+    fireEvent.keyDown(items[1], { key: 'ArrowUp' })
+    // Should not throw
+  })
 })

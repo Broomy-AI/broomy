@@ -335,6 +335,49 @@ describe('useSourceControlActions', () => {
     })
   })
 
+  describe('handleToggleCommit - loading cleanup', () => {
+    it('clears loadingCommitFiles after loading', async () => {
+      vi.mocked(window.git.commitFiles).mockResolvedValue([
+        { path: 'src/index.ts', status: 'modified' },
+      ])
+      const setLoadingCommitFiles = vi.fn()
+      const data = makeData({ setLoadingCommitFiles })
+
+      const { result } = renderHook(() =>
+        useSourceControlActions({ directory: '/repos/project', data })
+      )
+
+      await act(async () => {
+        await result.current.handleToggleCommit('abc123')
+      })
+
+      // Should have been called twice: once to add, once to remove
+      expect(setLoadingCommitFiles).toHaveBeenCalledTimes(2)
+      // Second call should remove the hash
+      const removeFn = setLoadingCommitFiles.mock.calls[1][0]
+      const result2 = removeFn(new Set(['abc123']))
+      expect(result2.has('abc123')).toBe(false)
+    })
+
+    it('handles commit files loading error', async () => {
+      vi.mocked(window.git.commitFiles).mockRejectedValue(new Error('failed'))
+      const data = makeData()
+
+      const { result } = renderHook(() =>
+        useSourceControlActions({ directory: '/repos/project', data })
+      )
+
+      await act(async () => {
+        await result.current.handleToggleCommit('abc123')
+      })
+
+      // Should set empty array on error
+      expect(data.setCommitFilesByHash).toHaveBeenCalled()
+      // Should still clear loading state
+      expect(data.setLoadingCommitFiles).toHaveBeenCalledTimes(2)
+    })
+  })
+
   describe('handleReplyToComment', () => {
     it('posts a reply and refreshes comments', async () => {
       vi.mocked(window.gh.replyToComment).mockResolvedValue({ success: true })
@@ -354,6 +397,42 @@ describe('useSourceControlActions', () => {
 
       expect(window.gh.replyToComment).toHaveBeenCalledWith('/repos/project', 42, 1, 'My reply')
       expect(data.setReplyText).toHaveBeenCalled()
+    })
+
+    it('shows error when reply fails with error result', async () => {
+      vi.mocked(window.gh.replyToComment).mockResolvedValue({ success: false, error: 'forbidden' })
+      const data = makeData({
+        prStatus: { number: 42, title: 'Test', state: 'OPEN', url: 'https://example.com' },
+        replyText: { 1: 'My reply' },
+      })
+
+      const { result } = renderHook(() =>
+        useSourceControlActions({ directory: '/repos/project', data })
+      )
+
+      await act(async () => {
+        await result.current.handleReplyToComment(1)
+      })
+
+      expect(data.setGitOpError).toHaveBeenCalledWith({ operation: 'Reply', message: 'forbidden' })
+    })
+
+    it('shows error when reply throws', async () => {
+      vi.mocked(window.gh.replyToComment).mockRejectedValue(new Error('network error'))
+      const data = makeData({
+        prStatus: { number: 42, title: 'Test', state: 'OPEN', url: 'https://example.com' },
+        replyText: { 1: 'My reply' },
+      })
+
+      const { result } = renderHook(() =>
+        useSourceControlActions({ directory: '/repos/project', data })
+      )
+
+      await act(async () => {
+        await result.current.handleReplyToComment(1)
+      })
+
+      expect(data.setGitOpError).toHaveBeenCalledWith({ operation: 'Reply', message: 'Error: network error' })
     })
 
     it('does nothing without PR status', async () => {
