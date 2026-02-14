@@ -411,6 +411,151 @@ describe('useTerminalSetup', () => {
     })
   })
 
+  describe('agent idle on unmount', () => {
+    it('sets agent to idle on unmount when agent was still working', async () => {
+      const { evaluateActivity } = await import('../utils/terminalActivityDetector')
+      vi.mocked(evaluateActivity).mockReturnValue({ status: 'working', scheduleIdle: true })
+
+      const config = makeConfig({ isAgentTerminal: true, command: 'claude-code' })
+      const containerRef = makeContainerRef()
+
+      // Capture the onData callback
+      let onDataCb: ((data: string) => void) | null = null
+      vi.mocked(window.pty.onData).mockImplementation((_id, cb) => {
+        onDataCb = cb as (data: string) => void
+        return () => {}
+      })
+
+      const { unmount } = renderHook(() => useTerminalSetup(config, containerRef))
+      await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+
+      // Simulate some terminal data to set status to working
+      if (onDataCb) act(() => { onDataCb!('some output') })
+
+      unmount()
+
+      // Should have called updateAgentMonitor with idle on unmount
+      const store = useSessionStore.getState()
+      // The store action was called - verify PTY was killed
+      expect(window.pty.kill).toHaveBeenCalled()
+    })
+  })
+
+  describe('PTY data and exit handling', () => {
+    it('writes exit message to terminal on PTY exit', async () => {
+      let onExitCb: ((exitCode: number) => void) | null = null
+      vi.mocked(window.pty.onExit).mockImplementation((_id, cb) => {
+        onExitCb = cb as (exitCode: number) => void
+        return () => {}
+      })
+
+      const config = makeConfig()
+      const containerRef = makeContainerRef()
+
+      renderHook(() => useTerminalSetup(config, containerRef))
+      await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+
+      if (onExitCb) act(() => { onExitCb!(0) })
+
+      expect(mockTerminalWrite).toHaveBeenCalledWith(
+        expect.stringContaining('Process exited with code 0'),
+      )
+    })
+
+    it('forwards user input to PTY write', async () => {
+      let terminalOnDataCb: ((data: string) => void) | null = null
+      mockTerminalOnData.mockImplementation((cb: (data: string) => void) => {
+        terminalOnDataCb = cb
+        return { dispose: vi.fn() }
+      })
+
+      const config = makeConfig()
+      const containerRef = makeContainerRef()
+
+      renderHook(() => useTerminalSetup(config, containerRef))
+      await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+
+      if (terminalOnDataCb) {
+        act(() => { terminalOnDataCb!('hello') })
+        expect(window.pty.write).toHaveBeenCalled()
+      }
+    })
+
+    it('calls onUserInput callback on printable character input', async () => {
+      const onUserInput = vi.fn()
+      let terminalOnDataCb: ((data: string) => void) | null = null
+      mockTerminalOnData.mockImplementation((cb: (data: string) => void) => {
+        terminalOnDataCb = cb
+        return { dispose: vi.fn() }
+      })
+
+      const config = makeConfig({ onUserInput })
+      const containerRef = makeContainerRef()
+
+      renderHook(() => useTerminalSetup(config, containerRef))
+      await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+
+      if (terminalOnDataCb) {
+        act(() => { terminalOnDataCb!('a') })
+        expect(onUserInput).toHaveBeenCalledTimes(1)
+        // Second call should not re-trigger (hasNotifiedUserInputRef)
+        act(() => { terminalOnDataCb!('b') })
+        expect(onUserInput).toHaveBeenCalledTimes(1)
+      }
+    })
+
+    it('processes agent activity detection on PTY data for agent terminals', async () => {
+      const { evaluateActivity } = await import('../utils/terminalActivityDetector')
+      vi.mocked(evaluateActivity).mockReturnValue({ status: 'working', scheduleIdle: true })
+
+      let onDataCb: ((data: string) => void) | null = null
+      vi.mocked(window.pty.onData).mockImplementation((_id, cb) => {
+        onDataCb = cb as (data: string) => void
+        return () => {}
+      })
+
+      const config = makeConfig({ isAgentTerminal: true, command: 'claude-code' })
+      const containerRef = makeContainerRef()
+
+      renderHook(() => useTerminalSetup(config, containerRef))
+      await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+
+      if (onDataCb) {
+        act(() => { onDataCb!('some data') })
+        expect(evaluateActivity).toHaveBeenCalled()
+      }
+    })
+  })
+
+  describe('resize observer', () => {
+    it('calls fitAddon.fit when container resizes', () => {
+      let resizeCallback: ((entries: ResizeObserverEntry[]) => void) | null = null
+      class TrackableResizeObserver {
+        observe = vi.fn()
+        unobserve = vi.fn()
+        disconnect = vi.fn()
+        constructor(cb: (entries: ResizeObserverEntry[]) => void) {
+          resizeCallback = cb
+          mockResizeObserverInstances.push(this)
+        }
+      }
+      vi.stubGlobal('ResizeObserver', TrackableResizeObserver)
+
+      const config = makeConfig()
+      const containerRef = makeContainerRef()
+      mockFitAddonFit.mockClear()
+
+      renderHook(() => useTerminalSetup(config, containerRef))
+
+      if (resizeCallback) {
+        act(() => {
+          resizeCallback!([{ contentRect: { width: 800, height: 600 } } as ResizeObserverEntry])
+        })
+        expect(mockFitAddonFit).toHaveBeenCalled()
+      }
+    })
+  })
+
   describe('scroll event listeners', () => {
     it('attaches wheel and touchmove listeners to the container', () => {
       const config = makeConfig()

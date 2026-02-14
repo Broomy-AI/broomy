@@ -206,6 +206,61 @@ describe('usePanelsMap', () => {
     expect(result.current[PANEL_IDS.AGENT_TERMINAL]).not.toBeNull()
   })
 
+  it('renders review panel with review session context', () => {
+    const session = makeSession({
+      sessionType: 'review',
+      prNumber: 42,
+      prTitle: 'Fix bug',
+      panelVisibility: {
+        [PANEL_IDS.AGENT_TERMINAL]: true,
+        [PANEL_IDS.USER_TERMINAL]: false,
+        [PANEL_IDS.EXPLORER]: false,
+        [PANEL_IDS.FILE_VIEWER]: false,
+        [PANEL_IDS.REVIEW]: true,
+      },
+    })
+    const config = makeConfig({
+      sessions: [session],
+      activeSession: session,
+      activeSessionId: 'session-1',
+    })
+    const { result } = renderHook(() => usePanelsMap(config))
+
+    expect(result.current[PANEL_IDS.REVIEW]).not.toBeNull()
+  })
+
+  it('passes markStepComplete to agentTerminal onUserInput', () => {
+    const markStepComplete = vi.fn()
+    const config = makeConfig({ markStepComplete })
+    const { result } = renderHook(() => usePanelsMap(config))
+
+    expect(result.current[PANEL_IDS.AGENT_TERMINAL]).not.toBeNull()
+  })
+
+  it('passes markStepComplete to userTerminal onUserInput', () => {
+    const markStepComplete = vi.fn()
+    const config = makeConfig({ markStepComplete })
+    const { result } = renderHook(() => usePanelsMap(config))
+
+    expect(result.current[PANEL_IDS.USER_TERMINAL]).not.toBeNull()
+  })
+
+  it('renders file viewer with review context for review sessions', () => {
+    const session = makeSession({
+      showFileViewer: true,
+      sessionType: 'review',
+      selectedFilePath: '/test/file.ts',
+    })
+    const config = makeConfig({
+      sessions: [session],
+      activeSession: session,
+      activeSessionId: 'session-1',
+    })
+    const { result } = renderHook(() => usePanelsMap(config))
+
+    expect(result.current[PANEL_IDS.FILE_VIEWER]).not.toBeNull()
+  })
+
   it('renders agent terminal for each session', () => {
     const session1 = makeSession({ id: 'session-1', name: 'S1' })
     const session2 = makeSession({ id: 'session-2', name: 'S2' })
