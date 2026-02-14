@@ -39,7 +39,7 @@ export function getProfileInitScriptsDir(profileId: string): string {
 
 // Default agents
 export const DEFAULT_AGENTS = [
-  { id: 'claude', name: 'Claude Code', command: 'claude -c', color: '#D97757' },
+  { id: 'claude', name: 'Claude Code', command: 'claude', color: '#D97757' },
   { id: 'codex', name: 'Codex', command: 'codex', color: '#10A37F' },
   { id: 'gemini', name: 'Gemini CLI', command: 'gemini', color: '#4285F4' },
 ]

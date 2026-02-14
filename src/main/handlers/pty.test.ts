@@ -96,7 +96,7 @@ describe('pty handlers', () => {
       const result = await handlers['pty:create'](mockEvent, {
         id: 'test-1',
         cwd: '/tmp',
-        command: 'claude -c',
+        command: 'claude',
       })
 
       expect(result).toEqual({ id: 'test-1' })
@@ -144,7 +144,7 @@ describe('pty handlers', () => {
       await handlers['pty:create'](mockEvent, {
         id: 'test-ss',
         cwd: '/tmp',
-        command: 'claude -c',
+        command: 'claude',
         sessionId: '1',
       })
 
@@ -168,7 +168,7 @@ describe('pty handlers', () => {
       await handlers['pty:create'](mockEvent, {
         id: 'test-ss-idle',
         cwd: '/tmp',
-        command: 'claude -c',
+        command: 'claude',
         sessionId: '2',
       })
 
@@ -192,7 +192,7 @@ describe('pty handlers', () => {
       await handlers['pty:create'](mockEvent, {
         id: 'test-custom',
         cwd: '/tmp',
-        command: 'claude -c',
+        command: 'claude',
       })
 
       vi.advanceTimersByTime(100)
@@ -236,13 +236,13 @@ describe('pty handlers', () => {
       await handlers['pty:create'](mockEvent, {
         id: 'cmd-1',
         cwd: '/tmp',
-        command: 'claude -c',
+        command: 'claude',
       })
 
       // On Unix, command is passed as shell args: ['-l', '-i', '-c', command]
       expect(mockPtySpawn).toHaveBeenCalledWith(
         '/bin/zsh',
-        ['-l', '-i', '-c', 'claude -c'],
+        ['-l', '-i', '-c', 'claude'],
         expect.any(Object),
       )
     })
