@@ -131,6 +131,58 @@ describe('ImageViewerComponent', () => {
     })
   })
 
+  it('handles mouse drag when zoomed in', async () => {
+    vi.mocked(window.fs.readFileBase64).mockResolvedValue('aGVsbG8=')
+    const { container } = render(<ImageViewerComponent filePath="/test/image.png" content="" />)
+    await waitFor(() => {
+      expect(screen.getByText('100%')).toBeTruthy()
+    })
+    // Zoom in to enable panning
+    fireEvent.click(screen.getByTitle('Zoom in'))
+    fireEvent.click(screen.getByTitle('Zoom in'))
+
+    const imageContainer = container.querySelector('.flex-1.overflow-hidden')!
+    fireEvent.mouseDown(imageContainer, { clientX: 100, clientY: 100 })
+    fireEvent.mouseMove(imageContainer, { clientX: 150, clientY: 150 })
+    fireEvent.mouseUp(imageContainer)
+    // Should not throw
+  })
+
+  it('handles mouseLeave to stop dragging', async () => {
+    vi.mocked(window.fs.readFileBase64).mockResolvedValue('aGVsbG8=')
+    const { container } = render(<ImageViewerComponent filePath="/test/image.png" content="" />)
+    await waitFor(() => {
+      expect(screen.getByText('100%')).toBeTruthy()
+    })
+    fireEvent.click(screen.getByTitle('Zoom in'))
+
+    const imageContainer = container.querySelector('.flex-1.overflow-hidden')!
+    fireEvent.mouseDown(imageContainer, { clientX: 100, clientY: 100 })
+    fireEvent.mouseLeave(imageContainer)
+    // Should not throw
+  })
+
+  it('handles Ctrl+wheel zoom', async () => {
+    vi.mocked(window.fs.readFileBase64).mockResolvedValue('aGVsbG8=')
+    const { container } = render(<ImageViewerComponent filePath="/test/image.png" content="" />)
+    await waitFor(() => {
+      expect(screen.getByText('100%')).toBeTruthy()
+    })
+
+    const imageContainer = container.querySelector('.flex-1.overflow-hidden')!
+    // Zoom in with Ctrl+wheel up
+    fireEvent.wheel(imageContainer, { deltaY: -100, ctrlKey: true })
+    expect(screen.queryByText('100%')).toBeNull() // Scale changed from 100%
+  })
+
+  it('handles non-Error thrown during loading', async () => {
+    vi.mocked(window.fs.readFileBase64).mockRejectedValue('string error')
+    render(<ImageViewerComponent filePath="/test/missing.png" content="" />)
+    await waitFor(() => {
+      expect(screen.getByText('Failed to load image')).toBeTruthy()
+    })
+  })
+
   it('uses correct MIME type for svg', async () => {
     vi.mocked(window.fs.readFileBase64).mockResolvedValue('abc=')
     render(<ImageViewerComponent filePath="/test/icon.svg" content="" />)

@@ -135,6 +135,53 @@ describe('MonacoDiffViewer', () => {
     )
   })
 
+  it('calls scroll to line on mount when scrollToLine is provided', () => {
+    render(
+      <MonacoDiffViewer
+        filePath="/test/file.ts"
+        originalContent=""
+        modifiedContent=""
+        scrollToLine={42}
+      />
+    )
+    // Get the onMount handler
+    const onMountHandler = mockDiffEditor.mock.calls[0][0].onMount
+    expect(onMountHandler).toBeDefined()
+
+    const mockModifiedEditor = {
+      revealLineInCenter: vi.fn(),
+      setPosition: vi.fn(),
+    }
+    const mockEditorInstance = {
+      getModifiedEditor: vi.fn().mockReturnValue(mockModifiedEditor),
+    }
+    onMountHandler(mockEditorInstance)
+
+    expect(mockModifiedEditor.revealLineInCenter).toHaveBeenCalledWith(42)
+    expect(mockModifiedEditor.setPosition).toHaveBeenCalledWith({ lineNumber: 42, column: 1 })
+  })
+
+  it('does not scroll on mount when scrollToLine is not provided', () => {
+    render(
+      <MonacoDiffViewer
+        filePath="/test/file.ts"
+        originalContent=""
+        modifiedContent=""
+      />
+    )
+    const onMountHandler = mockDiffEditor.mock.calls[0][0].onMount
+    const mockModifiedEditor = {
+      revealLineInCenter: vi.fn(),
+      setPosition: vi.fn(),
+    }
+    const mockEditorInstance = {
+      getModifiedEditor: vi.fn().mockReturnValue(mockModifiedEditor),
+    }
+    onMountHandler(mockEditorInstance)
+
+    expect(mockModifiedEditor.revealLineInCenter).not.toHaveBeenCalled()
+  })
+
   it('defaults sideBySide to true', () => {
     render(
       <MonacoDiffViewer

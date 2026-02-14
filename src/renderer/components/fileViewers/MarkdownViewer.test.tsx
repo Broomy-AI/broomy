@@ -84,4 +84,49 @@ describe('MarkdownViewerComponent', () => {
     const code = screen.getByText('npm install')
     expect(code.tagName).toBe('CODE')
   })
+
+  it('renders h4 heading', () => {
+    render(<MarkdownViewerComponent filePath="test.md" content="#### Fourth Level" />)
+    const h4 = screen.getByText('Fourth Level')
+    expect(h4.tagName).toBe('H4')
+  })
+
+  it('renders fenced code blocks', () => {
+    render(<MarkdownViewerComponent filePath="test.md" content={'```javascript\nconst x = 1\n```'} />)
+    const code = screen.getByText('const x = 1')
+    expect(code.tagName).toBe('CODE')
+    expect(code.closest('pre')).toBeTruthy()
+  })
+
+  it('renders ordered lists', () => {
+    const { container } = render(<MarkdownViewerComponent filePath="test.md" content={"1. First item\n2. Second item\n3. Third item"} />)
+    const ol = container.querySelector('ol')
+    expect(ol).toBeTruthy()
+    expect(screen.getByText('First item')).toBeTruthy()
+  })
+
+  it('renders horizontal rules', () => {
+    const { container } = render(<MarkdownViewerComponent filePath="test.md" content={"Above paragraph\n\n---\n\nBelow paragraph"} />)
+    const hr = container.querySelector('hr')
+    expect(hr).toBeTruthy()
+  })
+
+  it('renders images', () => {
+    render(<MarkdownViewerComponent filePath="test.md" content="![Alt text](https://example.com/img.png)" />)
+    const img = screen.getByAltText('Alt text')
+    expect(img.tagName).toBe('IMG')
+    expect(img.getAttribute('src')).toBe('https://example.com/img.png')
+  })
+
+  it('renders tables', () => {
+    const tableMarkdown = '| Header 1 | Header 2 |\n|----------|----------|\n| Cell 1 | Cell 2 |'
+    const { container } = render(<MarkdownViewerComponent filePath="test.md" content={tableMarkdown} />)
+    expect(container.querySelector('table')).toBeTruthy()
+    expect(container.querySelector('thead')).toBeTruthy()
+    expect(container.querySelector('tbody')).toBeTruthy()
+    expect(container.querySelector('th')).toBeTruthy()
+    expect(container.querySelector('td')).toBeTruthy()
+    expect(screen.getByText('Header 1')).toBeTruthy()
+    expect(screen.getByText('Cell 1')).toBeTruthy()
+  })
 })

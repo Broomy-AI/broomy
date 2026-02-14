@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, cleanup } from '@testing-library/react'
+import { render, screen, cleanup } from '@testing-library/react'
 import '../../../test/react-setup'
 
 // Mock Monaco editor and workers to avoid loading real Monaco
@@ -151,6 +151,64 @@ describe('MonacoViewerComponent', () => {
       <MonacoViewerComponent filePath="/test/file.ts" content="" />
     )
     expect(container.querySelector('input[placeholder="Type your comment..."]')).toBeNull()
+  })
+
+  it('calls onDirtyChange via onChange handler', () => {
+    const onDirtyChange = vi.fn()
+    render(
+      <MonacoViewerComponent filePath="/test/file.ts" content="original" onDirtyChange={onDirtyChange} />
+    )
+    // Get the onChange handler passed to the mocked Editor
+    const onChangeCall = mockEditor.mock.calls[0][0]
+    expect(onChangeCall.onChange).toBeDefined()
+    // Simulate editor change with different content
+    onChangeCall.onChange('modified')
+    expect(onDirtyChange).toHaveBeenCalledWith(true, 'modified')
+    // Simulate editor change back to original
+    onChangeCall.onChange('original')
+    expect(onDirtyChange).toHaveBeenCalledWith(false, 'original')
+  })
+
+  it('handles onChange with undefined value', () => {
+    const onDirtyChange = vi.fn()
+    render(
+      <MonacoViewerComponent filePath="/test/file.ts" content="original" onDirtyChange={onDirtyChange} />
+    )
+    const onChangeCall = mockEditor.mock.calls[0][0]
+    onChangeCall.onChange(undefined)
+    expect(onDirtyChange).toHaveBeenCalledWith(true, '')
+  })
+
+  it('renders comment input when reviewContext and commentLine are set', async () => {
+    const { useMonacoComments } = await import('../../hooks/useMonacoComments')
+    vi.mocked(useMonacoComments).mockReturnValue({
+      commentLine: 5,
+      setCommentLine: vi.fn(),
+      commentText: 'test comment',
+      setCommentText: vi.fn(),
+      existingComments: [],
+      handleAddComment: vi.fn(),
+    })
+
+    const { container } = render(
+      <MonacoViewerComponent
+        filePath="/test/file.ts"
+        content=""
+        reviewContext={{ sessionDirectory: '/test', commentsFilePath: '/test/.broomy/comments.json' }}
+      />
+    )
+    expect(container.querySelector('input[placeholder="Type your comment..."]')).toBeTruthy()
+    expect(screen.getByText('Comment on line 5:')).toBeTruthy()
+
+    // Reset the mock
+    vi.mocked(useMonacoComments).mockReturnValue({
+      commentLine: null,
+      setCommentLine: vi.fn(),
+      commentText: '',
+      setCommentText: vi.fn(),
+      existingComments: [],
+      handleAddComment: vi.fn(),
+    })
   })
 
   it('enables glyphMargin when reviewContext is provided', () => {
