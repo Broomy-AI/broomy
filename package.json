@@ -35,7 +35,7 @@
     "release": "bash scripts/release.sh",
     "release:all": "bash scripts/release-all.sh",
     "stats": "node scripts/download-stats.cjs",
-    "postinstall": "electron-builder install-app-deps && node scripts/postinstall.cjs"
+    "postinstall": "node scripts/postinstall.cjs"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
