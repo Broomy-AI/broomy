@@ -38,12 +38,12 @@ describe('NewSessionDialog', () => {
     expect(findButton(container, { textIncludes: 'lone' })).toBeTruthy()
   })
 
-  it('calls onCancel when backdrop is clicked', () => {
+  it('does not call onCancel when backdrop is clicked', () => {
     const onCancel = vi.fn()
     const { container } = render(<NewSessionDialog onComplete={vi.fn()} onCancel={onCancel} />)
     const backdrop = container.querySelector('.fixed.inset-0')!
     fireEvent.click(backdrop)
-    expect(onCancel).toHaveBeenCalled()
+    expect(onCancel).not.toHaveBeenCalled()
   })
 
   it('does not call onCancel when dialog content is clicked', () => {

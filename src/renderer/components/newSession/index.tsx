@@ -27,7 +27,7 @@ export function NewSessionDialog({ onComplete, onCancel }: NewSessionDialogProps
   }, [view.type])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onCancel}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div
         className="bg-bg-secondary rounded-lg shadow-xl border border-border w-full max-w-lg mx-4"
         onClick={(e) => e.stopPropagation()}
