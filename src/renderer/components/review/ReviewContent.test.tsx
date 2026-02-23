@@ -9,6 +9,14 @@ afterEach(() => {
   cleanup()
 })
 
+const defaultGitHubProps = {
+  prDescription: null,
+  prGitHubComments: [],
+  prCommentsLoading: false,
+  prCommentsHasMore: false,
+  onLoadOlderComments: vi.fn(),
+}
+
 function makeReviewData(overrides: Partial<ReviewData> = {}): ReviewData {
   return {
     version: 1,
@@ -32,6 +40,7 @@ describe('ReviewContent', () => {
         directory="/test"
         onClickLocation={vi.fn()}
         onDeleteComment={vi.fn()}
+        {...defaultGitHubProps}
       />
     )
     expect(screen.getByText('Overview')).toBeTruthy()
@@ -53,6 +62,7 @@ describe('ReviewContent', () => {
         directory="/test"
         onClickLocation={vi.fn()}
         onDeleteComment={vi.fn()}
+        {...defaultGitHubProps}
       />
     )
     expect(screen.getByText('Change Patterns')).toBeTruthy()
@@ -77,6 +87,7 @@ describe('ReviewContent', () => {
         directory="/test"
         onClickLocation={vi.fn()}
         onDeleteComment={vi.fn()}
+        {...defaultGitHubProps}
       />
     )
     expect(screen.getByText('Potential Issues')).toBeTruthy()
@@ -101,6 +112,7 @@ describe('ReviewContent', () => {
         directory="/test"
         onClickLocation={vi.fn()}
         onDeleteComment={vi.fn()}
+        {...defaultGitHubProps}
       />
     )
     expect(screen.getByText('Design Decisions')).toBeTruthy()
@@ -125,6 +137,7 @@ describe('ReviewContent', () => {
         directory="/test"
         onClickLocation={onClickLocation}
         onDeleteComment={vi.fn()}
+        {...defaultGitHubProps}
       />
     )
     // Open the section first
@@ -148,6 +161,7 @@ describe('ReviewContent', () => {
         directory="/test"
         onClickLocation={vi.fn()}
         onDeleteComment={vi.fn()}
+        {...defaultGitHubProps}
       />
     )
     expect(screen.getByText('Pending Comments')).toBeTruthy()
@@ -166,6 +180,7 @@ describe('ReviewContent', () => {
         directory="/test"
         onClickLocation={vi.fn()}
         onDeleteComment={vi.fn()}
+        {...defaultGitHubProps}
       />
     )
     // Open the section
@@ -187,6 +202,7 @@ describe('ReviewContent', () => {
         directory="/test"
         onClickLocation={vi.fn()}
         onDeleteComment={onDeleteComment}
+        {...defaultGitHubProps}
       />
     )
     fireEvent.click(screen.getByText('Pending Comments'))
@@ -216,6 +232,7 @@ describe('ReviewContent', () => {
         directory="/test"
         onClickLocation={vi.fn()}
         onDeleteComment={vi.fn()}
+        {...defaultGitHubProps}
       />
     )
     expect(screen.getByText('Changes Since Last Review')).toBeTruthy()
@@ -237,6 +254,7 @@ describe('ReviewContent', () => {
         directory="/test"
         onClickLocation={vi.fn()}
         onDeleteComment={vi.fn()}
+        {...defaultGitHubProps}
       />
     )
     expect(screen.getByText('Since Last Review')).toBeTruthy()
@@ -253,6 +271,7 @@ describe('ReviewContent', () => {
         directory="/test"
         onClickLocation={vi.fn()}
         onDeleteComment={vi.fn()}
+        {...defaultGitHubProps}
       />
     )
     expect(screen.queryByText('Potential Issues')).toBeNull()
@@ -268,6 +287,7 @@ describe('ReviewContent', () => {
         directory="/test"
         onClickLocation={vi.fn()}
         onDeleteComment={vi.fn()}
+        {...defaultGitHubProps}
       />
     )
     expect(screen.queryByText('Design Decisions')).toBeNull()

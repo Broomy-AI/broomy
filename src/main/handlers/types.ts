@@ -42,6 +42,7 @@ export const DEFAULT_AGENTS = [
   { id: 'claude', name: 'Claude Code', command: 'claude', color: '#D97757' },
   { id: 'codex', name: 'Codex', command: 'codex', color: '#10A37F' },
   { id: 'gemini', name: 'Gemini CLI', command: 'gemini', color: '#4285F4' },
+  { id: 'copilot', name: 'GitHub Copilot', command: 'copilot', color: '#6E40C9' },
 ]
 
 // Default profiles
@@ -73,8 +74,8 @@ export function getE2EDemoSessions(isScreenshotMode: boolean) {
     { id: '7', name: 'docs-site', directory: normalizePath(join(tmpdir(), 'broomy-e2e-docs-site')), agentId: null },
     { id: '8', name: 'data-pipeline', directory: normalizePath(join(tmpdir(), 'broomy-e2e-data-pipeline')), agentId: 'claude' },
   ] : [
-    { id: '1', name: 'broomy', directory: normalizePath(join(tmpdir(), 'broomy-e2e-broomy')), agentId: 'claude' },
-    { id: '2', name: 'backend-api', directory: normalizePath(join(tmpdir(), 'broomy-e2e-backend-api')), agentId: 'aider' },
+    { id: '1', name: 'broomy', directory: normalizePath(join(tmpdir(), 'broomy-e2e-broomy')), agentId: 'claude', issueNumber: 42, issueTitle: 'Add user authentication', issueUrl: 'https://github.com/user/broomy/issues/42' },
+    { id: '2', name: 'backend-api', directory: normalizePath(join(tmpdir(), 'broomy-e2e-backend-api')), agentId: 'aider', issueNumber: 15, issueTitle: 'Fix API rate limiting', issueUrl: 'https://github.com/user/backend-api/issues/15' },
     { id: '3', name: 'docs-site', directory: normalizePath(join(tmpdir(), 'broomy-e2e-docs-site')), agentId: null },
   ]
 }

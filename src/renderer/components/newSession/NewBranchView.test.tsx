@@ -95,7 +95,7 @@ describe('NewBranchView', () => {
       <NewBranchView repo={mockRepo} issue={issue} onBack={vi.fn()} onComplete={vi.fn()} />
     )
     const input = screen.getByPlaceholderText('feature/my-feature')
-    expect((input as HTMLInputElement).value).toContain('42')
+    expect((input as HTMLInputElement).value).toContain('login-bug')
   })
 
   it('creates branch and calls onComplete on success', async () => {

@@ -24,6 +24,7 @@ const defaultProps = {
   setCommitMessage: vi.fn(),
   isCommitting: false,
   isMerging: false,
+  hasConflicts: false,
   commitError: null as string | null,
   commitErrorExpanded: false,
   setCommitErrorExpanded: vi.fn(),
@@ -31,6 +32,8 @@ const defaultProps = {
   isSyncing: false,
   onCommit: vi.fn(),
   onCommitMerge: vi.fn(),
+  onResolveConflicts: vi.fn(),
+  askedAgentToResolve: false,
   onSync: vi.fn(),
   onSyncWithMain: vi.fn(),
   onPushNewBranch: vi.fn(),
@@ -284,6 +287,44 @@ describe('SCWorkingView', () => {
       render(<SCWorkingView {...changesProps} isMerging={false} />)
       expect(screen.getByPlaceholderText('Commit message')).toBeTruthy()
       expect(screen.queryByText('Commit Merge')).toBeNull()
+    })
+
+    it('shows merge in progress banner when merging with conflicts', () => {
+      render(<SCWorkingView {...changesProps} isMerging={true} hasConflicts={true} />)
+      expect(screen.getByText('Merge in progress')).toBeTruthy()
+    })
+
+    it('shows merge conflicts resolved banner when merging without conflicts', () => {
+      render(<SCWorkingView {...changesProps} isMerging={true} hasConflicts={false} />)
+      expect(screen.getByText('Merge conflicts resolved')).toBeTruthy()
+    })
+
+    it('shows enabled Resolve Conflicts button when merging with conflicts', () => {
+      render(<SCWorkingView {...changesProps} isMerging={true} hasConflicts={true} />)
+      const btn = screen.getByText('Resolve Conflicts')
+      expect(btn).toBeTruthy()
+      expect(btn.hasAttribute('disabled')).toBe(false)
+    })
+
+    it('calls onResolveConflicts when Resolve Conflicts is clicked', () => {
+      const onResolveConflicts = vi.fn()
+      render(<SCWorkingView {...changesProps} isMerging={true} hasConflicts={true} onResolveConflicts={onResolveConflicts} />)
+      fireEvent.click(screen.getByText('Resolve Conflicts'))
+      expect(onResolveConflicts).toHaveBeenCalled()
+    })
+
+    it('disables Resolve Conflicts after agent has been asked', () => {
+      render(<SCWorkingView {...changesProps} isMerging={true} hasConflicts={true} askedAgentToResolve={true} />)
+      const btn = screen.getByText('Resolving Conflicts...')
+      expect(btn).toBeTruthy()
+      expect(btn.hasAttribute('disabled')).toBe(true)
+    })
+
+    it('shows Commit Merge button when merging without conflicts', () => {
+      render(<SCWorkingView {...changesProps} isMerging={true} hasConflicts={false} />)
+      expect(screen.getByText('Commit Merge')).toBeTruthy()
+      const btn = screen.getByText('Commit Merge')
+      expect(btn.hasAttribute('disabled')).toBe(false)
     })
   })
 

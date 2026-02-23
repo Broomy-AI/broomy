@@ -19,6 +19,7 @@ export type GitStatusResult = {
   tracking: string | null
   current: string | null
   isMerging?: boolean
+  hasConflicts?: boolean
 }
 
 export type SearchResult = {
@@ -66,6 +67,14 @@ export type GitHubPrComment = {
   createdAt: string
   url: string
   inReplyToId?: number
+}
+
+export type GitHubIssueComment = {
+  id: number
+  body: string
+  author: string
+  createdAt: string
+  url: string
 }
 
 export type GitHubPrForReview = {
@@ -119,6 +128,7 @@ export type SessionData = {
   repoId?: string
   issueNumber?: number
   issueTitle?: string
+  issueUrl?: string
   // Review session fields
   sessionType?: 'default' | 'review'
   prNumber?: number

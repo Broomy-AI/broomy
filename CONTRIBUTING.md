@@ -44,8 +44,9 @@ Unit tests are co-located with source files (`*.test.ts` next to `*.ts`). The pr
 ### 3. Run E2E Tests
 
 ```bash
-pnpm test                   # Headless (for CI)
-pnpm test:headed            # With visible window (for debugging)
+pnpm test:e2e               # Fast mode (uses Vite dev server)
+pnpm test:e2e:headed        # With visible window (for debugging)
+pnpm test:e2e:built         # Against production build (for CI)
 ```
 
 E2E tests use Playwright to launch the full Electron app with mock data. They verify complete user workflows without touching real git repos or config files.
@@ -57,7 +58,7 @@ Before considering any change done:
 ```bash
 pnpm test:unit              # All unit tests pass
 pnpm test:unit:coverage     # Coverage stays above 90%
-pnpm test                   # E2E tests pass
+pnpm test:e2e               # E2E tests pass
 ```
 
 ---
@@ -307,9 +308,9 @@ Check the DevTools console (opens automatically in dev mode). Common causes:
 ### Tests time out
 
 E2E tests wait for the app to fully render. If timeouts occur:
-- Ensure `pnpm build` completes without errors before running `pnpm test`
 - Check that no other Electron instances are running
-- Try `pnpm test:headed` to see what's happening visually
+- Try `pnpm test:e2e:headed` to see what's happening visually
+- If using `pnpm test:e2e:built`, ensure `pnpm build` completes without errors
 
 ### Hot reload not working for main process changes
 
@@ -322,5 +323,5 @@ Vite HMR only covers the renderer process. For main process or preload changes, 
 1. **Keep PRs focused.** One logical change per PR.
 2. **Write tests.** New utility functions and store actions need unit tests. UI changes should be covered by E2E tests.
 3. **Maintain coverage.** `pnpm test:unit:coverage` must stay above 90%.
-4. **Test E2E.** Run `pnpm test` before opening a PR.
+4. **Test E2E.** Run `pnpm test:e2e` before opening a PR.
 5. **Update docs.** If you change architecture, IPC APIs, or panel behavior, update the relevant documentation.

@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react'
 import TabbedTerminal from '../components/TabbedTerminal'
+import PanelErrorBoundary from '../components/PanelErrorBoundary'
 import Explorer from '../components/explorer'
 import FileViewer from '../components/FileViewer'
 import AgentSettings from '../components/AgentSettings'
@@ -90,6 +91,8 @@ function useExplorerPanel(config: PanelsMapConfig) {
         session={activeSession}
         repo={repos.find(r => r.id === activeSession.repoId)}
         issueNumber={activeSession.issueNumber}
+        issueTitle={activeSession.issueTitle}
+        issueUrl={activeSession.issueUrl}
         issuePlanExists={issuePlanExists}
       />
     )
@@ -152,13 +155,15 @@ export function usePanelsMap(config: PanelsMapConfig) {
           key={session.id}
           className={`absolute inset-0 ${session.id === activeSessionId ? '' : 'hidden'}`}
         >
-          <TabbedTerminal
-            sessionId={session.id}
-            cwd={session.directory}
-            isActive={session.id === activeSessionId}
-            agentCommand={getAgentCommand(session)}
-            agentEnv={getAgentEnv(session)}
-          />
+          <PanelErrorBoundary name={`Session ${session.branch || session.id}`}>
+            <TabbedTerminal
+              sessionId={session.id}
+              cwd={session.directory}
+              isActive={session.id === activeSessionId}
+              agentCommand={getAgentCommand(session)}
+              agentEnv={getAgentEnv(session)}
+            />
+          </PanelErrorBoundary>
         </div>
       ))}
       {sessions.length === 0 && (

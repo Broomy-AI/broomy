@@ -10,6 +10,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import Terminal from './Terminal'
 import TerminalTabBar from './TerminalTabBar'
+import PanelErrorBoundary from './PanelErrorBoundary'
 import { useSessionStore } from '../store/sessions'
 import type { TerminalTab } from '../store/sessions'
 
@@ -229,14 +230,16 @@ export default function TabbedTerminal({ sessionId, cwd, isActive, agentCommand,
         <div
           className={`absolute inset-0 ${activeTabId === AGENT_TAB_ID ? '' : 'hidden'}`}
         >
-          <Terminal
-            sessionId={sessionId}
-            cwd={cwd}
-            command={agentCommand}
-            env={agentEnv}
-            isAgentTerminal={!!agentCommand}
-            isActive={isActive && activeTabId === AGENT_TAB_ID}
-          />
+          <PanelErrorBoundary name="Agent Terminal">
+            <Terminal
+              sessionId={sessionId}
+              cwd={cwd}
+              command={agentCommand}
+              env={agentEnv}
+              isAgentTerminal={!!agentCommand}
+              isActive={isActive && activeTabId === AGENT_TAB_ID}
+            />
+          </PanelErrorBoundary>
         </div>
 
         {/* User terminals */}
@@ -245,11 +248,13 @@ export default function TabbedTerminal({ sessionId, cwd, isActive, agentCommand,
             key={tab.id}
             className={`absolute inset-0 ${tab.id === activeTabId ? '' : 'hidden'}`}
           >
-            <Terminal
-              sessionId={`user-${sessionId}-${tab.id}`}
-              cwd={cwd}
-              isActive={isActive && tab.id === activeTabId}
-            />
+            <PanelErrorBoundary name={`Terminal ${tab.name}`}>
+              <Terminal
+                sessionId={`user-${sessionId}-${tab.id}`}
+                cwd={cwd}
+                isActive={isActive && tab.id === activeTabId}
+              />
+            </PanelErrorBoundary>
           </div>
         ))}
       </div>

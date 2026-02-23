@@ -15,7 +15,7 @@ import type { GitFileStatus, GitStatusResult } from '../../preload/index'
 export function normalizeGitStatus(status: unknown): GitStatusResult {
   // New format: object with files array
   if (status && typeof status === 'object' && !Array.isArray(status) && 'files' in status) {
-    const s = status as { files?: Partial<GitFileStatus>[]; ahead?: number; behind?: number; tracking?: string | null; current?: string | null }
+    const s = status as { files?: Partial<GitFileStatus>[]; ahead?: number; behind?: number; tracking?: string | null; current?: string | null; isMerging?: boolean; hasConflicts?: boolean }
     return {
       files: (s.files ?? []).map(f => ({
         path: f.path ?? '',
@@ -28,6 +28,8 @@ export function normalizeGitStatus(status: unknown): GitStatusResult {
       behind: s.behind ?? 0,
       tracking: s.tracking ?? null,
       current: s.current ?? null,
+      isMerging: s.isMerging ?? false,
+      hasConflicts: s.hasConflicts ?? false,
     }
   }
   // Old format: flat array of {path, status}
@@ -44,7 +46,9 @@ export function normalizeGitStatus(status: unknown): GitStatusResult {
       behind: 0,
       tracking: null,
       current: null,
+      isMerging: false,
+      hasConflicts: false,
     }
   }
-  return { files: [], ahead: 0, behind: 0, tracking: null, current: null }
+  return { files: [], ahead: 0, behind: 0, tracking: null, current: null, isMerging: false, hasConflicts: false }
 }

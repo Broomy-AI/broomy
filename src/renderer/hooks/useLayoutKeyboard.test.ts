@@ -666,6 +666,54 @@ describe('useLayoutKeyboard', () => {
     })
   })
 
+  describe('select-all scoping', () => {
+    beforeEach(() => {
+      // jsdom doesn't define execCommand — stub it so we can spy on it
+      if (!document.execCommand) {
+        document.execCommand = vi.fn().mockReturnValue(true)
+      }
+    })
+
+    it('app:select-all calls execCommand selectAll for non-terminal focus', () => {
+      renderHook(() => useLayoutKeyboard(defaultProps))
+
+      const input = document.createElement('input')
+      document.body.appendChild(input)
+      input.focus()
+
+      const execSpy = vi.spyOn(document, 'execCommand').mockReturnValue(true)
+
+      act(() => {
+        window.dispatchEvent(new CustomEvent('app:select-all'))
+      })
+
+      expect(execSpy).toHaveBeenCalledWith('selectAll')
+      execSpy.mockRestore()
+      document.body.removeChild(input)
+    })
+
+    it('app:select-all skips execCommand when focus is inside .xterm', () => {
+      renderHook(() => useLayoutKeyboard(defaultProps))
+
+      const xtermDiv = document.createElement('div')
+      xtermDiv.classList.add('xterm')
+      const textarea = document.createElement('textarea')
+      xtermDiv.appendChild(textarea)
+      document.body.appendChild(xtermDiv)
+      textarea.focus()
+
+      const execSpy = vi.spyOn(document, 'execCommand').mockReturnValue(true)
+
+      act(() => {
+        window.dispatchEvent(new CustomEvent('app:select-all'))
+      })
+
+      expect(execSpy).not.toHaveBeenCalled()
+      execSpy.mockRestore()
+      document.body.removeChild(xtermDiv)
+    })
+  })
+
   describe('cleanup', () => {
     it('removes event listeners on unmount', () => {
       const addSpy = vi.spyOn(window, 'addEventListener')
@@ -687,6 +735,7 @@ describe('useLayoutKeyboard', () => {
       expect(addSpy).toHaveBeenCalledWith('app:next-terminal-tab', expect.any(Function))
       expect(addSpy).toHaveBeenCalledWith('app:prev-terminal-tab', expect.any(Function))
       expect(addSpy).toHaveBeenCalledWith('app:explorer-tab', expect.any(Function))
+      expect(addSpy).toHaveBeenCalledWith('app:select-all', expect.any(Function))
 
       unmount()
 
@@ -704,6 +753,7 @@ describe('useLayoutKeyboard', () => {
       expect(removeSpy).toHaveBeenCalledWith('app:next-terminal-tab', expect.any(Function))
       expect(removeSpy).toHaveBeenCalledWith('app:prev-terminal-tab', expect.any(Function))
       expect(removeSpy).toHaveBeenCalledWith('app:explorer-tab', expect.any(Function))
+      expect(removeSpy).toHaveBeenCalledWith('app:select-all', expect.any(Function))
 
       addSpy.mockRestore()
       removeSpy.mockRestore()

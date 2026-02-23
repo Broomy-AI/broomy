@@ -3,7 +3,57 @@ import type { CodeLocation, RequestedChange, ReviewHistory } from '../../types/r
 import type { Session } from '../../store/sessions'
 import type { ManagedRepo } from '../../../preload/index'
 import { buildReviewPrompt, type PrComment } from '../../utils/reviewPromptBuilder'
+import { focusAgentTerminal } from '../../utils/focusHelpers'
 import type { ReviewDataState } from './useReviewData'
+
+async function fetchReviewContext(
+  session: Session,
+  historyFilePath: string,
+): Promise<{ previousRequestedChanges: RequestedChange[]; previousHeadCommit?: string; prComments?: PrComment[]; prDescription?: string }> {
+  let previousRequestedChanges: RequestedChange[] = []
+  let previousHeadCommit: string | undefined
+
+  try {
+    const historyExists = await window.fs.exists(historyFilePath)
+    if (historyExists) {
+      const content = await window.fs.readFile(historyFilePath)
+      const history = JSON.parse(content) as ReviewHistory
+      if (history.reviews.length > 0) {
+        previousRequestedChanges = history.reviews[0].requestedChanges
+        previousHeadCommit = history.reviews[0].headCommit
+      }
+    }
+  } catch {
+    // Non-fatal
+  }
+
+  let prComments: PrComment[] | undefined
+  if (session.prNumber && previousHeadCommit) {
+    try {
+      const ghComments = await window.gh.prComments(session.directory, session.prNumber)
+      prComments = ghComments.map(c => ({
+        body: c.body,
+        path: c.path || undefined,
+        line: c.line ?? undefined,
+        author: c.author,
+      }))
+    } catch {
+      // Non-fatal
+    }
+  }
+
+  let prDescription: string | undefined
+  if (session.prNumber) {
+    try {
+      const body = await window.gh.prDescription(session.directory, session.prNumber)
+      if (body) prDescription = body
+    } catch {
+      // Non-fatal
+    }
+  }
+
+  return { previousRequestedChanges, previousHeadCommit, prComments, prDescription }
+}
 
 export interface ReviewActions {
   handleGenerateReview: () => Promise<void>
@@ -31,6 +81,7 @@ export function useReviewActions(
     promptFilePath,
     setFetching,
     setWaitingForAgent,
+    setFetchingStatus,
     setPushing,
     setPushResult,
     setError,
@@ -101,52 +152,25 @@ export function useReviewActions(
       // Create .broomy directory
       await window.fs.mkdir(broomyDir)
 
-      // Get previous review history for comparison
-      let previousRequestedChanges: RequestedChange[] = []
-      let previousHeadCommit: string | undefined
-      try {
-        const historyExists = await window.fs.exists(historyFilePath)
-        if (historyExists) {
-          const content = await window.fs.readFile(historyFilePath)
-          const history = JSON.parse(content) as ReviewHistory
-          if (history.reviews.length > 0) {
-            previousRequestedChanges = history.reviews[0].requestedChanges
-            previousHeadCommit = history.reviews[0].headCommit
-          }
-        }
-      } catch {
-        // Non-fatal
-      }
-
-      // Fetch PR comments from GitHub for re-review context
-      let prComments: PrComment[] | undefined
-      if (session.prNumber && previousHeadCommit) {
-        try {
-          const ghComments = await window.gh.prComments(session.directory, session.prNumber)
-          prComments = ghComments.map(c => ({
-            body: c.body,
-            path: c.path || undefined,
-            line: c.line ?? undefined,
-            author: c.author,
-          }))
-        } catch {
-          // Non-fatal
-        }
-      }
+      // Fetch review context (history, PR comments, PR description)
+      const { previousRequestedChanges, ...promptOptions } = await fetchReviewContext(session, historyFilePath)
 
       // Build the review prompt
       const reviewInstructions = repo?.reviewInstructions || ''
-      const prompt = buildReviewPrompt(session, reviewInstructions, previousRequestedChanges, previousHeadCommit, prComments)
+      const prompt = buildReviewPrompt(session, reviewInstructions, previousRequestedChanges, promptOptions)
 
       // Write the prompt file
       await window.fs.writeFile(promptFilePath, prompt)
 
       // Send command to agent terminal (user must press enter to confirm)
       await window.pty.write(session.agentPtyId!, 'Please read and follow the instructions in .broomy/review-prompt.md')
+      setFetchingStatus('pasted')
+      focusAgentTerminal()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       setFetching(false)
       setWaitingForAgent(false)
+      setFetchingStatus(null)
     }
   }
 

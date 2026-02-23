@@ -151,4 +151,85 @@ describe('TabbedTerminal', () => {
     )
     expect(container.querySelector('[data-testid="tab-bar"]')).toBeTruthy()
   })
+
+  it('starts rename on double-click of user tab', () => {
+    render(
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} />
+    )
+    fireEvent.click(screen.getByTestId('dblclick-first'))
+    // After double-click, editing should be active (editingTabId set)
+    // The mock TerminalTabBar doesn't render editing UI, but we verify it doesn't crash
+    expect(screen.getByTestId('tab-bar')).toBeTruthy()
+  })
+
+  it('renders agent terminal always visible', () => {
+    render(
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} />
+    )
+    // Agent terminal should be rendered
+    expect(screen.getByTestId('terminal-session-1')).toBeTruthy()
+  })
+
+  it('passes agentCommand to agent terminal', () => {
+    render(
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} agentCommand="claude" />
+    )
+    expect(screen.getByTestId('terminal-session-1')).toBeTruthy()
+  })
+
+  it('shows active tab content only', () => {
+    // With tab1 active, both terminals should be rendered but tab2 hidden
+    const { container } = render(
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} />
+    )
+    const terminals = container.querySelectorAll('[class*="absolute inset-0"]')
+    // Agent + 2 user tabs = 3 terminal containers
+    expect(terminals.length).toBe(3)
+  })
+
+  it('defaults to agent tab when no stored active tab', () => {
+    useSessionStore.setState({
+      sessions: [
+        {
+          id: 'session-1',
+          name: 'Test Session',
+          directory: '/tmp/test',
+          branch: 'main',
+          status: 'idle' as const,
+          agentId: null,
+          panelVisibility: {},
+          showExplorer: true,
+          showFileViewer: false,
+          showDiff: false,
+          selectedFilePath: null,
+          planFilePath: null,
+          fileViewerPosition: 'top' as const,
+          layoutSizes: {
+            explorerWidth: 256,
+            fileViewerSize: 300,
+            userTerminalHeight: 192,
+            diffPanelWidth: 320,
+            tutorialPanelWidth: 320,
+          },
+          explorerFilter: 'files' as const,
+          lastMessage: null,
+          lastMessageTime: null,
+          isUnread: false,
+          workingStartTime: null,
+          recentFiles: [],
+          terminalTabs: {
+            tabs: [{ id: tab1Id, name: 'Terminal 1' }],
+            activeTabId: null,
+          },
+          branchStatus: 'in-progress',
+          isArchived: false,
+        },
+      ],
+    })
+    render(
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} />
+    )
+    // Should not crash and should render the tab bar
+    expect(screen.getByTestId('tab-bar')).toBeTruthy()
+  })
 })

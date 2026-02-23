@@ -17,6 +17,7 @@ export function statusFromChar(c: string): string {
     case 'D': return 'deleted'
     case 'R': return 'renamed'
     case '?': return 'untracked'
+    case 'U': return 'conflict'
     default: return 'modified'
   }
 }

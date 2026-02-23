@@ -182,6 +182,174 @@ describe('SessionList', () => {
     expect(screen.getByText('Review')).toBeTruthy()
   })
 
+  describe('keyboard navigation', () => {
+    it('selects session on Enter key', () => {
+      const props = makeProps({ sessions: [makeSession({ id: 's1', branch: 'b1' })] })
+      const { container } = render(<SessionList {...props} />)
+      const card = container.querySelector('[tabindex="0"]')!
+      fireEvent.keyDown(card, { key: 'Enter' })
+      expect(props.onSelectSession).toHaveBeenCalledWith('s1')
+    })
+
+    it('opens delete dialog on Delete key', () => {
+      const sessions = [makeSession({ id: 's1', branch: 'b1' })]
+      render(<SessionList {...makeProps({ sessions })} />)
+      const card = screen.getByText('b1').closest('[tabindex="0"]')!
+      fireEvent.keyDown(card, { key: 'Delete' })
+      expect(screen.getByText('Delete Session')).toBeTruthy()
+    })
+
+    it('opens delete dialog on Backspace key', () => {
+      const sessions = [makeSession({ id: 's1', branch: 'b1' })]
+      render(<SessionList {...makeProps({ sessions })} />)
+      const card = screen.getByText('b1').closest('[tabindex="0"]')!
+      fireEvent.keyDown(card, { key: 'Backspace' })
+      expect(screen.getByText('Delete Session')).toBeTruthy()
+    })
+  })
+
+  describe('delete dialog', () => {
+    it('shows delete confirmation dialog', () => {
+      const sessions = [makeSession({ id: 's1', branch: 'del-branch' })]
+      const { container } = render(<SessionList {...makeProps({ sessions })} />)
+      // Click delete button (the X button)
+      const deleteBtn = container.querySelector('[title="Delete session"]')!
+      fireEvent.click(deleteBtn)
+      expect(screen.getByText('Delete Session')).toBeTruthy()
+    })
+
+    it('calls onDeleteSession on confirm', () => {
+      const sessions = [makeSession({ id: 's1', branch: 'b1' })]
+      const props = makeProps({ sessions })
+      const { container } = render(<SessionList {...props} />)
+      const deleteBtn = container.querySelector('[title="Delete session"]')!
+      fireEvent.click(deleteBtn)
+      fireEvent.click(screen.getByText('Delete'))
+      expect(props.onDeleteSession).toHaveBeenCalledWith('s1', false)
+    })
+
+    it('closes delete dialog on cancel', () => {
+      const sessions = [makeSession({ id: 's1', branch: 'b1' })]
+      const { container } = render(<SessionList {...makeProps({ sessions })} />)
+      const deleteBtn = container.querySelector('[title="Delete session"]')!
+      fireEvent.click(deleteBtn)
+      expect(screen.getByText('Delete Session')).toBeTruthy()
+      fireEvent.click(screen.getByText('Cancel'))
+      expect(screen.queryByText('Delete Session')).toBeNull()
+    })
+
+    it('shows worktree checkbox for managed worktree sessions', () => {
+      const repos = [{ id: 'r1', name: 'repo', remoteUrl: '', rootDir: '/repos/repo', defaultBranch: 'main' }]
+      const sessions = [makeSession({ id: 's1', branch: 'feature/x', repoId: 'r1' })]
+      const { container } = render(<SessionList {...makeProps({ sessions, repos })} />)
+      const deleteBtn = container.querySelector('[title="Delete session"]')!
+      fireEvent.click(deleteBtn)
+      expect(screen.getByText('Delete worktree and folder')).toBeTruthy()
+    })
+
+    it('deletes with worktree when checkbox is checked for managed worktree', () => {
+      const repos = [{ id: 'r1', name: 'repo', remoteUrl: '', rootDir: '/repos/repo', defaultBranch: 'main' }]
+      const sessions = [makeSession({ id: 's1', branch: 'feature/x', repoId: 'r1' })]
+      const props = makeProps({ sessions, repos })
+      const { container } = render(<SessionList {...props} />)
+      const deleteBtn = container.querySelector('[title="Delete session"]')!
+      fireEvent.click(deleteBtn)
+      // Checkbox is checked by default
+      fireEvent.click(screen.getByText('Delete'))
+      expect(props.onDeleteSession).toHaveBeenCalledWith('s1', true)
+    })
+
+    it('shows warning for in-progress managed worktree', () => {
+      const repos = [{ id: 'r1', name: 'repo', remoteUrl: '', rootDir: '/repos/repo', defaultBranch: 'main' }]
+      const sessions = [makeSession({ id: 's1', branch: 'feature/x', repoId: 'r1', branchStatus: 'in-progress' })]
+      const { container } = render(<SessionList {...makeProps({ sessions, repos })} />)
+      const deleteBtn = container.querySelector('[title="Delete session"]')!
+      fireEvent.click(deleteBtn)
+      expect(screen.getByText(/work in progress/)).toBeTruthy()
+    })
+
+    it('does not show warning for merged/closed sessions', () => {
+      const repos = [{ id: 'r1', name: 'repo', remoteUrl: '', rootDir: '/repos/repo', defaultBranch: 'main' }]
+      const sessions = [makeSession({ id: 's1', branch: 'feature/x', repoId: 'r1', branchStatus: 'merged' })]
+      const { container } = render(<SessionList {...makeProps({ sessions, repos })} />)
+      const deleteBtn = container.querySelector('[title="Delete session"]')!
+      fireEvent.click(deleteBtn)
+      expect(screen.queryByText(/work in progress/)).toBeNull()
+    })
+  })
+
+  describe('archive actions', () => {
+    it('calls onArchiveSession when archive button is clicked', () => {
+      const sessions = [makeSession({ id: 's1', branch: 'b1' })]
+      const props = makeProps({ sessions })
+      const { container } = render(<SessionList {...props} />)
+      const archiveBtn = container.querySelector('[title="Archive session"]')!
+      fireEvent.click(archiveBtn)
+      expect(props.onArchiveSession).toHaveBeenCalledWith('s1')
+    })
+
+    it('calls onUnarchiveSession when unarchive button is clicked on archived session', () => {
+      const sessions = [makeSession({ id: 's1', branch: 'archived-b', isArchived: true })]
+      const props = makeProps({ sessions })
+      render(<SessionList {...props} />)
+      // Expand archived section
+      fireEvent.click(screen.getByText(/Archived \(1\)/))
+      // Click unarchive button
+      const unarchiveBtn = screen.getByTitle('Unarchive session')
+      fireEvent.click(unarchiveBtn)
+      expect(props.onUnarchiveSession).toHaveBeenCalledWith('s1')
+    })
+
+    it('unarchives and selects when clicking an archived session', () => {
+      const sessions = [makeSession({ id: 's1', branch: 'archived-b', isArchived: true })]
+      const props = makeProps({ sessions })
+      render(<SessionList {...props} />)
+      fireEvent.click(screen.getByText(/Archived \(1\)/))
+      fireEvent.click(screen.getByText('archived-b'))
+      expect(props.onUnarchiveSession).toHaveBeenCalledWith('s1')
+      expect(props.onSelectSession).toHaveBeenCalledWith('s1')
+    })
+  })
+
+  describe('refresh PR status', () => {
+    it('renders refresh button when onRefreshPrStatus is provided', () => {
+      render(<SessionList {...makeProps()} />)
+      expect(screen.getByTitle('Refresh PR status for all sessions')).toBeTruthy()
+    })
+
+    it('does not render refresh button when onRefreshPrStatus is not provided', () => {
+      render(<SessionList {...makeProps({ onRefreshPrStatus: undefined })} />)
+      expect(screen.queryByTitle('Refresh PR status for all sessions')).toBeNull()
+    })
+
+    it('calls onRefreshPrStatus when refresh button is clicked', async () => {
+      const props = makeProps()
+      render(<SessionList {...props} />)
+      fireEvent.click(screen.getByTitle('Refresh PR status for all sessions'))
+      expect(props.onRefreshPrStatus).toHaveBeenCalled()
+    })
+  })
+
+  describe('status indicators', () => {
+    it('shows working spinner', () => {
+      const sessions = [makeSession({ id: 's1', branch: 'b1', status: 'working' })]
+      const { container } = render(<SessionList {...makeProps({ sessions })} />)
+      expect(container.querySelector('.animate-spin')).toBeTruthy()
+    })
+
+    it('shows error dot', () => {
+      const sessions = [makeSession({ id: 's1', branch: 'b1', status: 'error' })]
+      const { container } = render(<SessionList {...makeProps({ sessions })} />)
+      expect(container.querySelector('.bg-status-error')).toBeTruthy()
+    })
+
+    it('shows EMPTY branch status chip', () => {
+      const sessions = [makeSession({ id: 's1', branch: 'b1', branchStatus: 'empty' })]
+      render(<SessionList {...makeProps({ sessions })} />)
+      expect(screen.getByText('EMPTY')).toBeTruthy()
+    })
+  })
+
   describe('session search', () => {
     it('renders search input', () => {
       render(<SessionList {...makeProps()} />)

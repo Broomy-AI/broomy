@@ -96,6 +96,7 @@ async function doSave(): Promise<void> {
       repoId: s.repoId,
       issueNumber: s.issueNumber,
       issueTitle: s.issueTitle,
+      issueUrl: s.issueUrl,
       // Save new panelVisibility format
       panelVisibility: s.panelVisibility,
       // Review session fields

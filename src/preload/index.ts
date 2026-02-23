@@ -54,6 +54,11 @@ import { configApi, profilesApi, agentsApi, reposApi } from './apis/config'
 import { shellApi, dialogApi, appApi, updateApi } from './apis/shell'
 import { menuApi, tsApi } from './apis/menu'
 
+// Forward menu:select-all from main process to a DOM CustomEvent
+ipcRenderer.on('menu:select-all', () => {
+  window.dispatchEvent(new CustomEvent('app:select-all'))
+})
+
 // Expose all APIs to the renderer process via context bridge
 contextBridge.exposeInMainWorld('pty', ptyApi)
 contextBridge.exposeInMainWorld('dialog', dialogApi)

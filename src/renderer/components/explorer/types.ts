@@ -43,6 +43,8 @@ export interface ExplorerProps {
   repo?: ManagedRepo
   // Issue plan
   issueNumber?: number
+  issueTitle?: string
+  issueUrl?: string
   issuePlanExists?: boolean
 }
 

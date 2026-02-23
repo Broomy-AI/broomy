@@ -4,9 +4,13 @@ Playwright end-to-end tests that launch the full Electron app with mock data and
 
 ## How It Connects
 
-Tests depend on the build output (`pnpm build` via `global-setup.ts`), the fake Claude scripts in `scripts/`, and the E2E mock data paths in `src/main/index.ts`. The main process checks `isE2ETest` to return demo sessions, mock file trees, and mock git status. Each test launches its own Electron instance, optionally specifying a custom fake Claude script via `FAKE_CLAUDE_SCRIPT`.
+Tests depend on the build output (via `global-setup.ts`), the fake Claude scripts in `scripts/`, and the E2E mock data paths in `src/main/index.ts`. The main process checks `isE2ETest` to return demo sessions, mock file trees, and mock git status. Each test launches its own Electron instance, optionally specifying a custom fake Claude script via `FAKE_CLAUDE_SCRIPT`.
 
-The `E2E_HEADLESS` environment variable controls window visibility -- set to `'false'` for local debugging, defaults to `'true'` for CI. The `pnpm test` command runs tests headlessly; `pnpm test:headed` shows the window.
+There are two E2E modes:
+- `pnpm test:e2e` — builds only main+preload and uses a Vite dev server for the renderer (fast, for local development)
+- `pnpm test:e2e:built` — does a full production build first (for CI)
+
+The `E2E_HEADLESS` environment variable controls window visibility -- set to `'false'` for local debugging, defaults to `'true'` for CI. Use `pnpm test:e2e:headed` or `pnpm test:e2e:built:headed` to show the window.
 
 ## Files
 

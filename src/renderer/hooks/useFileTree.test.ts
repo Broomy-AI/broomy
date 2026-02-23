@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { useFileTree } from './useFileTree'
+import { useFileTree, updateTreeNode, findNode, navigateTreeItem } from './useFileTree'
 import type { GitFileStatus } from '../../preload/index'
 
 describe('useFileTree', () => {
@@ -231,14 +231,12 @@ describe('useFileTree', () => {
 
   describe('updateTreeNode', () => {
     it('updates matching node', () => {
-      const { result } = renderHook(() => useFileTree(defaultParams))
-
       const nodes = [
         { name: 'file.ts', isDirectory: false, path: '/test/project/file.ts' },
         { name: 'other.ts', isDirectory: false, path: '/test/project/other.ts' },
       ]
 
-      const updated = result.current.updateTreeNode(nodes, '/test/project/file.ts', {
+      const updated = updateTreeNode(nodes, '/test/project/file.ts', {
         name: 'renamed.ts',
       })
 
@@ -247,8 +245,6 @@ describe('useFileTree', () => {
     })
 
     it('updates nested nodes', () => {
-      const { result } = renderHook(() => useFileTree(defaultParams))
-
       const nodes = [
         {
           name: 'src',
@@ -260,7 +256,7 @@ describe('useFileTree', () => {
         },
       ]
 
-      const updated = result.current.updateTreeNode(nodes, '/test/project/src/file.ts', {
+      const updated = updateTreeNode(nodes, '/test/project/src/file.ts', {
         name: 'updated.ts',
       })
 
@@ -268,32 +264,26 @@ describe('useFileTree', () => {
     })
 
     it('leaves unmatched nodes unchanged', () => {
-      const { result } = renderHook(() => useFileTree(defaultParams))
-
       const nodes = [
         { name: 'file.ts', isDirectory: false, path: '/test/project/file.ts' },
       ]
 
-      const updated = result.current.updateTreeNode(nodes, '/nonexistent', { name: 'x' })
+      const updated = updateTreeNode(nodes, '/nonexistent', { name: 'x' })
       expect(updated).toEqual(nodes)
     })
   })
 
   describe('findNode', () => {
     it('finds node at top level', () => {
-      const { result } = renderHook(() => useFileTree(defaultParams))
-
       const nodes = [
         { name: 'file.ts', isDirectory: false, path: '/test/project/file.ts' },
       ]
 
-      const found = result.current.findNode(nodes, '/test/project/file.ts')
+      const found = findNode(nodes, '/test/project/file.ts')
       expect(found).toEqual(nodes[0])
     })
 
     it('finds nested node', () => {
-      const { result } = renderHook(() => useFileTree(defaultParams))
-
       const childNode = { name: 'child.ts', isDirectory: false, path: '/test/project/src/child.ts' }
       const nodes = [
         {
@@ -304,18 +294,16 @@ describe('useFileTree', () => {
         },
       ]
 
-      const found = result.current.findNode(nodes, '/test/project/src/child.ts')
+      const found = findNode(nodes, '/test/project/src/child.ts')
       expect(found).toEqual(childNode)
     })
 
     it('returns null for nonexistent path', () => {
-      const { result } = renderHook(() => useFileTree(defaultParams))
-
       const nodes = [
         { name: 'file.ts', isDirectory: false, path: '/test/project/file.ts' },
       ]
 
-      const found = result.current.findNode(nodes, '/nonexistent')
+      const found = findNode(nodes, '/nonexistent')
       expect(found).toBeNull()
     })
   })
@@ -462,7 +450,7 @@ describe('useFileTree', () => {
   })
 
   describe('handleFileContextMenu', () => {
-    it('shows delete option in context menu', async () => {
+    it('shows rename and delete options in context menu', async () => {
       vi.mocked(window.menu.popup).mockResolvedValue(null)
 
       const { result } = renderHook(() => useFileTree(defaultParams))
@@ -473,6 +461,7 @@ describe('useFileTree', () => {
       })
 
       expect(window.menu.popup).toHaveBeenCalledWith([
+        { id: 'rename', label: 'Rename "file.ts"' },
         { id: 'delete', label: 'Delete "file.ts"' },
       ])
     })
@@ -503,6 +492,23 @@ describe('useFileTree', () => {
       })
 
       expect(window.fs.rm).not.toHaveBeenCalled()
+    })
+
+    it('sets rename input when rename is selected', async () => {
+      vi.mocked(window.menu.popup).mockResolvedValue('rename')
+
+      const { result } = renderHook(() => useFileTree(defaultParams))
+      const mockEvent = { preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as React.MouseEvent
+
+      await act(async () => {
+        await result.current.handleFileContextMenu(mockEvent, '/test/project/file.ts', 'file.ts')
+      })
+
+      expect(result.current.renameInput).toEqual({
+        filePath: '/test/project/file.ts',
+        originalName: 'file.ts',
+      })
+      expect(result.current.renameInputValue).toBe('file.ts')
     })
   })
 
@@ -586,10 +592,242 @@ describe('useFileTree', () => {
     })
   })
 
-  describe('navigateTreeItem', () => {
-    it('focuses next item on down navigation', () => {
+  describe('submitRename', () => {
+    it('calls fs.rename with correct old and new paths', async () => {
       const { result } = renderHook(() => useFileTree(defaultParams))
 
+      // Simulate rename being initiated via context menu
+      vi.mocked(window.menu.popup).mockResolvedValue('rename')
+      const mockEvent = { preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as React.MouseEvent
+
+      await act(async () => {
+        await result.current.handleFileContextMenu(mockEvent, '/test/project/file.ts', 'file.ts')
+      })
+
+      // Change the name
+      act(() => {
+        result.current.setRenameInputValue('renamed.ts')
+      })
+
+      await act(async () => {
+        await result.current.submitRename()
+      })
+
+      expect(window.fs.rename).toHaveBeenCalledWith('/test/project/file.ts', '/test/project/renamed.ts')
+      expect(result.current.renameInput).toBeNull()
+    })
+
+    it('does nothing when name is unchanged', async () => {
+      const { result } = renderHook(() => useFileTree(defaultParams))
+
+      vi.mocked(window.menu.popup).mockResolvedValue('rename')
+      const mockEvent = { preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as React.MouseEvent
+
+      await act(async () => {
+        await result.current.handleFileContextMenu(mockEvent, '/test/project/file.ts', 'file.ts')
+      })
+
+      // Don't change the value — it's already 'file.ts'
+      await act(async () => {
+        await result.current.submitRename()
+      })
+
+      expect(window.fs.rename).not.toHaveBeenCalled()
+      expect(result.current.renameInput).toBeNull()
+    })
+
+    it('does nothing with empty input', async () => {
+      const { result } = renderHook(() => useFileTree(defaultParams))
+
+      vi.mocked(window.menu.popup).mockResolvedValue('rename')
+      const mockEvent = { preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as React.MouseEvent
+
+      await act(async () => {
+        await result.current.handleFileContextMenu(mockEvent, '/test/project/file.ts', 'file.ts')
+      })
+
+      act(() => {
+        result.current.setRenameInputValue('   ')
+      })
+
+      await act(async () => {
+        await result.current.submitRename()
+      })
+
+      expect(window.fs.rename).not.toHaveBeenCalled()
+    })
+
+    it('does nothing without renameInput', async () => {
+      const { result } = renderHook(() => useFileTree(defaultParams))
+
+      await act(async () => {
+        await result.current.submitRename()
+      })
+
+      expect(window.fs.rename).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('cancelRename', () => {
+    it('clears rename state', async () => {
+      const { result } = renderHook(() => useFileTree(defaultParams))
+
+      vi.mocked(window.menu.popup).mockResolvedValue('rename')
+      const mockEvent = { preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as React.MouseEvent
+
+      await act(async () => {
+        await result.current.handleFileContextMenu(mockEvent, '/test/project/file.ts', 'file.ts')
+      })
+
+      expect(result.current.renameInput).not.toBeNull()
+
+      act(() => {
+        result.current.cancelRename()
+      })
+
+      expect(result.current.renameInput).toBeNull()
+      expect(result.current.renameInputValue).toBe('')
+    })
+  })
+
+  describe('directory context menu rename', () => {
+    it('shows rename option for non-root directories', async () => {
+      vi.mocked(window.menu.popup).mockResolvedValue(null)
+
+      const { result } = renderHook(() => useFileTree(defaultParams))
+
+      act(() => {
+        result.current.setTree([
+          { name: 'src', isDirectory: true, path: '/test/project/src' },
+        ])
+      })
+
+      const mockEvent = { preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as React.MouseEvent
+
+      await act(async () => {
+        await result.current.handleContextMenu(mockEvent, '/test/project/src')
+      })
+
+      expect(window.menu.popup).toHaveBeenCalledWith([
+        { id: 'new-file', label: 'New File' },
+        { id: 'new-folder', label: 'New Folder' },
+        { id: 'rename', label: 'Rename "src"' },
+      ])
+    })
+
+    it('does not show rename for root directory', async () => {
+      vi.mocked(window.menu.popup).mockResolvedValue(null)
+
+      const { result } = renderHook(() => useFileTree(defaultParams))
+      const mockEvent = { preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as React.MouseEvent
+
+      await act(async () => {
+        await result.current.handleContextMenu(mockEvent, '/test/project')
+      })
+
+      expect(window.menu.popup).toHaveBeenCalledWith([
+        { id: 'new-file', label: 'New File' },
+        { id: 'new-folder', label: 'New Folder' },
+      ])
+    })
+
+    it('sets rename input when rename is selected on directory', async () => {
+      vi.mocked(window.menu.popup).mockResolvedValue('rename')
+
+      const { result } = renderHook(() => useFileTree(defaultParams))
+      const mockEvent = { preventDefault: vi.fn(), stopPropagation: vi.fn() } as unknown as React.MouseEvent
+
+      await act(async () => {
+        await result.current.handleContextMenu(mockEvent, '/test/project/src')
+      })
+
+      expect(result.current.renameInput).toEqual({
+        filePath: '/test/project/src',
+        originalName: 'src',
+      })
+      expect(result.current.renameInputValue).toBe('src')
+    })
+  })
+
+  describe('drag and drop', () => {
+    it('calls fs.rename to move file to target directory', async () => {
+      const { result } = renderHook(() => useFileTree(defaultParams))
+
+      act(() => {
+        result.current.startDrag('/test/project/file.ts')
+      })
+
+      expect(result.current.draggedPath).toBe('/test/project/file.ts')
+
+      await act(async () => {
+        await result.current.handleDrop('/test/project/src')
+      })
+
+      expect(window.fs.rename).toHaveBeenCalledWith('/test/project/file.ts', '/test/project/src/file.ts')
+      expect(result.current.draggedPath).toBeNull()
+      expect(result.current.dropTargetPath).toBeNull()
+    })
+
+    it('does nothing when dropping on self', async () => {
+      const { result } = renderHook(() => useFileTree(defaultParams))
+
+      act(() => {
+        result.current.startDrag('/test/project/src')
+      })
+
+      await act(async () => {
+        await result.current.handleDrop('/test/project/src')
+      })
+
+      expect(window.fs.rename).not.toHaveBeenCalled()
+    })
+
+    it('does nothing when no drag is in progress', async () => {
+      const { result } = renderHook(() => useFileTree(defaultParams))
+
+      await act(async () => {
+        await result.current.handleDrop('/test/project/src')
+      })
+
+      expect(window.fs.rename).not.toHaveBeenCalled()
+    })
+
+    it('prevents dropping into own subdirectory', async () => {
+      const { result } = renderHook(() => useFileTree(defaultParams))
+
+      act(() => {
+        result.current.startDrag('/test/project/src')
+      })
+
+      await act(async () => {
+        await result.current.handleDrop('/test/project/src/nested')
+      })
+
+      expect(window.fs.rename).not.toHaveBeenCalled()
+    })
+
+    it('endDrag clears drag state', () => {
+      const { result } = renderHook(() => useFileTree(defaultParams))
+
+      act(() => {
+        result.current.startDrag('/test/project/file.ts')
+        result.current.setDropTarget('/test/project/src')
+      })
+
+      expect(result.current.draggedPath).toBe('/test/project/file.ts')
+      expect(result.current.dropTargetPath).toBe('/test/project/src')
+
+      act(() => {
+        result.current.endDrag()
+      })
+
+      expect(result.current.draggedPath).toBeNull()
+      expect(result.current.dropTargetPath).toBeNull()
+    })
+  })
+
+  describe('navigateTreeItem', () => {
+    it('focuses next item on down navigation', () => {
       const container = document.createElement('div')
       container.setAttribute('data-panel-id', 'explorer')
       const item1 = document.createElement('div')
@@ -601,9 +839,7 @@ describe('useFileTree', () => {
       container.appendChild(item2)
       document.body.appendChild(container)
 
-      act(() => {
-        result.current.navigateTreeItem(item1, 'down')
-      })
+      navigateTreeItem(item1, 'down')
 
       expect(item2.focus).toHaveBeenCalled()
 
@@ -611,8 +847,6 @@ describe('useFileTree', () => {
     })
 
     it('focuses previous item on up navigation', () => {
-      const { result } = renderHook(() => useFileTree(defaultParams))
-
       const container = document.createElement('div')
       container.setAttribute('data-panel-id', 'explorer')
       const item1 = document.createElement('div')
@@ -624,9 +858,7 @@ describe('useFileTree', () => {
       container.appendChild(item2)
       document.body.appendChild(container)
 
-      act(() => {
-        result.current.navigateTreeItem(item2, 'up')
-      })
+      navigateTreeItem(item2, 'up')
 
       expect(item1.focus).toHaveBeenCalled()
 
@@ -634,19 +866,13 @@ describe('useFileTree', () => {
     })
 
     it('does nothing when no container found', () => {
-      const { result } = renderHook(() => useFileTree(defaultParams))
-
       const orphan = document.createElement('div')
 
       // Should not throw
-      act(() => {
-        result.current.navigateTreeItem(orphan, 'down')
-      })
+      navigateTreeItem(orphan, 'down')
     })
 
     it('does nothing at boundary (last item going down)', () => {
-      const { result } = renderHook(() => useFileTree(defaultParams))
-
       const container = document.createElement('div')
       container.setAttribute('data-panel-id', 'explorer')
       const item1 = document.createElement('div')
@@ -655,9 +881,7 @@ describe('useFileTree', () => {
       document.body.appendChild(container)
 
       // Should not throw when trying to go down from last item
-      act(() => {
-        result.current.navigateTreeItem(item1, 'down')
-      })
+      navigateTreeItem(item1, 'down')
 
       document.body.removeChild(container)
     })

@@ -13,7 +13,7 @@ export function NewBranchView({
   repo: ManagedRepo
   issue?: GitHubIssue
   onBack: () => void
-  onComplete: (directory: string, agentId: string | null, extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; name?: string }) => void
+  onComplete: (directory: string, agentId: string | null, extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; issueUrl?: string; name?: string }) => void
 }) {
   const { agents } = useAgentStore()
 
@@ -61,6 +61,7 @@ export function NewBranchView({
         repoId: repo.id,
         issueNumber: issue?.number,
         issueTitle: issue?.title,
+        issueUrl: issue?.url,
         name: repo.name,
       })
     } catch (err) {

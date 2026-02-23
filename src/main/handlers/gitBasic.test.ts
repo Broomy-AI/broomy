@@ -18,6 +18,11 @@ vi.mock('simple-git', () => ({
   default: vi.fn(() => mockGitInstance),
 }))
 
+const mockReadFile = vi.fn()
+vi.mock('fs/promises', () => ({
+  readFile: (...args: unknown[]) => mockReadFile(...args),
+}))
+
 vi.mock('../gitStatusParser', () => ({
   statusFromChar: vi.fn((c: string) => {
     switch (c) {
@@ -26,6 +31,7 @@ vi.mock('../gitStatusParser', () => ({
       case 'D': return 'deleted'
       case 'R': return 'renamed'
       case '?': return 'untracked'
+      case 'U': return 'conflict'
       default: return 'modified'
     }
   }),
@@ -243,6 +249,72 @@ describe('gitBasic handlers', () => {
       const handlers = setupHandlers()
       const result = await handlers['git:status'](null, '/repo')
       expect(result.isMerging).toBe(false)
+    })
+
+    it('detects hasConflicts when unmerged files contain conflict markers', async () => {
+      mockGitInstance.status.mockResolvedValue({
+        files: [
+          { path: 'conflict.ts', index: 'U', working_dir: 'U' },
+          { path: 'clean.ts', index: 'M', working_dir: ' ' },
+        ],
+        ahead: 0,
+        behind: 0,
+        tracking: null,
+        current: 'feature',
+      })
+      mockReadFile.mockResolvedValue('line1\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>>\nline2')
+      const handlers = setupHandlers()
+      const result = await handlers['git:status'](null, '/repo')
+      expect(result.hasConflicts).toBe(true)
+      expect(mockReadFile).toHaveBeenCalledWith('/repo/conflict.ts', 'utf-8')
+    })
+
+    it('returns hasConflicts false when unmerged files have no conflict markers', async () => {
+      mockGitInstance.status.mockResolvedValue({
+        files: [
+          { path: 'resolved.ts', index: 'U', working_dir: 'U' },
+        ],
+        ahead: 0,
+        behind: 0,
+        tracking: null,
+        current: 'feature',
+      })
+      mockReadFile.mockResolvedValue('clean content with no markers')
+      const handlers = setupHandlers()
+      const result = await handlers['git:status'](null, '/repo')
+      expect(result.hasConflicts).toBe(false)
+    })
+
+    it('returns hasConflicts true when unmerged file cannot be read', async () => {
+      mockGitInstance.status.mockResolvedValue({
+        files: [
+          { path: 'unreadable.ts', index: 'U', working_dir: 'U' },
+        ],
+        ahead: 0,
+        behind: 0,
+        tracking: null,
+        current: 'feature',
+      })
+      mockReadFile.mockRejectedValue(new Error('ENOENT'))
+      const handlers = setupHandlers()
+      const result = await handlers['git:status'](null, '/repo')
+      expect(result.hasConflicts).toBe(true)
+    })
+
+    it('returns hasConflicts false when no files have U status', async () => {
+      mockGitInstance.status.mockResolvedValue({
+        files: [
+          { path: 'clean.ts', index: 'M', working_dir: ' ' },
+        ],
+        ahead: 0,
+        behind: 0,
+        tracking: null,
+        current: 'feature',
+      })
+      const handlers = setupHandlers()
+      const result = await handlers['git:status'](null, '/repo')
+      expect(result.hasConflicts).toBe(false)
+      expect(mockReadFile).not.toHaveBeenCalled()
     })
 
     it('returns empty status on error', async () => {

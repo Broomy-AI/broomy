@@ -61,6 +61,75 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     }
   })
 
+  ipcMain.handle('gh:prDescription', async (_event, repoDir: string, prNumber: number) => {
+    if (ctx.isE2ETest) {
+      return 'This PR adds dark mode support to the application.\n\n## Changes\n- Added theme toggle component\n- Updated CSS variables for dark/light themes\n- Persisted preference in localStorage'
+    }
+
+    try {
+      const { stdout } = await execFileAsync('gh', [
+        'pr', 'view', String(prNumber), '--json', 'body', '--jq', '.body',
+      ], {
+        cwd: expandHomePath(repoDir),
+        encoding: 'utf-8',
+        timeout: 30000,
+      })
+      return stdout.trim() || null
+    } catch {
+      return null
+    }
+  })
+
+  ipcMain.handle('gh:prIssueComments', async (_event, repoDir: string, prNumber: number, page = 1, perPage = 20) => {
+    if (ctx.isE2ETest) {
+      return [
+        {
+          id: 101,
+          body: 'Overall this looks great! Just a few minor suggestions.',
+          author: 'reviewer',
+          createdAt: '2024-01-15T09:00:00Z',
+          url: 'https://github.com/user/demo-project/pull/123#issuecomment-101',
+        },
+        {
+          id: 102,
+          body: 'Could you add some tests for the edge cases?',
+          author: 'maintainer',
+          createdAt: '2024-01-15T12:00:00Z',
+          url: 'https://github.com/user/demo-project/pull/123#issuecomment-102',
+        },
+      ]
+    }
+
+    try {
+      const { stdout } = await execFileAsync('gh', [
+        'api', `repos/{owner}/{repo}/issues/${prNumber}/comments`,
+        '--jq', '.[] | {id: .id, body: .body, author: .user.login, createdAt: .created_at, url: .html_url}',
+        '-F', `per_page=${perPage}`, '-F', `page=${page}`,
+      ], {
+        cwd: expandHomePath(repoDir),
+        encoding: 'utf-8',
+        timeout: 30000,
+      })
+
+      const comments = stdout
+        .trim()
+        .split(/\r?\n/)
+        .filter(line => line.trim())
+        .map(line => {
+          try {
+            return JSON.parse(line)
+          } catch {
+            return null
+          }
+        })
+        .filter(c => c !== null)
+
+      return comments
+    } catch {
+      return []
+    }
+  })
+
   ipcMain.handle('gh:replyToComment', async (_event, repoDir: string, prNumber: number, commentId: number, body: string) => {
     if (ctx.isE2ETest) {
       return { success: true }

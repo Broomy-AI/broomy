@@ -84,11 +84,12 @@ export function useFileViewer({
   }, [scrollToLine, selectedViewerId, availableViewers])
 
   // Reset dirty state and set initial view mode when file changes
+  // Deleted files always open in diff mode (comparing old content vs empty)
   useEffect(() => {
     setIsDirty(false)
-    const shouldUseDiffMode = initialViewMode === 'diff' && canShowDiff
+    const shouldUseDiffMode = fileStatus === 'deleted' || (initialViewMode === 'diff' && canShowDiff)
     setViewMode(shouldUseDiffMode ? 'diff' : 'latest')
-  }, [filePath, initialViewMode, canShowDiff])
+  }, [filePath, initialViewMode, canShowDiff, fileStatus])
 
   // Save handler (called by editor on Cmd+S)
   // Returns false if the save was aborted due to external changes.

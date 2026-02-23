@@ -147,6 +147,7 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
             repoId: sessionData.repoId,
             issueNumber: sessionData.issueNumber,
             issueTitle: sessionData.issueTitle,
+            issueUrl: sessionData.issueUrl,
             sessionType: sessionData.sessionType,
             prNumber: sessionData.prNumber,
             prTitle: sessionData.prTitle,
@@ -204,7 +205,7 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
       }
     },
 
-    addSession: async (directory: string, agentId: string | null, extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; name?: string; sessionType?: 'default' | 'review'; prNumber?: number; prTitle?: string; prUrl?: string; prBaseBranch?: string }): Promise<DuplicateSessionResult | undefined> => {
+    addSession: async (directory: string, agentId: string | null, extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; issueUrl?: string; name?: string; sessionType?: 'default' | 'review'; prNumber?: number; prTitle?: string; prUrl?: string; prBaseBranch?: string }): Promise<DuplicateSessionResult | undefined> => {
       const isGitRepo = await window.git.isGitRepo(directory)
       if (!isGitRepo) {
         throw new Error('Selected directory is not a git repository')

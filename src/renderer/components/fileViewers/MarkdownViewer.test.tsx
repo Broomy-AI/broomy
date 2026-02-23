@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import '../../../test/react-setup'
 
 import { MarkdownViewer } from './MarkdownViewer'
@@ -57,6 +57,13 @@ describe('MarkdownViewerComponent', () => {
     const link = screen.getByText('Click here')
     expect(link.tagName).toBe('A')
     expect(link.getAttribute('href')).toBe('https://example.com')
+  })
+
+  it('opens links in external browser instead of navigating', () => {
+    render(<MarkdownViewerComponent filePath="test.md" content="[Visit site](https://example.com)" />)
+    const link = screen.getByText('Visit site')
+    fireEvent.click(link)
+    expect(vi.mocked(window.shell.openExternal)).toHaveBeenCalledWith('https://example.com')
   })
 
   it('renders unordered lists', () => {

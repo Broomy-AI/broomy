@@ -344,8 +344,10 @@ All data comes from the mock handlers in `src/main/index.ts`.
 | `pnpm test:unit` | Run all Vitest unit tests |
 | `pnpm test:unit:watch` | Unit tests in watch mode |
 | `pnpm test:unit:coverage` | Unit tests with 90% line coverage check |
-| `pnpm test` | Run Playwright E2E tests (headless) |
-| `pnpm test:headed` | E2E tests with visible Electron window |
+| `pnpm test:e2e` | Run Playwright E2E tests (fast, uses Vite dev server) |
+| `pnpm test:e2e:headed` | E2E tests with visible Electron window |
+| `pnpm test:e2e:built` | E2E tests against production build (for CI) |
+| `pnpm test:e2e:built:headed` | Production build E2E tests with visible window |
 
 ### Recommended Workflow
 
@@ -353,4 +355,4 @@ All data comes from the mock handlers in `src/main/index.ts`.
 2. Write or update unit tests for changed logic
 3. Run `pnpm test:unit` to verify unit tests pass
 4. Run `pnpm test:unit:coverage` to confirm coverage stays above 90%
-5. Run `pnpm test` to verify E2E tests still pass
+5. Run `pnpm test:e2e` to verify E2E tests still pass

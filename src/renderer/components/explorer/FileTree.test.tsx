@@ -4,6 +4,8 @@ import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import '../../../test/react-setup'
 
 // Mock useFileTree hook to avoid complex async filesystem calls
+const mockNavigateTreeItem = vi.fn()
+
 const mockUseFileTree = {
   tree: [] as TreeNode[],
   setTree: vi.fn(),
@@ -14,6 +16,11 @@ const mockUseFileTree = {
   setInlineInput: vi.fn(),
   inlineInputValue: '',
   setInlineInputValue: vi.fn(),
+  renameInput: null as { filePath: string; originalName: string } | null,
+  renameInputValue: '',
+  setRenameInputValue: vi.fn(),
+  draggedPath: null as string | null,
+  dropTargetPath: null as string | null,
   loadDirectory: vi.fn().mockResolvedValue([]),
   refreshTree: vi.fn().mockResolvedValue(undefined),
   toggleExpand: vi.fn(),
@@ -22,14 +29,18 @@ const mockUseFileTree = {
   handleContextMenu: vi.fn(),
   handleFileContextMenu: vi.fn(),
   submitInlineInput: vi.fn(),
-  navigateTreeItem: vi.fn(),
-  updateTreeNode: vi.fn(),
-  findNode: vi.fn(),
+  submitRename: vi.fn(),
+  cancelRename: vi.fn(),
+  startDrag: vi.fn(),
+  setDropTarget: vi.fn(),
+  handleDrop: vi.fn(),
+  endDrag: vi.fn(),
   setExpandedPaths: vi.fn(),
 }
 
 vi.mock('../../hooks/useFileTree', () => ({
   useFileTree: () => mockUseFileTree,
+  navigateTreeItem: (...args: unknown[]) => mockNavigateTreeItem(...args),
 }))
 
 import type { TreeNode } from './types'
@@ -45,6 +56,10 @@ beforeEach(() => {
   mockUseFileTree.isLoading = false
   mockUseFileTree.expandedPaths = new Set<string>()
   mockUseFileTree.inlineInput = null
+  mockUseFileTree.renameInput = null
+  mockUseFileTree.renameInputValue = ''
+  mockUseFileTree.draggedPath = null
+  mockUseFileTree.dropTargetPath = null
   mockUseFileTree.getFileStatus.mockReturnValue(undefined)
   mockUseFileTree.loadDirectory.mockResolvedValue([])
 })
@@ -151,14 +166,14 @@ describe('FileTree', () => {
       render(<FileTree directory="/repos/project" />)
       const item = screen.getByText('src').closest('[data-tree-item]')!
       fireEvent.keyDown(item, { key: 'ArrowDown' })
-      expect(mockUseFileTree.navigateTreeItem).toHaveBeenCalled()
+      expect(mockNavigateTreeItem).toHaveBeenCalled()
     })
 
     it('calls navigateTreeItem on ArrowUp', () => {
       render(<FileTree directory="/repos/project" />)
       const item = screen.getByText('index.ts').closest('[data-tree-item]')!
       fireEvent.keyDown(item, { key: 'ArrowUp' })
-      expect(mockUseFileTree.navigateTreeItem).toHaveBeenCalled()
+      expect(mockNavigateTreeItem).toHaveBeenCalled()
     })
 
     it('calls toggleExpand on ArrowRight for collapsed directory', () => {
@@ -173,7 +188,7 @@ describe('FileTree', () => {
       render(<FileTree directory="/repos/project" />)
       const item = screen.getByText('src').closest('[data-tree-item]')!
       fireEvent.keyDown(item, { key: 'ArrowRight' })
-      expect(mockUseFileTree.navigateTreeItem).toHaveBeenCalled()
+      expect(mockNavigateTreeItem).toHaveBeenCalled()
     })
 
     it('calls toggleExpand on ArrowLeft for expanded directory', () => {

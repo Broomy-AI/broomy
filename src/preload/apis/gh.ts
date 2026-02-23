@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type { GitHubIssue, GitHubPrStatus, GitHubPrComment, GitHubPrForReview } from './types'
+import type { GitHubIssue, GitHubPrStatus, GitHubPrComment, GitHubIssueComment, GitHubPrForReview } from './types'
 
 export type GhApi = {
   isInstalled: () => Promise<boolean>
@@ -10,6 +10,8 @@ export type GhApi = {
   mergeBranchToMain: (repoDir: string) => Promise<{ success: boolean; error?: string }>
   getPrCreateUrl: (repoDir: string) => Promise<string | null>
   prComments: (repoDir: string, prNumber: number) => Promise<GitHubPrComment[]>
+  prDescription: (repoDir: string, prNumber: number) => Promise<string | null>
+  prIssueComments: (repoDir: string, prNumber: number, page?: number, perPage?: number) => Promise<GitHubIssueComment[]>
   replyToComment: (repoDir: string, prNumber: number, commentId: number, body: string) => Promise<{ success: boolean; error?: string }>
   prsToReview: (repoDir: string) => Promise<GitHubPrForReview[]>
   submitDraftReview: (repoDir: string, prNumber: number, comments: { path: string; line: number; body: string }[]) => Promise<{ success: boolean; reviewId?: number; error?: string }>
@@ -24,6 +26,8 @@ export const ghApi: GhApi = {
   mergeBranchToMain: (repoDir) => ipcRenderer.invoke('gh:mergeBranchToMain', repoDir),
   getPrCreateUrl: (repoDir) => ipcRenderer.invoke('gh:getPrCreateUrl', repoDir),
   prComments: (repoDir, prNumber) => ipcRenderer.invoke('gh:prComments', repoDir, prNumber),
+  prDescription: (repoDir, prNumber) => ipcRenderer.invoke('gh:prDescription', repoDir, prNumber),
+  prIssueComments: (repoDir, prNumber, page, perPage) => ipcRenderer.invoke('gh:prIssueComments', repoDir, prNumber, page, perPage),
   replyToComment: (repoDir, prNumber, commentId, body) => ipcRenderer.invoke('gh:replyToComment', repoDir, prNumber, commentId, body),
   prsToReview: (repoDir) => ipcRenderer.invoke('gh:prsToReview', repoDir),
   submitDraftReview: (repoDir, prNumber, comments) => ipcRenderer.invoke('gh:submitDraftReview', repoDir, prNumber, comments),

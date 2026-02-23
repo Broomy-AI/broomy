@@ -3,6 +3,7 @@ import type { Session } from '../store/sessions'
 import type { ProfileData } from '../store/profiles'
 import { terminalBufferRegistry } from '../utils/terminalBufferRegistry'
 import { loadMonacoProjectContext } from '../utils/monacoProjectContext'
+import { focusAgentTerminal } from '../utils/focusHelpers'
 
 export function useSessionLifecycle({
   sessions,
@@ -89,10 +90,7 @@ export function useSessionLifecycle({
       markSessionRead(activeSessionId)
       // Focus the agent terminal after a short delay to let it render
       const timeout = setTimeout(() => {
-        const container = document.querySelector('[data-panel-id="terminal"]')
-        if (!container) return
-        const xtermTextarea = container.querySelector<HTMLElement>('.xterm-helper-textarea')
-        if (xtermTextarea) xtermTextarea.focus()
+        focusAgentTerminal()
       }, 100)
       return () => clearTimeout(timeout)
     }

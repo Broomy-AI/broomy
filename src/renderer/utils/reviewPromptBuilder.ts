@@ -8,14 +8,20 @@ export interface PrComment {
   author: string
 }
 
+export interface ReviewPromptOptions {
+  previousHeadCommit?: string
+  prComments?: PrComment[]
+  prDescription?: string
+}
+
 // Build the review generation prompt
 export function buildReviewPrompt(
   session: Session,
   reviewInstructions: string,
   previousRequestedChanges: RequestedChange[],
-  previousHeadCommit?: string,
-  prComments?: PrComment[],
+  options?: ReviewPromptOptions,
 ): string {
+  const { previousHeadCommit, prComments, prDescription } = options || {}
   const hasPreviousReview = previousRequestedChanges.length > 0 || !!previousHeadCommit
 
   const changesSinceLastReviewSchema = `  "changesSinceLastReview": {
@@ -96,7 +102,17 @@ export function buildReviewPrompt(
   let prompt = `# PR Review Analysis
 
 You are reviewing a pull request. Analyze the diff and produce a structured review.
+`
 
+  if (prDescription) {
+    prompt += `
+## PR Description (by the author)
+
+${prDescription}
+`
+  }
+
+  prompt += `
 ## Instructions
 
 1. Run \`git diff origin/${baseBranch}...HEAD\` to see the full diff

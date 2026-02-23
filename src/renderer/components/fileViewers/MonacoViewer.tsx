@@ -247,7 +247,10 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
 
     // Notify parent of available editor actions
     onEditorReady?.({
-      showOutline: () => editor.trigger('keyboard', 'editor.action.quickOutline', {}),
+      showOutline: () => {
+        editor.focus()
+        editor.trigger('keyboard', 'editor.action.quickOutline', {})
+      },
     })
   }
 

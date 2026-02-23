@@ -14,6 +14,7 @@ function dispatchAppEvent(type: string): false {
 
 /** Map of Cmd/Ctrl+key shortcuts to CustomEvent types dispatched from terminal. */
 const modKeyEvents = new Map<string, string>([
+  ['a', 'app:select-all'],
   ['n', 'app:new-session'],
   ['j', 'app:focus-sessions'],
   [',', 'app:toggle-settings'],

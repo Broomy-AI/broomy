@@ -5,13 +5,14 @@ import { PANEL_IDS } from '../panels'
 import type { AgentConfig } from '../store/agents'
 import type { PrState } from '../utils/branchStatus'
 import type { DuplicateSessionResult } from '../store/sessionCoreActions'
+import { focusAgentTerminal } from '../utils/focusHelpers'
 
 interface AppCallbacksDeps {
   sessions: Session[]
   activeSessionId: string | null
   agents: AgentConfig[]
   repos: { id: string; rootDir: string; defaultBranch: string }[]
-  addSession: (directory: string, agentId: string | null, extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; name?: string; sessionType?: 'default' | 'review'; prNumber?: number; prTitle?: string; prUrl?: string; prBaseBranch?: string }) => Promise<DuplicateSessionResult | undefined>
+  addSession: (directory: string, agentId: string | null, extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; issueUrl?: string; name?: string; sessionType?: 'default' | 'review'; prNumber?: number; prTitle?: string; prUrl?: string; prBaseBranch?: string }) => Promise<DuplicateSessionResult | undefined>
   removeSession: (id: string) => void
   setActiveSession: (id: string | null) => void
   togglePanel: (sessionId: string, panelId: string) => void
@@ -46,7 +47,7 @@ export function useAppCallbacks({
   const handleNewSessionComplete = useCallback(async (
     directory: string,
     agentId: string | null,
-    extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; name?: string; sessionType?: 'default' | 'review'; prNumber?: number; prTitle?: string; prUrl?: string; prBaseBranch?: string }
+    extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; issueUrl?: string; name?: string; sessionType?: 'default' | 'review'; prNumber?: number; prTitle?: string; prUrl?: string; prBaseBranch?: string }
   ) => {
     try {
       const result = await addSession(directory, agentId, extra)
@@ -104,14 +105,7 @@ export function useAppCallbacks({
 
   const handleSelectSession = useCallback((id: string) => {
     setActiveSession(id)
-    requestAnimationFrame(() => {
-      const container = document.querySelector('[data-panel-id="terminal"]')
-      if (!container) return
-      const xtermTextarea = container.querySelector<HTMLElement>('.xterm-helper-textarea')
-      if (xtermTextarea) {
-        xtermTextarea.focus()
-      }
-    })
+    focusAgentTerminal()
   }, [setActiveSession])
 
   const handleDeleteSession = useCallback((id: string, deleteWorktree: boolean) => {

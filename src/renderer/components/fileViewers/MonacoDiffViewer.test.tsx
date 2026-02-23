@@ -148,11 +148,14 @@ describe('MonacoDiffViewer', () => {
     const onMountHandler = mockDiffEditor.mock.calls[0][0].onMount
     expect(onMountHandler).toBeDefined()
 
+    const mockOriginalEditor = { updateOptions: vi.fn() }
     const mockModifiedEditor = {
       revealLineInCenter: vi.fn(),
       setPosition: vi.fn(),
+      updateOptions: vi.fn(),
     }
     const mockEditorInstance = {
+      getOriginalEditor: vi.fn().mockReturnValue(mockOriginalEditor),
       getModifiedEditor: vi.fn().mockReturnValue(mockModifiedEditor),
     }
     onMountHandler(mockEditorInstance)
@@ -170,11 +173,14 @@ describe('MonacoDiffViewer', () => {
       />
     )
     const onMountHandler = mockDiffEditor.mock.calls[0][0].onMount
+    const mockOriginalEditor = { updateOptions: vi.fn() }
     const mockModifiedEditor = {
       revealLineInCenter: vi.fn(),
       setPosition: vi.fn(),
+      updateOptions: vi.fn(),
     }
     const mockEditorInstance = {
+      getOriginalEditor: vi.fn().mockReturnValue(mockOriginalEditor),
       getModifiedEditor: vi.fn().mockReturnValue(mockModifiedEditor),
     }
     onMountHandler(mockEditorInstance)

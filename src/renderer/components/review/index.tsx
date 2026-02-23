@@ -1,9 +1,120 @@
 import type { Session } from '../../store/sessions'
 import type { ManagedRepo } from '../../../preload/index'
+import { CollapsibleSection } from './CollapsibleSection'
 import { GitignoreModal } from './GitignoreModal'
 import { ReviewContent } from './ReviewContent'
 import { useReviewData } from './useReviewData'
 import { useReviewActions } from './useReviewActions'
+import type { FetchingStatus } from './useReviewData'
+import type { ReviewData } from '../../types/review'
+
+function ReviewEmptyState({
+  fetching, waitingForAgent, fetchingStatus, prBaseBranch, prDescription,
+}: {
+  fetching: boolean
+  waitingForAgent: boolean
+  fetchingStatus: FetchingStatus
+  prBaseBranch?: string
+  prDescription: string | null
+}) {
+  if (fetching) {
+    return (
+      <div className="flex items-center justify-center h-full text-text-primary px-4">
+        <div className="text-center max-w-xs">
+          <div className="text-sm">Fetching latest changes...</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (waitingForAgent) {
+    return (
+      <div className="flex items-center justify-center h-full text-text-primary px-4">
+        <div className="text-center max-w-xs">
+          {fetchingStatus === 'fetching' ? (
+            <>
+              <div className="text-sm mb-3 flex items-center justify-center gap-2">
+                <svg className="animate-spin w-4 h-4 text-text-secondary" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Fetching {prBaseBranch || 'main'} to compare...
+              </div>
+              <div className="text-xs text-text-secondary">
+                Pulling the latest changes before generating the review.
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-sm mb-3">
+                Review instructions have been pasted into your agent terminal.
+              </div>
+              <div className="text-sm text-text-secondary mb-4">
+                Press <kbd className="px-1.5 py-0.5 rounded bg-bg-tertiary border border-border font-mono text-xs">Enter</kbd> in the agent terminal to start the review.
+              </div>
+              <div className="text-xs text-text-secondary">
+                The review will appear here once your agent writes it to <code className="font-mono bg-bg-tertiary px-1 rounded">.broomy/review.json</code>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  if (prDescription) {
+    return (
+      <div className="px-3 py-2">
+        <CollapsibleSection title="PR Description" defaultOpen={true}>
+          <div className="text-sm text-text-primary whitespace-pre-wrap leading-relaxed">{prDescription}</div>
+        </CollapsibleSection>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center justify-center h-full text-text-primary text-sm px-4 text-center">
+      <div>
+        <p className="mb-2">Click "Generate Review" to get an AI-generated structured review of this PR.</p>
+        <p className="text-xs text-text-secondary">The review data will be stored in <code className="font-mono bg-bg-tertiary px-1 rounded">.broomy/</code> so your agent can reference it.</p>
+      </div>
+    </div>
+  )
+}
+
+function GenerateButton({ fetching, waitingForAgent, reviewData, disabled, onClick }: {
+  fetching: boolean
+  waitingForAgent: boolean
+  reviewData: ReviewData | null
+  disabled: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="flex-1 py-1.5 text-xs rounded bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+    >
+      {fetching ? (
+        <span className="flex items-center justify-center gap-1.5">
+          <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          Fetching latest...
+        </span>
+      ) : waitingForAgent ? (
+        <span className="flex items-center justify-center gap-1.5">
+          <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          Waiting for agent...
+        </span>
+      ) : reviewData ? 'Regenerate Review' : 'Generate Review'}
+    </button>
+  )
+}
 
 interface ReviewPanelProps {
   session: Session
@@ -12,7 +123,7 @@ interface ReviewPanelProps {
 }
 
 export default function ReviewPanel({ session, repo, onSelectFile }: ReviewPanelProps) {
-  const state = useReviewData(session.id, session.directory, session.prBaseBranch)
+  const state = useReviewData(session.id, session.directory, session.prBaseBranch, session.prNumber)
 
   const {
     reviewData,
@@ -20,11 +131,17 @@ export default function ReviewPanel({ session, repo, onSelectFile }: ReviewPanel
     comparison,
     fetching,
     waitingForAgent,
+    fetchingStatus,
     pushing,
     pushResult,
     error,
     showGitignoreModal,
     unpushedCount,
+    prDescription,
+    prGitHubComments,
+    prCommentsLoading,
+    prCommentsHasMore,
+    loadOlderComments,
   } = state
 
   const {
@@ -66,29 +183,13 @@ export default function ReviewPanel({ session, repo, onSelectFile }: ReviewPanel
           )}
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={handleGenerateReview}
+          <GenerateButton
+            fetching={fetching}
+            waitingForAgent={waitingForAgent}
+            reviewData={reviewData}
             disabled={fetching || waitingForAgent || !session.agentPtyId}
-            className="flex-1 py-1.5 text-xs rounded bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {fetching ? (
-              <span className="flex items-center justify-center gap-1.5">
-                <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Fetching latest...
-              </span>
-            ) : waitingForAgent ? (
-              <span className="flex items-center justify-center gap-1.5">
-                <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Waiting for agent...
-              </span>
-            ) : reviewData ? 'Regenerate Review' : 'Generate Review'}
-          </button>
+            onClick={handleGenerateReview}
+          />
           {comments.length > 0 && session.prNumber && (
             <button
               onClick={handlePushComments}
@@ -110,48 +211,26 @@ export default function ReviewPanel({ session, repo, onSelectFile }: ReviewPanel
 
       {/* Review content */}
       <div className="flex-1 overflow-y-auto">
-        {!reviewData && !waitingForAgent && !fetching && (
-          <div className="flex items-center justify-center h-full text-text-primary text-sm px-4 text-center">
-            <div>
-              <p className="mb-2">Click "Generate Review" to get an AI-generated structured review of this PR.</p>
-              <p className="text-xs text-text-secondary">The review data will be stored in <code className="font-mono bg-bg-tertiary px-1 rounded">.broomy/</code> so your agent can reference it.</p>
-            </div>
-          </div>
-        )}
-
-        {fetching && !reviewData && (
-          <div className="flex items-center justify-center h-full text-text-primary px-4">
-            <div className="text-center max-w-xs">
-              <div className="text-sm">
-                Fetching latest changes...
-              </div>
-            </div>
-          </div>
-        )}
-
-        {waitingForAgent && !fetching && !reviewData && (
-          <div className="flex items-center justify-center h-full text-text-primary px-4">
-            <div className="text-center max-w-xs">
-              <div className="text-sm mb-3">
-                Review instructions have been pasted into your agent terminal.
-              </div>
-              <div className="text-sm text-text-secondary mb-4">
-                Press <kbd className="px-1.5 py-0.5 rounded bg-bg-tertiary border border-border font-mono text-xs">Enter</kbd> in the agent terminal to start the review.
-              </div>
-              <div className="text-xs text-text-secondary">
-                The review will appear here once your agent writes it to <code className="font-mono bg-bg-tertiary px-1 rounded">.broomy/review.json</code>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {reviewData && (
+        {!reviewData ? (
+          <ReviewEmptyState
+            fetching={fetching}
+            waitingForAgent={waitingForAgent}
+            fetchingStatus={fetchingStatus}
+            prBaseBranch={session.prBaseBranch}
+            prDescription={prDescription}
+          />
+        ) : (
           <ReviewContent
             reviewData={reviewData}
             comparison={comparison}
             comments={comments}
             unpushedCount={unpushedCount}
             directory={session.directory}
+            prDescription={prDescription}
+            prGitHubComments={prGitHubComments}
+            prCommentsLoading={prCommentsLoading}
+            prCommentsHasMore={prCommentsHasMore}
+            onLoadOlderComments={loadOlderComments}
             onClickLocation={handleClickLocation}
             onDeleteComment={handleDeleteComment}
           />

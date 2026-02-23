@@ -30,7 +30,6 @@ export function NewSessionDialog({ onComplete, onCancel }: NewSessionDialogProps
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div
         className="bg-bg-secondary rounded-lg shadow-xl border border-border w-full max-w-lg mx-4"
-        onClick={(e) => e.stopPropagation()}
       >
         {view.type === 'home' && (
           <HomeView

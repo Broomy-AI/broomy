@@ -105,8 +105,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full testing guide.
 ```bash
 pnpm test:unit              # Vitest unit tests
 pnpm test:unit:coverage     # With 90% line coverage threshold
-pnpm test                   # Playwright E2E tests (headless)
-pnpm test:headed            # E2E tests with visible window
+pnpm test:e2e               # Playwright E2E tests (fast, uses Vite dev server)
+pnpm test:e2e:headed        # E2E tests with visible window
+pnpm test:e2e:built         # E2E tests against production build (for CI)
 ```
 
 ## Project Structure

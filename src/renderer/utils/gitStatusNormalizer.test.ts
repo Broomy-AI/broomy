@@ -39,6 +39,28 @@ describe('normalizeGitStatus', () => {
       expect(result.current).toBeNull()
     })
 
+    it('preserves isMerging and hasConflicts fields', () => {
+      const input = {
+        files: [],
+        ahead: 0,
+        behind: 0,
+        tracking: null,
+        current: 'feature',
+        isMerging: true,
+        hasConflicts: true,
+      }
+      const result = normalizeGitStatus(input)
+      expect(result.isMerging).toBe(true)
+      expect(result.hasConflicts).toBe(true)
+    })
+
+    it('defaults isMerging and hasConflicts to false when missing', () => {
+      const input = { files: [], ahead: 0, behind: 0, tracking: null, current: 'main' }
+      const result = normalizeGitStatus(input)
+      expect(result.isMerging).toBe(false)
+      expect(result.hasConflicts).toBe(false)
+    })
+
     it('handles empty files array', () => {
       const input = { files: [], ahead: 0, behind: 0, tracking: null, current: 'main' }
       const result = normalizeGitStatus(input)
@@ -71,6 +93,12 @@ describe('normalizeGitStatus', () => {
       expect(result.behind).toBe(0)
       expect(result.tracking).toBeNull()
       expect(result.current).toBeNull()
+    })
+
+    it('defaults isMerging and hasConflicts to false', () => {
+      const result = normalizeGitStatus([{ path: 'a.ts', status: 'modified' as const }])
+      expect(result.isMerging).toBe(false)
+      expect(result.hasConflicts).toBe(false)
     })
 
     it('handles empty array', () => {

@@ -404,6 +404,20 @@ describe('useSourceControlData', () => {
     expect(result.current.behindMainCount).toBe(5)
   })
 
+  it('fetches behind-main count when open with no changes', async () => {
+    vi.mocked(window.git.isBehindMain).mockResolvedValue({ behind: 3, defaultBranch: 'main' })
+
+    const { result } = renderHook(() =>
+      useSourceControlData({ ...defaultProps, branchStatus: 'open', gitStatus: [] })
+    )
+
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 10))
+    })
+
+    expect(result.current.behindMainCount).toBe(3)
+  })
+
   it('does not fetch behind-main when branch is in-progress', async () => {
     const { result } = renderHook(() =>
       useSourceControlData({ ...defaultProps, branchStatus: 'in-progress', gitStatus: [] })

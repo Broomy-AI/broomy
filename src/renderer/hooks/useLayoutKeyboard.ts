@@ -225,6 +225,20 @@ export function useLayoutKeyboard({
       onExplorerTab?.(detail.filter)
     }
 
+    // Select-all scoping: for non-terminal focused elements (Monaco, inputs, textareas),
+    // use execCommand('selectAll') which correctly scopes to the focused editable element.
+    // Terminal.tsx handles its own select-all via the same app:select-all event.
+    const handleSelectAll = () => {
+      const active = document.activeElement
+      if (!active) return
+      // Skip if focus is inside a terminal (xterm) — Terminal.tsx handles it
+      if (active.closest('.xterm')) return
+      // For Monaco editor, input, textarea, or contentEditable elements.
+      // No modern replacement for execCommand('selectAll') on arbitrary focused elements.
+      // eslint-disable-next-line @typescript-eslint/no-deprecated
+      document.execCommand('selectAll')
+    }
+
     window.addEventListener('keydown', handleKeyDown, true)
     window.addEventListener('app:toggle-panel', handleCustomToggle)
     window.addEventListener('app:new-session', handleCustomNewSession)
@@ -238,6 +252,7 @@ export function useLayoutKeyboard({
     window.addEventListener('app:next-terminal-tab', handleCustomNextTerminalTab)
     window.addEventListener('app:prev-terminal-tab', handleCustomPrevTerminalTab)
     window.addEventListener('app:explorer-tab', handleCustomExplorerTab)
+    window.addEventListener('app:select-all', handleSelectAll)
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true)
       window.removeEventListener('app:toggle-panel', handleCustomToggle)
@@ -252,6 +267,7 @@ export function useLayoutKeyboard({
       window.removeEventListener('app:next-terminal-tab', handleCustomNextTerminalTab)
       window.removeEventListener('app:prev-terminal-tab', handleCustomPrevTerminalTab)
       window.removeEventListener('app:explorer-tab', handleCustomExplorerTab)
+      window.removeEventListener('app:select-all', handleSelectAll)
     }
   }, [handleToggleByKey, handleCyclePanel, onSearchFiles, onNewSession, onNextSession, onPrevSession, onFocusSessionList, onFocusSessionSearch, onArchiveSession, onToggleSettings, onShowShortcuts, onNextTerminalTab, onPrevTerminalTab, onExplorerTab])
 

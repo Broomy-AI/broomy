@@ -1,4 +1,5 @@
 import type { NavigationTarget } from '../../utils/fileNavigation'
+import { focusAgentTerminal } from '../../utils/focusHelpers'
 
 const ClipboardIcon = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -48,6 +49,7 @@ export function IssuePlanChip({ directory, issueNumber, issuePlanExists, agentPt
             if (!agentPtyId) return
             const command = `Read issue #${issueNumber} using \`gh issue view ${issueNumber}\`. Before doing anything, ask me any questions about the issue to clarify requirements and resolve ambiguities. Then write a plan to .broomy/plan.md that includes: a detailed description of what you will do, and any open questions or assumptions.`
             void window.pty.write(agentPtyId, command)
+            focusAgentTerminal()
           }}
           disabled={!agentPtyId}
           className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors ${

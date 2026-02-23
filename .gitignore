@@ -35,11 +35,16 @@ pnpm-debug.log*
 # Test artifacts
 test-results/
 playwright-report/
+tests/.vite-dev-server.pid
 coverage/
 *.png
 !build/icon.png
 !website/public/**/*.png
 !website/public/*.png
+
+# Feature documentation generated artifacts
+tests/features/*/index.html
+tests/features/index.html
 
 # Broomy review data
 .broomy/

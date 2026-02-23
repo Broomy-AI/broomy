@@ -61,7 +61,7 @@ describe('buildReviewPrompt', () => {
       { id: '1', description: 'Fix the bug', file: 'src/app.ts', line: 42 },
       { id: '2', description: 'Add tests' },
     ]
-    const result = buildReviewPrompt(session, '', changes, 'abc123')
+    const result = buildReviewPrompt(session, '', changes, { previousHeadCommit: 'abc123' })
 
     expect(result).toContain('Previous Review Changes')
     expect(result).toContain('1. Fix the bug (src/app.ts:42)')
@@ -72,7 +72,7 @@ describe('buildReviewPrompt', () => {
 
   it('includes changes since last review section with previous commit', () => {
     const session = makeSession()
-    const result = buildReviewPrompt(session, '', [], 'abc123')
+    const result = buildReviewPrompt(session, '', [], { previousHeadCommit: 'abc123' })
 
     expect(result).toContain('Changes Since Last Review')
     expect(result).toContain('commit `abc123`')
@@ -85,7 +85,7 @@ describe('buildReviewPrompt', () => {
     const comments = [
       { body: 'Please fix this', path: 'src/app.ts', line: 10, author: 'reviewer' },
     ]
-    const result = buildReviewPrompt(session, '', [], 'abc123', comments)
+    const result = buildReviewPrompt(session, '', [], { previousHeadCommit: 'abc123', prComments: comments })
 
     expect(result).toContain('Reviewer Comments on This PR')
     expect(result).toContain('reviewer: "Please fix this" (src/app.ts:10)')
@@ -110,7 +110,7 @@ describe('buildReviewPrompt', () => {
   it('handles requested changes with file but no line', () => {
     const session = makeSession()
     const changes = [{ id: '1', description: 'Update types', file: 'src/types.ts' }]
-    const result = buildReviewPrompt(session, '', changes, 'abc123')
+    const result = buildReviewPrompt(session, '', changes, { previousHeadCommit: 'abc123' })
 
     expect(result).toContain('1. Update types (src/types.ts)')
   })
@@ -118,7 +118,7 @@ describe('buildReviewPrompt', () => {
   it('includes changesSinceLastReview schema when hasPreviousReview is true', () => {
     const session = makeSession()
     // hasPreviousReview is true when previousHeadCommit is set
-    const result = buildReviewPrompt(session, '', [], 'abc123')
+    const result = buildReviewPrompt(session, '', [], { previousHeadCommit: 'abc123' })
 
     expect(result).toContain('changesSinceLastReview')
     expect(result).toContain('responsesToComments')

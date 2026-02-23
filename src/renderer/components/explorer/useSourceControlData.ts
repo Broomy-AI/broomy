@@ -175,6 +175,9 @@ export function useSourceControlData({
   // Agent merge message (shown as info banner instead of error)
   const [agentMergeMessage, setAgentMergeMessage] = useState<string | null>(null)
 
+  // Track whether we already asked the agent to resolve conflicts
+  const [askedAgentToResolve, setAskedAgentToResolve] = useState(false)
+
   // PR effects
   const pr = usePrEffects({ directory, syncStatus, scView, onUpdatePrState, pushedToMainAt, pushedToMainCommit, onClearPushToMain })
 
@@ -205,7 +208,7 @@ export function useSourceControlData({
       setBehindMainCount(0)
       return
     }
-    if (branchStatus !== 'pushed' && branchStatus !== 'empty') {
+    if (branchStatus !== 'pushed' && branchStatus !== 'empty' && branchStatus !== 'open') {
       setBehindMainCount(0)
       return
     }
@@ -293,6 +296,7 @@ export function useSourceControlData({
     isFetchingBehindMain,
     // Agent merge message
     agentMergeMessage, setAgentMergeMessage,
+    askedAgentToResolve, setAskedAgentToResolve,
     // PR state (spread from sub-hook)
     ...pr,
     currentRepo,

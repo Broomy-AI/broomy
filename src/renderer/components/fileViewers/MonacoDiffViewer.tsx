@@ -89,6 +89,9 @@ export default function MonacoDiffViewer({
 
   const handleDiffEditorMount = (editor: monacoEditor.editor.IStandaloneDiffEditor) => {
     diffEditorRef.current = editor
+    // Ensure word wrap is applied to both panes
+    editor.getOriginalEditor().updateOptions({ wordWrap: 'on' })
+    editor.getModifiedEditor().updateOptions({ wordWrap: 'on' })
     if (scrollToLine) {
       const modifiedEditor = editor.getModifiedEditor()
       modifiedEditor.revealLineInCenter(scrollToLine)
@@ -120,6 +123,7 @@ export default function MonacoDiffViewer({
           keepCurrentModifiedModel={true}
           options={{
             readOnly: true,
+            wordWrap: 'on',
             renderSideBySide: sideBySide,
             minimap: { enabled: false },
             fontSize: 13,

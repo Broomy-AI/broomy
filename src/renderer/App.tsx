@@ -28,6 +28,7 @@ import { useAppCallbacks } from './hooks/useAppCallbacks'
 import { usePanelsMap } from './hooks/usePanelsMap'
 import { useHelpMenu } from './hooks/useHelpMenu'
 import { useSessionKeyboardCallbacks } from './hooks/useSessionKeyboardCallbacks'
+import { focusSearchInput } from './utils/focusHelpers'
 
 // Re-export types for backwards compatibility
 export type { Session, SessionStatus }
@@ -198,18 +199,15 @@ function AppContent() {
     if (!activeSessionId) return
     if (!activeSession?.panelVisibility[PANEL_IDS.EXPLORER]) togglePanel(activeSessionId, PANEL_IDS.EXPLORER)
     setExplorerFilter(activeSessionId, 'search')
+    focusSearchInput()
   }, [activeSessionId, activeSession, togglePanel, setExplorerFilter])
 
   const handleExplorerTab = useCallback((filter: string) => {
     if (!activeSessionId) return
     if (!activeSession?.panelVisibility[PANEL_IDS.EXPLORER]) togglePanel(activeSessionId, PANEL_IDS.EXPLORER)
     setExplorerFilter(activeSessionId, filter as Parameters<typeof setExplorerFilter>[1])
-    // Auto-focus search input when switching to search tab
     if (filter === 'search') {
-      requestAnimationFrame(() => {
-        const input = document.querySelector<HTMLInputElement>('[data-explorer-search]')
-        input?.focus()
-      })
+      focusSearchInput()
     }
   }, [activeSessionId, activeSession, togglePanel, setExplorerFilter])
 

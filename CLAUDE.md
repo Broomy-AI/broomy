@@ -16,8 +16,9 @@ pnpm build           # Build without packaging
 pnpm test:unit       # Run Vitest unit tests
 pnpm test:unit:watch # Unit tests in watch mode
 pnpm test:unit:coverage # Unit tests with 90% line coverage threshold
-pnpm test            # Run Playwright E2E tests (headless)
-pnpm test:headed     # E2E tests with visible window
+pnpm test:e2e        # Run Playwright E2E tests (fast, uses Vite dev server)
+pnpm test:e2e:headed # E2E tests with visible window
+pnpm test:e2e:built  # E2E tests against production build (for CI)
 pnpm dist            # Build and package for macOS
 pnpm check:all       # Run all project-specific checks (workers, etc.)
 ```
@@ -79,9 +80,9 @@ Session store debounces saves with 500ms delay. Runtime-only state (`status`, `i
 
 ## Testing
 
-**Always confirm these checks pass before considering work done: `pnpm lint`, `pnpm typecheck`, `pnpm check:all`, `pnpm test:unit`, and `pnpm test` (E2E).**
+**Always confirm these checks pass before considering work done: `pnpm lint`, `pnpm typecheck`, `pnpm check:all`, `pnpm test:unit`, and `pnpm test:e2e`.**
 
-**IMPORTANT: Do NOT run E2E tests (`pnpm test`) without first asking the user for confirmation.** E2E tests launch Electron and are resource-intensive — running them from multiple agents simultaneously will hose the machine. Always run lint, typecheck, and unit tests first, then ask before running E2E.
+**IMPORTANT: Do NOT run E2E tests (`pnpm test:e2e`) without first asking the user for confirmation.** E2E tests launch Electron and are resource-intensive — running them from multiple agents simultaneously will hose the machine. Always run lint, typecheck, and unit tests first, then ask before running E2E.
 
 ### Unit Tests
 
@@ -110,7 +111,7 @@ Playwright tests in `tests/`. The test system:
 5. Run `pnpm check:all` to verify project-specific checks pass (worker config, etc.)
 6. Run `pnpm test:unit` to verify all unit tests pass
 7. Run `pnpm test:unit:coverage` to confirm coverage stays above 90%
-8. **Ask the user for confirmation**, then run `pnpm test` to verify E2E tests still pass
+8. **Ask the user for confirmation**, then run `pnpm test:e2e` to verify E2E tests still pass
 
 ## Adding New Features
 
@@ -130,3 +131,36 @@ Playwright tests in `tests/`. The test system:
 1. Create `src/renderer/store/myStore.ts` with Zustand
 2. Load in `App.tsx` on mount
 3. Create `src/renderer/store/myStore.test.ts`
+
+## Feature Documentation
+
+**Every feature or significant change requires a screenshot walkthrough.** Create a screenshot-documented E2E test that exercises the feature flow and generates a visual writeup. This serves as both verification and documentation. The spec file is committed; running `pnpm test:feature-docs` generates the screenshots and HTML locally.
+
+### How to create a feature doc
+
+1. Create `tests/features/<feature-slug>/` directory
+2. Write `<feature-slug>.spec.ts` that:
+   - Launches the Electron app with `E2E_TEST=true`
+   - Navigates to the relevant state for the feature
+   - Exercises each step of the feature flow
+   - Captures a cropped screenshot at each meaningful stage (use helpers from `_shared/screenshot-helpers.ts`)
+   - Collects step metadata (screenshot path + caption) into an array
+   - In `afterAll`, calls `generateFeaturePage()` to produce `index.html`, then `generateIndex()` to update the table of contents
+3. Run `pnpm test:feature-docs <feature-slug>` to verify screenshots and HTML generate correctly
+4. The generated screenshots and HTML are gitignored — only the `.spec.ts` is committed
+
+### Screenshot guidelines
+
+- Crop to the relevant UI region — don't screenshot the whole window unless the whole window is relevant
+- Use `screenshotElement()` for single-element crops, `screenshotRegion()` for multi-element regions
+- Name screenshots with numeric prefixes: `01-initial.png`, `02-after-click.png`, etc.
+- Write captions that explain what the user should notice, not just what's on screen
+
+### Running feature docs
+
+```bash
+pnpm test:feature-docs <feature-slug> [feature-slug...]  # Generate docs for specific features
+pnpm test:feature-docs:view                               # Open generated docs in browser
+```
+
+Feature doc tests are **not** run as part of `pnpm test:e2e`. They are separate, on-demand tests for documenting and validating feature flows. See `tests/features/session-switching/` for a reference example.

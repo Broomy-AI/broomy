@@ -1,4 +1,5 @@
 import type { ReviewData, ReviewComparison, PendingComment, CodeLocation } from '../../types/review'
+import type { NormalizedComment } from './useReviewData'
 import { CollapsibleSection } from './CollapsibleSection'
 import { LocationLink, SeverityBadge, ChangeStatusBadge } from './ReviewHelpers'
 
@@ -35,12 +36,112 @@ function SinceLastReviewSection({ data }: { data: NonNullable<ReviewData['change
   )
 }
 
+function formatRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return 'just now'
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24) return `${diffHr}h ago`
+  const diffDay = Math.floor(diffHr / 24)
+  if (diffDay < 30) return `${diffDay}d ago`
+  return date.toLocaleDateString()
+}
+
+function PrCommentsSection({
+  prGitHubComments,
+  prCommentsLoading,
+  prCommentsHasMore,
+  onLoadOlderComments,
+  onClickLocation,
+}: {
+  prGitHubComments: NormalizedComment[]
+  prCommentsLoading: boolean
+  prCommentsHasMore: boolean
+  onLoadOlderComments: () => void
+  onClickLocation: (location: CodeLocation) => void
+}) {
+  // Group review comments: top-level threads and their replies
+  const topLevel = prGitHubComments.filter(c => c.type === 'issue' || !c.inReplyToId)
+  const replies = prGitHubComments.filter(c => c.type === 'review' && c.inReplyToId)
+  const replyMap = new Map<number, NormalizedComment[]>()
+  for (const reply of replies) {
+    const existing = replyMap.get(reply.inReplyToId!) || []
+    existing.push(reply)
+    replyMap.set(reply.inReplyToId!, existing)
+  }
+
+  return (
+    <CollapsibleSection title="PR Comments" count={prGitHubComments.length} defaultOpen={false}>
+      <div className="space-y-2">
+        {topLevel.map(comment => (
+          <div key={comment.id}>
+            <div className="rounded border border-border bg-bg-primary p-2">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-medium text-text-primary">{comment.author}</span>
+                <span className="text-[10px] text-text-secondary">{formatRelativeTime(comment.createdAt)}</span>
+                {comment.type === 'review' && comment.path && (
+                  <button
+                    onClick={() => onClickLocation({
+                      file: comment.path!,
+                      startLine: comment.line || 1,
+                    })}
+                    className="text-[10px] text-accent hover:text-accent/80 font-mono truncate transition-colors ml-auto"
+                  >
+                    {comment.path.split('/').pop()}{comment.line ? `:${comment.line}` : ''}
+                  </button>
+                )}
+              </div>
+              <div className="text-xs text-text-primary whitespace-pre-wrap">{comment.body}</div>
+            </div>
+            {/* Threaded replies */}
+            {replyMap.get(comment.id)?.map(reply => (
+              <div key={reply.id} className="ml-4 mt-1 rounded border border-border/50 bg-bg-primary/50 p-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-medium text-text-primary">{reply.author}</span>
+                  <span className="text-[10px] text-text-secondary">{formatRelativeTime(reply.createdAt)}</span>
+                </div>
+                <div className="text-xs text-text-primary whitespace-pre-wrap">{reply.body}</div>
+              </div>
+            ))}
+          </div>
+        ))}
+
+        {prCommentsLoading && (
+          <div className="flex items-center justify-center py-2">
+            <svg className="animate-spin w-4 h-4 text-text-secondary" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          </div>
+        )}
+
+        {prCommentsHasMore && !prCommentsLoading && (
+          <button
+            onClick={onLoadOlderComments}
+            className="w-full py-1.5 text-xs text-text-secondary hover:text-text-primary transition-colors"
+          >
+            Show older comments
+          </button>
+        )}
+      </div>
+    </CollapsibleSection>
+  )
+}
+
 interface ReviewContentProps {
   reviewData: ReviewData
   comparison: ReviewComparison | null
   comments: PendingComment[]
   unpushedCount: number
   directory: string
+  prDescription: string | null
+  prGitHubComments: NormalizedComment[]
+  prCommentsLoading: boolean
+  prCommentsHasMore: boolean
+  onLoadOlderComments: () => void
   onClickLocation: (location: CodeLocation) => void
   onDeleteComment: (commentId: string) => void
 }
@@ -51,6 +152,11 @@ export function ReviewContent({
   comments,
   unpushedCount,
   directory,
+  prDescription,
+  prGitHubComments,
+  prCommentsLoading,
+  prCommentsHasMore,
+  onLoadOlderComments,
   onClickLocation,
   onDeleteComment,
 }: ReviewContentProps) {
@@ -86,6 +192,13 @@ export function ReviewContent({
       {/* Since Last Review (from agent's analysis) */}
       {reviewData.changesSinceLastReview && (
         <SinceLastReviewSection data={reviewData.changesSinceLastReview} />
+      )}
+
+      {/* PR Description */}
+      {prDescription && (
+        <CollapsibleSection title="PR Description" defaultOpen={true}>
+          <div className="text-sm text-text-primary whitespace-pre-wrap leading-relaxed">{prDescription}</div>
+        </CollapsibleSection>
       )}
 
       {/* Overview */}
@@ -222,6 +335,17 @@ export function ReviewContent({
             ))}
           </div>
         </CollapsibleSection>
+      )}
+
+      {/* PR Comments from GitHub */}
+      {prGitHubComments.length > 0 && (
+        <PrCommentsSection
+          prGitHubComments={prGitHubComments}
+          prCommentsLoading={prCommentsLoading}
+          prCommentsHasMore={prCommentsHasMore}
+          onLoadOlderComments={onLoadOlderComments}
+          onClickLocation={onClickLocation}
+        />
       )}
     </>
   )

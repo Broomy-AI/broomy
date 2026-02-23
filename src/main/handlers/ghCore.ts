@@ -71,8 +71,8 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   ipcMain.handle('gh:issues', async (_event, repoDir: string) => {
     if (ctx.isE2ETest) {
       return [
-        { number: 42, title: 'Add user authentication', labels: ['feature', 'priority'], url: 'https://github.com/user/demo-project/issues/42' },
-        { number: 17, title: 'Fix login page crash', labels: ['bug'], url: 'https://github.com/user/demo-project/issues/17' },
+        { number: 42, title: 'Add support for the dark mode toggle in the user settings panel', labels: ['feature', 'priority'], url: 'https://github.com/user/demo-project/issues/42' },
+        { number: 17, title: 'Fix the crash that happens when clicking on an empty notification list', labels: ['bug'], url: 'https://github.com/user/demo-project/issues/17' },
       ]
     }
 

@@ -1,4 +1,6 @@
 import { IpcMain } from 'electron'
+import { readFile } from 'fs/promises'
+import { join } from 'path'
 import simpleGit from 'simple-git'
 import { statusFromChar } from '../gitStatusParser'
 import { HandlerContext, getE2EMockBranches } from './types'
@@ -34,6 +36,7 @@ async function handleIsGitRepo(ctx: HandlerContext, dirPath: string) {
 async function handleStatus(ctx: HandlerContext, repoPath: string) {
   if (ctx.isE2ETest) {
     const E2E_MOCK_BRANCHES = getE2EMockBranches(ctx.isScreenshotMode)
+    const mockMerge = process.env.E2E_MOCK_MERGE
     if (ctx.isScreenshotMode) {
       return {
         files: [
@@ -49,7 +52,8 @@ async function handleStatus(ctx: HandlerContext, repoPath: string) {
         behind: 0,
         tracking: 'origin/feature/jwt-auth',
         current: E2E_MOCK_BRANCHES[repoPath] || 'main',
-        isMerging: false,
+        isMerging: mockMerge === 'true' || mockMerge === 'conflicts',
+        hasConflicts: mockMerge === 'conflicts',
       }
     }
     return {
@@ -61,7 +65,8 @@ async function handleStatus(ctx: HandlerContext, repoPath: string) {
       behind: 0,
       tracking: null,
       current: E2E_MOCK_BRANCHES[repoPath] || 'main',
-      isMerging: false,
+      isMerging: mockMerge === 'true' || mockMerge === 'conflicts',
+      hasConflicts: mockMerge === 'conflicts',
     }
   }
 
@@ -90,6 +95,20 @@ async function handleStatus(ctx: HandlerContext, repoPath: string) {
     }
 
     const isMerging = await git.raw(['rev-parse', '--verify', 'MERGE_HEAD']).then(() => true).catch(() => false)
+    const unmergedFiles = status.files.filter(f => f.index === 'U' || f.working_dir === 'U')
+    let hasConflicts = false
+    for (const file of unmergedFiles) {
+      try {
+        const content = await readFile(join(repoPath, file.path), 'utf-8')
+        if (content.includes('<<<<<<<')) {
+          hasConflicts = true
+          break
+        }
+      } catch {
+        hasConflicts = true
+        break
+      }
+    }
 
     return {
       files,
@@ -98,9 +117,10 @@ async function handleStatus(ctx: HandlerContext, repoPath: string) {
       tracking: status.tracking,
       current: status.current,
       isMerging,
+      hasConflicts,
     }
   } catch {
-    return { files: [], ahead: 0, behind: 0, tracking: null, current: null, isMerging: false }
+    return { files: [], ahead: 0, behind: 0, tracking: null, current: null, isMerging: false, hasConflicts: false }
   }
 }
 
@@ -316,6 +336,21 @@ async function handleShow(ctx: HandlerContext, repoPath: string, filePath: strin
       lines.push('  }')
       lines.push('}')
       return lines.join('\n')
+    }
+    if (filePath.endsWith('README.md')) {
+      return [
+        '# Project Overview',
+        '',
+        'This project provides a basic authentication system with token validation for API access.',
+        '',
+        '## Getting Started',
+        '',
+        'Install dependencies and run the development server.',
+        '',
+        '## Architecture',
+        '',
+        'The authentication middleware validates incoming requests by checking the token from the Authorization header.',
+      ].join('\n')
     }
     return `export function main() {
   console.log('Hello')

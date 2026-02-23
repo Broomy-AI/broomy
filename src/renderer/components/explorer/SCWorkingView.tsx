@@ -16,6 +16,7 @@ interface SCWorkingViewProps {
   setCommitMessage: (msg: string) => void
   isCommitting: boolean
   isMerging: boolean
+  hasConflicts: boolean
   commitError: string | null
   commitErrorExpanded: boolean
   setCommitErrorExpanded: (expanded: boolean) => void
@@ -23,6 +24,8 @@ interface SCWorkingViewProps {
   isSyncing: boolean
   onCommit: () => void
   onCommitMerge: () => void
+  onResolveConflicts: () => void
+  askedAgentToResolve: boolean
   onSync: () => void
   onSyncWithMain: () => void
   onPushNewBranch: (branchName: string) => void
@@ -251,17 +254,32 @@ function BehindMainBanner({ branchStatus, branchBaseName, behindMainCount, isFet
   )
 }
 
-function CommitArea({ isMerging, isCommitting, commitMessage, setCommitMessage, onCommit, onCommitMerge, onStageAll, gitStatus, unstagedFiles, commitError, commitErrorExpanded, setCommitErrorExpanded, setCommitError }: Pick<SCWorkingViewProps, 'isMerging' | 'isCommitting' | 'commitMessage' | 'setCommitMessage' | 'onCommit' | 'onCommitMerge' | 'onStageAll' | 'gitStatus' | 'unstagedFiles' | 'commitError' | 'commitErrorExpanded' | 'setCommitErrorExpanded' | 'setCommitError'>) {
+function CommitArea({ isMerging, hasConflicts, isCommitting, commitMessage, setCommitMessage, onCommit, onCommitMerge, onResolveConflicts, askedAgentToResolve, onStageAll, gitStatus, unstagedFiles, commitError, commitErrorExpanded, setCommitErrorExpanded, setCommitError }: Pick<SCWorkingViewProps, 'isMerging' | 'hasConflicts' | 'isCommitting' | 'commitMessage' | 'setCommitMessage' | 'onCommit' | 'onCommitMerge' | 'onResolveConflicts' | 'askedAgentToResolve' | 'onStageAll' | 'gitStatus' | 'unstagedFiles' | 'commitError' | 'commitErrorExpanded' | 'setCommitErrorExpanded' | 'setCommitError'>) {
   return (
     <div className="px-3 py-2 border-b border-border">
       {isMerging ? (
-        <button
-          onClick={onCommitMerge}
-          disabled={isCommitting}
-          className="w-full px-2 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isCommitting ? 'Committing...' : 'Commit Merge'}
-        </button>
+        <div className="flex flex-col gap-1.5">
+          <div className={`text-xs font-medium ${hasConflicts ? 'text-yellow-400' : 'text-green-400'}`}>
+            {hasConflicts ? 'Merge in progress' : 'Merge conflicts resolved'}
+          </div>
+          {hasConflicts ? (
+            <button
+              onClick={askedAgentToResolve ? undefined : onResolveConflicts}
+              disabled={askedAgentToResolve}
+              className="w-full px-2 py-1.5 text-xs rounded bg-orange-600 text-white hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {askedAgentToResolve ? 'Resolving Conflicts...' : 'Resolve Conflicts'}
+            </button>
+          ) : (
+            <button
+              onClick={onCommitMerge}
+              disabled={isCommitting}
+              className="w-full px-2 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isCommitting ? 'Committing...' : 'Commit Merge'}
+            </button>
+          )}
+        </div>
       ) : (
         <div className="flex items-center gap-1">
           <input
@@ -329,6 +347,7 @@ export function SCWorkingView({
   setCommitMessage,
   isCommitting,
   isMerging,
+  hasConflicts,
   commitError,
   commitErrorExpanded,
   setCommitErrorExpanded,
@@ -336,6 +355,8 @@ export function SCWorkingView({
   isSyncing,
   onCommit,
   onCommitMerge,
+  onResolveConflicts,
+  askedAgentToResolve,
   onSync,
   onSyncWithMain,
   onPushNewBranch,
@@ -383,11 +404,14 @@ export function SCWorkingView({
     <>
       <CommitArea
         isMerging={isMerging}
+        hasConflicts={hasConflicts}
         isCommitting={isCommitting}
         commitMessage={commitMessage}
         setCommitMessage={setCommitMessage}
         onCommit={onCommit}
         onCommitMerge={onCommitMerge}
+        onResolveConflicts={onResolveConflicts}
+        askedAgentToResolve={askedAgentToResolve}
         onStageAll={onStageAll}
         gitStatus={gitStatus}
         unstagedFiles={unstagedFiles}

@@ -13,6 +13,7 @@ import { basename } from 'path-browserify'
 import MonacoDiffViewer from './fileViewers/MonacoDiffViewer'
 import FileViewerToolbar from './FileViewerToolbar'
 import { useFileViewer } from '../hooks/useFileViewer'
+import PanelErrorBoundary from './PanelErrorBoundary'
 
 export type FileViewerPosition = 'top' | 'left'
 export type ViewMode = 'latest' | 'diff'
@@ -69,7 +70,7 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
     )
   }
 
-  if (viewer.error) {
+  if (viewer.error && viewer.viewMode !== 'diff') {
     return (
       <div className="h-full flex items-center justify-center text-red-400 text-sm">
         {viewer.error}
@@ -77,7 +78,7 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
     )
   }
 
-  if (!viewer.selectedViewer) {
+  if (!viewer.selectedViewer && viewer.viewMode !== 'diff') {
     return (
       <div className="h-full flex items-center justify-center text-text-secondary text-sm">
         No viewer available for this file type
@@ -86,7 +87,7 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
   }
 
   const fileName = basename(filePath)
-  const ViewerComponent = viewer.selectedViewer.component
+  const ViewerComponent = viewer.selectedViewer?.component
 
   return (
     <div className="h-full flex flex-col">
@@ -123,6 +124,7 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
         selectedViewerId={viewer.selectedViewerId}
         canShowDiff={viewer.canShowDiff}
         diffLabel={diffLabel}
+        fileStatus={fileStatus}
         position={position}
         onPositionChange={onPositionChange}
         onClose={onClose}
@@ -132,33 +134,35 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
         onSetViewMode={viewer.setViewMode}
       />
       <div className="flex-1 min-h-0">
-        {viewer.viewMode === 'diff' ? (
-          viewer.isLoadingDiff ? (
-            <div className="h-full flex items-center justify-center text-text-secondary text-sm">
-              Loading diff...
-            </div>
-          ) : (
-            <MonacoDiffViewer
+        <PanelErrorBoundary name="File Viewer Content">
+          {viewer.viewMode === 'diff' ? (
+            viewer.isLoadingDiff ? (
+              <div className="h-full flex items-center justify-center text-text-secondary text-sm">
+                Loading diff...
+              </div>
+            ) : (
+              <MonacoDiffViewer
+                filePath={filePath}
+                originalContent={viewer.originalContent}
+                modifiedContent={viewer.diffModifiedContent !== null ? viewer.diffModifiedContent : (fileStatus === 'deleted' ? '' : viewer.content)}
+                sideBySide={viewer.diffSideBySide}
+                scrollToLine={scrollToLine}
+              />
+            )
+          ) : ViewerComponent ? (
+            <ViewerComponent
               filePath={filePath}
-              originalContent={viewer.originalContent}
-              modifiedContent={viewer.diffModifiedContent !== null ? viewer.diffModifiedContent : (fileStatus === 'deleted' ? '' : viewer.content)}
-              sideBySide={viewer.diffSideBySide}
+              content={diffCurrentRef ? (viewer.diffModifiedContent ?? viewer.content) : viewer.content}
+              onSave={diffCurrentRef ? undefined : viewer.handleSave}
+              onDirtyChange={diffCurrentRef ? undefined : viewer.handleDirtyChange}
               scrollToLine={scrollToLine}
+              searchHighlight={searchHighlight}
+              reviewContext={reviewContext}
+              onEditorReady={viewer.setEditorActions}
+              onOpenFile={onOpenFile}
             />
-          )
-        ) : (
-          <ViewerComponent
-            filePath={filePath}
-            content={diffCurrentRef ? (viewer.diffModifiedContent ?? viewer.content) : viewer.content}
-            onSave={diffCurrentRef ? undefined : viewer.handleSave}
-            onDirtyChange={diffCurrentRef ? undefined : viewer.handleDirtyChange}
-            scrollToLine={scrollToLine}
-            searchHighlight={searchHighlight}
-            reviewContext={reviewContext}
-            onEditorReady={viewer.setEditorActions}
-            onOpenFile={onOpenFile}
-          />
-        )}
+          ) : null}
+        </PanelErrorBoundary>
       </div>
     </div>
   )

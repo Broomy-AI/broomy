@@ -10,6 +10,7 @@
 import { useState } from 'react'
 import type { Session, SessionStatus, BranchStatus } from '../store/sessions'
 import type { ManagedRepo } from '../../preload/index'
+import PanelErrorBoundary from './PanelErrorBoundary'
 
 interface SessionListProps {
   sessions: Session[]
@@ -368,14 +369,15 @@ export default function SessionList({
       {/* Session list */}
       <div className="flex-1 overflow-y-auto p-2">
         {activeSessions.map((session) => (
-          <SessionCard
-            key={session.id}
-            session={session}
-            isActive={session.id === activeSessionId}
-            onSelect={() => handleSelectSession(session)}
-            onDelete={(e) => handleDelete(e, session)}
-            onArchive={(e) => handleArchive(e, session)}
-          />
+          <PanelErrorBoundary key={session.id} name={`Session ${session.branch}`}>
+            <SessionCard
+              session={session}
+              isActive={session.id === activeSessionId}
+              onSelect={() => handleSelectSession(session)}
+              onDelete={(e) => handleDelete(e, session)}
+              onArchive={(e) => handleArchive(e, session)}
+            />
+          </PanelErrorBoundary>
         ))}
 
         {activeSessions.length === 0 && archivedSessions.length === 0 && !searchQuery && (
@@ -414,14 +416,15 @@ export default function SessionList({
             {showArchived && (
               <div className="mt-1">
                 {archivedSessions.map((session) => (
-                  <SessionCard
-                    key={session.id}
-                    session={session}
-                    isActive={session.id === activeSessionId}
-                    onSelect={() => handleSelectSession(session)}
-                    onDelete={(e) => handleDelete(e, session)}
-                    onArchive={(e) => handleUnarchive(e, session)}
-                  />
+                  <PanelErrorBoundary key={session.id} name={`Session ${session.branch}`}>
+                    <SessionCard
+                      session={session}
+                      isActive={session.id === activeSessionId}
+                      onSelect={() => handleSelectSession(session)}
+                      onDelete={(e) => handleDelete(e, session)}
+                      onArchive={(e) => handleUnarchive(e, session)}
+                    />
+                  </PanelErrorBoundary>
                 ))}
               </div>
             )}

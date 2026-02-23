@@ -1,6 +1,6 @@
 import { BrowserWindow, IpcMain, IpcMainInvokeEvent } from 'electron'
 import { watch } from 'fs'
-import { readdir, readFile, writeFile, appendFile, stat, mkdir, rm, access } from 'fs/promises'
+import { readdir, readFile, writeFile, appendFile, stat, mkdir, rm, access, rename } from 'fs/promises'
 import { join } from 'path'
 import { normalizePath } from '../platform'
 import { HandlerContext } from './types'
@@ -182,6 +182,75 @@ async function handleReadFile(ctx: HandlerContext, filePath: string) {
     if (ctx.isScreenshotMode && (/\/tmp\/broomy-review-[^/]+\/comments\.json$/.exec(filePath))) {
       return '[]'
     }
+    if (filePath.endsWith('README.md')) {
+      return [
+        '# Project Overview',
+        '',
+        'This project provides a comprehensive authentication system with JWT-based token management, session tracking, and automatic token rotation for secure API access across distributed microservices.',
+        '',
+        '## Getting Started',
+        '',
+        'To get started with this project, you need to install the dependencies using your preferred package manager, configure the environment variables for JWT secrets and Redis connection strings, and run the database migrations before starting the development server.',
+        '',
+        '## Architecture',
+        '',
+        'The authentication middleware validates incoming requests by extracting the bearer token from the Authorization header, verifying the JWT signature and expiration, checking the session store for revocation status, and attaching the decoded user payload to the request object for downstream handlers.',
+        '',
+        '## Contributing',
+        '',
+        'We welcome contributions from the community. Please read our [contributing guidelines](https://github.com/example/project/blob/main/CONTRIBUTING.md), set up your development environment following the instructions above, create a feature branch, write tests for your changes, and submit a pull request with a clear description of what you changed and why.',
+        '',
+        '## Resources',
+        '',
+        'For more information, see the [API documentation](https://docs.example.com/api) and the [project homepage](https://example.com).',
+      ].join('\n')
+    }
+    // E2E mode: fake review data for ReviewPanel (non-screenshot mode)
+    if (/\.broomy[/\\]review\.json$/.exec(filePath)) {
+      return JSON.stringify({
+        generatedAt: '2025-01-15T10:30:00Z',
+        headCommit: 'abc123',
+        overview: {
+          purpose: 'Add dark mode theme support with user preference persistence.',
+          approach: 'Uses CSS custom properties for theming with a React context provider. Theme preference persisted in localStorage.',
+        },
+        changePatterns: [
+          {
+            id: 'cp1',
+            title: 'Theme context and provider',
+            description: 'New ThemeContext and ThemeProvider for managing dark/light mode state.',
+            locations: [{ file: 'src/contexts/ThemeContext.tsx', startLine: 1 }],
+          },
+          {
+            id: 'cp2',
+            title: 'CSS variable updates',
+            description: 'Updated CSS custom properties in :root and [data-theme="dark"] selectors.',
+            locations: [{ file: 'src/styles/theme.css', startLine: 12 }],
+          },
+        ],
+        potentialIssues: [
+          {
+            id: 'pi1',
+            title: 'Flash of unstyled content on load',
+            description: 'Theme is read from localStorage after React hydration, causing a brief flash of default theme.',
+            severity: 'medium',
+            locations: [{ file: 'src/contexts/ThemeContext.tsx', startLine: 15 }],
+          },
+        ],
+        designDecisions: [
+          {
+            id: 'dd1',
+            title: 'localStorage over cookies',
+            description: 'Theme preference stored in localStorage — simpler but not available server-side.',
+            alternatives: ['HTTP cookie', 'Server-side session'],
+            locations: [],
+          },
+        ],
+      })
+    }
+    if (/\.broomy[/\\]comments\.json$/.exec(filePath)) {
+      return '[]'
+    }
     return '// Mock file content for E2E tests\nexport const test = true;\n'
   }
 
@@ -230,6 +299,10 @@ async function handleExists(ctx: HandlerContext, filePath: string) {
   if (ctx.isScreenshotMode && (/\/tmp\/broomy-review-[^/]+\/(review|comments)\.json$/.exec(filePath))) {
     return true
   }
+  // E2E mode: review/comments files always exist for mock data
+  if (ctx.isE2ETest && /\.broomy[/\\](review|comments)\.json$/.exec(filePath)) {
+    return true
+  }
   try {
     await access(filePath)
     return true
@@ -269,6 +342,19 @@ async function handleRm(ctx: HandlerContext, targetPath: string) {
       return { success: true }
     }
     await rm(targetPath, { recursive: true, force: true })
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+}
+
+async function handleRename(ctx: HandlerContext, oldPath: string, newPath: string) {
+  if (ctx.isE2ETest) {
+    return { success: true }
+  }
+
+  try {
+    await rename(oldPath, newPath)
     return { success: true }
   } catch (error) {
     return { success: false, error: String(error) }
@@ -372,6 +458,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   ipcMain.handle('fs:exists', (_event, filePath: string) => handleExists(ctx, filePath))
   ipcMain.handle('fs:mkdir', (_event, dirPath: string) => handleMkdir(ctx, dirPath))
   ipcMain.handle('fs:rm', (_event, targetPath: string) => handleRm(ctx, targetPath))
+  ipcMain.handle('fs:rename', (_event, oldPath: string, newPath: string) => handleRename(ctx, oldPath, newPath))
   ipcMain.handle('fs:createFile', (_event, filePath: string) => handleCreateFile(ctx, filePath))
   ipcMain.handle('fs:readFileBase64', (_event, filePath: string) => handleReadFileBase64(ctx, filePath))
   ipcMain.handle('fs:watch', (_event, id: string, dirPath: string) => handleWatch(ctx, _event, id, dirPath))

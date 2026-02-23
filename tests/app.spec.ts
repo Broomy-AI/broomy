@@ -99,23 +99,6 @@ test.describe('Broomy App', () => {
     expect(explorerHeaders).toBe(1) // Only the button remains
   })
 
-  test('should toggle Terminal panel', async () => {
-    const terminalButton = page.locator('button:has-text("Terminal")').first()
-    await expect(terminalButton).toBeVisible()
-
-    // Get initial state - check if button is highlighted (blue)
-    const initialClasses = await terminalButton.getAttribute('class')
-    const wasActive = initialClasses?.includes('bg-accent')
-
-    // Click to toggle
-    await terminalButton.click()
-    await page.waitForTimeout(300)
-
-    // Click again to restore state
-    await terminalButton.click()
-    await page.waitForTimeout(300)
-  })
-
   test('should switch between sessions', async () => {
     // Click on backend-api session (session items are divs with cursor-pointer)
     const backendSession = page.locator('.cursor-pointer:has-text("backend-api")')
@@ -312,29 +295,6 @@ test.describe('Button States', () => {
     expect(classes).not.toContain('bg-accent')
   })
 
-  test('should highlight Terminal button when panel is open', async () => {
-    const terminalButton = page.locator('button:has-text("Terminal")').first()
-
-    // Get initial state
-    let classes = await terminalButton.getAttribute('class')
-    const initiallyActive = classes?.includes('bg-accent')
-
-    // Toggle state
-    await terminalButton.click()
-    await page.waitForTimeout(300)
-
-    // State should be opposite now
-    classes = await terminalButton.getAttribute('class')
-    if (initiallyActive) {
-      expect(classes).not.toContain('bg-accent')
-    } else {
-      expect(classes).toContain('bg-accent')
-    }
-
-    // Toggle back
-    await terminalButton.click()
-    await page.waitForTimeout(300)
-  })
 })
 
 test.describe('Session Terminal Persistence', () => {
@@ -387,22 +347,30 @@ test.describe('E2E Shell Integration', () => {
     expect(terminalText).toContain('FAKE_CLAUDE_READY')
   })
 
-  test('should show user terminal when toggled', async () => {
-    // Toggle the user terminal to be visible
-    const terminalButton = page.locator('button:has-text("Terminal")').first()
-    await terminalButton.click()
-    await page.waitForTimeout(1500)  // Wait for terminal to initialize
+  test('should show user terminal when tab added', async () => {
+    // Add a new user terminal tab via the "+" button in the tab bar
+    const addTabButton = page.locator('button[title="New terminal tab"]:visible')
+    await addTabButton.click()
+    await page.waitForTimeout(2000)  // Wait for user terminal PTY to initialize
 
+    // The agent terminal is now hidden and the user terminal is visible.
+    // Find the visible .xterm-rows (the one not inside a hidden ancestor).
     const terminalText = await page.evaluate(() => {
-      const viewports = document.querySelectorAll('.xterm-rows')
-      return Array.from(viewports).map(v => v.textContent || '').join('\n')
+      const allRows = document.querySelectorAll('.xterm-rows')
+      for (const rows of allRows) {
+        const wrapper = rows.closest('.hidden')
+        if (!wrapper) return rows.textContent || ''
+      }
+      return ''
     })
 
-    // The user terminal shell uses "test-shell$" as its prompt
+    // The user terminal shell uses "test-shell$" as its prompt in E2E mode
     expect(terminalText).toContain('test-shell$')
 
-    // Toggle it back off to restore state
-    await terminalButton.click()
+    // Switch back to Agent tab to restore state for subsequent tests
+    const agentTab = page.locator('div.cursor-pointer:has-text("Agent"):visible').first()
+    await agentTab.click()
     await page.waitForTimeout(300)
   })
+
 })

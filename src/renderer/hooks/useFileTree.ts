@@ -19,17 +19,63 @@ export interface UseFileTreeResult {
   setInlineInput: React.Dispatch<React.SetStateAction<{ parentPath: string; type: 'file' | 'folder' } | null>>
   inlineInputValue: string
   setInlineInputValue: React.Dispatch<React.SetStateAction<string>>
+  renameInput: { filePath: string; originalName: string } | null
+  renameInputValue: string
+  setRenameInputValue: React.Dispatch<React.SetStateAction<string>>
+  draggedPath: string | null
+  dropTargetPath: string | null
   loadDirectory: (dirPath: string) => Promise<TreeNode[]>
   refreshTree: () => Promise<void>
-  updateTreeNode: (nodes: TreeNode[], path: string, updates: Partial<TreeNode>) => TreeNode[]
   toggleExpand: (node: TreeNode) => Promise<void>
   handleFileClick: (node: TreeNode) => void
   getFileStatus: (filePath: string) => GitFileStatus | undefined
   handleContextMenu: (e: React.MouseEvent, parentPath: string) => Promise<void>
   handleFileContextMenu: (e: React.MouseEvent, filePath: string, fileName: string) => Promise<void>
-  findNode: (nodes: TreeNode[], path: string) => TreeNode | null
   submitInlineInput: () => Promise<void>
-  navigateTreeItem: (current: HTMLElement, direction: 'up' | 'down') => void
+  submitRename: () => Promise<void>
+  cancelRename: () => void
+  startDrag: (path: string) => void
+  setDropTarget: (path: string | null) => void
+  handleDrop: (targetDirPath: string) => Promise<void>
+  endDrag: () => void
+}
+
+// Pure helpers extracted to keep useFileTree under max-lines-per-function
+
+export function updateTreeNode(
+  nodes: TreeNode[],
+  path: string,
+  updates: Partial<TreeNode>
+): TreeNode[] {
+  return nodes.map((node) => {
+    if (node.path === path) {
+      return { ...node, ...updates }
+    }
+    if (node.children) {
+      return { ...node, children: updateTreeNode(node.children, path, updates) }
+    }
+    return node
+  })
+}
+
+export function findNode(nodes: TreeNode[], path: string): TreeNode | null {
+  for (const node of nodes) {
+    if (node.path === path) return node
+    if (node.children) {
+      const found = findNode(node.children, path)
+      if (found) return found
+    }
+  }
+  return null
+}
+
+export function navigateTreeItem(current: HTMLElement, direction: 'up' | 'down'): void {
+  const container = current.closest('[data-panel-id]')
+  if (!container) return
+  const items = Array.from(container.querySelectorAll('[data-tree-item]'))
+  const idx = items.indexOf(current)
+  const target = (direction === 'down' ? items[idx + 1] : items[idx - 1]) as Element | undefined
+  if (target) (target as HTMLElement).focus()
 }
 
 export function useFileTree({ directory, onFileSelect, gitStatus = [] }: UseFileTreeParams): UseFileTreeResult {
@@ -40,6 +86,14 @@ export function useFileTree({ directory, onFileSelect, gitStatus = [] }: UseFile
   // Context menu state for inline creation
   const [inlineInput, setInlineInput] = useState<{ parentPath: string; type: 'file' | 'folder' } | null>(null)
   const [inlineInputValue, setInlineInputValue] = useState('')
+
+  // Rename state
+  const [renameInput, setRenameInput] = useState<{ filePath: string; originalName: string } | null>(null)
+  const [renameInputValue, setRenameInputValue] = useState('')
+
+  // Drag-and-drop state
+  const [draggedPath, setDraggedPath] = useState<string | null>(null)
+  const [dropTargetPath, setDropTargetPath] = useState<string | null>(null)
 
   // Load directory contents
   const loadDirectory = useCallback(async (dirPath: string): Promise<TreeNode[]> => {
@@ -78,23 +132,6 @@ export function useFileTree({ directory, onFileSelect, gitStatus = [] }: UseFile
     setTree(refreshedTree)
   }, [directory, loadDirectory, expandedPaths])
 
-  // Update a node in the tree
-  const updateTreeNode = (
-    nodes: TreeNode[],
-    path: string,
-    updates: Partial<TreeNode>
-  ): TreeNode[] => {
-    return nodes.map((node) => {
-      if (node.path === path) {
-        return { ...node, ...updates }
-      }
-      if (node.children) {
-        return { ...node, children: updateTreeNode(node.children, path, updates) }
-      }
-      return node
-    })
-  }
-
   // Toggle directory expansion
   const toggleExpand = async (node: TreeNode) => {
     if (!node.isDirectory) return
@@ -127,29 +164,25 @@ export function useFileTree({ directory, onFileSelect, gitStatus = [] }: UseFile
     return gitStatus.find((s) => s.path === relativePath)
   }
 
-  // Find a node in the tree
-  const findNode = (nodes: TreeNode[], path: string): TreeNode | null => {
-    for (const node of nodes) {
-      if (node.path === path) return node
-      if (node.children) {
-        const found = findNode(node.children, path)
-        if (found) return found
-      }
-    }
-    return null
-  }
-
   // Context menu handler for directories
   const handleContextMenu = async (e: React.MouseEvent, parentPath: string) => {
     e.preventDefault()
     e.stopPropagation()
 
-    const result = await window.menu.popup([
+    const isRoot = parentPath === directory
+    const dirName = parentPath.split('/').pop() || parentPath
+    const menuItems = [
       { id: 'new-file', label: 'New File' },
       { id: 'new-folder', label: 'New Folder' },
-    ])
+      ...(!isRoot ? [{ id: 'rename', label: `Rename "${dirName}"` }] : []),
+    ]
 
-    if (result === 'new-file' || result === 'new-folder') {
+    const result = await window.menu.popup(menuItems)
+
+    if (result === 'rename') {
+      setRenameInput({ filePath: parentPath, originalName: dirName })
+      setRenameInputValue(dirName)
+    } else if (result === 'new-file' || result === 'new-folder') {
       // Make sure the parent directory is expanded
       if (parentPath !== directory) {
         const newExpanded = new Set(expandedPaths)
@@ -175,10 +208,14 @@ export function useFileTree({ directory, onFileSelect, gitStatus = [] }: UseFile
     e.stopPropagation()
 
     const result = await window.menu.popup([
+      { id: 'rename', label: `Rename "${fileName}"` },
       { id: 'delete', label: `Delete "${fileName}"` },
     ])
 
-    if (result === 'delete') {
+    if (result === 'rename') {
+      setRenameInput({ filePath, originalName: fileName })
+      setRenameInputValue(fileName)
+    } else if (result === 'delete') {
       if (window.confirm(`Delete "${fileName}"? This cannot be undone.`)) {
         await window.fs.rm(filePath)
       }
@@ -205,14 +242,61 @@ export function useFileTree({ directory, onFileSelect, gitStatus = [] }: UseFile
     // File watcher will handle refresh
   }
 
-  // Tree keyboard navigation helper
-  const navigateTreeItem = (current: HTMLElement, direction: 'up' | 'down') => {
-    const container = current.closest('[data-panel-id]')
-    if (!container) return
-    const items = Array.from(container.querySelectorAll('[data-tree-item]'))
-    const idx = items.indexOf(current)
-    const target = (direction === 'down' ? items[idx + 1] : items[idx - 1]) as Element | undefined
-    if (target) (target as HTMLElement).focus()
+  // Submit rename
+  const submitRename = async () => {
+    if (!renameInput || !renameInputValue.trim()) {
+      setRenameInput(null)
+      return
+    }
+
+    const newName = renameInputValue.trim()
+    if (newName === renameInput.originalName) {
+      setRenameInput(null)
+      return
+    }
+
+    const parentDir = renameInput.filePath.substring(0, renameInput.filePath.lastIndexOf('/'))
+    const newPath = `${parentDir}/${newName}`
+    await window.fs.rename(renameInput.filePath, newPath)
+    setRenameInput(null)
+    setRenameInputValue('')
+  }
+
+  // Cancel rename
+  const cancelRename = () => {
+    setRenameInput(null)
+    setRenameInputValue('')
+  }
+
+  // Drag-and-drop handlers
+  const startDrag = (path: string) => {
+    setDraggedPath(path)
+  }
+
+  const handleDrop = async (targetDirPath: string) => {
+    if (!draggedPath || draggedPath === targetDirPath) {
+      setDraggedPath(null)
+      setDropTargetPath(null)
+      return
+    }
+
+    // Don't allow dropping into own subdirectory
+    if (targetDirPath.startsWith(`${draggedPath}/`)) {
+      setDraggedPath(null)
+      setDropTargetPath(null)
+      return
+    }
+
+    const fileName = draggedPath.split('/').pop()!
+    const newPath = `${targetDirPath}/${fileName}`
+    await window.fs.rename(draggedPath, newPath)
+    setDraggedPath(null)
+    setDropTargetPath(null)
+  }
+
+  const endDrag = () => {
+    setDraggedPath(null)
+    setDropTargetPath(null)
   }
 
   return {
@@ -226,16 +310,24 @@ export function useFileTree({ directory, onFileSelect, gitStatus = [] }: UseFile
     setInlineInput,
     inlineInputValue,
     setInlineInputValue,
+    renameInput,
+    renameInputValue,
+    setRenameInputValue,
+    draggedPath,
+    dropTargetPath,
     loadDirectory,
     refreshTree,
-    updateTreeNode,
     toggleExpand,
     handleFileClick,
     getFileStatus,
     handleContextMenu,
     handleFileContextMenu,
-    findNode,
     submitInlineInput,
-    navigateTreeItem,
+    submitRename,
+    cancelRename,
+    startDrag,
+    setDropTarget: setDropTargetPath,
+    handleDrop,
+    endDrag,
   }
 }

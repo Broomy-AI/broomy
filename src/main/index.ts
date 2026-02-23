@@ -85,7 +85,7 @@ function createWindow(profileId?: string): BrowserWindow {
   const profileParam = profileId ? `?profile=${encodeURIComponent(profileId)}` : ''
   if (isDev && process.env.ELECTRON_RENDERER_URL) {
     void window.loadURL(`${process.env.ELECTRON_RENDERER_URL}${profileParam}`)
-    window.webContents.openDevTools()
+    if (!isE2ETest) window.webContents.openDevTools()
   } else {
     void window.loadFile(join(__dirname, '../renderer/index.html'), {
       search: profileId ? `profile=${encodeURIComponent(profileId)}` : undefined,
@@ -106,6 +106,20 @@ function createWindow(profileId?: string): BrowserWindow {
 
   window.webContents.on('render-process-gone', (_event, details) => {
     console.error('Render process gone:', details)
+  })
+
+  // Prevent navigation to external URLs — open them in the default browser instead
+  window.webContents.on('will-navigate', (event, url) => {
+    // Allow reloading the app itself (file:// or devserver URLs)
+    if (url.startsWith('file://') || url.startsWith('http://localhost')) return
+    event.preventDefault()
+    void shell.openExternal(url)
+  })
+
+  // Intercept window.open() calls and redirect to external browser
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url)
+    return { action: 'deny' }
   })
 
   // Cleanup when window is closing
@@ -218,7 +232,13 @@ function buildAppMenu() {
         { role: 'cut' },
         { role: 'copy' },
         { role: 'paste' },
-        { role: 'selectAll' },
+        {
+          label: 'Select All',
+          accelerator: 'CmdOrCtrl+A',
+          click: (_, browserWindow) => {
+            browserWindow?.webContents.send('menu:select-all')
+          },
+        },
       ],
     },
     {

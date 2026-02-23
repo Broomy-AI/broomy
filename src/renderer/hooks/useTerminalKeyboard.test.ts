@@ -211,6 +211,27 @@ describe('useTerminalKeyboard', () => {
     })
   })
 
+  describe('Cmd+A (select all)', () => {
+    it('dispatches app:select-all and returns false', () => {
+      const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
+      const { result } = renderHook(() => useTerminalKeyboard(ptyIdRef))
+      const event = makeKeyEvent({ key: 'a', metaKey: true, type: 'keydown' })
+      expect(result.current(event)).toBe(false)
+      expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'app:select-all' }))
+      dispatchSpy.mockRestore()
+    })
+
+    it('does not handle Cmd+Shift+A as select-all (Shift+A is archive)', () => {
+      const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
+      const { result } = renderHook(() => useTerminalKeyboard(ptyIdRef))
+      const event = makeKeyEvent({ key: 'a', metaKey: true, shiftKey: true, type: 'keydown' })
+      expect(result.current(event)).toBe(false)
+      // Should dispatch archive, not select-all
+      expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'app:archive-session' }))
+      dispatchSpy.mockRestore()
+    })
+  })
+
   describe('new app-wide shortcuts from terminal', () => {
     it('Cmd+N dispatches app:new-session and returns false', () => {
       const dispatchSpy = vi.spyOn(window, 'dispatchEvent')

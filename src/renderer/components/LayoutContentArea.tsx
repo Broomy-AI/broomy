@@ -2,6 +2,7 @@ import { ReactNode, RefObject } from 'react'
 import type { LayoutSizes, FileViewerPosition } from '../store/sessions'
 import { PANEL_IDS } from '../panels'
 import type { DividerType } from '../hooks/useDividerResize'
+import PanelErrorBoundary from './PanelErrorBoundary'
 
 interface DividerProps {
   type: NonNullable<DividerType>
@@ -91,7 +92,9 @@ export default function LayoutContentArea({
         tabIndex={-1}
         className={`min-w-0 bg-bg-secondary overflow-y-auto outline-none ${showSettings && settingsPanel ? 'flex-1' : 'hidden'}`}
       >
-        {settingsPanel}
+        <PanelErrorBoundary name="Settings">
+          {settingsPanel}
+        </PanelErrorBoundary>
       </div>
 
       {/* Regular content - hidden when settings active, never unmounted */}
@@ -105,7 +108,9 @@ export default function LayoutContentArea({
             style={getFileViewerStyle(fileViewerPosition, layoutSizes.fileViewerSize)}
           >
             <FlashOverlay panelId={PANEL_IDS.FILE_VIEWER} flashedPanel={flashedPanel} />
-            {fileViewer}
+            <PanelErrorBoundary name="File Viewer">
+              {fileViewer}
+            </PanelErrorBoundary>
           </div>
         )}
 
@@ -120,7 +125,9 @@ export default function LayoutContentArea({
           tabIndex={-1}
           className="relative flex-1 min-w-0 min-h-0 bg-bg-primary outline-none"
         >
-          {terminal}
+          <PanelErrorBoundary name="Terminal">
+            {terminal}
+          </PanelErrorBoundary>
         </div>
       </div>
     </div>

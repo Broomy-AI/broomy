@@ -26,7 +26,18 @@ function MarkdownViewerComponent({ content }: FileViewerComponentProps) {
             h3: ({ children }) => <h3 className="text-lg font-semibold mt-4 mb-2 text-text-primary">{children}</h3>,
             h4: ({ children }) => <h4 className="text-base font-semibold mt-4 mb-2 text-text-primary">{children}</h4>,
             p: ({ children }) => <p className="my-2 text-text-primary">{children}</p>,
-            a: ({ href, children }) => <a href={href} className="text-accent hover:underline">{children}</a>,
+            a: ({ href, children }) => (
+              <a
+                href={href}
+                className="text-accent hover:underline"
+                onClick={(e) => {
+                  e.preventDefault()
+                  if (href) void window.shell.openExternal(href)
+                }}
+              >
+                {children}
+              </a>
+            ),
             code: ({ children, className }) => {
               const isBlock = className?.includes('language-')
               if (isBlock) {

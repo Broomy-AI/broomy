@@ -60,13 +60,13 @@ describe('getProfileInitScriptsDir', () => {
 })
 
 describe('DEFAULT_AGENTS', () => {
-  it('contains three default agents', () => {
-    expect(DEFAULT_AGENTS).toHaveLength(3)
+  it('contains four default agents', () => {
+    expect(DEFAULT_AGENTS).toHaveLength(4)
   })
 
-  it('includes claude, codex, and gemini', () => {
+  it('includes claude, codex, gemini, and copilot', () => {
     const ids = DEFAULT_AGENTS.map((a) => a.id)
-    expect(ids).toEqual(['claude', 'codex', 'gemini'])
+    expect(ids).toEqual(['claude', 'codex', 'gemini', 'copilot'])
   })
 
   it('each agent has id, name, command, and color', () => {

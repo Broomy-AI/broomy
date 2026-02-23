@@ -9,7 +9,7 @@
  * to idle (after at least 3 seconds) mark the session as unread. Also detects plan
  * file paths in agent output via a rolling buffer regex match.
  */
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useEffect } from 'react'
 import { useTerminalSetup } from '../hooks/useTerminalSetup'
 import type { TerminalConfig } from '../hooks/useTerminalSetup'
 import '@xterm/xterm/css/xterm.css'
@@ -38,6 +38,17 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
   }
 
   const { terminalRef, ptyIdRef, showScrollButton, handleScrollToBottom } = useTerminalSetup(config, containerRef)
+
+  // Select all terminal content when this terminal is the active one
+  useEffect(() => {
+    const handleSelectAll = () => {
+      if (isActive && terminalRef.current) {
+        terminalRef.current.selectAll()
+      }
+    }
+    window.addEventListener('app:select-all', handleSelectAll)
+    return () => window.removeEventListener('app:select-all', handleSelectAll)
+  }, [isActive, terminalRef])
 
   const handleContextMenu = useCallback(async (e: React.MouseEvent) => {
     e.preventDefault()

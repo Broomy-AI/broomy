@@ -18,6 +18,7 @@ import { useAppBannerError } from '../hooks/useErrorBanners'
 import LayoutToolbar from './LayoutToolbar'
 import LayoutContentArea from './LayoutContentArea'
 import { ErrorBanner } from './ErrorBanner'
+import PanelErrorBoundary from './PanelErrorBoundary'
 
 // Divider component - wide hit area, visible line
 function Divider({ type, direction, draggingDivider, onMouseDown }: {
@@ -217,7 +218,9 @@ export default function Layout({
               style={{ width: sidebarWidth }}
             >
               <FlashOverlay panelId={PANEL_IDS.SIDEBAR} />
-              {panels[PANEL_IDS.SIDEBAR]}
+              <PanelErrorBoundary name="Sidebar">
+                {panels[PANEL_IDS.SIDEBAR]}
+              </PanelErrorBoundary>
             </div>
             <Divider type="sidebar" direction="vertical" draggingDivider={draggingDivider} onMouseDown={handleMouseDown} />
           </>
@@ -246,7 +249,9 @@ export default function Layout({
                   style={{ width: layoutSizes.explorerWidth }}
                 >
                   <FlashOverlay panelId={PANEL_IDS.EXPLORER} />
-                  {panels[PANEL_IDS.EXPLORER]}
+                  <PanelErrorBoundary name="Explorer">
+                    {panels[PANEL_IDS.EXPLORER]}
+                  </PanelErrorBoundary>
                 </div>
                 <Divider type="explorer" direction="vertical" draggingDivider={draggingDivider} onMouseDown={handleMouseDown} />
               </>
@@ -279,7 +284,9 @@ export default function Layout({
                   style={{ width: layoutSizes.tutorialPanelWidth }}
                 >
                   <FlashOverlay panelId={PANEL_IDS.TUTORIAL} />
-                  {panels[PANEL_IDS.TUTORIAL]}
+                  <PanelErrorBoundary name="Tutorial">
+                    {panels[PANEL_IDS.TUTORIAL]}
+                  </PanelErrorBoundary>
                 </div>
               </>
             )}
