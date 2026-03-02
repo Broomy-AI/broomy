@@ -111,6 +111,7 @@ function createWindow(profileId?: string): BrowserWindow {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      webviewTag: true,
     },
     acceptFirstMouse: true,
   })

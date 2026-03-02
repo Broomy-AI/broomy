@@ -11,6 +11,15 @@ import ReviewPanel from '../review'
 import { IssuePlanChip } from './IssuePlanChip'
 import { focusSearchInput } from '../../utils/focusHelpers'
 import PanelErrorBoundary from '../PanelErrorBoundary'
+import type { ExplorerFilter } from '../../store/sessions'
+
+function TabButton({ filter, current, onClick, title, children }: { filter: ExplorerFilter; current: ExplorerFilter; onClick: () => void; title: string; children: React.ReactNode }) {
+  return (
+    <button onClick={onClick} className={`p-1 rounded transition-colors ${current === filter ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'}`} title={title}>
+      {children}
+    </button>
+  )
+}
 
 export default function Explorer({
   directory,
@@ -53,61 +62,11 @@ export default function Explorer({
       <div className="px-3 py-2 border-b border-border flex items-center justify-between">
         <span className="text-sm font-medium text-text-primary">Explorer</span>
         <div className="flex items-center gap-1">
-          <button
-            onClick={() => onFilterChange('files')}
-            className={`p-1 rounded transition-colors ${
-              filter === 'files'
-                ? 'bg-accent text-white'
-                : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
-            }`}
-            title="Files"
-          >
-            <FileTreeIcon />
-          </button>
-          <button
-            onClick={() => onFilterChange('source-control')}
-            className={`p-1 rounded transition-colors ${
-              filter === 'source-control'
-                ? 'bg-accent text-white'
-                : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
-            }`}
-            title="Source Control"
-          >
-            <SourceControlIcon />
-          </button>
-          <button
-            onClick={() => { onFilterChange('search'); focusSearchInput() }}
-            className={`p-1 rounded transition-colors ${
-              filter === 'search'
-                ? 'bg-accent text-white'
-                : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
-            }`}
-            title="Search"
-          >
-            <SearchIcon />
-          </button>
-          <button
-            onClick={() => onFilterChange('recent')}
-            className={`p-1 rounded transition-colors ${
-              filter === 'recent'
-                ? 'bg-accent text-white'
-                : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
-            }`}
-            title="Recent Files"
-          >
-            <RecentIcon />
-          </button>
-          <button
-            onClick={() => onFilterChange('review')}
-            className={`p-1 rounded transition-colors ${
-              filter === 'review'
-                ? 'bg-accent text-white'
-                : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
-            }`}
-            title="Review"
-          >
-            <ReviewIcon />
-          </button>
+          <TabButton filter="files" current={filter} onClick={() => onFilterChange('files')} title="Files"><FileTreeIcon /></TabButton>
+          <TabButton filter="source-control" current={filter} onClick={() => onFilterChange('source-control')} title="Source Control"><SourceControlIcon /></TabButton>
+          <TabButton filter="search" current={filter} onClick={() => { onFilterChange('search'); focusSearchInput() }} title="Search"><SearchIcon /></TabButton>
+          <TabButton filter="recent" current={filter} onClick={() => onFilterChange('recent')} title="Recent Files"><RecentIcon /></TabButton>
+          <TabButton filter="review" current={filter} onClick={() => onFilterChange('review')} title="Review"><ReviewIcon /></TabButton>
         </div>
       </div>
 
@@ -210,6 +169,7 @@ export default function Explorer({
             />
           </PanelErrorBoundary>
         )}
+
       </div>
     </div>
   )

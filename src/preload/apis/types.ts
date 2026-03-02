@@ -42,6 +42,12 @@ export type ManagedRepo = {
   defaultAgentId?: string  // Default agent for sessions in this repo
   reviewInstructions?: string  // Custom instructions for AI review generation
   allowPushToMain?: boolean  // Whether "Push to main" button is shown for this repo
+  enabledAnalyses?: string[]  // Analysis IDs to enable (e.g. ['security', 'accessibility'])
+  checksEnabled?: boolean  // Whether automated checks are enabled
+  checkCommands?: Record<string, string>  // Override commands for built-in checks
+  customChecks?: { id: string; label: string; command: string }[]  // User-defined checks
+  walkthroughEnabled?: boolean  // Whether walkthrough generation is enabled
+  walkthroughInstructions?: string  // Custom walkthrough generation instructions
 }
 
 export type GitHubIssue = {

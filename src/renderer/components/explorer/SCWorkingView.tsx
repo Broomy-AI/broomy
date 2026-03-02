@@ -50,33 +50,7 @@ interface SCWorkingViewProps {
   isSyncingWithMain: boolean
 }
 
-function SyncStatusContent({
-  ahead,
-  behind,
-  branchStatus,
-  branchBaseName,
-  hasNoTracking,
-  onOpenReview,
-  prStatus,
-  hasWriteAccess,
-  isPushingToMain,
-  allowPushToMain,
-  onCreatePr,
-  onPushToMain,
-}: {
-  ahead: number
-  behind: number
-  branchStatus?: BranchStatus
-  branchBaseName: string
-  hasNoTracking: boolean
-  onOpenReview?: () => void
-  prStatus: { number: number; state: string } | null
-  hasWriteAccess: boolean
-  isPushingToMain: boolean
-  allowPushToMain: boolean
-  onCreatePr: () => void
-  onPushToMain: () => void
-}) {
+function SyncStatusContent({ ahead, behind, branchStatus, branchBaseName, hasNoTracking, onOpenReview, prStatus, hasWriteAccess, isPushingToMain, allowPushToMain, onCreatePr, onPushToMain }: Pick<SCWorkingViewProps, 'branchStatus' | 'branchBaseName' | 'onOpenReview' | 'prStatus' | 'hasWriteAccess' | 'isPushingToMain' | 'allowPushToMain' | 'onCreatePr' | 'onPushToMain'> & { ahead: number; behind: number; hasNoTracking: boolean }) {
   const hasRemoteChanges = ahead > 0 || behind > 0
 
   if (hasRemoteChanges) {
@@ -122,12 +96,9 @@ function SyncStatusContent({
           </div>
         )}
         {(branchStatus === 'open' || branchStatus === 'pushed') && onOpenReview && (
-          <button
-            onClick={onOpenReview}
-            className="px-4 py-1.5 text-xs rounded bg-purple-600 text-white hover:bg-purple-500 transition-colors"
-          >
-            Get AI Review
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={onOpenReview} className="px-4 py-1.5 text-xs rounded bg-purple-600 text-white hover:bg-purple-500 transition-colors">Get AI Review</button>
+          </div>
         )}
       </>
     )

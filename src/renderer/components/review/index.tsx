@@ -1,5 +1,6 @@
 /**
  * Top-level ReviewPanel that orchestrates review generation, comment management, and the review display.
+ * Also renders optional Checks, Analyses, and Walkthrough sections based on repo configuration.
  */
 import type { Session } from '../../store/sessions'
 import type { ManagedRepo } from '../../../preload/index'
@@ -11,6 +12,14 @@ import { MarkdownBody, ReviewContent } from './ReviewContent'
 import { PrCommentsSection } from './PrComments'
 import { useReviewData } from './useReviewData'
 import { useReviewActions } from './useReviewActions'
+import { useChecksRunner } from './checks/useChecksRunner'
+import { ChecksSection } from './checks/ChecksSection'
+import { useAnalysesData } from './analyses/useAnalysesData'
+import { useAnalysesActions } from './analyses/useAnalysesActions'
+import { AnalysesSection } from './analyses/AnalysesSection'
+import { useWalkthroughData } from './walkthrough/useWalkthroughData'
+import { useWalkthroughActions } from './walkthrough/useWalkthroughActions'
+import { WalkthroughSection } from './walkthrough/WalkthroughSection'
 
 function ReviewEmptyState({
   fetching, waitingForAgent, fetchingStatus, prBaseBranch,
@@ -147,6 +156,47 @@ function PreReviewContent({
   )
 }
 
+function ExtendedReviewSections({ session, repo, onSelectFile }: {
+  session: Session
+  repo?: ManagedRepo
+  onSelectFile: (filePath: string, openInDiffMode: boolean, scrollToLine?: number, diffBaseRef?: string) => void
+}) {
+  const enabledAnalyses = repo?.enabledAnalyses ?? []
+  const checksState = useChecksRunner(session.directory, repo)
+  const analysesResults = useAnalysesData(session.directory, enabledAnalyses)
+  const analysesActions = useAnalysesActions(session.directory, session.agentPtyId, enabledAnalyses)
+  const walkthroughData = useWalkthroughData(session.directory)
+  const walkthroughActions = useWalkthroughActions(session.directory, session.agentPtyId, repo?.walkthroughInstructions)
+
+  const hasAny = repo?.checksEnabled || enabledAnalyses.length > 0 || repo?.walkthroughEnabled
+  if (!hasAny) return null
+
+  return (
+    <>
+      {repo?.checksEnabled && <ChecksSection state={checksState} />}
+      {enabledAnalyses.length > 0 && (
+        <AnalysesSection
+          enabledAnalyses={enabledAnalyses}
+          results={analysesResults}
+          actions={analysesActions}
+          onClickLocation={(file, line) => {
+            const fullPath = file.startsWith('/') ? file : `${session.directory}/${file}`
+            onSelectFile(fullPath, true, line)
+          }}
+        />
+      )}
+      {repo?.walkthroughEnabled && (
+        <WalkthroughSection
+          data={walkthroughData}
+          actions={walkthroughActions}
+          directory={session.directory}
+          onSelectFile={onSelectFile}
+        />
+      )}
+    </>
+  )
+}
+
 interface ReviewPanelProps {
   session: Session
   repo?: ManagedRepo
@@ -268,6 +318,8 @@ export default function ReviewPanel({ session, repo, onSelectFile }: ReviewPanel
             onRefreshComments={refreshComments}
           />
         )}
+
+        <ExtendedReviewSections session={session} repo={repo} onSelectFile={onSelectFile} />
       </div>
     </div>
   )

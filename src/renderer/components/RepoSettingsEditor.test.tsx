@@ -92,7 +92,7 @@ describe('RepoSettingsEditor', () => {
     })
     fireEvent.click(screen.getByText('Save'))
     await waitFor(() => {
-      expect(onUpdate).toHaveBeenCalledWith({ defaultAgentId: undefined, allowPushToMain: false })
+      expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ defaultAgentId: undefined, allowPushToMain: false }))
       expect(onClose).toHaveBeenCalled()
     })
   })
@@ -129,9 +129,14 @@ describe('RepoSettingsEditor', () => {
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'agent-1' } })
     fireEvent.click(screen.getByText('Save'))
     await waitFor(() => {
-      expect(onUpdate).toHaveBeenCalledWith({ defaultAgentId: 'agent-1', allowPushToMain: false })
+      expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ defaultAgentId: 'agent-1', allowPushToMain: false }))
     })
   })
+
+  function getPushToMainCheckbox() {
+    const label = screen.getByText('Allow "Push to main" button')
+    return label.closest('label')!.querySelector<HTMLInputElement>('input[type="checkbox"]')!
+  }
 
   it('shows error when write access check fails for push to main', async () => {
     vi.mocked(window.gh.hasWriteAccess).mockResolvedValue(false)
@@ -139,8 +144,7 @@ describe('RepoSettingsEditor', () => {
     await waitFor(() => {
       expect(screen.queryByText('Loading...')).toBeNull()
     })
-    const checkbox = screen.getByRole('checkbox')
-    fireEvent.click(checkbox)
+    fireEvent.click(getPushToMainCheckbox())
     await waitFor(() => {
       expect(screen.getByText('Write access check failed')).toBeTruthy()
     })
@@ -152,8 +156,7 @@ describe('RepoSettingsEditor', () => {
     await waitFor(() => {
       expect(screen.queryByText('Loading...')).toBeNull()
     })
-    const checkbox = screen.getByRole('checkbox')
-    fireEvent.click(checkbox)
+    fireEvent.click(getPushToMainCheckbox())
     await waitFor(() => {
       expect(screen.getByText('Failed to check write access')).toBeTruthy()
     })
@@ -165,7 +168,7 @@ describe('RepoSettingsEditor', () => {
     await waitFor(() => {
       expect(screen.queryByText('Loading...')).toBeNull()
     })
-    const checkbox = screen.getByRole('checkbox')
+    const checkbox = getPushToMainCheckbox()
     fireEvent.click(checkbox)
     await waitFor(() => {
       expect(checkbox).toBeChecked()
@@ -178,8 +181,7 @@ describe('RepoSettingsEditor', () => {
     await waitFor(() => {
       expect(screen.queryByText('Loading...')).toBeNull()
     })
-    const checkbox = screen.getByRole('checkbox')
-    fireEvent.click(checkbox)
+    fireEvent.click(getPushToMainCheckbox())
     await waitFor(() => {
       expect(screen.getByText('Write access check failed')).toBeTruthy()
     })
@@ -194,7 +196,7 @@ describe('RepoSettingsEditor', () => {
     await waitFor(() => {
       expect(screen.queryByText('Loading...')).toBeNull()
     })
-    fireEvent.click(screen.getByRole('checkbox'))
+    fireEvent.click(getPushToMainCheckbox())
     await waitFor(() => {
       expect(screen.getByText('Write access check failed')).toBeTruthy()
     })

@@ -31,6 +31,16 @@ vi.mock('./MarkdownViewer', () => ({
   },
 }))
 
+vi.mock('./HtmlViewer', () => ({
+  HtmlViewer: {
+    id: 'html-viewer',
+    name: 'HTML Preview',
+    canHandle: (path: string) => /\.html?$/i.test(path),
+    priority: 50,
+    component: () => null,
+  },
+}))
+
 import { getViewersForFile, getDefaultViewer, isTextContent } from './index'
 
 describe('fileViewers registry', () => {
@@ -48,6 +58,11 @@ describe('fileViewers registry', () => {
     it('returns markdown viewer for .md files sorted by priority', () => {
       const viewers = getViewersForFile('README.md')
       expect(viewers[0].id).toBe('markdown')
+    })
+
+    it('returns html viewer for .html files sorted by priority', () => {
+      const viewers = getViewersForFile('page.html')
+      expect(viewers[0].id).toBe('html-viewer')
     })
 
     it('returns only monaco for unknown text file', () => {
