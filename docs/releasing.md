@@ -88,8 +88,12 @@ xcrun notarytool store-credentials "broomy-notarize" \
 The easiest way to cut a release is the all-in-one script:
 
 ```bash
+# 1. Generate release notes (run /release-notes in Claude Code before the script)
+# 2. Run the release pipeline
 pnpm release:all <patch|minor|major>
 ```
+
+**Before running the script**, use `/release-notes` in Claude Code to generate `release-notes.md`. The release script will use this file for the GitHub release body. If the file is missing, it falls back to GitHub's auto-generated notes.
 
 This runs the entire pipeline in order:
 
@@ -100,7 +104,7 @@ This runs the entire pipeline in order:
 5. Signed build with notarization (`pnpm dist:signed`)
 6. Confirmation prompt showing version, tag, and artifacts
 7. Push commit and tag to origin
-8. Create GitHub release with artifacts
+8. Create GitHub release with artifacts and release notes
 
 If anything fails, the script stops immediately. If you decline at the confirmation prompt, the commit and tag remain local-only (the script prints undo instructions).
 

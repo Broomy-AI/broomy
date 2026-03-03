@@ -132,9 +132,19 @@ for f in dist/*.dmg dist/*.zip dist/*.AppImage dist/*.yml; do
   [ -f "$f" ] && RELEASE_FILES+=("$f")
 done
 
+NOTES_ARGS=()
+if [ -f release-notes.md ]; then
+  echo "Using release notes from release-notes.md"
+  NOTES_ARGS=(--notes-file release-notes.md)
+else
+  echo "Warning: release-notes.md not found. Run '/release-notes' first for better release notes."
+  echo "Falling back to auto-generated notes."
+  NOTES_ARGS=(--generate-notes)
+fi
+
 gh release create "$TAG" "${RELEASE_FILES[@]}" \
   --title "Broomy $TAG" \
-  --generate-notes
+  "${NOTES_ARGS[@]}"
 
 echo ""
 echo "Done! Release $TAG published."
