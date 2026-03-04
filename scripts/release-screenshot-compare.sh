@@ -45,77 +45,72 @@ fail() {
   echo -e "  ${RED}✗${RESET} $1"
 }
 
-# Run all feature walkthroughs in a single Playwright invocation,
-# then copy screenshots to the target directory.
-# Args: $1 = label (e.g. "baseline"), $2 = target dir, $3 = results json path
+# Run feature walkthroughs one at a time with progress reporting.
+# Discovers which features exist at the currently checked-out ref,
+# so baseline runs won't attempt features added after that release.
+# Args: $1 = label (e.g. "baseline"), $2 = target dir, $3 = results json path, $4 = ref label
 run_walkthroughs() {
   local label="$1"
   local target_dir="$2"
   local results_json="$3"
   local ref_label="$4"
 
+  # Discover features that exist at THIS ref (not the pre-checkout list)
+  local features=()
+  for dir in "$FEATURES_DIR"/*/; do
+    local name
+    name=$(basename "$dir")
+    if [ "$name" != "_shared" ] && ls "$dir"*.spec.ts &>/dev/null; then
+      features+=("$name")
+    fi
+  done
+  local feature_count=${#features[@]}
+  info "Found $feature_count feature walkthroughs at $ref_label"
+
   # Clean all existing screenshots before running
-  for feature in "${FEATURES[@]}"; do
+  for feature in "${features[@]}"; do
     rm -rf "$FEATURES_DIR/$feature/screenshots"
   done
 
-  # Build test paths for all features
-  local test_paths=()
-  for feature in "${FEATURES[@]}"; do
-    test_paths+=("tests/features/$feature/")
-  done
-
-  info "Running all $FEATURE_COUNT feature walkthroughs in one batch..."
-
-  local output_file
-  output_file=$(mktemp)
-  local exit_code=0
-
-  # Run all features in a single Playwright invocation.
-  # Redirect to file instead of tee to avoid pipe keeping processes alive on timeout.
-  npx playwright test --config playwright.features.config.ts "${test_paths[@]}" > "$output_file" 2>&1 || exit_code=$?
-
-  # Show a condensed summary of what Playwright reported
-  grep -E '^\s*(✓|✘|-)' "$output_file" | tail -20 || true
-
-  # Collect screenshots and determine per-feature pass/fail from output
   local passed=0
   local failed=0
   local failed_features=""
+  local all_errors=""
+  local i=0
 
-  for feature in "${FEATURES[@]}"; do
+  for feature in "${features[@]}"; do
+    i=$((i + 1))
+    echo -ne "  ${DIM}[$i/$feature_count]${RESET} $feature... "
+
+    local output_file
+    output_file=$(mktemp)
+    local exit_code=0
+
+    npx playwright test --config playwright.features.config.ts "tests/features/$feature/" > "$output_file" 2>&1 || exit_code=$?
+
     if [ -d "$FEATURES_DIR/$feature/screenshots" ]; then
-      # Feature produced screenshots — it passed
       mkdir -p "$target_dir/$feature"
       cp "$FEATURES_DIR/$feature/screenshots/"*.png "$target_dir/$feature/" 2>/dev/null || true
       local count
       count=$(ls "$target_dir/$feature/"*.png 2>/dev/null | wc -l | tr -d ' ')
-      success "$feature — $count screenshot(s)"
+      echo -e "${GREEN}✓${RESET} $count screenshot(s)"
       passed=$((passed + 1))
     else
-      # No screenshots — it failed
-      fail "$feature — no screenshots (test failed)"
+      echo -e "${RED}✗${RESET} failed"
       failed=$((failed + 1))
       failed_features="$failed_features $feature"
+      all_errors="$all_errors$(cat "$output_file")\n"
     fi
 
-    # Clean up screenshots from tests/features/ so they don't get committed
+    # Clean up screenshots and HTML so they don't get committed
     rm -rf "$FEATURES_DIR/$feature/screenshots"
+    rm -f "$FEATURES_DIR/$feature/index.html"
+    rm -f "$output_file"
   done
 
-  # Also clean up any generated HTML in tests/features/ (gitignored but still messy)
-  for feature in "${FEATURES[@]}"; do
-    rm -f "$FEATURES_DIR/$feature/index.html"
-  done
   rm -f "$FEATURES_DIR/index.html"
 
   # Write results JSON
-  local errors_text=""
-  if [ $failed -gt 0 ]; then
-    errors_text=$(cat "$output_file")
-  fi
-  rm -f "$output_file"
-
   node -e "
 const fs = require('fs');
 const results = {
@@ -126,7 +121,7 @@ const results = {
   errors: process.argv[5]
 };
 fs.writeFileSync(process.argv[6], JSON.stringify(results, null, 2));
-" "$ref_label" "$passed" "$failed" "$failed_features" "$errors_text" "$results_json"
+" "$ref_label" "$passed" "$failed" "$failed_features" "$all_errors" "$results_json"
 
   echo ""
   if [ $failed -eq 0 ]; then
@@ -195,18 +190,6 @@ progress "Preparing output directory"
 rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR/baseline" "$OUTPUT_DIR/current" "$OUTPUT_DIR/diffs"
 success "Created $OUTPUT_DIR/"
-
-# List available features (from current branch, before checkout)
-FEATURES=()
-for dir in "$FEATURES_DIR"/*/; do
-  name=$(basename "$dir")
-  if [ "$name" != "_shared" ]; then
-    FEATURES+=("$name")
-  fi
-done
-
-FEATURE_COUNT=${#FEATURES[@]}
-info "Found $FEATURE_COUNT feature walkthroughs to run"
 
 # ──────────────────────────────────────────────────────────────
 # Step 4: Generate baseline screenshots (last release)
