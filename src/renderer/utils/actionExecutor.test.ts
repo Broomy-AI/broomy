@@ -127,13 +127,12 @@ describe('executeAction - agent', () => {
     expect(result.error).toBe('No agent terminal available')
   })
 
-  it('writes context.json when action has context', async () => {
+  it('writes context.json with template vars before agent action', async () => {
     vi.mocked(window.fs.mkdir).mockResolvedValue({ success: true })
 
     const action: ActionDefinition = {
       id: 'push', label: 'Push', type: 'agent',
       prompt: 'Push it', showWhen: [],
-      context: { targetBranch: '{main}' },
     }
 
     await executeAction(action, makeCtx())
@@ -142,22 +141,8 @@ describe('executeAction - agent', () => {
     expect(window.fs.mkdir).toHaveBeenCalledWith('/repo/.broomy/output')
     expect(window.fs.writeFile).toHaveBeenCalledWith(
       '/repo/.broomy/output/context.json',
-      expect.stringContaining('"targetBranch": "main"')
+      expect.stringContaining('"main"')
     )
-  })
-
-  it('calls writePrompt callback when specified', async () => {
-    const onWritePrompt = vi.fn().mockResolvedValue(undefined)
-
-    const action: ActionDefinition = {
-      id: 'review', label: 'Review', type: 'agent',
-      prompt: 'Review it', showWhen: [],
-      writePrompt: { file: '.broomy/output/review-prompt.md', builder: 'review' },
-    }
-
-    await executeAction(action, makeCtx({ onWritePrompt }))
-
-    expect(onWritePrompt).toHaveBeenCalledWith('review', '/repo/.broomy/output/review-prompt.md')
   })
 
   it('uses agent-specific skill override for claude when skill file exists', async () => {
@@ -272,7 +257,6 @@ describe('executeAction - agent', () => {
     const action: ActionDefinition = {
       id: 'push', label: 'Push', type: 'agent',
       prompt: 'Push', showWhen: [],
-      context: { targetBranch: '{main}' },
     }
 
     const result = await executeAction(action, makeCtx())

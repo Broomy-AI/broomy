@@ -86,6 +86,8 @@ export interface Session {
   workingStartTime: number | null // When the current working period began
   // Agent PTY ID (runtime only, set by Terminal.tsx)
   agentPtyId?: string
+  // Commands editor: when set, file viewer area shows the commands editor for this directory
+  commandsEditorDirectory?: string | null
   // Recently opened files (runtime, most recent first)
   recentFiles: string[]
   // User terminal tabs (persisted)
@@ -159,6 +161,9 @@ interface SessionStore {
   setActiveTerminalTab: (sessionId: string, tabId: string) => void
   closeOtherTerminalTabs: (sessionId: string, tabId: string) => void
   closeTerminalTabsToRight: (sessionId: string, tabId: string) => void
+  // Commands editor actions
+  openCommandsEditor: (sessionId: string, directory: string) => void
+  closeCommandsEditor: (sessionId: string) => void
   // Agent PTY tracking (runtime only)
   setAgentPtyId: (sessionId: string, ptyId: string) => void
   // Direct push to main tracking
@@ -218,6 +223,7 @@ export const useSessionStore = create<SessionStore>((set, get) => {
       return syncLegacyFields({
         ...s,
         selectedFilePath: filePath,
+        commandsEditorDirectory: null,
         panelVisibility: newVisibility,
         recentFiles,
       })

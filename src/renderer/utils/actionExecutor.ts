@@ -14,8 +14,6 @@ export interface ActionExecutionContext {
   agentPtyId?: string
   agentId?: string | null
   templateVars: TemplateVars
-  /** Called before agent actions that use writePrompt with built-in builders */
-  onWritePrompt?: (builder: string, outputPath: string) => Promise<void>
   /** Called after successful shell execution to refresh git status */
   onGitStatusRefresh?: () => void
 }
@@ -62,23 +60,11 @@ async function executeAgentAction(
   }
 
   try {
-    // Write context.json if needed
-    if (action.context) {
-      const resolvedContext: Record<string, string> = {}
-      for (const [key, value] of Object.entries(action.context)) {
-        resolvedContext[key] = resolveTemplateVars(value, ctx.templateVars)
-      }
-      const outputDir = `${ctx.directory}/.broomy/output`
-      await window.fs.mkdir(`${ctx.directory}/.broomy`)
-      await window.fs.mkdir(outputDir)
-      await window.fs.writeFile(`${outputDir}/context.json`, JSON.stringify(resolvedContext, null, 2))
-    }
-
-    // Run writePrompt builder if specified
-    if (action.writePrompt && ctx.onWritePrompt) {
-      const outputPath = resolveTemplateVars(action.writePrompt.file, ctx.templateVars)
-      await ctx.onWritePrompt(action.writePrompt.builder, `${ctx.directory}/${outputPath}`)
-    }
+    // Always write context.json so any prompt can reference session data
+    const outputDir = `${ctx.directory}/.broomy/output`
+    await window.fs.mkdir(`${ctx.directory}/.broomy`)
+    await window.fs.mkdir(outputDir)
+    await window.fs.writeFile(`${outputDir}/context.json`, JSON.stringify(ctx.templateVars, null, 2))
 
     // Determine what to send: agent-specific override or default
     const prompt = await resolveAgentPrompt(action, ctx)

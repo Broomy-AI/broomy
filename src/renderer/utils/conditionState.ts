@@ -19,6 +19,7 @@ export interface ConditionStateInput {
   behindMainCount: number
   issueNumber?: number
   noDevcontainer?: boolean
+  isReview?: boolean
 }
 
 export function computeConditionState(input: ConditionStateInput): ConditionState {
@@ -32,6 +33,7 @@ export function computeConditionState(input: ConditionStateInput): ConditionStat
     behindMainCount,
     issueNumber,
     noDevcontainer,
+    isReview,
   } = input
 
   const hasChanges = gitStatus.length > 0
@@ -61,5 +63,6 @@ export function computeConditionState(input: ConditionStateInput): ConditionStat
     'allow-push-to-main': allowPushToMain,
     'has-issue': !!issueNumber,
     'no-devcontainer': noDevcontainer ?? false,
+    'review': isReview ?? false,
   }
 }

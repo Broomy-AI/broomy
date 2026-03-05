@@ -5,7 +5,6 @@
 import { useState, useEffect } from 'react'
 import {
   getDefaultCommandsConfig,
-  getDefaultPromptFiles,
   commandsConfigPath,
   ensureOutputGitignore,
 } from '../../utils/commandsConfig'
@@ -34,21 +33,13 @@ export function CommandsSetupDialog({ directory, onClose, onCreated }: CommandsS
     setCreating(true)
     try {
       const broomyDir = `${directory}/.broomy`
-      const promptsDir = `${broomyDir}/prompts`
 
       // Create directories
       await window.fs.mkdir(broomyDir)
-      await window.fs.mkdir(promptsDir)
 
       // Write commands.json
       const config = getDefaultCommandsConfig()
       await window.fs.writeFile(commandsConfigPath(directory), JSON.stringify(config, null, 2))
-
-      // Write prompt files
-      const prompts = getDefaultPromptFiles()
-      for (const [filename, content] of Object.entries(prompts)) {
-        await window.fs.writeFile(`${promptsDir}/${filename}`, content)
-      }
 
       // Write .broomy/.gitignore for output/
       await ensureOutputGitignore(directory)

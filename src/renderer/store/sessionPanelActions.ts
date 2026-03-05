@@ -101,5 +101,33 @@ export function createPanelActions(get: StoreGet, set: StoreSet) {
       const store = get() as unknown as { togglePanel: (sessionId: string, panelId: string) => void }
       store.togglePanel(id, PANEL_IDS.FILE_VIEWER)
     },
+
+    openCommandsEditor: (sessionId: string, directory: string) => {
+      const { sessions } = get()
+      const updatedSessions = sessions.map((s) => {
+        if (s.id !== sessionId) return s
+        const newVisibility = {
+          ...s.panelVisibility,
+          [PANEL_IDS.FILE_VIEWER]: true,
+        }
+        return syncLegacyFields({
+          ...s,
+          commandsEditorDirectory: directory,
+          panelVisibility: newVisibility,
+        })
+      })
+      set({ sessions: updatedSessions })
+      debouncedSave()
+    },
+
+    closeCommandsEditor: (sessionId: string) => {
+      const { sessions } = get()
+      const updatedSessions = sessions.map((s) => {
+        if (s.id !== sessionId) return s
+        return { ...s, commandsEditorDirectory: null }
+      })
+      set({ sessions: updatedSessions })
+      debouncedSave()
+    },
   }
 }

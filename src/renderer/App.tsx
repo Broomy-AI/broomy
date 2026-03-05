@@ -145,6 +145,7 @@ function AppContent() {
     selectFile, setExplorerFilter, setFileViewerPosition, updateLayoutSize,
     markSessionRead, recordPushToMain, clearPushToMain, markHasHadCommits,
     updateBranchStatus, updatePrState, archiveSession, unarchiveSession, setPanelVisibility, updateSessionBranch,
+    closeCommandsEditor,
   } = useSessionStore()
 
   useGitBranchWatcher({ sessions, activeSessionId, updateSessionBranch })
@@ -267,7 +268,7 @@ function AppContent() {
     fetchGitStatus, getAgentCommand, getAgentEnv, getAgentResumeCommand, getRepoIsolation,
     globalPanelVisibility, toggleGlobalPanel, selectFile, setExplorerFilter,
     recordPushToMain, clearPushToMain, updatePrState,
-    setPanelVisibility, setToolbarPanels, repos,
+    setPanelVisibility, setToolbarPanels, closeCommandsEditor, repos,
   })
 
   if (isLoading) {

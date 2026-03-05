@@ -19,7 +19,7 @@ const BASE_STATE: ConditionState = {
   'no-tracking': false, ahead: false, behind: false, 'behind-main': false,
   'on-main': false, 'in-progress': true, pushed: false, empty: false,
   open: false, merged: false, closed: false, 'no-pr': true,
-  'has-write-access': true, 'allow-push-to-main': false, 'has-issue': false, 'no-devcontainer': false,
+  'has-write-access': true, 'allow-push-to-main': false, 'has-issue': false, 'no-devcontainer': false, review: false,
 }
 const VARS: TemplateVars = { main: 'main', branch: 'feature/test', directory: '/repo' }
 

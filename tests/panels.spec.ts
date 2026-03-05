@@ -117,21 +117,30 @@ test.describe('Settings Panel', () => {
     const settingsPanel = page.locator('[data-panel-id="settings"]')
     await expect(settingsPanel).toBeVisible()
 
-    // Should show "Settings" heading
+    // Should show "Settings" heading on root screen
     await expect(settingsPanel.locator('h2:has-text("Settings")')).toBeVisible()
 
-    // Should display the default agents from mock config (use .first() since name and command both match)
+    // Root screen shows nav rows for Agents and Repositories
+    await expect(settingsPanel.locator('text=Manage Agents')).toBeVisible()
+    await expect(settingsPanel.locator('h3:has-text("Repositories")')).toBeVisible()
+    await expect(settingsPanel.locator('text=demo-project').first()).toBeVisible()
+
+    // Navigate to agents sub-screen
+    await settingsPanel.locator('[data-testid="nav-agents"]').click()
+    await expect(settingsPanel.locator('h2:has-text("Agents")')).toBeVisible()
+
+    // Should display the default agents from mock config
     await expect(settingsPanel.locator('text=Claude Code')).toBeVisible()
     await expect(settingsPanel.locator('text=Codex').first()).toBeVisible()
     await expect(settingsPanel.locator('text=Gemini CLI')).toBeVisible()
     await expect(settingsPanel.locator('text=GitHub Copilot')).toBeVisible()
 
-    // Should show Repositories section with the demo-project repo (same scrolling view)
-    await expect(settingsPanel.locator('h3:has-text("Repositories")')).toBeVisible()
-    await expect(settingsPanel.locator('text=demo-project').first()).toBeVisible()
-
     // Should show "+ Add Agent" button
     await expect(settingsPanel.locator('button:has-text("+ Add Agent")')).toBeVisible()
+
+    // Navigate back to root
+    await settingsPanel.locator('[data-testid="settings-back"]').click()
+    await expect(settingsPanel.locator('h2:has-text("Settings")')).toBeVisible()
 
     // Close settings
     await settingsBtn.click()

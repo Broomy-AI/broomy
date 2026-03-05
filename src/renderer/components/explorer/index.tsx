@@ -1,6 +1,7 @@
 /**
  * Explorer panel entry point with tabbed navigation between file tree, source control, search, recent files, and review.
  */
+import { useCallback } from 'react'
 import type { ExplorerProps } from './types'
 import { FileTreeIcon, SourceControlIcon, SearchIcon, RecentIcon, ReviewIcon } from './icons'
 import { FileTree } from './FileTree'
@@ -11,6 +12,7 @@ import ReviewPanel from '../review'
 import { IssuePlanChip } from './IssuePlanChip'
 import { focusSearchInput } from '../../utils/focusHelpers'
 import PanelErrorBoundary from '../PanelErrorBoundary'
+import { useSessionStore } from '../../store/sessions'
 
 export default function Explorer({
   directory,
@@ -22,7 +24,7 @@ export default function Explorer({
   onFilterChange,
   onGitStatusRefresh,
   recentFiles = [],
-  sessionId: _sessionId,
+  sessionId,
   pushedToMainAt,
   pushedToMainCommit,
   onRecordPushToMain,
@@ -39,6 +41,11 @@ export default function Explorer({
   issueUrl,
   issuePlanExists,
 }: ExplorerProps) {
+  const openCmdsEditor = useSessionStore(s => s.openCommandsEditor)
+  const handleOpenCommandsEditor = useCallback(() => {
+    if (sessionId && directory) openCmdsEditor(sessionId, directory)
+  }, [sessionId, directory, openCmdsEditor])
+
   if (!directory) {
     return (
       <div className="h-full flex items-center justify-center text-text-secondary text-sm">
@@ -47,67 +54,21 @@ export default function Explorer({
     )
   }
 
+  const tabBtnClass = (active: boolean) => `p-1 rounded transition-colors ${
+    active ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
+  }`
+
   return (
     <div className="h-full flex flex-col">
       {/* Tab bar */}
       <div className="px-3 py-2 border-b border-border flex items-center justify-between">
         <span className="text-sm font-medium text-text-primary">Explorer</span>
         <div className="flex items-center gap-1">
-          <button
-            onClick={() => onFilterChange('source-control')}
-            className={`p-1 rounded transition-colors ${
-              filter === 'source-control'
-                ? 'bg-accent text-white'
-                : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
-            }`}
-            title="Source Control"
-          >
-            <SourceControlIcon />
-          </button>
-          <button
-            onClick={() => onFilterChange('files')}
-            className={`p-1 rounded transition-colors ${
-              filter === 'files'
-                ? 'bg-accent text-white'
-                : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
-            }`}
-            title="Files"
-          >
-            <FileTreeIcon />
-          </button>
-          <button
-            onClick={() => { onFilterChange('search'); focusSearchInput() }}
-            className={`p-1 rounded transition-colors ${
-              filter === 'search'
-                ? 'bg-accent text-white'
-                : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
-            }`}
-            title="Search"
-          >
-            <SearchIcon />
-          </button>
-          <button
-            onClick={() => onFilterChange('recent')}
-            className={`p-1 rounded transition-colors ${
-              filter === 'recent'
-                ? 'bg-accent text-white'
-                : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
-            }`}
-            title="Recent Files"
-          >
-            <RecentIcon />
-          </button>
-          <button
-            onClick={() => onFilterChange('review')}
-            className={`p-1 rounded transition-colors ${
-              filter === 'review'
-                ? 'bg-accent text-white'
-                : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
-            }`}
-            title="Review"
-          >
-            <ReviewIcon />
-          </button>
+          <button onClick={() => onFilterChange('source-control')} className={tabBtnClass(filter === 'source-control')} title="Source Control"><SourceControlIcon /></button>
+          <button onClick={() => onFilterChange('files')} className={tabBtnClass(filter === 'files')} title="Files"><FileTreeIcon /></button>
+          <button onClick={() => { onFilterChange('search'); focusSearchInput() }} className={tabBtnClass(filter === 'search')} title="Search"><SearchIcon /></button>
+          <button onClick={() => onFilterChange('recent')} className={tabBtnClass(filter === 'recent')} title="Recent Files"><RecentIcon /></button>
+          <button onClick={() => onFilterChange('review')} className={tabBtnClass(filter === 'review')} title="Review"><ReviewIcon /></button>
         </div>
       </div>
 
@@ -177,6 +138,8 @@ export default function Explorer({
               onRecordPushToMain={onRecordPushToMain}
               onClearPushToMain={onClearPushToMain}
               onSwitchTab={(tab) => onFilterChange(tab as Parameters<typeof onFilterChange>[0])}
+              onOpenCommandsEditor={handleOpenCommandsEditor}
+              isReview={session?.sessionType === 'review'}
             />
           </PanelErrorBoundary>
         )}

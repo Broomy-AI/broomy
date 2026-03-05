@@ -6,6 +6,7 @@ import TabbedTerminal from '../components/TabbedTerminal'
 import PanelErrorBoundary from '../components/PanelErrorBoundary'
 import Explorer from '../components/explorer'
 import FileViewer from '../components/FileViewer'
+import { CommandsEditor } from '../components/CommandsEditor'
 import AgentSettings from '../components/AgentSettings'
 import SessionList from '../components/sessionList'
 import WelcomeScreen from '../components/WelcomeScreen'
@@ -57,6 +58,7 @@ export interface PanelsMapConfig {
   updatePrState: (sessionId: string, prState: PrState, prNumber?: number, prUrl?: string) => void
   setPanelVisibility: (sessionId: string, panelId: string, visible: boolean) => void
   setToolbarPanels: (panels: string[]) => void
+  closeCommandsEditor: (sessionId: string) => void
   repos: ManagedRepo[]
 }
 
@@ -111,6 +113,7 @@ function useFileViewerPanel(config: PanelsMapConfig) {
     diffBaseRef, diffCurrentRef, diffLabel, setIsFileViewerDirty,
     registerSaveFunction,
     handleToggleFileViewer, handleFileViewerPositionChange, selectedFileStatus, fetchGitStatus,
+    closeCommandsEditor,
   } = config
 
   const [tmpdir, setTmpdir] = useState('/tmp')
@@ -141,6 +144,22 @@ function useFileViewerPanel(config: PanelsMapConfig) {
       <div className="h-full w-full relative">
         {sessions.map((session) => {
           const isActive = session.id === activeSessionId
+
+          // Show commands editor when commandsEditorDirectory is set
+          if (session.commandsEditorDirectory) {
+            return (
+              <div
+                key={session.id}
+                className={`absolute inset-0 ${isActive ? '' : 'hidden'}`}
+              >
+                <CommandsEditor
+                  directory={session.commandsEditorDirectory}
+                  onClose={() => closeCommandsEditor(session.id)}
+                />
+              </div>
+            )
+          }
+
           return (
             <div
               key={session.id}
@@ -174,7 +193,7 @@ function useFileViewerPanel(config: PanelsMapConfig) {
         })}
       </div>
     )
-  }, [sessions, activeSessionId, selectedFileStatus, sessionViewModes, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel, fetchGitStatus, handleToggleFileViewer, handleFileViewerPositionChange, navigateToFile, tmpdir, setIsFileViewerDirty, makeSaveFunctionCallback])
+  }, [sessions, activeSessionId, selectedFileStatus, sessionViewModes, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel, fetchGitStatus, handleToggleFileViewer, handleFileViewerPositionChange, navigateToFile, tmpdir, setIsFileViewerDirty, makeSaveFunctionCallback, closeCommandsEditor])
 }
 
 export function usePanelsMap(config: PanelsMapConfig) {
