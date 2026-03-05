@@ -18,16 +18,8 @@
 
 html, body, #root {
   height: 100%;
-  overflow: hidden;
+  overflow: clip;
   overscroll-behavior: none;
-}
-
-/* Prevent Chromium from scrolling the document when xterm.js repositions its
-   hidden textarea for IME composition. position:fixed on html ensures the
-   viewport cannot shift even if a focused element is off-screen. */
-html {
-  position: fixed;
-  width: 100%;
 }
 
 body {
