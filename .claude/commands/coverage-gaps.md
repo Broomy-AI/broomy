@@ -2,7 +2,7 @@ Find untested code and suggest what to test next.
 
 ## Steps
 
-1. **Run coverage.** Execute `pnpm test:unit:coverage` and capture the output. Note which files are below the 90% threshold and which are close to it.
+1. **Run coverage.** Execute `/coverage-run` to run the full test suite with coverage and cache the results. Then run `node scripts/coverage-utils.cjs below 90` to list files below threshold. Use `/coverage-check <file>` to verify individual files after writing new tests.
 
 2. **Read the coverage config.** Check `vitest.config.ts` to see which files are in the coverage target list. Note any source files with testable logic that are NOT in the coverage list but should be.
 

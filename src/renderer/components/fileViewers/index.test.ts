@@ -95,5 +95,9 @@ describe('fileViewers registry', () => {
     it('returns true for content with extended ASCII characters', () => {
       expect(isTextContent('café résumé')).toBe(true)
     })
+
+    it('returns true for content with Unicode characters (emoji, CJK)', () => {
+      expect(isTextContent('Hello 🌍 世界 こんにちは')).toBe(true)
+    })
   })
 })

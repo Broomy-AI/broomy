@@ -11,11 +11,7 @@ afterEach(() => {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  useErrorStore.setState({
-    errors: [],
-    hasUnread: false,
-    detailError: null,
-  })
+  useErrorStore.setState({ detailError: null })
 })
 
 const mockError: AppError = {

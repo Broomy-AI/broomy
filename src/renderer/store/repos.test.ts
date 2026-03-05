@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { allowConsoleWarn } from '../../test/console-guard'
 import { useRepoStore } from './repos'
 import { setLoadedCounts } from './configPersistence'
 
@@ -9,6 +10,7 @@ describe('useRepoStore', () => {
       repos: [],
       defaultCloneDir: '',
       ghAvailable: null,
+      loadError: null,
       profileId: undefined,
     })
     setLoadedCounts({ sessions: 0, agents: 0, repos: 0 })
@@ -79,12 +81,14 @@ describe('useRepoStore', () => {
     })
 
     it('sets empty repos on error', async () => {
+      allowConsoleWarn()
       vi.mocked(window.config.load).mockRejectedValue(new Error('fail'))
 
       await useRepoStore.getState().loadRepos()
       const state = useRepoStore.getState()
       expect(state.repos).toEqual([])
       expect(state.defaultCloneDir).toBe('')
+      expect(state.loadError).toBe('Failed to load repository config')
     })
   })
 

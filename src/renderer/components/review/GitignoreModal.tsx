@@ -1,5 +1,5 @@
 /**
- * Modal dialog prompting the user to add .broomy to .gitignore before generating a review.
+ * Modal dialog prompting the user to set up .broomy/.gitignore before generating a review.
  */
 export function GitignoreModal({
   onAddToGitignore,
@@ -16,11 +16,11 @@ export function GitignoreModal({
         className="bg-bg-secondary rounded-lg shadow-xl border border-border w-full max-w-md mx-4 p-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-lg font-medium text-text-primary mb-2">Add .broomy to .gitignore?</h3>
+        <h3 className="text-lg font-medium text-text-primary mb-2">Set up .broomy/.gitignore?</h3>
         <p className="text-sm text-text-secondary mb-4">
-          The <code className="font-mono bg-bg-tertiary px-1 rounded">.broomy</code> folder stores review data.
-          It's recommended to add it to your <code className="font-mono bg-bg-tertiary px-1 rounded">.gitignore</code>
-          so review artifacts aren't committed.
+          Review data is stored in <code className="font-mono bg-bg-tertiary px-1 rounded">.broomy/output/</code>.
+          It's recommended to create a <code className="font-mono bg-bg-tertiary px-1 rounded">.broomy/.gitignore</code>
+          so generated files aren't committed.
         </p>
         <div className="flex gap-2 justify-end">
           <button
@@ -39,7 +39,7 @@ export function GitignoreModal({
             onClick={onAddToGitignore}
             className="px-3 py-1.5 text-sm rounded bg-accent text-white hover:bg-accent/80 transition-colors"
           >
-            Add to .gitignore
+            Create .gitignore
           </button>
         </div>
       </div>

@@ -68,12 +68,12 @@ export function useSessionLifecycle({
   // Load profiles, then sessions/agents/repos for the current profile
   useEffect(() => {
     void loadProfiles().then(() => {
-      void loadSessions(currentProfileId)
-      void loadAgents(currentProfileId)
-      void loadRepos(currentProfileId)
-      void checkGhAvailability()
-      void checkGitAvailability()
-    })
+      void loadSessions(currentProfileId).catch((err: unknown) => console.error('[startup] Failed to load sessions:', err))
+      void loadAgents(currentProfileId).catch((err: unknown) => console.error('[startup] Failed to load agents:', err))
+      void loadRepos(currentProfileId).catch((err: unknown) => console.error('[startup] Failed to load repos:', err))
+      void checkGhAvailability().catch((err: unknown) => console.error('[startup] Failed to check gh:', err))
+      void checkGitAvailability().catch((err: unknown) => console.error('[startup] Failed to check git:', err))
+    }).catch((err: unknown) => console.error('[startup] Failed to load profiles:', err))
   }, [])
 
   // Handle profile switching: open the profile in a new window

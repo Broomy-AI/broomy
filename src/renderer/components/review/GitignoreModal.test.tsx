@@ -17,8 +17,8 @@ describe('GitignoreModal', () => {
         onCancel={vi.fn()}
       />
     )
-    expect(screen.getByText('Add .broomy to .gitignore?')).toBeTruthy()
-    expect(screen.getByText(/review data/)).toBeTruthy()
+    expect(screen.getByText('Set up .broomy/.gitignore?')).toBeTruthy()
+    expect(screen.getByText(/Review data/)).toBeTruthy()
   })
 
   it('calls onAddToGitignore when Add to .gitignore button is clicked', () => {
@@ -30,7 +30,7 @@ describe('GitignoreModal', () => {
         onCancel={vi.fn()}
       />
     )
-    fireEvent.click(screen.getByText('Add to .gitignore'))
+    fireEvent.click(screen.getByText('Create .gitignore'))
     expect(onAdd).toHaveBeenCalled()
   })
 
@@ -83,11 +83,11 @@ describe('GitignoreModal', () => {
         onCancel={onCancel}
       />
     )
-    fireEvent.click(screen.getByText('Add .broomy to .gitignore?'))
+    fireEvent.click(screen.getByText('Set up .broomy/.gitignore?'))
     expect(onCancel).not.toHaveBeenCalled()
   })
 
-  it('mentions .broomy and .gitignore in the description', () => {
+  it('mentions .broomy/output/ and .broomy/.gitignore in the description', () => {
     render(
       <GitignoreModal
         onAddToGitignore={vi.fn()}
@@ -95,7 +95,7 @@ describe('GitignoreModal', () => {
         onCancel={vi.fn()}
       />
     )
-    expect(screen.getByText('.broomy')).toBeTruthy()
-    expect(screen.getByText('.gitignore')).toBeTruthy()
+    expect(screen.getByText('.broomy/output/')).toBeTruthy()
+    expect(screen.getByText('.broomy/.gitignore')).toBeTruthy()
   })
 })

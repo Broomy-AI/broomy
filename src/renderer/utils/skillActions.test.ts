@@ -16,8 +16,8 @@ describe('skillCommandPath', () => {
 })
 
 describe('SKILL_ACTIONS', () => {
-  it('has 6 actions', () => {
-    expect(SKILL_ACTIONS).toHaveLength(6)
+  it('has 7 actions', () => {
+    expect(SKILL_ACTIONS).toHaveLength(7)
   })
 
   it('each action has name, label, and defaultContent', () => {
@@ -30,6 +30,6 @@ describe('SKILL_ACTIONS', () => {
 
   it('includes all expected action names', () => {
     const names = SKILL_ACTIONS.map(a => a.name)
-    expect(names).toEqual(['commit', 'push-to-main', 'create-pr', 'resolve-conflicts', 'review', 'plan-issue'])
+    expect(names).toEqual(['commit', 'push-to-main', 'create-pr', 'resolve-conflicts', 'review', 'review-md', 'plan-issue'])
   })
 })

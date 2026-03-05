@@ -6,7 +6,6 @@ import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SerializeAddon } from '@xterm/addon-serialize'
 
-import { useErrorStore } from '../store/errors'
 import { useSessionStore } from '../store/sessions'
 import { useRepoStore } from '../store/repos'
 import { terminalBufferRegistry } from '../utils/terminalBufferRegistry'
@@ -20,12 +19,17 @@ export interface TerminalConfig {
   command: string | undefined
   env: Record<string, string> | undefined
   isAgentTerminal: boolean
+  isServicesTerminal?: boolean
   isActive: boolean
   restartKey: number
   isolated?: boolean
-  isolationMode?: 'docker' | 'devcontainer'
-  dockerImage?: string
   repoRootDir?: string
+}
+
+export interface ExitInfo {
+  code: number
+  message: string
+  detail?: string
 }
 
 export interface TerminalSetupResult {
@@ -33,6 +37,7 @@ export interface TerminalSetupResult {
   ptyIdRef: React.MutableRefObject<string | null>
   showScrollButton: boolean
   handleScrollToBottom: () => void
+  exitInfo: ExitInfo | null
 }
 
 // ── Xterm theme (module-level constant) ──────────────────────────────
@@ -143,7 +148,7 @@ function createScrollTracking(
 // ── Terminal state hook (refs, store wiring, callbacks) ──────────────
 
 function useTerminalState(config: TerminalConfig) {
-  const { sessionId, command, env, isAgentTerminal, cwd, isolated, isolationMode, dockerImage, repoRootDir } = config
+  const { sessionId, command, env, isAgentTerminal, cwd, isolated, repoRootDir } = config
 
   const terminalRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
@@ -160,6 +165,7 @@ function useTerminalState(config: TerminalConfig) {
 
   const isActiveRef = useRef(true)
   const dataHandlerRef = useRef<{ flush: () => void } | null>(null)
+  const [exitInfo, setExitInfo] = useState<ExitInfo | null>(null)
 
   const commandRef = useRef(command)
   commandRef.current = command
@@ -171,16 +177,9 @@ function useTerminalState(config: TerminalConfig) {
   cwdRef.current = cwd
   const isolatedRef = useRef(isolated)
   isolatedRef.current = isolated
-  const isolationModeRef = useRef(isolationMode)
-  isolationModeRef.current = isolationMode
-  const dockerImageRef = useRef(dockerImage)
-  dockerImageRef.current = dockerImage
   const repoRootDirRef = useRef(repoRootDir)
   repoRootDirRef.current = repoRootDir
 
-  const { addError } = useErrorStore()
-  const addErrorRef = useRef(addError)
-  addErrorRef.current = addError
   const updateAgentMonitor = useSessionStore((state) => state.updateAgentMonitor)
   const markSessionRead = useSessionStore((state) => state.markSessionRead)
   const setPlanFile = useSessionStore((state) => state.setPlanFile)
@@ -227,8 +226,9 @@ function useTerminalState(config: TerminalConfig) {
     lastUserInputRef, lastInteractionRef, ptyIdRef, isFollowingRef,
     isActiveRef, dataHandlerRef,
     showScrollButton, setShowScrollButton,
-    commandRef, envRef, isAgentTerminalRef, cwdRef, isolatedRef, isolationModeRef, dockerImageRef, repoRootDirRef,
-    addErrorRef, updateAgentMonitorRef, markSessionReadRef,
+    exitInfo, setExitInfo,
+    commandRef, envRef, isAgentTerminalRef, cwdRef, isolatedRef, repoRootDirRef,
+    updateAgentMonitorRef, markSessionReadRef,
     sessionIdRef, setAgentPtyId,
     handleKeyEvent, processPlanDetection,
     scheduleUpdate, handleScrollToBottom,
@@ -323,6 +323,7 @@ export function useTerminalSetup(
 
     const id = `${sessionId}-${Date.now()}`
     s.ptyIdRef.current = id
+    let isStale = false
 
     // Register onData/onExit listeners BEFORE pty.create() so we don't miss
     // early messages from container setup (which fires async immediately).
@@ -338,16 +339,33 @@ export function useTerminalSetup(
 
     const removeExitListener = window.pty.onExit(id, (exitCode: number) => {
       terminal.write(`\r\n[Process exited with code ${exitCode}]\r\n`)
+      if (exitCode === 137) {
+        if (s.isolatedRef.current) {
+          terminal.write(`The process was killed (SIGKILL) \u2014 likely by Docker\u2019s out-of-memory killer.\r\n`)
+          terminal.write(`Try increasing Docker Desktop\u2019s memory in Settings \u2192 Resources \u2192 Memory.\r\n`)
+          s.setExitInfo({
+            code: 137,
+            message: 'Agent killed by Docker out-of-memory killer (SIGKILL)',
+            detail: 'Docker Desktop runs all containers in a shared Linux VM with a fixed memory ceiling. When total memory across all containers exceeds this limit, the Linux OOM killer picks a process to terminate.\n\nTo fix this, either:\n\u2022 Increase Docker Desktop\u2019s memory limit in Settings \u2192 Resources \u2192 Memory\n\u2022 Reduce the number or size of other running containers, since they compete for the same memory budget',
+          })
+        } else {
+          terminal.write(`The process was killed (SIGKILL).\r\n`)
+          s.setExitInfo({ code: 137, message: 'Process killed (SIGKILL)' })
+        }
+      }
       if (isAgent && s.sessionIdRef.current) {
         s.lastStatusRef.current = 'idle'
         s.scheduleUpdate({ status: 'idle' })
       }
     })
 
-    s.cleanupRef.current = () => { dataHandler.clearTimers(); removeDataListener(); removeExitListener() }
+    s.cleanupRef.current = () => { isStale = true; dataHandler.clearTimers(); removeDataListener(); removeExitListener() }
 
-    window.pty.create({ id, cwd: effectCwd, command: cmd, sessionId, env: envVars, shell: defaultShell || undefined, isolated: s.isolatedRef.current, isolationMode: s.isolationModeRef.current, dockerImage: s.dockerImageRef.current, repoRootDir: s.repoRootDirRef.current })
+    window.pty.create({ id, cwd: effectCwd, command: cmd, sessionId, env: envVars, shell: defaultShell || undefined, isolated: s.isolatedRef.current, repoRootDir: s.repoRootDirRef.current })
       .then(() => {
+        // Guard against stale effect: terminal may have been disposed during async setup
+        if (isStale) return
+
         if (isAgentTerminal && sessionId) s.setAgentPtyId(sessionId, id)
 
         terminal.onData((data) => {
@@ -357,8 +375,9 @@ export function useTerminalSetup(
         })
       })
       .catch((err: unknown) => {
+        if (isStale) return
         const errorMsg = `Failed to start terminal: ${err instanceof Error ? err.message : String(err)}`
-        s.addErrorRef.current(errorMsg)
+        console.error('[useTerminalSetup]', errorMsg)
         terminal.write(`\r\n\x1b[31mError: Failed to start terminal\x1b[0m\r\n`)
         terminal.write(`\x1b[33m${err instanceof Error ? err.message : String(err)}\x1b[0m\r\n`)
       })
@@ -368,9 +387,6 @@ export function useTerminalSetup(
       const entry = entries[0] as ResizeObserverEntry | undefined
       if (!entry || entry.contentRect.width === 0 || entry.contentRect.height === 0) return
       try { fitAddon.fit() } catch { /* ignore */ }
-      if (s.isFollowingRef.current) {
-        terminal.scrollToBottom()
-      }
       if (ptyResizeTimeout) clearTimeout(ptyResizeTimeout)
       ptyResizeTimeout = setTimeout(() => {
         if (s.ptyIdRef.current && terminal.cols > 0 && terminal.rows > 0) {
@@ -426,5 +442,5 @@ export function useTerminalSetup(
     }
   }, [])
 
-  return { terminalRef: s.terminalRef, ptyIdRef: s.ptyIdRef, showScrollButton: s.showScrollButton, handleScrollToBottom: s.handleScrollToBottom }
+  return { terminalRef: s.terminalRef, ptyIdRef: s.ptyIdRef, showScrollButton: s.showScrollButton, handleScrollToBottom: s.handleScrollToBottom, exitInfo: s.exitInfo }
 }

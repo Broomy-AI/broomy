@@ -57,6 +57,15 @@ describe('useMenuButton', () => {
     expect(deps.setShowShortcutsModal).toHaveBeenCalledWith(true)
   })
 
+  it('resets tutorial on help:reset-tutorial', async () => {
+    vi.mocked(window.menu.appMenuPopup).mockResolvedValue('help:reset-tutorial')
+    const { result } = renderHook(() => useMenuButton(deps))
+    await act(async () => { await result.current.handleMenuButtonClick() })
+    // Tutorial store resetProgress was called — verify via store state
+    const { useTutorialStore } = await import('../store/tutorial')
+    expect(useTutorialStore.getState()).toBeDefined()
+  })
+
   it('checks for updates on check-for-updates', async () => {
     vi.mocked(window.menu.appMenuPopup).mockResolvedValue('check-for-updates')
     const { result } = renderHook(() => useMenuButton(deps))

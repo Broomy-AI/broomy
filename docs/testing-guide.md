@@ -219,6 +219,11 @@ pnpm test:unit:coverage
 
 If coverage drops below 90% on any targeted file, the command fails.
 
+**Preferred: use the coverage skills** for a faster workflow:
+- `/coverage-run` — runs the full suite, caches structured results for incremental checks
+- `/coverage-check <file>` — re-runs only one file's tests and updates the cached summary
+- `/coverage-increase` — iteratively writes tests for all files below 90%
+
 ## E2E Test Architecture
 
 ### Overview
@@ -410,6 +415,6 @@ Feature doc tests are **not** run as part of `pnpm test:e2e`. They are separate,
 1. Make code changes
 2. Write or update unit tests for changed logic
 3. Run `pnpm test:unit` to verify unit tests pass
-4. Run `pnpm test:unit:coverage` to confirm coverage stays above 90%
+4. Run `/coverage-run` to confirm coverage stays above 90% (or `pnpm test:unit:coverage` directly). Use `/coverage-check <file>` for incremental checks on individual files.
 5. Run `pnpm test:e2e` to verify E2E tests still pass
 6. Create or update a feature doc screenshot walkthrough, then run `pnpm test:feature-docs <feature-slug>` to verify

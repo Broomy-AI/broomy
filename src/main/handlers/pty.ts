@@ -12,7 +12,7 @@ import type { IPty } from 'node-pty'
 import { isWindows, getDefaultShell, resolveWindowsCommand } from '../platform'
 import { HandlerContext } from './types'
 import { getScenarioData } from './scenarios'
-import { isDockerAvailable, ensureContainer, buildDockerExecArgs, dockerSetupMessage, imageExists, ensureAgentInstalled, setupContainer, acquireSetupLock, isSetupLockHeld, DEFAULT_DOCKER_IMAGE } from '../docker'
+import { isDockerAvailable, dockerSetupMessage, ensureAgentInstalled, acquireSetupLock } from '../containerUtils'
 import { isDevcontainerCliAvailable, hasDevcontainerConfig, devcontainerUp, buildDevcontainerExecArgs, devcontainerSetupMessage } from '../devcontainer'
 
 /**
@@ -81,150 +81,19 @@ function extractAgentCommand(command: string): string {
 }
 
 /**
- * Handle Docker isolation PTY creation with two-phase flow:
- * Phase 1 (sync): Return { id } immediately so the renderer can register onData.
- * Phase 2 (async): Set up container, install agent, start docker exec PTY.
- */
-function createIsolatedPty(
-  ctx: HandlerContext,
-  options: { id: string; cwd: string; command?: string; sessionId: string; env?: Record<string, string>; dockerImage?: string; repoRootDir?: string },
-  senderWindow: BrowserWindow | null,
-): { id: string } | null {
-  const { id, cwd, command, dockerImage, repoRootDir } = options
-  // Container is keyed on repo root dir (shared across worktrees/sessions),
-  // falling back to cwd if repoRootDir is not provided.
-  const containerKey = repoRootDir || cwd
-
-  const sendToTerminal = (text: string) => {
-    if (senderWindow && !senderWindow.isDestroyed()) {
-      senderWindow.webContents.send(`pty:data:${id}`, text)
-    }
-  }
-
-  // Phase 1 (sync): Quick checks that don't need async
-  // We launch the async phase and return immediately.
-
-  // Phase 2 (async): Container setup, agent install, PTY start
-  // Uses a per-repo lock so concurrent sessions wait for the first to finish
-  // setup rather than racing on container creation and agent install.
-  const asyncSetup = async () => {
-    sendToTerminal('\x1b[2m── Starting container for agent ──\x1b[22m\r\n')
-
-    // Check Docker availability (before acquiring lock — fast check)
-    sendToTerminal('\x1b[2m  Checking Docker...\x1b[22m\r\n')
-    const status = await isDockerAvailable()
-    if (!status.available) {
-      displayTerminalError(id, dockerSetupMessage(status), senderWindow)
-      return
-    }
-
-    // Check custom image exists (before acquiring lock — fast check)
-    const img = dockerImage || DEFAULT_DOCKER_IMAGE
-    if (dockerImage) {
-      sendToTerminal('\x1b[2m  Checking image...\x1b[22m\r\n')
-      const hasImage = await imageExists(img)
-      if (!hasImage) {
-        displayTerminalError(id,
-          `Docker image '${img}' not found. Pull or build it, then restart the session.`,
-          senderWindow)
-        return
-      }
-    }
-
-    // Acquire per-repo lock for container creation + setup + agent install.
-    // Second session for the same repo waits here, then gets the already-running
-    // container with the agent already installed.
-    const lockContended = isSetupLockHeld(containerKey)
-    if (lockContended) {
-      sendToTerminal('\x1b[2m  Waiting for container setup...\x1b[22m\r\n')
-    }
-    const releaseLock = await acquireSetupLock(containerKey)
-    let containerId: string
-    try {
-      // Ensure container exists (pulls default image if needed)
-      const result = await ensureContainer(ctx, containerKey, dockerImage, sendToTerminal)
-      if (!result.success || !result.containerId) {
-        displayTerminalError(id,
-          `Docker container failed to start: ${result.error || 'Unknown error'}`,
-          senderWindow)
-        return
-      }
-      containerId = result.containerId
-
-      // First-time setup for new containers
-      if (result.isNew) {
-        const setupResult = await setupContainer(containerId, sendToTerminal)
-        if (!setupResult.success) {
-          displayTerminalError(id,
-            `Container setup failed: ${setupResult.error || 'Unknown error'}`,
-            senderWindow)
-          return
-        }
-      }
-
-      // Install agent if a command was specified
-      if (command) {
-        const agentCmd = extractAgentCommand(command)
-        const installResult = await ensureAgentInstalled(containerId, agentCmd, sendToTerminal)
-        if (!installResult.success) {
-          displayTerminalError(id,
-            `Failed to install ${agentCmd}: ${installResult.error || 'Unknown error'}`,
-            senderWindow)
-          return
-        }
-      }
-    } finally {
-      releaseLock()
-    }
-
-    sendToTerminal('\x1b[2m── Container ready ──\x1b[22m\r\n\r\n')
-
-    // Start docker exec PTY.
-    // Expand ~ to the container's home dir (/home/node) since Node.js fs APIs
-    // don't expand tilde — only shells do. Without this, env vars like
-    // CLAUDE_CONFIG_DIR=~/.claude create a literal '~' directory.
-    const containerHome = '/home/node'
-    const dockerEnv: Record<string, string> = {}
-    if (options.env) {
-      for (const [key, value] of Object.entries(options.env)) {
-        if (value.startsWith('~/')) {
-          dockerEnv[key] = `${containerHome}/${value.slice(2)}`
-        } else if (value === '~') {
-          dockerEnv[key] = containerHome
-        } else {
-          dockerEnv[key] = value
-        }
-      }
-    }
-    const dockerArgs = buildDockerExecArgs(containerId, cwd, dockerEnv, command)
-
-    const ptyProcess = pty.spawn('docker', dockerArgs, {
-      name: 'xterm-256color',
-      cols: 80,
-      rows: 30,
-      cwd: process.cwd(),
-      env: process.env as Record<string, string>,
-    })
-    wirePtyEvents(ctx, ptyProcess, id, senderWindow)
-  }
-
-  // Fire and forget — errors are sent to the terminal
-  asyncSetup().catch((err: unknown) => {
-    displayTerminalError(id, `Unexpected error: ${err instanceof Error ? err.message : String(err)}`, senderWindow)
-  })
-
-  return { id }
-}
-
-/**
  * Handle devcontainer isolation PTY creation with two-phase flow.
  * Uses devcontainer CLI to start/reuse a dev container, then docker exec for interactive PTY.
+ *
+ * When no .devcontainer/devcontainer.json is found, degrades gracefully:
+ * sends a warning to the terminal and emits pty:devcontainer-missing so the
+ * UI can show a banner, then returns 'fallthrough' to let the caller use the
+ * standard non-isolated PTY path instead.
  */
 function createDevcontainerPty(
   ctx: HandlerContext,
   options: { id: string; cwd: string; command?: string; sessionId: string; env?: Record<string, string>; repoRootDir?: string },
   senderWindow: BrowserWindow | null,
-): { id: string } | null {
+): { id: string } | 'fallthrough' | null {
   const { id, cwd, command } = options
   // Devcontainer workspace folder = the worktree directory (cwd), not repoRootDir.
   // Each worktree may have a different .devcontainer/devcontainer.json, so each
@@ -232,12 +101,23 @@ function createDevcontainerPty(
   // when configs are identical.
   const workspaceFolder = cwd
 
+  // Check for devcontainer config synchronously — if missing, degrade gracefully
+  // to the standard non-isolated PTY path
+  if (!hasDevcontainerConfig(workspaceFolder)) {
+    // Notify renderer so it can show a warning banner
+    if (senderWindow && !senderWindow.isDestroyed()) {
+      senderWindow.webContents.send('pty:devcontainer-missing', { sessionId: options.sessionId })
+    }
+    return 'fallthrough'
+  }
+
   const sendToTerminal = (text: string) => {
     if (senderWindow && !senderWindow.isDestroyed()) {
       senderWindow.webContents.send(`pty:data:${id}`, text)
     }
   }
 
+  pendingSetups.add(id)
   const asyncSetup = async () => {
     sendToTerminal('\x1b[2m── Starting dev container ──\x1b[22m\r\n')
 
@@ -255,19 +135,11 @@ function createDevcontainerPty(
       return
     }
 
-    // Check for devcontainer config
-    const hasConfig = hasDevcontainerConfig(workspaceFolder)
-    if (!hasConfig) {
-      displayTerminalError(id,
-        'No .devcontainer/devcontainer.json found. Generate one in repo settings or create it manually.',
-        senderWindow)
-      return
-    }
-
     // Acquire per-repo lock
     const releaseLock = await acquireSetupLock(workspaceFolder)
     let containerId: string
     let remoteUser: string
+    let postAttachCommand: string | undefined
     try {
       // Run devcontainer up
       const result = await devcontainerUp(workspaceFolder, sendToTerminal)
@@ -279,6 +151,7 @@ function createDevcontainerPty(
       }
       containerId = result.result.containerId
       remoteUser = result.result.remoteUser
+      postAttachCommand = result.result.postAttachCommand
 
       // Store container info for DockerInfoPanel
       ctx.dockerContainers.set(workspaceFolder, {
@@ -302,7 +175,20 @@ function createDevcontainerPty(
       releaseLock()
     }
 
+    // Check if session was killed during async setup
+    if (!pendingSetups.has(id)) return
+
     sendToTerminal('\x1b[2m── Dev container ready ──\x1b[22m\r\n\r\n')
+
+    // Notify renderer about devcontainer readiness (for Services tab)
+    if (postAttachCommand && senderWindow && !senderWindow.isDestroyed()) {
+      senderWindow.webContents.send('pty:devcontainer-ready', {
+        sessionId: options.sessionId,
+        postAttachCommand,
+        containerId,
+        remoteUser,
+      })
+    }
 
     // Start docker exec PTY using devcontainer's remote user
     const containerHome = remoteUser === 'root' ? '/root' : `/home/${remoteUser}`
@@ -320,17 +206,32 @@ function createDevcontainerPty(
     }
     const dockerArgs = buildDevcontainerExecArgs(containerId, remoteUser, cwd, dockerEnv, command)
 
-    const ptyProcess = pty.spawn('docker', dockerArgs, {
-      name: 'xterm-256color',
-      cols: 80,
-      rows: 30,
-      cwd: process.cwd(),
-      env: process.env as Record<string, string>,
-    })
+    let ptyProcess: IPty
+    try {
+      ptyProcess = pty.spawn('docker', dockerArgs, {
+        name: 'xterm-256color',
+        cols: 80,
+        rows: 30,
+        cwd: process.cwd(),
+        env: process.env as Record<string, string>,
+      })
+    } catch (err) {
+      displayTerminalError(id, `Failed to spawn Docker process: ${err instanceof Error ? err.message : String(err)}`, senderWindow)
+      return
+    }
+    ptyProcess.onExit(() => {}) // prevent unhandled-exit crashes
+
+    // Final check: session may have been killed between spawn and wire
+    if (!pendingSetups.has(id)) {
+      ptyProcess.kill()
+      return
+    }
+    pendingSetups.delete(id)
     wirePtyEvents(ctx, ptyProcess, id, senderWindow)
   }
 
   asyncSetup().catch((err: unknown) => {
+    pendingSetups.delete(id)
     displayTerminalError(id, `Unexpected error: ${err instanceof Error ? err.message : String(err)}`, senderWindow)
   })
 
@@ -383,17 +284,29 @@ function resolveShellConfig(
   return { shell, shellArgs, initialCommand }
 }
 
+/** Track in-flight async PTY setups so pty:kill can cancel them. */
+const pendingSetups = new Set<string>()
+
 export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
-  ipcMain.handle('pty:create', (_event, options: { id: string; cwd: string; command?: string; sessionId?: string; env?: Record<string, string>; shell?: string; isolated?: boolean; isolationMode?: 'docker' | 'devcontainer'; dockerImage?: string; repoRootDir?: string }) => {
+  ipcMain.handle('pty:create', (_event, options: { id: string; cwd: string; command?: string; sessionId?: string; env?: Record<string, string>; shell?: string; isolated?: boolean; repoRootDir?: string }) => {
+    // Kill any existing PTY with the same ID (e.g. React strict mode double-mount)
+    const existing = ctx.ptyProcesses.get(options.id)
+    if (existing) {
+      existing.kill()
+      ctx.ptyProcesses.delete(options.id)
+      ctx.ptyOwnerWindows.delete(options.id)
+    }
+
     const senderWindow = BrowserWindow.fromWebContents(_event.sender)
 
-    // Container isolation path (allowed in E2E when E2E_REAL_DOCKER is set)
+    // Container isolation path (devcontainer only).
+    // When no devcontainer.json exists, createDevcontainerPty returns 'fallthrough'
+    // and we degrade gracefully to the standard non-isolated PTY path.
     const allowRealDocker = ctx.isE2ETest && process.env.E2E_REAL_DOCKER === 'true'
     if (options.isolated && (!ctx.isE2ETest || allowRealDocker) && options.sessionId) {
-      if (options.isolationMode === 'devcontainer') {
-        return createDevcontainerPty(ctx, { ...options, sessionId: options.sessionId }, senderWindow)
-      }
-      return createIsolatedPty(ctx, { ...options, sessionId: options.sessionId }, senderWindow)
+      const result = createDevcontainerPty(ctx, { ...options, sessionId: options.sessionId }, senderWindow)
+      if (result !== 'fallthrough') return result
+      // Fall through to standard PTY when no devcontainer config
     }
 
     // Standard (non-isolated) path
@@ -421,20 +334,28 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
 
     const env = { ...baseEnv, ...agentEnv } as Record<string, string>
 
-    const ptyProcess = pty.spawn(shell, shellArgs, {
-      name: 'xterm-256color',
-      cols: 80,
-      rows: 30,
-      cwd: options.cwd,
-      env,
-    })
+    let ptyProcess: IPty
+    try {
+      ptyProcess = pty.spawn(shell, shellArgs, {
+        name: 'xterm-256color',
+        cols: 80,
+        rows: 30,
+        cwd: options.cwd,
+        env,
+      })
+    } catch (err) {
+      displayTerminalError(options.id, `Failed to start terminal: ${err instanceof Error ? err.message : String(err)}`, senderWindow)
+      return { id: options.id }
+    }
 
     wirePtyEvents(ctx, ptyProcess, options.id, senderWindow)
 
     if (initialCommand) {
       initialCommand = resolveInitialCommand(initialCommand, ctx.isE2ETest)
       setTimeout(() => {
-        ptyProcess.write(`${initialCommand}\r`)
+        if (ctx.ptyProcesses.has(options.id)) {
+          ptyProcess.write(`${initialCommand}\r`)
+        }
       }, 100)
     }
 
@@ -456,10 +377,13 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   })
 
   ipcMain.handle('pty:kill', (_event, id: string) => {
+    // Cancel any in-flight async container setup for this ID
+    pendingSetups.delete(id)
     const ptyProcess = ctx.ptyProcesses.get(id)
     if (ptyProcess) {
       ptyProcess.kill()
       ctx.ptyProcesses.delete(id)
+      ctx.ptyOwnerWindows.delete(id)
     }
   })
 }

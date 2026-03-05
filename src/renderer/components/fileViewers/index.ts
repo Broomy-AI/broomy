@@ -10,10 +10,12 @@ import type { FileViewerPlugin } from './types'
 import { MonacoViewer } from './MonacoViewer'
 import { ImageViewer } from './ImageViewer'
 import { MarkdownViewer } from './MarkdownViewer'
+import { WebviewViewer } from './WebviewViewer'
 
 // Registry of all available file viewers
 // Add new viewers here - they will automatically be available
 const viewers: FileViewerPlugin[] = [
+  WebviewViewer, // Highest priority for URLs
   ImageViewer,
   MarkdownViewer,
   MonacoViewer, // Fallback for text files
@@ -48,17 +50,21 @@ export function isTextContent(content: string): boolean {
   // Check for null bytes which indicate binary content
   if (content.includes('\0')) return false
 
-  // Check if most characters are printable ASCII or common whitespace
-  const printableRatio = content.split('').filter((char) => {
-    const code = char.charCodeAt(0)
-    // Allow printable ASCII, tabs, newlines, and common extended chars
-    return (code >= 32 && code <= 126) || code === 9 || code === 10 || code === 13 || (code >= 160 && code <= 255)
-  }).length / content.length
+  // Count non-text characters (C0 control chars excluding whitespace)
+  let nonTextCount = 0
+  for (let i = 0; i < content.length; i++) {
+    const code = content.charCodeAt(i)
+    // Only flag C0 control characters (0-31) that aren't common whitespace
+    if (code < 32 && code !== 9 && code !== 10 && code !== 13) {
+      nonTextCount++
+    }
+  }
 
-  return printableRatio > 0.9
+  return nonTextCount / content.length < 0.1
 }
 
 export type { FileViewerPlugin, FileViewerComponentProps } from './types'
 export { MonacoViewer } from './MonacoViewer'
 export { ImageViewer } from './ImageViewer'
 export { MarkdownViewer } from './MarkdownViewer'
+export { WebviewViewer } from './WebviewViewer'

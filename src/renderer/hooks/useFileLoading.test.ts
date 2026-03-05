@@ -9,6 +9,10 @@ vi.mock('../components/fileViewers', () => ({
   isTextContent: vi.fn().mockReturnValue(true),
 }))
 
+vi.mock('../components/fileViewers/MonacoViewer', () => ({
+  hasKnownTextExtension: vi.fn().mockReturnValue(false),
+}))
+
 import { getViewersForFile, isTextContent } from '../components/fileViewers'
 
 const monacoViewer = { id: 'monaco', name: 'Code', canHandle: () => true, priority: 0, component: () => null }

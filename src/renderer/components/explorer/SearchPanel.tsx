@@ -5,6 +5,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react'
 import type { SearchResult } from '../../../preload/index'
 import type { SearchTreeNode } from './types'
 import type { NavigationTarget } from '../../utils/fileNavigation'
+import { DialogErrorBanner } from '../ErrorBanner'
 
 interface SearchPanelProps {
   directory?: string
@@ -16,6 +17,7 @@ export function SearchPanel({ directory, onFileSelect }: SearchPanelProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
   const [collapsedSearchGroups, setCollapsedSearchGroups] = useState<Set<string>>(new Set())
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -64,6 +66,7 @@ export function SearchPanel({ directory, onFileSelect }: SearchPanelProps) {
     }
 
     setIsSearching(true)
+    setSearchError(null)
     searchTimeoutRef.current = setTimeout(() => {
       void (async () => {
         try {
@@ -71,6 +74,7 @@ export function SearchPanel({ directory, onFileSelect }: SearchPanelProps) {
           setSearchResults(results)
         } catch {
           setSearchResults([])
+          setSearchError('Search failed')
         }
         setIsSearching(false)
       })()
@@ -163,7 +167,10 @@ export function SearchPanel({ directory, onFileSelect }: SearchPanelProps) {
         {isSearching && (
           <div className="px-3 py-4 text-xs text-text-secondary text-center">Searching...</div>
         )}
-        {!isSearching && searchQuery.length >= 2 && searchResults.length === 0 && (
+        {!isSearching && searchError && (
+          <div className="px-3 py-2"><DialogErrorBanner error={searchError} onDismiss={() => setSearchError(null)} /></div>
+        )}
+        {!isSearching && !searchError && searchQuery.length >= 2 && searchResults.length === 0 && (
           <div className="px-3 py-4 text-xs text-text-secondary text-center">No results found</div>
         )}
         {!isSearching && searchQuery.length < 2 && searchQuery.length > 0 && (

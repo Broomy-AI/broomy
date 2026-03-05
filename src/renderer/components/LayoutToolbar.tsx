@@ -2,7 +2,6 @@
  * Top toolbar with panel toggle buttons, error indicator, and version display.
  */
 import { ReactNode } from 'react'
-import ErrorIndicator from './ErrorIndicator'
 import VersionIndicator from './VersionIndicator'
 import type { PanelDefinition } from '../panels'
 
@@ -83,7 +82,6 @@ export default function LayoutToolbar({
           )
         })}
 
-        <ErrorIndicator />
         <VersionIndicator />
 
         {onMenuButtonClick && (

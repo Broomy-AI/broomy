@@ -155,7 +155,7 @@ describe('SearchPanel', () => {
       await Promise.resolve()
     })
 
-    expect(screen.getByText('No results found')).toBeTruthy()
+    expect(screen.getByText('Search failed')).toBeTruthy()
   })
 
   it('toggles folder collapse in search results', async () => {

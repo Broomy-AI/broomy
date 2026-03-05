@@ -65,6 +65,54 @@ describe('preload pty API', () => {
     })
   })
 
+  describe('onDevcontainerReady', () => {
+    it('registers event listener on pty:devcontainer-ready', () => {
+      const callback = vi.fn()
+      ptyApi.onDevcontainerReady(callback)
+      expect(mockOn).toHaveBeenCalledWith('pty:devcontainer-ready', expect.any(Function))
+    })
+
+    it('returns a cleanup function that removes the listener', () => {
+      const callback = vi.fn()
+      const cleanup = ptyApi.onDevcontainerReady(callback)
+      cleanup()
+      expect(mockRemoveListener).toHaveBeenCalledWith('pty:devcontainer-ready', expect.any(Function))
+    })
+
+    it('forwards event data to the callback', () => {
+      const callback = vi.fn()
+      ptyApi.onDevcontainerReady(callback)
+      const handler = mockOn.mock.calls[0][1]
+      const event = { sessionId: 's1', postAttachCommand: 'pnpm dev', containerId: 'c1', remoteUser: 'vscode' }
+      handler({}, event)
+      expect(callback).toHaveBeenCalledWith(event)
+    })
+  })
+
+  describe('onDevcontainerMissing', () => {
+    it('registers event listener on pty:devcontainer-missing', () => {
+      const callback = vi.fn()
+      ptyApi.onDevcontainerMissing(callback)
+      expect(mockOn).toHaveBeenCalledWith('pty:devcontainer-missing', expect.any(Function))
+    })
+
+    it('returns a cleanup function that removes the listener', () => {
+      const callback = vi.fn()
+      const cleanup = ptyApi.onDevcontainerMissing(callback)
+      cleanup()
+      expect(mockRemoveListener).toHaveBeenCalledWith('pty:devcontainer-missing', expect.any(Function))
+    })
+
+    it('forwards event data to the callback', () => {
+      const callback = vi.fn()
+      ptyApi.onDevcontainerMissing(callback)
+      const handler = mockOn.mock.calls[0][1]
+      const event = { sessionId: 's1' }
+      handler({}, event)
+      expect(callback).toHaveBeenCalledWith(event)
+    })
+  })
+
   describe('onExit', () => {
     it('registers event listener on pty:exit:${id}', () => {
       const callback = vi.fn()

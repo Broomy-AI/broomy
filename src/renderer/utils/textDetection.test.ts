@@ -36,18 +36,22 @@ describe('isTextContent', () => {
     expect(isTextContent(text)).toBe(true)
   })
 
-  it('returns true when printable ratio is above 85%', () => {
-    // 90 printable + 10 non-printable = 90% printable
-    const printable = 'A'.repeat(90)
-    const nonPrintable = String.fromCharCode(1).repeat(10)
+  it('returns true when control char ratio is below 10%', () => {
+    // 91 printable + 9 control = 9% control chars
+    const printable = 'A'.repeat(91)
+    const nonPrintable = String.fromCharCode(1).repeat(9)
     expect(isTextContent(printable + nonPrintable)).toBe(true)
   })
 
-  it('returns false when printable ratio is below 85%', () => {
-    // 80 printable + 20 non-printable = 80% printable
+  it('returns false when control char ratio is above 10%', () => {
+    // 80 printable + 20 control = 20% control chars
     const printable = 'A'.repeat(80)
     const nonPrintable = String.fromCharCode(1).repeat(20)
     expect(isTextContent(printable + nonPrintable)).toBe(false)
+  })
+
+  it('returns true for text with Unicode characters (emoji, CJK)', () => {
+    expect(isTextContent('Hello 🌍 世界 こんにちは')).toBe(true)
   })
 
   it('treats carriage return as printable', () => {

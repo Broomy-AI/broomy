@@ -184,7 +184,7 @@ describe('updater handler', () => {
 
         const handler = getHandler(mockIpcMain, 'updater:checkForUpdates')
         const result = await handler()
-        expect(result).toEqual({ updateAvailable: false })
+        expect(result).toEqual({ updateAvailable: false, checkFailed: true })
       })
 
     })

@@ -8,7 +8,8 @@ import { execFile, spawn } from 'child_process'
 import { promisify } from 'util'
 import { existsSync, mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import { ensureAgentInstalled } from './docker'
+import type { HandlerContext } from './handlers/types'
+import type { ContainerInfo } from '../preload/apis/types'
 
 const execFileAsync = promisify(execFile)
 
@@ -63,11 +64,40 @@ export function writeDefaultDevcontainerConfig(workspaceFolder: string): void {
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`)
 }
 
+/**
+ * Normalize devcontainer postAttachCommand to a single shell string.
+ * The spec allows: string, string[], or { [name]: string | string[] }.
+ */
+/** Shell-escape a string for embedding in a bash command. */
+function shellQuote(s: string): string {
+  if (/^[a-zA-Z0-9_./:=@%^+,-]+$/.test(s)) return s
+  return `'${s.replace(/'/g, "'\\''")}'`
+}
+
+export function normalizePostAttachCommand(
+  cmd: unknown,
+): string | undefined {
+  if (!cmd) return undefined
+  if (typeof cmd === 'string') return cmd
+  // Array form represents exec-style args — shell-quote each element to preserve spaces
+  if (Array.isArray(cmd)) return cmd.map((a: unknown) => shellQuote(String(a))).join(' ')
+  if (typeof cmd === 'object') {
+    const parts: string[] = []
+    for (const value of Object.values(cmd as Record<string, unknown>)) {
+      if (typeof value === 'string') parts.push(value)
+      else if (Array.isArray(value)) parts.push(value.map((a: unknown) => shellQuote(String(a))).join(' '))
+    }
+    return parts.length > 0 ? parts.join(' && ') : undefined
+  }
+  return undefined
+}
+
 /** Result from devcontainer up. */
 export type DevcontainerUpResult = {
   containerId: string
   remoteUser: string
   remoteWorkspaceFolder: string
+  postAttachCommand?: string
 }
 
 /**
@@ -84,6 +114,8 @@ export async function devcontainerUp(
     const child = spawn('devcontainer', [
       'up',
       '--workspace-folder', workspaceFolder,
+      '--skip-post-attach',
+      '--include-merged-configuration',
     ], {
       stdio: ['ignore', 'pipe', 'pipe'],
     })
@@ -117,13 +149,18 @@ export async function devcontainerUp(
           containerId: string
           remoteUser: string
           remoteWorkspaceFolder: string
+          mergedConfiguration?: { postAttachCommand?: unknown }
         }
+        const postAttachCommand = normalizePostAttachCommand(
+          parsed.mergedConfiguration?.postAttachCommand,
+        )
         resolve({
           success: true,
           result: {
             containerId: parsed.containerId,
             remoteUser: parsed.remoteUser,
             remoteWorkspaceFolder: parsed.remoteWorkspaceFolder,
+            postAttachCommand,
           },
         })
       } catch (parseErr) {
@@ -176,12 +213,61 @@ export function devcontainerSetupMessage(status: { available: boolean; error?: s
     '│                                                     │',
     '│  Docker Desktop must also be running.               │',
     '│                                                     │',
-    '│  Or switch to "Lightweight Docker" mode in repo     │',
-    '│  settings.                                          │',
+    '│  Or disable container isolation in repo settings.   │',
     '╰────────────────────────────────────────────────────╯',
     '',
   ].join('\r\n')
 }
 
+/**
+ * Get container info for the ContainerInfoPanel.
+ * Reads from the in-memory docker containers map and checks live status via docker inspect.
+ */
+export async function getContainerInfo(
+  ctx: HandlerContext,
+  repoDir: string,
+): Promise<ContainerInfo | null> {
+  const state = ctx.dockerContainers.get(repoDir)
+  if (!state) return null
+
+  let status: ContainerInfo['status'] = 'stopped'
+  try {
+    const { stdout } = await execFileAsync('docker', [
+      'inspect', '--format', '{{.State.Status}}', state.containerId,
+    ])
+    const dockerStatus = stdout.trim()
+    if (dockerStatus === 'running') status = 'running'
+    else if (dockerStatus === 'created') status = 'starting'
+  } catch {
+    // Container gone
+    return null
+  }
+
+  return {
+    containerId: state.containerId.substring(0, 12),
+    status,
+    image: state.image,
+    repoDir: state.repoDir,
+  }
+}
+
+/**
+ * Force-remove a container and clear it from the tracking map.
+ */
+export async function resetContainer(
+  ctx: HandlerContext,
+  repoDir: string,
+): Promise<void> {
+  const state = ctx.dockerContainers.get(repoDir)
+  ctx.dockerContainers.delete(repoDir)
+  if (state) {
+    try {
+      await execFileAsync('docker', ['rm', '-f', state.containerId])
+    } catch {
+      // Already gone — ignore
+    }
+  }
+}
+
 /** Re-export ensureAgentInstalled for devcontainer use */
-export { ensureAgentInstalled }
+export { ensureAgentInstalled } from './containerUtils'

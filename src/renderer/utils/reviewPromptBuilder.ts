@@ -130,11 +130,11 @@ ${prDescription}
 1. Run \`git diff origin/${baseBranch}...HEAD\` to see the full diff
 2. Run \`git rev-parse HEAD\` to get the current commit SHA (for the headCommit field)
 3. Examine the changed files to understand the context
-4. Produce a structured JSON review and write it to \`.broomy/review.json\`
+4. Produce a structured JSON review and write it to \`.broomy/output/review.json\`
 
 ## Output Format
 
-Write the following JSON to \`.broomy/review.json\`:
+Write the following JSON to \`.broomy/output/review.json\`:
 
 \`\`\`json
 ${schema}
@@ -153,7 +153,7 @@ ${reviewInstructions}
   prompt += `
 ## Action
 
-Please analyze the PR now and write the result to \`.broomy/review.json\`.
+Please analyze the PR now and write the result to \`.broomy/output/review.json\`.
 `
 
   return prompt
@@ -192,7 +192,7 @@ ${prDescription}
 2. Run \`git log ${previousHeadCommit}..HEAD --oneline\` to see what commits were added
 3. Run \`git diff origin/${baseBranch}...HEAD\` to see the full current diff
 4. Run \`git rev-parse HEAD\` to get the current commit SHA (for the headCommit field)
-5. Produce a structured JSON review and write it to \`.broomy/review.json\`
+5. Produce a structured JSON review and write it to \`.broomy/output/review.json\`
 
 ## Responses to Your Comments
 
@@ -243,7 +243,7 @@ Populate the \`changesSinceLastReview\` field with:
 
 ## Output Format
 
-Write the following JSON to \`.broomy/review.json\`:
+Write the following JSON to \`.broomy/output/review.json\`:
 
 \`\`\`json
 ${schema}
@@ -262,7 +262,115 @@ ${reviewInstructions}
   prompt += `
 ## Action
 
-Please analyze the changes since the last review and write the result to \`.broomy/review.json\`.
+Please analyze the changes since the last review and write the result to \`.broomy/output/review.json\`.
+`
+
+  return prompt
+}
+
+/**
+ * Build a markdown-format review prompt that instructs the agent to write `.broomy/output/review.md`.
+ */
+export function buildMarkdownReviewPrompt(
+  session: Session,
+  reviewInstructions: string,
+  options?: ReviewPromptOptions,
+): string {
+  const baseBranch = session.prBaseBranch || 'main'
+  const { prDescription, previousHeadCommit } = options || {}
+  const prChangesUrl = session.prUrl ? `${session.prUrl}/files` : null
+
+  let prompt = `# PR Review
+
+You are reviewing a pull request. Analyze the diff and produce a detailed review as a markdown document.
+`
+
+  if (prDescription) {
+    prompt += `
+## PR Description (by the author)
+
+${prDescription}
+`
+  }
+
+  const isReReview = !!previousHeadCommit
+
+  prompt += `
+## Instructions
+
+1. Run \`git diff origin/${baseBranch}...HEAD\` to see the full diff
+`
+
+  if (isReReview) {
+    prompt += `2. Run \`git diff ${previousHeadCommit}..HEAD --stat\` to see what changed since the last review
+3. Run \`git log ${previousHeadCommit}..HEAD --oneline\` to see new commits
+`
+  }
+
+  prompt += `
+## Output Format
+
+Write your review to \`.broomy/output/review.md\` as a markdown document. Follow these rules:
+
+- Use \`## Heading\` for each major section (the UI will auto-collapse these as collapsible sections)
+- Use \`### Sub-heading\` for individual issues, findings, or change groups within a section
+- Use \`- [ ] Check name\` for in-progress checks and \`- [x] Check name\` for completed checks (place these under the relevant \`###\` sub-heading)
+- Sections with incomplete checkboxes (\`- [ ]\`) will stay expanded in the UI
+- **IMPORTANT — Links**: Every mention of a file, function, or code location MUST include a clickable link to the PR diff view. Never omit links — the reader navigates the review by clicking them. All links MUST point to the PR diff view, never to the blob/file view. ${prChangesUrl ? `Use \`${prChangesUrl}\` as the base URL and append \`#diff-<sha256-of-filepath>\` for each file.` : 'Use the PR files/changes URL (e.g. `https://github.com/owner/repo/pull/N/files#diff-<sha256-of-filepath>`) for each file.'} To compute the anchor, take the SHA-256 hash of the file's relative path. Example: for \`src/app.tsx\` → \`${prChangesUrl || 'https://github.com/owner/repo/pull/N/files'}#diff-<sha256 of "src/app.tsx">\`. You can run \`echo -n "path" | shasum -a 256\` to compute the hash.
+- You can use \`<!-- include: .broomy/review-detail-name.md -->\` to break out sub-analyses into separate files — the UI will inline them when they exist
+- Write the file incrementally — the UI polls and re-renders as you write
+
+### Suggested sections
+
+\`\`\`markdown
+## Overview
+Brief summary of what this PR does and the approach taken.
+
+## Change Analysis
+- [x] Reviewed file structure
+- [x] Identified change patterns
+
+### Theme context and provider
+Description of this change group.
+[src/file.tsx](${prChangesUrl || 'https://github.com/owner/repo/pull/N/files'}#diff-<sha256>)
+
+### CSS variable updates
+Description of this change group.
+[src/styles.css](${prChangesUrl || 'https://github.com/owner/repo/pull/N/files'}#diff-<sha256>)
+
+## Potential Issues
+
+### Flash of unstyled content on load
+- [ ] Resolved
+
+Description of the issue and its impact.
+Location: [src/file.tsx](${prChangesUrl || 'https://github.com/owner/repo/pull/N/files'}#diff-<sha256>)
+
+## Design Decisions
+
+### localStorage over cookies
+- [x] Reviewed
+
+Explanation of the decision and alternatives considered.
+${isReReview ? `
+## Changes Since Last Review
+Summarize what changed since commit \`${previousHeadCommit}\`.
+` : ''}
+\`\`\`
+`
+
+  if (reviewInstructions) {
+    prompt += `
+## Additional Review Focus
+
+${reviewInstructions}
+`
+  }
+
+  prompt += `
+## Action
+
+Please analyze the PR now and write the result to \`.broomy/output/review.md\`.
 `
 
   return prompt

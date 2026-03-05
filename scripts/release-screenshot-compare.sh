@@ -48,24 +48,62 @@ fail() {
 # Run all feature walkthroughs in a single Playwright invocation,
 # then copy screenshots to the target directory.
 # Args: $1 = label (e.g. "baseline"), $2 = target dir, $3 = results json path
+#        $4 = ref label, $5... = feature names to run
 run_walkthroughs() {
+  # Disable set -e inside this function — we handle all errors explicitly
+  # and need to tolerate test failures without aborting.
+  set +e
+
   local label="$1"
   local target_dir="$2"
   local results_json="$3"
   local ref_label="$4"
+  shift 4
+  local features_to_run=("$@")
+  local feature_count=${#features_to_run[@]}
 
   # Clean all existing screenshots before running
-  for feature in "${FEATURES[@]}"; do
+  for feature in "${features_to_run[@]}"; do
     rm -rf "$FEATURES_DIR/$feature/screenshots"
   done
 
-  # Build test paths for all features
+  # Build test paths — only include features that have spec files at this checkout
   local test_paths=()
-  for feature in "${FEATURES[@]}"; do
-    test_paths+=("tests/features/$feature/")
+  local skipped_features=()
+  for feature in "${features_to_run[@]}"; do
+    local spec_files
+    spec_files=$(find "$FEATURES_DIR/$feature" -name '*.spec.ts' 2>/dev/null | head -1 || true)
+    if [ -n "$spec_files" ]; then
+      test_paths+=("tests/features/$feature/")
+    else
+      skipped_features+=("$feature")
+    fi
   done
 
-  info "Running all $FEATURE_COUNT feature walkthroughs in one batch..."
+  local runnable_count=${#test_paths[@]}
+  local skipped_count=${#skipped_features[@]}
+  local skipped_csv=""
+  if [ "$skipped_count" -gt 0 ]; then
+    skipped_csv=$(IFS=,; echo "${skipped_features[*]}")
+    warn "Skipping $skipped_count feature(s) not present at $ref_label: ${skipped_features[*]}"
+  fi
+
+  if [ "$runnable_count" -eq 0 ]; then
+    warn "No runnable feature walkthroughs at $ref_label"
+    # Write empty results JSON
+    node -e "
+const fs = require('fs');
+fs.writeFileSync(process.argv[1], JSON.stringify({
+  ref: process.argv[2], passed: 0, failed: 0,
+  skipped: parseInt(process.argv[3]),
+  skippedFeatures: process.argv[4].split(',').filter(Boolean),
+  failedFeatures: [], errors: ''
+}, null, 2));
+" "$results_json" "$ref_label" "$skipped_count" "$skipped_csv"
+    return
+  fi
+
+  info "Running $runnable_count feature walkthrough(s) in one batch..."
 
   local output_file
   output_file=$(mktemp)
@@ -81,9 +119,21 @@ run_walkthroughs() {
   # Collect screenshots and determine per-feature pass/fail from output
   local passed=0
   local failed=0
-  local failed_features=""
+  local failed_features=()
 
-  for feature in "${FEATURES[@]}"; do
+  for feature in "${features_to_run[@]}"; do
+    # Check if this feature was skipped (not present at this ref)
+    local was_skipped=false
+    for sf in ${skipped_features[@]+"${skipped_features[@]}"}; do
+      if [ "$sf" = "$feature" ]; then
+        was_skipped=true
+        break
+      fi
+    done
+    if [ "$was_skipped" = true ]; then
+      continue
+    fi
+
     if [ -d "$FEATURES_DIR/$feature/screenshots" ]; then
       # Feature produced screenshots — it passed
       mkdir -p "$target_dir/$feature"
@@ -96,7 +146,7 @@ run_walkthroughs() {
       # No screenshots — it failed
       fail "$feature — no screenshots (test failed)"
       failed=$((failed + 1))
-      failed_features="$failed_features $feature"
+      failed_features+=("$feature")
     fi
 
     # Clean up screenshots from tests/features/ so they don't get committed
@@ -104,36 +154,53 @@ run_walkthroughs() {
   done
 
   # Also clean up any generated HTML in tests/features/ (gitignored but still messy)
-  for feature in "${FEATURES[@]}"; do
+  for feature in "${features_to_run[@]}"; do
     rm -f "$FEATURES_DIR/$feature/index.html"
   done
   rm -f "$FEATURES_DIR/index.html"
 
-  # Write results JSON
-  local errors_text=""
+  # Write results JSON — use a temp file to pass error text safely (avoids
+  # shell-escaping issues with Playwright output containing backticks, $, etc.)
+  local errors_file
+  errors_file=$(mktemp)
   if [ $failed -gt 0 ]; then
-    errors_text=$(cat "$output_file")
+    cp "$output_file" "$errors_file"
   fi
   rm -f "$output_file"
 
+  local failed_csv=""
+  if [ ${#failed_features[@]} -gt 0 ]; then
+    failed_csv=$(IFS=,; echo "${failed_features[*]}")
+  fi
+
   node -e "
 const fs = require('fs');
+const errorsText = fs.readFileSync(process.argv[5], 'utf-8');
 const results = {
   ref: process.argv[1],
   passed: parseInt(process.argv[2]),
   failed: parseInt(process.argv[3]),
-  failedFeatures: process.argv[4].trim().split(/\s+/).filter(Boolean),
-  errors: process.argv[5]
+  skipped: parseInt(process.argv[7]),
+  failedFeatures: process.argv[4].split(',').filter(Boolean),
+  skippedFeatures: process.argv[8].split(',').filter(Boolean),
+  errors: errorsText
 };
 fs.writeFileSync(process.argv[6], JSON.stringify(results, null, 2));
-" "$ref_label" "$passed" "$failed" "$failed_features" "$errors_text" "$results_json"
+" "$ref_label" "$passed" "$failed" "$failed_csv" "$errors_file" "$results_json" "$skipped_count" "$skipped_csv"
+
+  rm -f "$errors_file"
 
   echo ""
-  if [ $failed -eq 0 ]; then
+  if [ $failed -eq 0 ] && [ $skipped_count -eq 0 ]; then
     success "All $passed walkthroughs passed"
+  elif [ $failed -eq 0 ]; then
+    success "$passed passed, $skipped_count skipped (not present at $ref_label)"
   else
-    success "$passed passed, $failed failed"
+    warn "$passed passed, $failed failed, $skipped_count skipped"
   fi
+
+  # Re-enable set -e for the rest of the script
+  set -e
 }
 
 # ──────────────────────────────────────────────────────────────
@@ -222,7 +289,7 @@ pnpm install --frozen-lockfile 2>/dev/null || pnpm install
 info "Building app..."
 pnpm build
 
-run_walkthroughs "baseline" "$OUTPUT_DIR/baseline" "$OUTPUT_DIR/baseline-results.json" "$LAST_TAG"
+run_walkthroughs "baseline" "$OUTPUT_DIR/baseline" "$OUTPUT_DIR/baseline-results.json" "$LAST_TAG" "${FEATURES[@]}"
 
 # ──────────────────────────────────────────────────────────────
 # Step 5: Generate current screenshots
@@ -238,7 +305,7 @@ pnpm install --frozen-lockfile 2>/dev/null || pnpm install
 info "Building app..."
 pnpm build
 
-run_walkthroughs "current" "$OUTPUT_DIR/current" "$OUTPUT_DIR/current-results.json" "$ORIGINAL_REF"
+run_walkthroughs "current" "$OUTPUT_DIR/current" "$OUTPUT_DIR/current-results.json" "$ORIGINAL_REF" "${FEATURES[@]}"
 
 # ──────────────────────────────────────────────────────────────
 # Step 6: Compare screenshots
@@ -269,6 +336,9 @@ if [ -f "$REPORT" ]; then
     console.log('    Removed:   ' + removed);
     if (c.summary.currentFailures > 0) {
       console.log('    Current test failures:  ' + c.summary.currentFailures);
+    }
+    if (c.summary.baselineSkipped > 0) {
+      console.log('    New features (no baseline): ' + c.summary.baselineSkipped);
     }
     "
   fi

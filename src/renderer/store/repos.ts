@@ -32,6 +32,7 @@ interface RepoStore {
   defaultShell: string
   ghAvailable: boolean | null
   gitAvailable: boolean | null
+  loadError: string | null
   profileId?: string
 
   loadRepos: (profileId?: string) => Promise<void>
@@ -50,6 +51,7 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
   defaultShell: '',
   ghAvailable: null,
   gitAvailable: null,
+  loadError: null,
 
   loadRepos: async (profileId?: string) => {
     if (profileId !== undefined) {
@@ -70,8 +72,9 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
         profileId: pid,
       })
       setLoadedCounts({ repos: repos.length })
-    } catch {
-      set({ repos: [], defaultCloneDir: '' })
+    } catch (err) {
+      console.warn('[repos] Failed to load repos config:', err)
+      set({ repos: [], defaultCloneDir: '', loadError: 'Failed to load repository config' })
     }
   },
 

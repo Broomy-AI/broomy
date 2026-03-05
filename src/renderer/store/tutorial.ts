@@ -85,7 +85,7 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
   {
     id: 'used-review',
     title: 'Use review tab',
-    description: 'The Review tab in the Explorer lets you review pull requests with AI assistance — see diffs, leave comments, and get summaries. You can also review your current branch to better understand all the code your agent wrote. Switch to the Review tab in the Explorer, or create a review session from the New Session dialog by selecting "Review" mode.',
+    description: 'The Review tab generates markdown-based reviews of your pull requests. Click "Generate Review" and your agent writes a structured review to .broomy/review.md. Customize the review process by editing .claude/commands/broomy-action-review-md.md — add your own checks, sections, and validation steps. Links in the review open GitHub pages in the file panel for inline commenting.',
   },
   {
     id: 'viewed-settings',

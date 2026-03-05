@@ -1,10 +1,10 @@
 /**
- * Watches for the existence of a `.broomy/plan.md` file in a session's directory using filesystem events.
+ * Watches for the existence of a `.broomy/output/plan.md` file in a session's directory using filesystem events.
  */
 import { useState, useEffect } from 'react'
 
 /**
- * Watches for the existence of `.broomy/plan.md` in a session's directory.
+ * Watches for the existence of `.broomy/output/plan.md` in a session's directory.
  * Uses the same fs.watch + onChange pattern as FileTree for file system events.
  */
 export function useIssuePlanDetection(
@@ -19,7 +19,7 @@ export function useIssuePlanDetection(
       return
     }
 
-    const planPath = `${directory}/.broomy/plan.md`
+    const planPath = `${directory}/.broomy/output/plan.md`
 
     // Check initial state
     void window.fs.exists(planPath).then(setIssuePlanExists)

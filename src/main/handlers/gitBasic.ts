@@ -206,12 +206,18 @@ async function appendAuthHint(repoPath: string, errorStr: string): Promise<strin
     url = remotes.find(r => r.name === 'origin')?.refs.push
   } catch { /* ignore */ }
   let ghAvailable = true
+  let ghAuthenticated = false
   try {
     await execFileAsync('gh', ['--version'], { encoding: 'utf-8' })
+    // Also check auth status — gh may be installed but not authenticated
+    try {
+      await execFileAsync('gh', ['auth', 'status'], { encoding: 'utf-8', timeout: 5000 })
+      ghAuthenticated = true
+    } catch { /* not authenticated */ }
   } catch {
     ghAvailable = false
   }
-  const hint = getGitAuthHint(errorStr, { url, ghAvailable })
+  const hint = getGitAuthHint(errorStr, { url, ghAvailable, ghAuthenticated })
   return hint ? errorStr + hint : errorStr
 }
 

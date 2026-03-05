@@ -34,7 +34,7 @@ export function IssuePlanChip({ directory, issueNumber, issuePlanExists, agentPt
     return (
       <div className="px-3 py-1.5 border-b border-border">
         <button
-          onClick={() => onFileSelect?.({ filePath: `${directory}/.broomy/plan.md`, openInDiffMode: false })}
+          onClick={() => onFileSelect?.({ filePath: `${directory}/.broomy/output/plan.md`, openInDiffMode: false })}
           className="inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors bg-bg-tertiary text-text-secondary hover:text-text-primary hover:bg-accent/20"
           title="Show issue plan"
         >
@@ -51,7 +51,7 @@ export function IssuePlanChip({ directory, issueNumber, issuePlanExists, agentPt
         <button
           onClick={() => {
             if (!agentPtyId) return
-            const command = `Read issue #${issueNumber} using \`gh issue view ${issueNumber}\`. Before doing anything, ask me any questions about the issue to clarify requirements and resolve ambiguities. Then write a plan to .broomy/plan.md that includes: a detailed description of what you will do, and any open questions or assumptions.`
+            const command = `Read issue #${issueNumber} using \`gh issue view ${issueNumber}\`. Before doing anything, ask me any questions about the issue to clarify requirements and resolve ambiguities. Then write a plan to .broomy/output/plan.md that includes: a detailed description of what you will do, and any open questions or assumptions.`
             void sendSkillAwarePrompt({
               action: 'plan-issue',
               agentPtyId,

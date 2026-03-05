@@ -28,6 +28,7 @@ export type AppApi = {
 export type UpdateCheckResult = {
   updateAvailable: boolean
   version?: string
+  checkFailed?: boolean
 }
 
 export type UpdateApi = {

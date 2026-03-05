@@ -27,7 +27,8 @@ export async function resolveShellEnv(): Promise<void> {
         process.env[entry.slice(0, i)] = entry.slice(i + 1)
       }
     }
-  } catch {
+  } catch (err) {
+    console.warn('[shellEnv] Failed to resolve login shell environment:', err)
     // If this fails, the app still works — just with the minimal PATH
   }
 }

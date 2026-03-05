@@ -1,11 +1,10 @@
 /**
  * React error boundary that catches unhandled render errors.
  *
- * Wraps the entire app, logging errors to the error store and showing
+ * Wraps the entire app, logging errors to console and showing
  * a recovery UI with a "Try Again" button that resets the error state.
  */
 import { Component, type ReactNode } from 'react'
-import { useErrorStore } from '../store/errors'
 
 interface Props {
   children: ReactNode
@@ -24,7 +23,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error) {
-    useErrorStore.getState().addError(`Unhandled render error: ${error.message}`)
+    console.error('[ErrorBoundary] Unhandled render error:', error)
   }
 
   handleReset = () => {

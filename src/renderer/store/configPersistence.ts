@@ -61,23 +61,25 @@ async function doSave(): Promise<void> {
   const agents = agentState.agents
   const repos = repoState.repos
 
-  // Save guards: refuse to persist empty arrays when we previously loaded real data.
+  // Save guards: refuse to persist empty arrays when we previously loaded many items.
   // This prevents bugs (e.g. a failed load or store reset) from wiping disk data.
-  if (sessions.length === 0 && loadedCounts.sessions > 0) {
+  // Threshold > 1 so that deleting the last item is allowed — only block when
+  // a suspiciously large number of items vanish at once (indicating a bug, not user action).
+  if (sessions.length === 0 && loadedCounts.sessions > 1) {
     console.warn(
       `[configPersistence] Save guard: refusing to save — sessions empty ` +
       `(${loadedCounts.sessions} were loaded from disk)`
     )
     return
   }
-  if (agents.length === 0 && loadedCounts.agents > 0) {
+  if (agents.length === 0 && loadedCounts.agents > 1) {
     console.warn(
       `[configPersistence] Save guard: refusing to save — agents empty ` +
       `(${loadedCounts.agents} were loaded from disk)`
     )
     return
   }
-  if (repos.length === 0 && loadedCounts.repos > 0) {
+  if (repos.length === 0 && loadedCounts.repos > 1) {
     console.warn(
       `[configPersistence] Save guard: refusing to save — repos empty ` +
       `(${loadedCounts.repos} were loaded from disk)`

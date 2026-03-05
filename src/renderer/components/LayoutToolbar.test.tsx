@@ -5,11 +5,6 @@ import '../../test/react-setup'
 import LayoutToolbar from './LayoutToolbar'
 import { PANEL_IDS } from '../panels'
 
-// Mock ErrorIndicator to avoid pulling in ErrorStore rendering complexity
-vi.mock('./ErrorIndicator', () => ({
-  default: () => <div data-testid="error-indicator" />,
-}))
-
 afterEach(() => {
   cleanup()
 })
@@ -171,11 +166,6 @@ describe('LayoutToolbar', () => {
     // Explorer is not visible
     const explorerBtn = screen.getByText('Explorer')
     expect(explorerBtn.className).toContain('bg-bg-tertiary')
-  })
-
-  it('renders error indicator', () => {
-    renderToolbar()
-    expect(screen.getByTestId('error-indicator')).toBeTruthy()
   })
 
   it('renders Linux window controls when platform is linux', () => {

@@ -40,6 +40,7 @@ export function useFileViewer({
   const [isDirty, setIsDirty] = useState(false)
   const [editedContent, setEditedContent] = useState<string>('')
   const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('latest')
   const [pendingViewMode, setPendingViewMode] = useState<ViewMode | null>(null)
   const [diffSideBySide, setDiffSideBySide] = useState(true)
@@ -144,7 +145,12 @@ export function useFileViewer({
   // Save button handler
   const handleSaveButton = useCallback(async () => {
     if (!filePath || !isDirty || !editedContent) return
-    await handleSave(editedContent)
+    try {
+      setSaveError(null)
+      await handleSave(editedContent)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err))
+    }
   }, [filePath, isDirty, editedContent, handleSave])
 
   // Dirty change handler - also tracks the current content for save button
@@ -195,6 +201,8 @@ export function useFileViewer({
     selectedViewerId,
     isDirty,
     isSaving,
+    saveError,
+    clearSaveError: () => setSaveError(null),
     viewMode,
     diffSideBySide,
     editorActions,

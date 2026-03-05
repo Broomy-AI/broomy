@@ -83,7 +83,7 @@ export default function FileViewerToolbar({
             </svg>
           </button>
         )}
-        <span className="text-xs text-text-secondary truncate">{directory ? relative(directory, filePath) : filePath}</span>
+        <span className="text-xs text-text-secondary truncate">{directory && !/^https?:\/\//.test(filePath) ? relative(directory, filePath) : filePath}</span>
         {fileStatus === 'deleted' && (
           <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 shrink-0">
             Deleted

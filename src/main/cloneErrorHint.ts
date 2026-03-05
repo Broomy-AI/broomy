@@ -71,7 +71,7 @@ function getSshAuthHint(url: string, options?: { ghAvailable?: boolean }): strin
  * When a URL is provided, delegates to getCloneErrorHint for protocol-specific advice.
  * When no URL is available, gives generic advice.
  */
-export function getGitAuthHint(errorStr: string, options?: { url?: string; ghAvailable?: boolean }): string | null {
+export function getGitAuthHint(errorStr: string, options?: { url?: string; ghAvailable?: boolean; ghAuthenticated?: boolean }): string | null {
   if (options?.url) {
     return getCloneErrorHint(errorStr, options.url, { ghAvailable: options.ghAvailable })
   }
@@ -105,6 +105,8 @@ export function getGitAuthHint(errorStr: string, options?: { url?: string; ghAva
   hint += '\n\nTry one of:'
   if (options?.ghAvailable === false) {
     hint += '\n• Install GitHub CLI (cli.github.com) to set up credentials automatically'
+  } else if (options?.ghAuthenticated === false) {
+    hint += '\n• Run "gh auth login" in your terminal — gh is installed but not authenticated'
   } else {
     hint += '\n• Run "gh auth login" in your terminal to set up credentials'
   }

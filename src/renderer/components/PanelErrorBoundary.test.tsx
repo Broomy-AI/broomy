@@ -2,7 +2,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import PanelErrorBoundary from './PanelErrorBoundary'
-import { useErrorStore } from '../store/errors'
 
 function ThrowingChild({ shouldThrow }: { shouldThrow: boolean }) {
   if (shouldThrow) throw new Error('test explosion')
@@ -11,7 +10,6 @@ function ThrowingChild({ shouldThrow }: { shouldThrow: boolean }) {
 
 describe('PanelErrorBoundary', () => {
   beforeEach(() => {
-    useErrorStore.getState().clearAll()
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
@@ -39,40 +37,34 @@ describe('PanelErrorBoundary', () => {
     expect(screen.getByText('Retry')).toBeDefined()
   })
 
-  it('logs to error store on crash', () => {
+  it('logs to console.error on crash', () => {
     render(
       <PanelErrorBoundary name="Explorer">
         <ThrowingChild shouldThrow={true} />
       </PanelErrorBoundary>,
     )
-    const errors = useErrorStore.getState().errors
-    expect(errors.length).toBe(1)
-    expect(errors[0].message).toBe('Explorer crashed: test explosion')
-    expect(errors[0].scope).toEqual({ panel: 'Explorer' })
+    expect(console.error).toHaveBeenCalledWith(
+      '[PanelErrorBoundary] Explorer crashed:',
+      expect.any(Error),
+    )
   })
 
   it('retry button resets error state so children re-render', () => {
-    // First render with a throwing child, then re-render with a non-throwing child
     const { rerender } = render(
       <PanelErrorBoundary name="Test">
         <ThrowingChild shouldThrow={true} />
       </PanelErrorBoundary>,
     )
 
-    // Should show error bar
     expect(screen.getByText(/Test crashed: test explosion/)).toBeDefined()
 
-    // Swap children to a non-throwing version before clicking retry
     rerender(
       <PanelErrorBoundary name="Test">
         <ThrowingChild shouldThrow={false} />
       </PanelErrorBoundary>,
     )
 
-    // Click retry
     fireEvent.click(screen.getByText('Retry'))
-
-    // Should now show recovered content
     expect(screen.getByText('child content')).toBeDefined()
   })
 })

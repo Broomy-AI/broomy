@@ -54,17 +54,6 @@ export default function Explorer({
         <span className="text-sm font-medium text-text-primary">Explorer</span>
         <div className="flex items-center gap-1">
           <button
-            onClick={() => onFilterChange('files')}
-            className={`p-1 rounded transition-colors ${
-              filter === 'files'
-                ? 'bg-accent text-white'
-                : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
-            }`}
-            title="Files"
-          >
-            <FileTreeIcon />
-          </button>
-          <button
             onClick={() => onFilterChange('source-control')}
             className={`p-1 rounded transition-colors ${
               filter === 'source-control'
@@ -74,6 +63,17 @@ export default function Explorer({
             title="Source Control"
           >
             <SourceControlIcon />
+          </button>
+          <button
+            onClick={() => onFilterChange('files')}
+            className={`p-1 rounded transition-colors ${
+              filter === 'files'
+                ? 'bg-accent text-white'
+                : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
+            }`}
+            title="Files"
+          >
+            <FileTreeIcon />
           </button>
           <button
             onClick={() => { onFilterChange('search'); focusSearchInput() }}
@@ -176,7 +176,7 @@ export default function Explorer({
               pushedToMainCommit={pushedToMainCommit}
               onRecordPushToMain={onRecordPushToMain}
               onClearPushToMain={onClearPushToMain}
-              onOpenReview={() => onFilterChange('review')}
+              onSwitchTab={(tab) => onFilterChange(tab as Parameters<typeof onFilterChange>[0])}
             />
           </PanelErrorBoundary>
         )}

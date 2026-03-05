@@ -177,6 +177,8 @@ const comparison = {
     total: allKeys.size,
     baselineFailures: baselineResults?.failed || 0,
     currentFailures: currentResults?.failed || 0,
+    baselineSkipped: baselineResults?.skipped || 0,
+    currentSkipped: currentResults?.skipped || 0,
   },
   changed: results.changed,
   added: results.added,
@@ -200,6 +202,7 @@ function generateHTML(comparison, baselineResults, currentResults, outputDir) {
   const ref = comparison.currentRef
 
   const hasFailures = summary.currentFailures > 0
+  const hasBaselineSkips = summary.baselineSkipped > 0
 
   // Build feature grouping data — group all screenshots by feature name
   const featureMap = {}
@@ -311,15 +314,24 @@ function generateHTML(comparison, baselineResults, currentResults, outputDir) {
 
   html += `<div id="view-by-status">\n`
 
-  // Assertion failures section
-  if (hasFailures) {
-    html += `<div class="section">\n<h2 class="section-title">Test Failures</h2>\n`
+  // Assertion failures and skips section
+  if (hasFailures || hasBaselineSkips) {
+    html += `<div class="section">\n<h2 class="section-title">Test Failures &amp; Skips</h2>\n`
 
     if (currentResults?.failed > 0) {
       html += `<div class="failures">
 <h4>Current failures (${ref}): ${currentResults.failed} feature(s)</h4>
 <p style="color:#8b949e;font-size:13px;margin-bottom:8px">Failed features: ${currentResults.failedFeatures?.join(', ') || 'unknown'}</p>
+<details><summary style="cursor:pointer;color:#8b949e;font-size:12px;margin-top:8px">Show Playwright output</summary>
 <pre>${escapeHtml(currentResults.errors || 'No error output captured')}</pre>
+</details>
+</div>\n`
+    }
+
+    if (hasBaselineSkips) {
+      html += `<div style="background:#3fb9501a;border:1px solid #3fb95033;border-radius:8px;padding:16px;margin-bottom:16px">
+<h4 style="color:#3fb950;margin-bottom:8px">New features (not in ${tag}): ${summary.baselineSkipped}</h4>
+<p style="color:#8b949e;font-size:13px">These features didn't exist at ${tag} so baseline screenshots were skipped. Their current screenshots appear as "added": ${baselineResults?.skippedFeatures?.join(', ') || 'none'}</p>
 </div>\n`
     }
 
@@ -386,14 +398,22 @@ function generateHTML(comparison, baselineResults, currentResults, outputDir) {
     html += `</ul></div>\n`
   }
 
-  // Test failures (current code only — baseline failures are expected for new features)
-  if (hasFailures) {
-    html += `<div class="section">\n<h2 class="section-title">Test Failures</h2>\n`
+  // Test failures and skips
+  if (hasFailures || hasBaselineSkips) {
+    html += `<div class="section">\n<h2 class="section-title">Test Failures &amp; Skips</h2>\n`
     if (currentResults?.failed > 0) {
       html += `<div class="failures">
 <h4>Current failures (${ref}): ${currentResults.failed} feature(s)</h4>
 <p style="color:#8b949e;font-size:13px;margin-bottom:8px">Failed features: ${currentResults.failedFeatures?.join(', ') || 'unknown'}</p>
+<details><summary style="cursor:pointer;color:#8b949e;font-size:12px;margin-top:8px">Show Playwright output</summary>
 <pre>${escapeHtml(currentResults.errors || 'No error output captured')}</pre>
+</details>
+</div>\n`
+    }
+    if (hasBaselineSkips) {
+      html += `<div style="background:#3fb9501a;border:1px solid #3fb95033;border-radius:8px;padding:16px;margin-bottom:16px">
+<h4 style="color:#3fb950;margin-bottom:8px">New features (not in ${tag}): ${summary.baselineSkipped}</h4>
+<p style="color:#8b949e;font-size:13px">These features didn't exist at ${tag} so baseline screenshots were skipped: ${baselineResults?.skippedFeatures?.join(', ') || 'none'}</p>
 </div>\n`
     }
     html += `</div>\n`

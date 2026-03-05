@@ -13,6 +13,7 @@ export type SkillActionName =
   | 'resolve-conflicts'
   | 'review'
   | 'plan-issue'
+  | 'review-md'
 
 export interface SkillAction {
   name: SkillActionName
@@ -38,7 +39,7 @@ Look at the current git diff and make a commit. Stage all relevant files, write 
     label: 'Push to Main',
     defaultContent: `# Broomy: Push to Main
 
-Read \`.broomy/context.json\` for the target branch name.
+Read \`.broomy/output/context.json\` for the target branch name.
 
 Push this branch to the target branch safely. Follow these steps in order:
 1. Pull the latest from the target branch and merge it into this branch, resolving any merge conflicts
@@ -53,7 +54,7 @@ Push this branch to the target branch safely. Follow these steps in order:
     label: 'Create PR',
     defaultContent: `# Broomy: Create PR
 
-Read and follow the instructions in \`.broomy/create-pr-prompt.md\`.
+Read and follow the instructions in \`.broomy/output/create-pr-prompt.md\`.
 `,
   },
   {
@@ -61,15 +62,27 @@ Read and follow the instructions in \`.broomy/create-pr-prompt.md\`.
     label: 'Resolve Conflicts',
     defaultContent: `# Broomy: Resolve Conflicts
 
-Read and follow the instructions in \`.broomy/merge-prompt.md\`.
+Read and follow the instructions in \`.broomy/output/merge-prompt.md\`.
 `,
   },
   {
     name: 'review',
-    label: 'Review',
+    label: 'Review (Legacy)',
     defaultContent: `# Broomy: Review
 
 Read and follow the instructions in \`.broomy/review-prompt.md\`.
+`,
+  },
+  {
+    name: 'review-md',
+    label: 'Review',
+    defaultContent: `# Broomy: Review
+
+Read and follow the instructions in \`.broomy/output/review-prompt.md\`.
+
+Write your review to \`.broomy/output/review.md\` as a markdown document. Use \`## Heading\` for major sections and \`### Sub-heading\` for individual issues or findings within each section. Use \`- [ ] Check name\` / \`- [x] Check name\` for task checkboxes under each sub-heading. Include \`[View on GitHub](url)\` links where relevant.
+
+Write the file incrementally — the UI will poll and re-render as you write.
 `,
   },
   {
@@ -77,9 +90,9 @@ Read and follow the instructions in \`.broomy/review-prompt.md\`.
     label: 'Plan Issue',
     defaultContent: `# Broomy: Plan Issue
 
-Read \`.broomy/context.json\` for the issue number.
+Read \`.broomy/output/context.json\` for the issue number.
 
-Read the issue using \`gh issue view <issue-number>\`. Before doing anything, ask me any questions about the issue to clarify requirements and resolve ambiguities. Then write a plan to .broomy/plan.md that includes: a detailed description of what you will do, and any open questions or assumptions.
+Read the issue using \`gh issue view <issue-number>\`. Before doing anything, ask me any questions about the issue to clarify requirements and resolve ambiguities. Then write a plan to .broomy/output/plan.md that includes: a detailed description of what you will do, and any open questions or assumptions.
 `,
   },
 ]

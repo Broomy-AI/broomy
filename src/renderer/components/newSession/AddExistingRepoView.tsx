@@ -6,7 +6,7 @@ import { useAgentStore } from '../../store/agents'
 import { useRepoStore } from '../../store/repos'
 import { DialogErrorBanner } from '../ErrorBanner'
 import { IsolationSettings } from '../IsolationSettings'
-import type { DockerStatus, DevcontainerStatus } from '../../../preload/index'
+import type { DevcontainerStatus } from '../../../preload/index'
 
 async function validateWorktreeFolder(folder: string): Promise<{ worktrees: { path: string; branch: string }[]; error?: string }> {
   try {
@@ -69,29 +69,20 @@ async function validateWorktreeFolder(folder: string): Promise<{ worktrees: { pa
 
 function useIsolationState(rootDir: string) {
   const [isolated, setIsolated] = useState(false)
-  const [isolationMode, setIsolationMode] = useState<'docker' | 'devcontainer'>('docker')
-  const [dockerImage, setDockerImage] = useState('')
   const [skipApproval, setSkipApproval] = useState(false)
-  const [dockerStatus, setDockerStatus] = useState<DockerStatus | null>(null)
   const [devcontainerStatus, setDevcontainerStatus] = useState<DevcontainerStatus | null>(null)
   const [hasDevcontainerConfigState, setHasDevcontainerConfig] = useState<boolean | null>(null)
 
   useEffect(() => {
-    if (isolated || dockerStatus === null) {
-      void window.docker.status().then(setDockerStatus)
-    }
-  }, [isolated])
-
-  useEffect(() => {
-    if (isolated && isolationMode === 'devcontainer' && rootDir) {
+    if (isolated && rootDir) {
       void window.devcontainer.status().then(setDevcontainerStatus)
       void window.devcontainer.hasConfig(rootDir).then(setHasDevcontainerConfig)
     }
-  }, [isolated, isolationMode, rootDir])
+  }, [isolated, rootDir])
 
   return {
-    isolated, setIsolated, isolationMode, setIsolationMode, dockerImage, setDockerImage,
-    skipApproval, setSkipApproval, dockerStatus, devcontainerStatus,
+    isolated, setIsolated,
+    skipApproval, setSkipApproval, devcontainerStatus,
     hasDevcontainerConfigState, setHasDevcontainerConfig,
   }
 }
@@ -170,8 +161,6 @@ export function AddExistingRepoView({
         defaultAgentId: selectedAgentId || undefined,
         allowPushToMain,
         isolated: iso.isolated || undefined,
-        isolationMode: iso.isolated ? iso.isolationMode : undefined,
-        dockerImage: iso.dockerImage.trim() || undefined,
         skipApproval: iso.skipApproval || undefined,
       })
 
@@ -279,11 +268,10 @@ export function AddExistingRepoView({
             </div>
 
             <IsolationSettings
-              isolated={iso.isolated} isolationMode={iso.isolationMode} dockerImage={iso.dockerImage} skipApproval={iso.skipApproval}
-              dockerStatus={iso.dockerStatus} devcontainerStatus={iso.devcontainerStatus}
+              isolated={iso.isolated} skipApproval={iso.skipApproval}
+              dockerStatus={null} devcontainerStatus={iso.devcontainerStatus}
               hasDevcontainerConfig={iso.hasDevcontainerConfigState}
-              onIsolatedChange={iso.setIsolated} onIsolationModeChange={iso.setIsolationMode}
-              onDockerImageChange={iso.setDockerImage} onSkipApprovalChange={iso.setSkipApproval}
+              onIsolatedChange={iso.setIsolated} onSkipApprovalChange={iso.setSkipApproval}
               onGenerateDevcontainerConfig={rootDir ? async () => {
                 await window.devcontainer.generateDefaultConfig(rootDir)
                 iso.setHasDevcontainerConfig(true)

@@ -54,9 +54,10 @@ export async function sendSkillAwarePrompt(
 
   // Write context file if provided
   if (context) {
-    const broomyDir = `${directory}/.broomy`
-    await window.fs.mkdir(broomyDir)
-    await window.fs.writeFile(`${broomyDir}/context.json`, JSON.stringify(context, null, 2))
+    const outputDir = `${directory}/.broomy/output`
+    await window.fs.mkdir(`${directory}/.broomy`)
+    await window.fs.mkdir(outputDir)
+    await window.fs.writeFile(`${outputDir}/context.json`, JSON.stringify(context, null, 2))
   }
 
   await sendAgentPrompt(agentPtyId, `/broomy-action-${action}`)

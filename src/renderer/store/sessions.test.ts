@@ -108,7 +108,7 @@ describe('useSessionStore', () => {
       })
 
       await useSessionStore.getState().loadSessions()
-      expect(useSessionStore.getState().sessions[0].explorerFilter).toBe('files')
+      expect(useSessionStore.getState().sessions[0].explorerFilter).toBe('source-control')
     })
 
     it('migrates legacy explorerFilter "changed" to "source-control"', async () => {

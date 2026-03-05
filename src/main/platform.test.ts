@@ -89,6 +89,46 @@ describe('platform', () => {
     })
   })
 
+  describe('getAvailableShells', () => {
+    it('returns an array of shell options', async () => {
+      const { getAvailableShells } = await import('./platform')
+      const shells = getAvailableShells()
+      expect(shells.length).toBeGreaterThan(0)
+    })
+
+    it('marks exactly one shell as default', async () => {
+      const { getAvailableShells } = await import('./platform')
+      const shells = getAvailableShells()
+      const defaults = shells.filter(s => s.isDefault)
+      expect(defaults).toHaveLength(1)
+    })
+
+    it('includes the login shell on Unix', async () => {
+      const { getAvailableShells, isWindows } = await import('./platform')
+      if (isWindows) return
+      const shells = getAvailableShells()
+      const loginShell = process.env.SHELL || '/bin/sh'
+      expect(shells.some(s => s.path === loginShell)).toBe(true)
+    })
+
+    it('each shell has path, name, and isDefault', async () => {
+      const { getAvailableShells } = await import('./platform')
+      const shells = getAvailableShells()
+      for (const shell of shells) {
+        expect(shell.path).toBeTruthy()
+        expect(shell.name).toBeTruthy()
+        expect(typeof shell.isDefault).toBe('boolean')
+      }
+    })
+
+    it('does not include duplicate paths', async () => {
+      const { getAvailableShells } = await import('./platform')
+      const shells = getAvailableShells()
+      const paths = shells.map(s => s.path)
+      expect(new Set(paths).size).toBe(paths.length)
+    })
+  })
+
   describe('resolveWindowsCommand', () => {
     it('finds git via which/where on the current platform', async () => {
       const { resolveWindowsCommand } = await import('./platform')

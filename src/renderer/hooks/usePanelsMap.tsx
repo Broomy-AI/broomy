@@ -47,7 +47,7 @@ export interface PanelsMapConfig {
   getAgentCommand: (session: Session) => string | undefined
   getAgentEnv: (session: Session) => Record<string, string> | undefined
   getAgentResumeCommand: (session: Session) => string | undefined
-  getRepoIsolation: (session: Session) => { isolated: boolean; isolationMode?: 'docker' | 'devcontainer'; dockerImage?: string; repoRootDir?: string } | undefined
+  getRepoIsolation: (session: Session) => { isolated: boolean; repoRootDir?: string } | undefined
   globalPanelVisibility: Record<string, boolean>
   toggleGlobalPanel: (panelId: string) => void
   selectFile: (sessionId: string, filePath: string) => void
@@ -182,37 +182,50 @@ export function usePanelsMap(config: PanelsMapConfig) {
     sessions, activeSessionId, activeSession,
     handleSelectSession, handleNewSession, removeSession, refreshPrStatus,
     archiveSession, unarchiveSession,
-    getAgentCommand, getAgentEnv, getAgentResumeCommand, getRepoIsolation,
+    getAgentCommand, getAgentEnv, getAgentResumeCommand,
     globalPanelVisibility, toggleGlobalPanel,
     repos,
   } = config
 
+  // Derive a stable key from only the session fields the terminal cares about.
+  // Status, lastMessage, isUnread etc. are excluded — they don't affect terminal rendering.
+  const terminalSessionKey = useMemo(() =>
+    sessions.filter(s => !s.isArchived)
+      .map(s => `${s.id}|${s.directory}|${s.isRestored}|${s.agentId}|${s.repoId}`)
+      .join(','),
+    [sessions]
+  )
+
   const terminalPanel = useMemo(() => (
     <div className="h-full w-full relative">
-      {sessions.filter(s => !s.isArchived).map((session) => (
-        <div
-          key={session.id}
-          className={`absolute inset-0 ${session.id === activeSessionId ? '' : 'invisible pointer-events-none'}`}
-        >
-          <PanelErrorBoundary name={`Session ${session.branch || session.id}`}>
-            <TabbedTerminal
-              sessionId={session.id}
-              cwd={session.directory}
-              isActive={session.id === activeSessionId}
-              agentCommand={getAgentCommand(session)}
-              agentEnv={getAgentEnv(session)}
-              agentResumeCommand={getAgentResumeCommand(session)}
-              isRestored={session.isRestored}
-              isolation={getRepoIsolation(session)}
-            />
-          </PanelErrorBoundary>
-        </div>
-      ))}
+      {sessions.filter(s => !s.isArchived).map((session) => {
+        const repo = session.repoId ? repos.find(r => r.id === session.repoId) : undefined
+        return (
+          <div
+            key={session.id}
+            className={`absolute inset-0 ${session.id === activeSessionId ? '' : 'invisible pointer-events-none'}`}
+          >
+            <PanelErrorBoundary name={`Session ${session.branch || session.id}`}>
+              <TabbedTerminal
+                sessionId={session.id}
+                cwd={session.directory}
+                isActive={session.id === activeSessionId}
+                agentCommand={getAgentCommand(session)}
+                agentEnv={getAgentEnv(session)}
+                agentResumeCommand={getAgentResumeCommand(session)}
+                isRestored={session.isRestored}
+                isolated={repo?.isolated ?? false}
+                repoRootDir={repo?.rootDir}
+              />
+            </PanelErrorBoundary>
+          </div>
+        )
+      })}
       {sessions.length === 0 && (
         <WelcomeScreen onNewSession={handleNewSession} />
       )}
     </div>
-  ), [sessions, activeSessionId, getAgentCommand, getAgentEnv, getAgentResumeCommand, getRepoIsolation, handleNewSession])
+  ), [terminalSessionKey, activeSessionId, getAgentCommand, getAgentEnv, getAgentResumeCommand, handleNewSession, repos])
 
   const explorerPanel = useExplorerPanel(config)
   const fileViewerPanel = useFileViewerPanel(config)

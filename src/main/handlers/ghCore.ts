@@ -91,7 +91,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     try {
       const result = await runCommand('gh', ['issue', 'list', '--assignee', '@me', '--state', 'open', '--json', 'number,title,labels,url', '--limit', '50'], {
         cwd: expandHomePath(repoDir),
-        timeout: 30000,
+        timeout: 10000,
       })
       return parseIssuesJson(result)
     } catch {
@@ -113,7 +113,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     try {
       const result = await runCommand('gh', ['issue', 'list', '--search', query, '--state', 'open', '--json', 'number,title,labels,url', '--limit', '50'], {
         cwd: expandHomePath(repoDir),
-        timeout: 30000,
+        timeout: 10000,
       })
       return parseIssuesJson(result)
     } catch {
@@ -129,7 +129,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     try {
       const result = await runCommand('gh', ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'], {
         cwd: expandHomePath(repoDir),
-        timeout: 15000,
+        timeout: 10000,
       })
       return result.trim() || null
     } catch {
@@ -156,7 +156,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     try {
       const result = await runCommand('gh', ['pr', 'view', '--json', 'number,title,state,url,headRefName,baseRefName'], {
         cwd: expandHomePath(repoDir),
-        timeout: 15000,
+        timeout: 10000,
       })
       const pr = JSON.parse(result)
       return {
@@ -167,7 +167,12 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
         headRefName: pr.headRefName,
         baseRefName: pr.baseRefName,
       }
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      // No PR for current branch is expected — only log unexpected errors
+      if (!message.includes('no pull requests found') && !message.includes('Could not resolve')) {
+        return { error: message }
+      }
       return null
     }
   })
@@ -180,7 +185,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     try {
       const result = await runCommand('gh', ['repo', 'view', '--json', 'viewerPermission', '--jq', '.viewerPermission'], {
         cwd: expandHomePath(repoDir),
-        timeout: 15000,
+        timeout: 10000,
       })
       const permission = result.trim()
       return ['ADMIN', 'MAINTAIN', 'WRITE'].includes(permission)
@@ -228,7 +233,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
 
       const repoSlugResult = await runCommand('gh', ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'], {
         cwd: expandHomePath(repoDir),
-        timeout: 15000,
+        timeout: 10000,
       })
       const repoSlug = repoSlugResult.trim()
 
@@ -252,11 +257,11 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
         'api', 'user', '--jq', '.login',
       ], {
         encoding: 'utf-8',
-        timeout: 30000,
+        timeout: 10000,
       })
       return stdout.trim()
-    } catch {
-      return null
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) }
     }
   })
 }

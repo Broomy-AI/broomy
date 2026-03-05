@@ -101,8 +101,9 @@ describe('sendSkillAwarePrompt', () => {
     })
 
     expect(window.fs.mkdir).toHaveBeenCalledWith('/repo/.broomy')
+    expect(window.fs.mkdir).toHaveBeenCalledWith('/repo/.broomy/output')
     expect(window.fs.writeFile).toHaveBeenCalledWith(
-      '/repo/.broomy/context.json',
+      '/repo/.broomy/output/context.json',
       JSON.stringify({ issueNumber: 42 }, null, 2),
     )
   })

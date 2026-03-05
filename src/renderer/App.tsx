@@ -33,6 +33,7 @@ import { useSessionKeyboardCallbacks } from './hooks/useSessionKeyboardCallbacks
 import { focusSearchInput } from './utils/focusHelpers'
 import { useMenuButton } from './hooks/useMenuButton'
 import CrashRecoveryBanner from './components/CrashRecoveryBanner'
+import { DialogErrorBanner } from './components/ErrorBanner'
 
 // Re-export types for backwards compatibility
 export type { Session, SessionStatus }
@@ -114,10 +115,26 @@ function GhMissingBanner() {
   )
 }
 
+function TopBanners({ configLoadError, repoLoadError, appError, onDismissAppError }: {
+  configLoadError: string | null; repoLoadError: string | null; appError: string | null; onDismissAppError: () => void
+}) {
+  return (
+    <>
+      <CrashRecoveryBanner />
+      <GitMissingBanner />
+      <GhMissingBanner />
+      {configLoadError && <DialogErrorBanner error={configLoadError} onDismiss={() => useSessionStore.setState({ configLoadError: null })} />}
+      {repoLoadError && <DialogErrorBanner error={repoLoadError} onDismiss={() => useRepoStore.setState({ loadError: null })} />}
+      {appError && <DialogErrorBanner error={appError} onDismiss={onDismissAppError} />}
+    </>
+  )
+}
+
 function AppContent() {
   const sessions = useSessionStore(s => s.sessions)
   const activeSessionId = useSessionStore(s => s.activeSessionId)
   const isLoading = useSessionStore(s => s.isLoading)
+  const configLoadError = useSessionStore(s => s.configLoadError)
   const sidebarWidth = useSessionStore(s => s.sidebarWidth)
   const toolbarPanels = useSessionStore(s => s.toolbarPanels)
   const globalPanelVisibility = useSessionStore(s => s.globalPanelVisibility)
@@ -133,7 +150,7 @@ function AppContent() {
   useGitBranchWatcher({ sessions, activeSessionId, updateSessionBranch })
 
   const { agents, loadAgents } = useAgentStore()
-  const { repos, loadRepos, checkGhAvailability, checkGitAvailability } = useRepoStore()
+  const { repos, loadRepos, loadError: repoLoadError, checkGhAvailability, checkGitAvailability } = useRepoStore()
   const { currentProfileId, profiles, loadProfiles, switchProfile } = useProfileStore()
   const { showHelpModal, setShowHelpModal, showShortcutsModal, setShowShortcutsModal } = useHelpMenu(currentProfileId)
   const currentProfile = profiles.find((p) => p.id === currentProfileId)
@@ -142,6 +159,7 @@ function AppContent() {
   const [showNewSessionDialog, setShowNewSessionDialog] = useState(false)
   const [showPanelPicker, setShowPanelPicker] = useState(false)
   const [duplicateSessionInfo, setDuplicateSessionInfo] = useState<{ name: string; wasArchived: boolean } | null>(null)
+  const [appError, setAppError] = useState<string | null>(null)
 
   const {
     activeSessionGitStatus, activeSessionGitStatusResult, selectedFileStatus, fetchGitStatus,
@@ -208,6 +226,7 @@ function AppContent() {
     updatePrState,
     setShowNewSessionDialog,
     onSessionAlreadyExists: setDuplicateSessionInfo,
+    onError: setAppError,
   })
 
   const setActiveTerminalTab = useSessionStore((state) => state.setActiveTerminalTab)
@@ -221,13 +240,6 @@ function AppContent() {
     setActiveTerminalTab,
   })
 
-  const handleSearchFiles = useCallback(() => {
-    if (!activeSessionId) return
-    if (!activeSession?.panelVisibility[PANEL_IDS.EXPLORER]) togglePanel(activeSessionId, PANEL_IDS.EXPLORER)
-    setExplorerFilter(activeSessionId, 'search')
-    focusSearchInput()
-  }, [activeSessionId, activeSession, togglePanel, setExplorerFilter])
-
   const handleExplorerTab = useCallback((filter: string) => {
     if (!activeSessionId) return
     if (!activeSession?.panelVisibility[PANEL_IDS.EXPLORER]) togglePanel(activeSessionId, PANEL_IDS.EXPLORER)
@@ -237,7 +249,6 @@ function AppContent() {
     }
   }, [activeSessionId, activeSession, togglePanel, setExplorerFilter])
 
-  const handleToggleGlobalPanel = useCallback((panelId: string) => { toggleGlobalPanel(panelId) }, [toggleGlobalPanel])
   const { isMac, platform, handleMenuButtonClick } = useMenuButton({
     setShowPanelPicker, setShowHelpModal, setShowShortcutsModal,
   })
@@ -270,7 +281,7 @@ function AppContent() {
   return (
     <>
       <Layout
-        topBanner={<><CrashRecoveryBanner /><GitMissingBanner /><GhMissingBanner /></>}
+        topBanner={<TopBanners configLoadError={configLoadError} repoLoadError={repoLoadError} appError={appError} onDismissAppError={() => setAppError(null)} />}
         panels={panelsMap}
         panelVisibility={activeSession?.panelVisibility ?? {}}
         globalPanelVisibility={globalPanelVisibility}
@@ -283,10 +294,10 @@ function AppContent() {
         title={activeSession ? activeSession.name : undefined}
         profileChip={<ProfileChip onSwitchProfile={handleSwitchProfile} />}
         onTogglePanel={handleTogglePanel}
-        onToggleGlobalPanel={handleToggleGlobalPanel}
+        onToggleGlobalPanel={toggleGlobalPanel}
         onOpenPanelPicker={isMac ? () => setShowPanelPicker(true) : undefined}
         platform={platform} onMenuButtonClick={!isMac ? handleMenuButtonClick : undefined}
-        onSearchFiles={handleSearchFiles}
+        onSearchFiles={() => handleExplorerTab('search')}
         onNewSession={handleNewSession}
         onNextSession={handleNextSession}
         onPrevSession={handlePrevSession}

@@ -11,6 +11,7 @@ vi.mock('../hooks/useTerminalSetup', () => ({
     ptyIdRef: { current: 'pty-123' },
     showScrollButton: false,
     handleScrollToBottom: vi.fn(),
+    exitInfo: null,
   }),
 }))
 
@@ -58,6 +59,7 @@ describe('Terminal', () => {
       ptyIdRef: { current: 'pty-123' },
       showScrollButton: true,
       handleScrollToBottom: vi.fn(),
+      exitInfo: null,
     })
     render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
     expect(screen.getByText(/Go to End/)).toBeTruthy()
@@ -71,6 +73,7 @@ describe('Terminal', () => {
       ptyIdRef: { current: 'pty-123' },
       showScrollButton: true,
       handleScrollToBottom,
+      exitInfo: null,
     })
     render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
     fireEvent.click(screen.getByText(/Go to End/))
@@ -152,5 +155,169 @@ describe('Terminal', () => {
     render(<Terminal sessionId="session-1" cwd="/tmp/test" command="unknown-agent" agentNotInstalled={true} />)
     expect(screen.getByText(/Install it to use this agent/)).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Install/ })).toBeNull()
+  })
+
+  describe('context menu actions', () => {
+    it('handles paste action from context menu', async () => {
+      vi.mocked(window.menu.popup).mockResolvedValue('paste')
+      Object.assign(navigator, { clipboard: { readText: vi.fn().mockResolvedValue('pasted text') } })
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
+      const terminalDiv = document.querySelector('.h-full.w-full.flex.flex-col')!
+      fireEvent.contextMenu(terminalDiv)
+      await vi.waitFor(() => {
+        expect(window.pty.write).toHaveBeenCalledWith('pty-123', 'pasted text')
+      })
+    })
+
+    it('handles restart-agent action from context menu', async () => {
+      const { useTerminalSetup } = await import('../hooks/useTerminalSetup')
+      vi.mocked(window.menu.popup).mockResolvedValue('restart-agent')
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" isAgentTerminal />)
+      const terminalDiv = document.querySelector('.h-full.w-full.flex.flex-col')!
+      fireEvent.contextMenu(terminalDiv)
+      await vi.waitFor(() => {
+        // restart increments restartKey, which triggers useTerminalSetup again
+        expect(vi.mocked(useTerminalSetup).mock.calls.length).toBeGreaterThanOrEqual(2)
+      })
+    })
+
+    it('handles copy action with selection', async () => {
+      const { useTerminalSetup } = await import('../hooks/useTerminalSetup')
+      const mockGetSelection = vi.fn().mockReturnValue('selected text')
+      const mockHasSelection = vi.fn().mockReturnValue(true)
+      vi.mocked(useTerminalSetup).mockReturnValue({
+        terminalRef: { current: { hasSelection: mockHasSelection, getSelection: mockGetSelection, selectAll: vi.fn() } as never },
+        ptyIdRef: { current: 'pty-123' },
+        showScrollButton: false,
+        handleScrollToBottom: vi.fn(),
+        exitInfo: null,
+      })
+      vi.mocked(window.menu.popup).mockResolvedValue('copy')
+      Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined), readText: vi.fn() } })
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
+      const terminalDiv = document.querySelector('.h-full.w-full.flex.flex-col')!
+      fireEvent.contextMenu(terminalDiv)
+      await vi.waitFor(() => {
+        expect(navigator.clipboard.writeText).toHaveBeenCalledWith('selected text')
+      })
+    })
+
+    it('handles context menu error gracefully', async () => {
+      vi.mocked(window.menu.popup).mockRejectedValue(new Error('menu failed'))
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
+      const terminalDiv = document.querySelector('.h-full.w-full.flex.flex-col')!
+      fireEvent.contextMenu(terminalDiv)
+      await vi.waitFor(() => {
+        expect(warnSpy).toHaveBeenCalledWith('[Terminal] Context menu failed:', expect.any(Error))
+      })
+      warnSpy.mockRestore()
+    })
+  })
+
+  describe('resume banner', () => {
+    it('shows resume banner for restored agent with resume command', async () => {
+      const { useTerminalSetup } = await import('../hooks/useTerminalSetup')
+      vi.mocked(useTerminalSetup).mockReturnValue({
+        terminalRef: { current: null },
+        ptyIdRef: { current: 'pty-123' },
+        showScrollButton: false,
+        handleScrollToBottom: vi.fn(),
+        exitInfo: null,
+      })
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" isAgentTerminal isRestored agentResumeCommand="claude --continue" />)
+      expect(screen.getByText(/Resume your previous conversation/)).toBeTruthy()
+    })
+
+    it('dismisses resume banner when close button is clicked', async () => {
+      const { useTerminalSetup } = await import('../hooks/useTerminalSetup')
+      vi.mocked(useTerminalSetup).mockReturnValue({
+        terminalRef: { current: null },
+        ptyIdRef: { current: 'pty-123' },
+        showScrollButton: false,
+        handleScrollToBottom: vi.fn(),
+        exitInfo: null,
+      })
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" isAgentTerminal isRestored agentResumeCommand="claude --continue" />)
+      fireEvent.click(screen.getByLabelText('Dismiss'))
+      expect(screen.queryByText(/Resume your previous conversation/)).toBeNull()
+    })
+  })
+
+  describe('exit error banner', () => {
+    it('shows exit error banner when exitInfo is set', async () => {
+      const { useTerminalSetup } = await import('../hooks/useTerminalSetup')
+      vi.mocked(useTerminalSetup).mockReturnValue({
+        terminalRef: { current: null },
+        ptyIdRef: { current: 'pty-123' },
+        showScrollButton: false,
+        handleScrollToBottom: vi.fn(),
+        exitInfo: { code: 137, message: 'Agent killed by Docker out-of-memory killer (SIGKILL)', detail: 'Some detail' },
+      })
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
+      expect(screen.getByText(/out-of-memory killer/)).toBeTruthy()
+    })
+
+    it('does not show exit error banner when exitInfo is null', async () => {
+      const { useTerminalSetup } = await import('../hooks/useTerminalSetup')
+      vi.mocked(useTerminalSetup).mockReturnValue({
+        terminalRef: { current: null },
+        ptyIdRef: { current: 'pty-123' },
+        showScrollButton: false,
+        handleScrollToBottom: vi.fn(),
+        exitInfo: null,
+      })
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
+      expect(screen.queryByText(/out-of-memory/)).toBeNull()
+    })
+
+    it('dismisses exit error banner when close button is clicked', async () => {
+      const { useTerminalSetup } = await import('../hooks/useTerminalSetup')
+      vi.mocked(useTerminalSetup).mockReturnValue({
+        terminalRef: { current: null },
+        ptyIdRef: { current: 'pty-123' },
+        showScrollButton: false,
+        handleScrollToBottom: vi.fn(),
+        exitInfo: { code: 137, message: 'Process killed (SIGKILL)' },
+      })
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
+      expect(screen.getByText(/SIGKILL/)).toBeTruthy()
+      fireEvent.click(screen.getByLabelText('Dismiss'))
+      expect(screen.queryByText(/SIGKILL/)).toBeNull()
+    })
+
+    it('does not open error detail modal when banner without detail is clicked', async () => {
+      const { useTerminalSetup } = await import('../hooks/useTerminalSetup')
+      const { useErrorStore } = await import('../store/errors')
+      useErrorStore.setState({ detailError: null })
+      vi.mocked(useTerminalSetup).mockReturnValue({
+        terminalRef: { current: null },
+        ptyIdRef: { current: 'pty-123' },
+        showScrollButton: false,
+        handleScrollToBottom: vi.fn(),
+        exitInfo: { code: 137, message: 'Process killed (SIGKILL)' },
+      })
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
+      fireEvent.click(screen.getByText(/SIGKILL/))
+      const state = useErrorStore.getState()
+      expect(state.detailError).toBeNull()
+    })
+
+    it('opens error detail modal when banner with detail is clicked', async () => {
+      const { useTerminalSetup } = await import('../hooks/useTerminalSetup')
+      const { useErrorStore } = await import('../store/errors')
+      vi.mocked(useTerminalSetup).mockReturnValue({
+        terminalRef: { current: null },
+        ptyIdRef: { current: 'pty-123' },
+        showScrollButton: false,
+        handleScrollToBottom: vi.fn(),
+        exitInfo: { code: 137, message: 'Agent killed by OOM', detail: 'Docker Desktop runs all containers...' },
+      })
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
+      fireEvent.click(screen.getByText(/Agent killed by OOM/))
+      const state = useErrorStore.getState()
+      expect(state.detailError).not.toBeNull()
+      expect(state.detailError?.detail).toBe('Docker Desktop runs all containers...')
+    })
   })
 })

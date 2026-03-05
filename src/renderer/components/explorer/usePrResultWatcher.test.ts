@@ -15,12 +15,12 @@ describe('usePrResultWatcher', () => {
     setPrStatus: vi.fn(),
   }
 
-  it('sets up watcher on .broomy directory', () => {
+  it('sets up watcher on .broomy/output directory', () => {
     renderHook(() => usePrResultWatcher(defaultConfig))
 
     expect(window.fs.watch).toHaveBeenCalledWith(
       'pr-result-/repos/project',
-      '/repos/project/.broomy',
+      '/repos/project/.broomy/output',
     )
     expect(window.fs.onChange).toHaveBeenCalledWith(
       'pr-result-/repos/project',
@@ -87,7 +87,7 @@ describe('usePrResultWatcher', () => {
     // Let async work complete
     await vi.runAllTimersAsync()
 
-    expect(window.fs.readFile).toHaveBeenCalledWith('/repos/project/.broomy/pr-result.json')
+    expect(window.fs.readFile).toHaveBeenCalledWith('/repos/project/.broomy/output/pr-result.json')
     expect(defaultConfig.onUpdatePrState).toHaveBeenCalledWith('OPEN', 42, 'https://github.com/pr/42')
     expect(window.gh.prStatus).toHaveBeenCalledWith('/repos/project')
     expect(defaultConfig.setPrStatus).toHaveBeenCalledWith({
@@ -190,7 +190,7 @@ describe('usePrResultWatcher', () => {
     // New watcher set up
     expect(window.fs.watch).toHaveBeenCalledWith(
       'pr-result-/repos/other',
-      '/repos/other/.broomy',
+      '/repos/other/.broomy/output',
     )
   })
 })

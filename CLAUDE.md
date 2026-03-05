@@ -99,6 +99,9 @@ Unit tests are co-located with source files (`src/**/*.test.ts`). Vitest with 90
 | `/code-review [path]` | **Before submitting work.** Scans for duplication, bad naming, wrong-layer code, missing mocks, style violations. |
 | `/new-handler <ns:action>` | **When adding a new IPC handler.** Scaffolds handler + preload API + Window type + test mock in one go. |
 | `/new-panel <Name> <position>` | **When adding a new panel.** Scaffolds panel ID + definition + Layout rendering + default visibility. |
+| `/coverage-run` | **After any code changes that affect coverage.** Runs full test suite with coverage, caches results for incremental checks. |
+| `/coverage-check <file>` | **When iterating on a single file's tests.** Runs only that file's tests, updates cached coverage — much faster than the full suite. |
+| `/coverage-increase` | **When coverage is below 90%.** Iteratively writes tests for under-covered files using cached data. |
 | `/coverage-gaps` | **When coverage is low or before releases.** Finds untested code and suggests concrete test stubs. |
 | `/tech-debt` | **Periodically.** Audits `docs/code-improvements.md` — marks resolved items, finds new issues. |
 | `/release-notes` | **Before a release.** Generates human-readable release notes from commits since the last tag. Output used by release scripts. |

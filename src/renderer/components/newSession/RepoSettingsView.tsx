@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react'
 import { useAgentStore } from '../../store/agents'
 import { useRepoStore } from '../../store/repos'
-import type { ManagedRepo, DockerStatus, DevcontainerStatus } from '../../../preload/index'
+import type { ManagedRepo, DevcontainerStatus } from '../../../preload/index'
 import { IsolationSettings } from '../IsolationSettings'
 
 export function RepoSettingsView({
@@ -19,10 +19,7 @@ export function RepoSettingsView({
 
   const [defaultAgentId, setDefaultAgentId] = useState<string | null>(repo.defaultAgentId || null)
   const [isolated, setIsolated] = useState(repo.isolated ?? false)
-  const [isolationMode, setIsolationMode] = useState<'docker' | 'devcontainer'>(repo.isolationMode || 'docker')
-  const [dockerImage, setDockerImage] = useState(repo.dockerImage || '')
   const [skipApproval, setSkipApproval] = useState(repo.skipApproval ?? false)
-  const [dockerStatus, setDockerStatus] = useState<DockerStatus | null>(null)
   const [devcontainerStatus, setDevcontainerStatus] = useState<DevcontainerStatus | null>(null)
   const [hasDevcontainerConfigState, setHasDevcontainerConfig] = useState<boolean | null>(null)
   const [initScript, setInitScript] = useState('')
@@ -32,18 +29,12 @@ export function RepoSettingsView({
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
-    if (isolated || dockerStatus === null) {
-      void window.docker.status().then(setDockerStatus)
-    }
-  }, [isolated])
-
-  useEffect(() => {
-    if (isolated && isolationMode === 'devcontainer') {
+    if (isolated) {
       void window.devcontainer.status().then(setDevcontainerStatus)
       const mainWorktree = `${repo.rootDir}/${repo.defaultBranch}`
       void window.devcontainer.hasConfig(mainWorktree).then(setHasDevcontainerConfig)
     }
-  }, [isolated, isolationMode, repo.rootDir, repo.defaultBranch])
+  }, [isolated, repo.rootDir, repo.defaultBranch])
 
   // Load init script
   useEffect(() => {
@@ -69,8 +60,6 @@ export function RepoSettingsView({
       updateRepo(repo.id, {
         defaultAgentId: defaultAgentId || undefined,
         isolated: isolated || undefined,
-        isolationMode: isolated ? isolationMode : undefined,
-        dockerImage: dockerImage.trim() || undefined,
         skipApproval: skipApproval || undefined,
         reviewInstructions: reviewInstructions || undefined,
       })
@@ -159,11 +148,10 @@ export function RepoSettingsView({
             </div>
 
             <IsolationSettings
-              isolated={isolated} isolationMode={isolationMode} dockerImage={dockerImage} skipApproval={skipApproval}
-              dockerStatus={dockerStatus} devcontainerStatus={devcontainerStatus}
+              isolated={isolated} skipApproval={skipApproval}
+              dockerStatus={null} devcontainerStatus={devcontainerStatus}
               hasDevcontainerConfig={hasDevcontainerConfigState}
-              onIsolatedChange={setIsolated} onIsolationModeChange={setIsolationMode}
-              onDockerImageChange={setDockerImage} onSkipApprovalChange={setSkipApproval}
+              onIsolatedChange={setIsolated} onSkipApprovalChange={setSkipApproval}
               onGenerateDevcontainerConfig={async () => {
                 await window.devcontainer.generateDefaultConfig(`${repo.rootDir}/${repo.defaultBranch}`)
                 setHasDevcontainerConfig(true)

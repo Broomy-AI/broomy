@@ -4,7 +4,6 @@ import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import '../../test/react-setup'
 import { allowConsoleError } from '../../test/console-guard'
 import ErrorBoundary from './ErrorBoundary'
-import { useErrorStore } from '../store/errors'
 
 // Suppress jsdom printing thrown errors to stderr (not console.error — jsdom
 // dispatches an 'error' event that writes to process.stderr directly).
@@ -21,11 +20,6 @@ afterEach(() => {
 beforeEach(() => {
   allowConsoleError()
   vi.clearAllMocks()
-  useErrorStore.setState({
-    errors: [],
-    hasUnread: false,
-    detailError: null,
-  })
 })
 
 // A component that throws on render
@@ -59,17 +53,20 @@ describe('ErrorBoundary', () => {
     cleanup()
   })
 
-  it('adds error to error store when a child throws', () => {
+  it('logs to console.error when a child throws', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const cleanup = suppressJsdomErrors()
     render(
       <ErrorBoundary>
         <ThrowingComponent shouldThrow={true} />
       </ErrorBoundary>,
     )
-    const state = useErrorStore.getState()
-    expect(state.errors.length).toBe(1)
-    expect(state.errors[0].message).toContain('Unhandled render error: Test render error')
+    expect(spy).toHaveBeenCalledWith(
+      '[ErrorBoundary] Unhandled render error:',
+      expect.any(Error),
+    )
     cleanup()
+    spy.mockRestore()
   })
 
   it('resets error state when Try Again is clicked', () => {
@@ -82,14 +79,9 @@ describe('ErrorBoundary', () => {
     )
     expect(screen.getByText('Something went wrong')).toBeTruthy()
 
-    // Click Try Again - this calls handleReset which sets hasError to false
-    // The component will re-render its children. ThrowingComponent will throw again
-    // so the boundary will catch it again and show the error UI, but the important
-    // thing is that handleReset was called and setState was invoked.
     const tryAgainButton = screen.getByText('Try Again')
     expect(tryAgainButton).toBeTruthy()
 
-    // Verify the button is clickable
     fireEvent.click(tryAgainButton)
 
     // After clicking try again with a still-throwing child, the error boundary
@@ -108,7 +100,6 @@ describe('ErrorBoundary', () => {
         <EmptyErrorComponent />
       </ErrorBoundary>,
     )
-    // With empty message, it should show the fallback text
     expect(screen.getByText('An unexpected error occurred.')).toBeTruthy()
     cleanup()
   })

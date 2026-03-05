@@ -279,27 +279,9 @@ ipcMain.handle('fs:watch', async (_event, id, dirPath) => {
 File watchers are namespaced by ID and tracked per-window. They are cleaned up when the
 window closes.
 
-## The Review Panel and Diff Viewing
+## The Review Panel
 
-`src/renderer/components/review/` manages AI-powered code reviews (entry point: `index.tsx`, with supporting modules `ReviewContent.tsx`, `ReviewHelpers.tsx`, `useReviewActions.ts`, `useReviewData.ts`, and others). It:
-
-1. Reads branch changes via `git:branchChanges`
-2. Generates a review prompt and sends it to the agent terminal
-3. Watches for the resulting `review.json` file
-4. Displays findings organized by severity (info, warning, concern)
-5. Tracks which requested changes have been addressed across review iterations
-
-Review findings link to specific file locations. Clicking a finding opens the file in the
-diff viewer (`FileViewer` component) with the relevant line highlighted:
-
-```ts
-onSelectFile={(filePath, openInDiffMode, scrollToLine, diffBaseRef) => {
-  navigateToFile(filePath, openInDiffMode, scrollToLine, undefined, diffBaseRef)
-}}
-```
-
-The diff viewer shows the file content at the merge-base ref compared to the current
-working tree, using the `git:show` handler to fetch historical file content.
+The review panel is documented in [review-system.md](./review-system.md). It uses git branch changes and diffs as input — see that guide for the full architecture.
 
 ## GitHub CLI (gh) Wrappers
 

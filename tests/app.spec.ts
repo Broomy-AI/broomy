@@ -227,10 +227,14 @@ test.describe('Explorer Panel', () => {
 
     // Open the explorer panel
     await explorerButton.click()
-    await page.waitForTimeout(300)
+    const explorerPanel = page.locator('[data-panel-id="explorer"]')
+    await expect(explorerPanel).toBeVisible()
+
+    // Switch to Files filter (default is source-control)
+    const filesButton = explorerPanel.locator('button[title="Files"]')
+    await filesButton.click()
 
     // Check for placeholder file items (scoped to explorer panel to avoid matching hidden per-session instances)
-    const explorerPanel = page.locator('[data-panel-id="explorer"]')
     const srcFolder = explorerPanel.locator('text=src').first()
     const packageJson = explorerPanel.locator('text=package.json').first()
 

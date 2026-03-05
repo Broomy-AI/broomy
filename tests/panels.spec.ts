@@ -169,6 +169,10 @@ test.describe('Explorer Panel', () => {
     const explorerPanel = page.locator('[data-panel-id="explorer"]')
     await expect(explorerPanel).toBeVisible()
 
+    // Switch to Files filter (default is source-control)
+    const filesButton = explorerPanel.locator('button[title="Files"]')
+    await filesButton.click()
+
     // The default E2E mock returns src (dir), package.json, README.md
     await expect(explorerPanel.locator('text=src').first()).toBeVisible()
     await expect(explorerPanel.locator('text=package.json').first()).toBeVisible()
@@ -214,6 +218,10 @@ test.describe('File Viewer', () => {
 
     const explorerPanel = page.locator('[data-panel-id="explorer"]')
     await expect(explorerPanel).toBeVisible()
+
+    // Switch to Files filter (default is source-control)
+    const filesButton = explorerPanel.locator('button[title="Files"]')
+    await filesButton.click()
 
     // Click on package.json in the file tree
     await explorerPanel.locator('text=package.json').first().click()

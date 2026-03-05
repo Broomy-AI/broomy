@@ -1,5 +1,5 @@
 /**
- * Watches `.broomy/pr-result.json` for creation/modification and triggers PR status updates.
+ * Watches `.broomy/output/pr-result.json` for creation/modification and triggers PR status updates.
  */
 import { useEffect } from 'react'
 import type { PrState } from '../../store/sessions'
@@ -15,12 +15,12 @@ export function usePrResultWatcher({ directory, onUpdatePrState, setPrStatus }: 
   useEffect(() => {
     if (!directory) return
 
-    const broomyDir = `${directory}/.broomy`
-    const prResultPath = `${broomyDir}/pr-result.json`
+    const outputDir = `${directory}/.broomy/output`
+    const prResultPath = `${outputDir}/pr-result.json`
     const watcherId = `pr-result-${directory}`
     let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
-    void window.fs.watch(watcherId, broomyDir)
+    void window.fs.watch(watcherId, outputDir)
     const removeListener = window.fs.onChange(watcherId, (event: { eventType: string; filename: string | null }) => {
       if (event.filename && event.filename !== 'pr-result.json') return
 

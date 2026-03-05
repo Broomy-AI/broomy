@@ -42,9 +42,7 @@ export type ManagedRepo = {
   defaultAgentId?: string  // Default agent for sessions in this repo
   reviewInstructions?: string  // Custom instructions for AI review generation
   allowPushToMain?: boolean  // Whether "Push to main" button is shown for this repo
-  isolated?: boolean         // Run sessions in this repo inside Docker
-  isolationMode?: 'docker' | 'devcontainer'  // Isolation backend (default: 'docker')
-  dockerImage?: string       // Custom Docker image (default: broomy/isolation:latest)
+  isolated?: boolean         // Run sessions in this repo inside a dev container
   skipApproval?: boolean     // Auto-approve agent commands when isolated
 }
 
@@ -143,9 +141,6 @@ export type ContainerInfo = {
   status: 'running' | 'stopped' | 'starting'
   image: string
   repoDir: string
-  isolationMode?: 'docker' | 'devcontainer'
-  remoteUser?: string
-  remoteWorkspaceFolder?: string
 }
 
 export type DevcontainerStatus = {

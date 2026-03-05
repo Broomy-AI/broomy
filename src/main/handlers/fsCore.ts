@@ -102,9 +102,13 @@ async function handleExists(ctx: HandlerContext, filePath: string) {
       return true
     }
     // Review/comments files always exist for mock data in any scenario
-    if (/\.broomy[/\\](review|comments)\.json$/.exec(filePath)) {
+    if (/\.broomy[/\\]output[/\\](review|comments)\.json$/.exec(filePath)) {
       return true
     }
+    if (/\.broomy[/\\]review\.md$/.exec(filePath)) {
+      return true
+    }
+    // Fall through to real fs for other paths (e.g. .git directory checks)
   }
   try {
     await access(filePath)
@@ -238,7 +242,11 @@ function handleWatch(ctx: HandlerContext, _event: IpcMainInvokeEvent, id: string
     ctx.fileWatchers.set(id, watcher)
 
     watcher.on('error', (error) => {
-      console.error('File watcher error:', error)
+      console.error(`[fs:watch] Watcher error for ${id}:`, error)
+      const ownerWindow = ctx.watcherOwnerWindows.get(id) || ctx.mainWindow
+      if (ownerWindow && !ownerWindow.isDestroyed()) {
+        ownerWindow.webContents.send(`fs:watchError:${id}`, String(error))
+      }
       watcher.close()
       ctx.fileWatchers.delete(id)
       ctx.watcherOwnerWindows.delete(id)
@@ -256,6 +264,7 @@ function handleUnwatch(ctx: HandlerContext, id: string) {
   if (watcher) {
     watcher.close()
     ctx.fileWatchers.delete(id)
+    ctx.watcherOwnerWindows.delete(id)
   }
   return { success: true }
 }

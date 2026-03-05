@@ -13,6 +13,7 @@ import { basename } from 'path-browserify'
 import MonacoDiffViewer from './fileViewers/MonacoDiffViewer'
 import FileViewerToolbar from './FileViewerToolbar'
 import { useFileViewer } from '../hooks/useFileViewer'
+import { DialogErrorBanner } from './ErrorBanner'
 import PanelErrorBoundary from './PanelErrorBoundary'
 
 export type FileViewerPosition = 'top' | 'left'
@@ -135,6 +136,7 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
         onSelectViewer={viewer.setSelectedViewerId}
         onSetViewMode={viewer.requestViewMode}
       />
+      {viewer.saveError && <div className="px-3 py-1"><DialogErrorBanner error={viewer.saveError} onDismiss={() => viewer.clearSaveError()} /></div>}
       <div className="flex-1 min-h-0">
         <PanelErrorBoundary name="File Viewer Content">
           {viewer.viewMode === 'diff' ? (

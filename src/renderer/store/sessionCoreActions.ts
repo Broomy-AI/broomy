@@ -2,7 +2,6 @@
  * Core session store actions for creating, selecting, removing, and updating sessions.
  */
 import { basename } from 'path-browserify'
-import { useErrorStore } from './errors'
 import { PANEL_IDS, DEFAULT_TOOLBAR_PANELS } from '../panels/types'
 import type { Session, PanelVisibility, TerminalTabsState } from './sessions'
 import {
@@ -105,6 +104,7 @@ type StoreSet = (partial: Partial<{
   sessions: Session[]
   activeSessionId: string | null
   isLoading: boolean
+  configLoadError: string | null
   showSidebar: boolean
   sidebarWidth: number
   toolbarPanels: string[]
@@ -190,9 +190,9 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
             planFilePath: null,
             fileViewerPosition: sessionData.fileViewerPosition ?? 'top',
             layoutSizes: clampLayoutSizes({ ...DEFAULT_LAYOUT_SIZES, ...(sessionData.layoutSizes ?? {}) }),
-            explorerFilter: sessionData.explorerFilter === 'all' ? 'files'
+            explorerFilter: sessionData.explorerFilter === 'all' ? 'source-control'
               : sessionData.explorerFilter === 'changed' ? 'source-control'
-              : sessionData.explorerFilter ?? 'files',
+              : sessionData.explorerFilter ?? 'source-control',
             lastMessage: null,
             lastMessageTime: null,
             isUnread: false,
@@ -230,8 +230,7 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
         })
       } catch (err) {
         console.warn('[sessions] Failed to load sessions config:', err)
-        useErrorStore.getState().addError('Failed to load session config')
-        set({ sessions: [], activeSessionId: null, isLoading: false })
+        set({ sessions: [], activeSessionId: null, isLoading: false, configLoadError: 'Failed to load session config' })
       }
     },
 
@@ -285,7 +284,7 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
         planFilePath: null,
         fileViewerPosition: 'top',
         layoutSizes: { ...DEFAULT_LAYOUT_SIZES },
-        explorerFilter: isReview ? 'review' : 'files',
+        explorerFilter: isReview ? 'review' : 'source-control',
         lastMessage: null,
         lastMessageTime: null,
         isUnread: false,
@@ -310,11 +309,21 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
 
     removeSession: (id: string) => {
       const { sessions, activeSessionId } = get()
+      const removedIndex = sessions.findIndex((s) => s.id === id)
       const updatedSessions = sessions.filter((s) => s.id !== id)
 
       let newActiveId = activeSessionId
-      if (activeSessionId === id) {
-        newActiveId = updatedSessions.length > 0 ? updatedSessions[0].id : null
+      if (activeSessionId === id && updatedSessions.length > 0) {
+        // Prefer the next non-archived session, then previous, then any
+        const nextIndex = Math.min(removedIndex, updatedSessions.length - 1)
+        const candidates = [
+          ...updatedSessions.slice(nextIndex),
+          ...updatedSessions.slice(0, nextIndex),
+        ]
+        const nonArchived = candidates.find((s) => !s.isArchived)
+        newActiveId = nonArchived?.id ?? candidates[0].id
+      } else if (updatedSessions.length === 0) {
+        newActiveId = null
       }
 
       set({

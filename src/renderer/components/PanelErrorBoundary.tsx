@@ -3,11 +3,9 @@
  *
  * Catches render errors and shows a compact error bar at the top of the
  * affected region instead of crashing the entire app. A "Retry" button
- * resets the error state so children re-render. Errors are logged to the
- * error store for visibility in the error history.
+ * resets the error state so children re-render.
  */
 import { Component, type ReactNode } from 'react'
-import { useErrorStore } from '../store/errors'
 
 interface Props {
   name: string
@@ -26,11 +24,7 @@ export default class PanelErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error) {
-    useErrorStore.getState().addScopedError({
-      message: `${this.props.name} crashed: ${error.message}`,
-      scope: { panel: this.props.name },
-      detail: error.stack,
-    })
+    console.error(`[PanelErrorBoundary] ${this.props.name} crashed:`, error)
   }
 
   private handleRetry = () => {

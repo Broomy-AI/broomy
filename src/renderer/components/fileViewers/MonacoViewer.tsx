@@ -69,6 +69,16 @@ const TEXT_EXTENSIONS = [
   'lock', 'sum',
 ]
 
+const KNOWN_TEXT_FILENAMES = ['makefile', 'dockerfile', 'gemfile', 'rakefile', 'procfile']
+
+/** Check if a file path has a known text extension or filename */
+export function hasKnownTextExtension(filePath: string): boolean {
+  const ext = getFileExtension(filePath)
+  if (TEXT_EXTENSIONS.includes(ext)) return true
+  const fileName = filePath.split('/').pop()?.toLowerCase() || ''
+  return KNOWN_TEXT_FILENAMES.includes(fileName)
+}
+
 // Map file extensions to Monaco language IDs
 const getLanguageFromPath = (filePath: string): string => {
   const ext = getFileExtension(filePath)
@@ -382,12 +392,7 @@ export const MonacoViewer: FileViewerPlugin = {
     </svg>
   ),
   canHandle: (filePath: string) => {
-    const ext = getFileExtension(filePath)
-    // Handle files with known text extensions
-    if (TEXT_EXTENSIONS.includes(ext)) return true
-    // Handle files without extensions (like Makefile, Dockerfile)
-    const fileName = filePath.split('/').pop()?.toLowerCase() || ''
-    if (['makefile', 'dockerfile', 'gemfile', 'rakefile', 'procfile'].includes(fileName)) return true
+    if (hasKnownTextExtension(filePath)) return true
     // For unknown extensions, we'll check content in FileViewer
     // Return true here and let FileViewer filter based on content
     return true

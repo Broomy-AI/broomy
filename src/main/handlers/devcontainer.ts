@@ -1,9 +1,9 @@
 /**
- * IPC handlers for devcontainer CLI status and config management.
+ * IPC handlers for devcontainer CLI status, config management, and container lifecycle.
  */
 import { IpcMain } from 'electron'
 import { HandlerContext } from './types'
-import { isDevcontainerCliAvailable, hasDevcontainerConfig, writeDefaultDevcontainerConfig } from '../devcontainer'
+import { isDevcontainerCliAvailable, hasDevcontainerConfig, writeDefaultDevcontainerConfig, getContainerInfo, resetContainer } from '../devcontainer'
 
 export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   ipcMain.handle('devcontainer:status', async () => {
@@ -25,5 +25,19 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
       return
     }
     writeDefaultDevcontainerConfig(workspaceFolder)
+  })
+
+  ipcMain.handle('devcontainer:containerInfo', async (_event, repoDir: string) => {
+    if (ctx.isE2ETest) {
+      return null
+    }
+    return getContainerInfo(ctx, repoDir)
+  })
+
+  ipcMain.handle('devcontainer:resetContainer', async (_event, repoDir: string) => {
+    if (ctx.isE2ETest) {
+      return
+    }
+    await resetContainer(ctx, repoDir)
   })
 }

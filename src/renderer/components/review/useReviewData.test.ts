@@ -23,15 +23,11 @@ describe('useReviewData', () => {
       useReviewData('session-1', '/test/repo', 'main')
     )
 
-    expect(result.current.reviewData).toBeNull()
-    expect(result.current.comments).toEqual([])
+    expect(result.current.reviewMarkdown).toBeNull()
     expect(result.current.waitingForAgent).toBe(false)
-    expect(result.current.pushing).toBe(false)
-    expect(result.current.pushResult).toBeNull()
     expect(result.current.error).toBeNull()
     expect(result.current.showGitignoreModal).toBe(false)
     expect(result.current.pendingGenerate).toBe(false)
-    expect(result.current.unpushedCount).toBe(0)
   })
 
   it('computes correct file paths', () => {
@@ -40,52 +36,19 @@ describe('useReviewData', () => {
     )
 
     expect(result.current.broomyDir).toBe('/test/repo/.broomy')
-    expect(result.current.reviewFilePath).toBe('/test/repo/.broomy/review.json')
-    expect(result.current.commentsFilePath).toBe('/test/repo/.broomy/comments.json')
-    expect(result.current.historyFilePath).toBe('/test/repo/.broomy/review-history.json')
-    expect(result.current.promptFilePath).toBe('/test/repo/.broomy/review-prompt.md')
+    expect(result.current.outputDir).toBe('/test/repo/.broomy/output')
+    expect(result.current.reviewFilePath).toBe('/test/repo/.broomy/output/review.md')
+    expect(result.current.promptFilePath).toBe('/test/repo/.broomy/output/review-prompt.md')
   })
 
-  it('loads review data on mount when file exists', async () => {
-    const reviewData = {
-      version: 1,
-      generatedAt: '2024-01-01',
-      overview: { purpose: 'test', approach: 'testing' },
-      changePatterns: [],
-      potentialIssues: [],
-      designDecisions: [],
-    }
+  it('loads review markdown on mount when file exists', async () => {
+    const markdown = '## Overview\nThis PR adds a feature.'
 
     vi.mocked(window.fs.exists).mockImplementation(async (path: string) => {
-      return path.includes('review.json')
+      return path.includes('review.md')
     })
     vi.mocked(window.fs.readFile).mockImplementation(async (path: string) => {
-      if (path.includes('review.json')) return JSON.stringify(reviewData)
-      return ''
-    })
-
-    const { result } = renderHook(() =>
-      useReviewData('session-1', '/test/repo', 'main')
-    )
-
-    // Flush async effects
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(100)
-    })
-
-    expect(result.current.reviewData).toEqual(reviewData)
-  })
-
-  it('loads comments on mount when file exists', async () => {
-    const comments = [
-      { id: 'c-1', file: '/test/src/app.ts', line: 5, body: 'Comment', createdAt: '2024-01-01' },
-    ]
-
-    vi.mocked(window.fs.exists).mockImplementation(async (path: string) => {
-      return path.includes('comments.json')
-    })
-    vi.mocked(window.fs.readFile).mockImplementation(async (path: string) => {
-      if (path.includes('comments.json')) return JSON.stringify(comments)
+      if (path.includes('review.md')) return markdown
       return ''
     })
 
@@ -97,33 +60,7 @@ describe('useReviewData', () => {
       await vi.advanceTimersByTimeAsync(100)
     })
 
-    expect(result.current.comments).toEqual(comments)
-  })
-
-  it('computes unpushedCount from comments', async () => {
-    const comments = [
-      { id: 'c-1', file: '/test/src/app.ts', line: 5, body: 'Comment 1', createdAt: '2024-01-01', pushed: false },
-      { id: 'c-2', file: '/test/src/app.ts', line: 10, body: 'Comment 2', createdAt: '2024-01-01', pushed: true },
-      { id: 'c-3', file: '/test/src/app.ts', line: 15, body: 'Comment 3', createdAt: '2024-01-01' },
-    ]
-
-    vi.mocked(window.fs.exists).mockImplementation(async (path: string) => {
-      return path.includes('comments.json')
-    })
-    vi.mocked(window.fs.readFile).mockImplementation(async (path: string) => {
-      if (path.includes('comments.json')) return JSON.stringify(comments)
-      return ''
-    })
-
-    const { result } = renderHook(() =>
-      useReviewData('session-1', '/test/repo', 'main')
-    )
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(100)
-    })
-
-    expect(result.current.unpushedCount).toBe(2)
+    expect(result.current.reviewMarkdown).toEqual(markdown)
   })
 
   it('resets state when session changes', async () => {
@@ -149,7 +86,7 @@ describe('useReviewData', () => {
 
     expect(result.current.error).toBeNull()
     expect(result.current.waitingForAgent).toBe(false)
-    expect(result.current.reviewData).toBeNull()
+    expect(result.current.reviewMarkdown).toBeNull()
   })
 
   it('computes merge-base from git', async () => {
@@ -175,11 +112,8 @@ describe('useReviewData', () => {
       useReviewData('session-1', '/test/repo', 'main')
     )
 
-    expect(typeof result.current.setReviewData).toBe('function')
-    expect(typeof result.current.setComments).toBe('function')
+    expect(typeof result.current.setReviewMarkdown).toBe('function')
     expect(typeof result.current.setWaitingForAgent).toBe('function')
-    expect(typeof result.current.setPushing).toBe('function')
-    expect(typeof result.current.setPushResult).toBe('function')
     expect(typeof result.current.setError).toBe('function')
     expect(typeof result.current.setShowGitignoreModal).toBe('function')
     expect(typeof result.current.setPendingGenerate).toBe('function')
@@ -199,9 +133,9 @@ describe('useReviewData', () => {
     expect(result.current.mergeBase).toBe('')
   })
 
-  it('handles review data loading error gracefully', async () => {
+  it('handles review markdown loading error gracefully', async () => {
     vi.mocked(window.fs.exists).mockImplementation(async (path: string) => {
-      if (path.includes('review.json')) return true
+      if (path.includes('review.md')) return true
       return false
     })
     vi.mocked(window.fs.readFile).mockRejectedValue(new Error('read error'))
@@ -214,37 +148,11 @@ describe('useReviewData', () => {
       await vi.advanceTimersByTimeAsync(100)
     })
 
-    expect(result.current.reviewData).toBeNull()
+    expect(result.current.reviewMarkdown).toBeNull()
   })
 
-  it('handles comments loading error gracefully', async () => {
-    vi.mocked(window.fs.exists).mockImplementation(async (path: string) => {
-      if (path.includes('comments.json')) return true
-      return false
-    })
-    vi.mocked(window.fs.readFile).mockRejectedValue(new Error('read error'))
-
-    const { result } = renderHook(() =>
-      useReviewData('session-1', '/test/repo', 'main')
-    )
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(100)
-    })
-
-    expect(result.current.comments).toEqual([])
-  })
-
-  it('polls for review.json changes and updates reviewData', async () => {
-    const reviewData = {
-      version: 1,
-      generatedAt: '2024-01-02',
-      headCommit: 'commit2',
-      overview: { purpose: 'new', approach: 'testing' },
-      changePatterns: [],
-      potentialIssues: [],
-      designDecisions: [],
-    }
+  it('polls for review.md changes and updates reviewMarkdown', async () => {
+    const markdown = '## Overview\nNew review content.'
 
     // Start with no files
     vi.mocked(window.fs.exists).mockResolvedValue(false)
@@ -257,15 +165,15 @@ describe('useReviewData', () => {
       await vi.advanceTimersByTimeAsync(100)
     })
 
-    expect(result.current.reviewData).toBeNull()
+    expect(result.current.reviewMarkdown).toBeNull()
 
-    // Now make the review.json appear
+    // Now make the review.md appear
     vi.mocked(window.fs.exists).mockImplementation(async (path: string) => {
-      if (path.includes('review.json')) return true
+      if (path.includes('review.md')) return true
       return false
     })
     vi.mocked(window.fs.readFile).mockImplementation(async (path: string) => {
-      if (path.includes('review.json')) return JSON.stringify(reviewData)
+      if (path.includes('review.md')) return markdown
       return ''
     })
 
@@ -274,165 +182,8 @@ describe('useReviewData', () => {
       await vi.advanceTimersByTimeAsync(1100)
     })
 
-    expect(result.current.reviewData).toEqual(reviewData)
+    expect(result.current.reviewMarkdown).toEqual(markdown)
     expect(result.current.waitingForAgent).toBe(false)
-  })
-
-  it('polls for comments.json changes', async () => {
-    const comments = [
-      { id: 'c-1', file: '/test/src/app.ts', line: 5, body: 'New comment', createdAt: '2024-01-01' },
-    ]
-
-    vi.mocked(window.fs.exists).mockResolvedValue(false)
-
-    const { result } = renderHook(() =>
-      useReviewData('session-1', '/test/repo', 'main')
-    )
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(100)
-    })
-
-    expect(result.current.comments).toEqual([])
-
-    // Make comments.json appear
-    vi.mocked(window.fs.exists).mockImplementation(async (path: string) => {
-      if (path.includes('comments.json')) return true
-      return false
-    })
-    vi.mocked(window.fs.readFile).mockImplementation(async (path: string) => {
-      if (path.includes('comments.json')) return JSON.stringify(comments)
-      return ''
-    })
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1100)
-    })
-
-    expect(result.current.comments).toEqual(comments)
-  })
-
-  it('detects review.json deletion via polling', async () => {
-    const reviewData = {
-      version: 1,
-      generatedAt: '2024-01-01',
-      overview: { purpose: 'test', approach: 'testing' },
-      changePatterns: [],
-      potentialIssues: [],
-      designDecisions: [],
-    }
-
-    // Start with review file
-    vi.mocked(window.fs.exists).mockImplementation(async (path: string) => {
-      if (path.includes('review.json')) return true
-      return false
-    })
-    vi.mocked(window.fs.readFile).mockImplementation(async (path: string) => {
-      if (path.includes('review.json')) return JSON.stringify(reviewData)
-      return ''
-    })
-
-    const { result } = renderHook(() =>
-      useReviewData('session-1', '/test/repo', 'main')
-    )
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(100)
-    })
-
-    expect(result.current.reviewData).toEqual(reviewData)
-
-    // Now remove the file
-    vi.mocked(window.fs.exists).mockResolvedValue(false)
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1100)
-    })
-
-    expect(result.current.reviewData).toBeNull()
-  })
-
-  it('adds headCommit to review if missing during polling', async () => {
-    const reviewData = {
-      version: 1,
-      generatedAt: '2024-01-02',
-      overview: { purpose: 'test', approach: 'testing' },
-      changePatterns: [],
-      potentialIssues: [],
-      designDecisions: [],
-    }
-
-    vi.mocked(window.fs.exists).mockResolvedValue(false)
-
-    renderHook(() =>
-      useReviewData('session-1', '/test/repo', 'main')
-    )
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(100)
-    })
-
-    // Make review.json appear without headCommit
-    vi.mocked(window.fs.exists).mockImplementation(async (path: string) => {
-      if (path.includes('review.json')) return true
-      return false
-    })
-    vi.mocked(window.fs.readFile).mockImplementation(async (path: string) => {
-      if (path.includes('review.json')) return JSON.stringify(reviewData)
-      return ''
-    })
-    vi.mocked(window.git.headCommit).mockResolvedValue('newcommit123')
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1100)
-    })
-
-    expect(window.git.headCommit).toHaveBeenCalledWith('/test/repo')
-    expect(window.fs.writeFile).toHaveBeenCalled()
-  })
-
-  it('updates review history during polling when review changes', async () => {
-    const reviewData = {
-      version: 1,
-      generatedAt: '2024-01-02',
-      headCommit: 'newcommit',
-      overview: { purpose: 'test', approach: 'testing' },
-      changePatterns: [],
-      potentialIssues: [],
-      designDecisions: [],
-      requestedChanges: [],
-    }
-
-    vi.mocked(window.fs.exists).mockResolvedValue(false)
-
-    renderHook(() =>
-      useReviewData('session-1', '/test/repo', 'main')
-    )
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(100)
-    })
-
-    // Make review.json appear
-    vi.mocked(window.fs.exists).mockImplementation(async (path: string) => {
-      if (path.includes('review.json')) return true
-      if (path.includes('review-history.json')) return false
-      return false
-    })
-    vi.mocked(window.fs.readFile).mockImplementation(async (path: string) => {
-      if (path.includes('review.json')) return JSON.stringify(reviewData)
-      return ''
-    })
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1100)
-    })
-
-    // Should have written history file
-    expect(window.fs.writeFile).toHaveBeenCalledWith(
-      '/test/repo/.broomy/review-history.json',
-      expect.any(String)
-    )
   })
 
   it('calls branchChanges without baseBranch when prBaseBranch is empty', async () => {

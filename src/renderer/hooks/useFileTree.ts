@@ -18,6 +18,8 @@ export interface UseFileTreeResult {
   setExpandedPaths: React.Dispatch<React.SetStateAction<Set<string>>>
   isLoading: boolean
   setIsLoading: React.Dispatch<React.SetStateAction<boolean>>
+  error: string | null
+  clearError: () => void
   inlineInput: { parentPath: string; type: 'file' | 'folder' } | null
   setInlineInput: React.Dispatch<React.SetStateAction<{ parentPath: string; type: 'file' | 'folder' } | null>>
   inlineInputValue: string
@@ -81,6 +83,42 @@ export function navigateTreeItem(current: HTMLElement, direction: 'up' | 'down')
   if (target) (target as HTMLElement).focus()
 }
 
+function useDragDrop(
+  draggedPath: string | null,
+  setDraggedPath: (p: string | null) => void,
+  setDropTargetPath: (p: string | null) => void,
+  setError: (e: string | null) => void,
+) {
+  const startDrag = (path: string) => { setDraggedPath(path) }
+
+  const handleDrop = async (targetDirPath: string) => {
+    if (!draggedPath || draggedPath === targetDirPath) {
+      setDraggedPath(null)
+      setDropTargetPath(null)
+      return
+    }
+    if (targetDirPath.startsWith(`${draggedPath}/`)) {
+      setDraggedPath(null)
+      setDropTargetPath(null)
+      return
+    }
+    const fileName = draggedPath.split('/').pop()!
+    const newPath = `${targetDirPath}/${fileName}`
+    try {
+      setError(null)
+      await window.fs.rename(draggedPath, newPath)
+    } catch (err) {
+      setError(`Failed to move "${fileName}": ${err instanceof Error ? err.message : String(err)}`)
+    }
+    setDraggedPath(null)
+    setDropTargetPath(null)
+  }
+
+  const endDrag = () => { setDraggedPath(null); setDropTargetPath(null) }
+
+  return { startDrag, handleDrop, endDrag }
+}
+
 export function useFileTree({ directory, onFileSelect, gitStatus = [] }: UseFileTreeParams): UseFileTreeResult {
   const [tree, setTree] = useState<TreeNode[]>([])
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set())
@@ -93,6 +131,10 @@ export function useFileTree({ directory, onFileSelect, gitStatus = [] }: UseFile
   // Rename state
   const [renameInput, setRenameInput] = useState<{ filePath: string; originalName: string } | null>(null)
   const [renameInputValue, setRenameInputValue] = useState('')
+
+  // Error state
+  const [error, setError] = useState<string | null>(null)
+  const clearError = useCallback(() => setError(null), [])
 
   // Drag-and-drop state
   const [draggedPath, setDraggedPath] = useState<string | null>(null)
@@ -219,7 +261,12 @@ export function useFileTree({ directory, onFileSelect, gitStatus = [] }: UseFile
       setRenameInputValue(fileName)
     } else if (result === 'delete') {
       if (window.confirm(`Delete "${fileName}"? This cannot be undone.`)) {
-        await window.fs.rm(filePath)
+        try {
+          setError(null)
+          await window.fs.rm(filePath)
+        } catch (err) {
+          setError(`Failed to delete "${fileName}": ${err instanceof Error ? err.message : String(err)}`)
+        }
       }
     }
   }
@@ -233,10 +280,15 @@ export function useFileTree({ directory, onFileSelect, gitStatus = [] }: UseFile
 
     const fullPath = `${inlineInput.parentPath}/${inlineInputValue.trim()}`
 
-    if (inlineInput.type === 'folder') {
-      await window.fs.mkdir(fullPath)
-    } else {
-      await window.fs.createFile(fullPath)
+    try {
+      setError(null)
+      if (inlineInput.type === 'folder') {
+        await window.fs.mkdir(fullPath)
+      } else {
+        await window.fs.createFile(fullPath)
+      }
+    } catch (err) {
+      setError(`Failed to create ${inlineInput.type}: ${err instanceof Error ? err.message : String(err)}`)
     }
 
     setInlineInput(null)
@@ -259,7 +311,12 @@ export function useFileTree({ directory, onFileSelect, gitStatus = [] }: UseFile
 
     const parentDir = renameInput.filePath.substring(0, renameInput.filePath.lastIndexOf('/'))
     const newPath = `${parentDir}/${newName}`
-    await window.fs.rename(renameInput.filePath, newPath)
+    try {
+      setError(null)
+      await window.fs.rename(renameInput.filePath, newPath)
+    } catch (err) {
+      setError(`Failed to rename: ${err instanceof Error ? err.message : String(err)}`)
+    }
     setRenameInput(null)
     setRenameInputValue('')
   }
@@ -270,36 +327,7 @@ export function useFileTree({ directory, onFileSelect, gitStatus = [] }: UseFile
     setRenameInputValue('')
   }
 
-  // Drag-and-drop handlers
-  const startDrag = (path: string) => {
-    setDraggedPath(path)
-  }
-
-  const handleDrop = async (targetDirPath: string) => {
-    if (!draggedPath || draggedPath === targetDirPath) {
-      setDraggedPath(null)
-      setDropTargetPath(null)
-      return
-    }
-
-    // Don't allow dropping into own subdirectory
-    if (targetDirPath.startsWith(`${draggedPath}/`)) {
-      setDraggedPath(null)
-      setDropTargetPath(null)
-      return
-    }
-
-    const fileName = draggedPath.split('/').pop()!
-    const newPath = `${targetDirPath}/${fileName}`
-    await window.fs.rename(draggedPath, newPath)
-    setDraggedPath(null)
-    setDropTargetPath(null)
-  }
-
-  const endDrag = () => {
-    setDraggedPath(null)
-    setDropTargetPath(null)
-  }
+  const { startDrag, handleDrop, endDrag } = useDragDrop(draggedPath, setDraggedPath, setDropTargetPath, setError)
 
   return {
     tree,
@@ -308,6 +336,8 @@ export function useFileTree({ directory, onFileSelect, gitStatus = [] }: UseFile
     setExpandedPaths,
     isLoading,
     setIsLoading,
+    error,
+    clearError,
     inlineInput,
     setInlineInput,
     inlineInputValue,

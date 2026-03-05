@@ -142,8 +142,6 @@ describe('useTerminalSetup', () => {
       },
     })
     useErrorStore.setState({
-      errors: [],
-      hasUnread: false,
       detailError: null,
     })
 
@@ -462,6 +460,77 @@ describe('useTerminalSetup', () => {
       expect(mockTerminalWrite).toHaveBeenCalledWith(
         expect.stringContaining('Process exited with code 0'),
       )
+    })
+
+    it('sets exitInfo with Docker OOM detail for exit code 137 on isolated session', async () => {
+      let onExitCb: ((exitCode: number) => void) | null = null
+      vi.mocked(window.pty.onExit).mockImplementation((_id, cb) => {
+        onExitCb = cb as (exitCode: number) => void
+        return () => {}
+      })
+
+      const config = makeConfig({ isolated: true })
+      const containerRef = makeContainerRef()
+
+      const { result } = renderHook(() => useTerminalSetup(config, containerRef))
+      await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+
+      if (onExitCb) act(() => { onExitCb!(137) })
+
+      expect(mockTerminalWrite).toHaveBeenCalledWith(
+        expect.stringContaining('Process exited with code 137'),
+      )
+      expect(mockTerminalWrite).toHaveBeenCalledWith(
+        expect.stringContaining('out-of-memory killer'),
+      )
+      expect(result.current.exitInfo).toEqual(expect.objectContaining({
+        code: 137,
+        message: expect.stringContaining('out-of-memory'),
+        detail: expect.stringContaining('Increase Docker Desktop'),
+      }))
+    })
+
+    it('sets exitInfo without detail for exit code 137 on non-isolated session', async () => {
+      let onExitCb: ((exitCode: number) => void) | null = null
+      vi.mocked(window.pty.onExit).mockImplementation((_id, cb) => {
+        onExitCb = cb as (exitCode: number) => void
+        return () => {}
+      })
+
+      const config = makeConfig({ isolated: false })
+      const containerRef = makeContainerRef()
+
+      const { result } = renderHook(() => useTerminalSetup(config, containerRef))
+      await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+
+      if (onExitCb) act(() => { onExitCb!(137) })
+
+      expect(mockTerminalWrite).toHaveBeenCalledWith(
+        expect.stringContaining('killed (SIGKILL)'),
+      )
+      expect(result.current.exitInfo).toEqual(expect.objectContaining({
+        code: 137,
+        message: expect.stringContaining('SIGKILL'),
+      }))
+      expect(result.current.exitInfo?.detail).toBeUndefined()
+    })
+
+    it('does not set exitInfo for normal exit codes', async () => {
+      let onExitCb: ((exitCode: number) => void) | null = null
+      vi.mocked(window.pty.onExit).mockImplementation((_id, cb) => {
+        onExitCb = cb as (exitCode: number) => void
+        return () => {}
+      })
+
+      const config = makeConfig()
+      const containerRef = makeContainerRef()
+
+      const { result } = renderHook(() => useTerminalSetup(config, containerRef))
+      await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+
+      if (onExitCb) act(() => { onExitCb!(0) })
+
+      expect(result.current.exitInfo).toBeNull()
     })
 
     it('forwards user input to PTY write', async () => {

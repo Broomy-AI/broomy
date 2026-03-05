@@ -17,8 +17,13 @@ vi.mock('simple-git', () => ({
   default: vi.fn(() => mockGitInstance),
 }))
 
+vi.mock('child_process', () => ({
+  execFile: vi.fn((_cmd: string, _args: string[], _opts: unknown, cb: Function) => cb(null, '', '')),
+}))
+
 vi.mock('../cloneErrorHint', () => ({
   getCloneErrorHint: vi.fn(() => null),
+  getGitAuthHint: vi.fn(() => null),
 }))
 
 vi.mock('../platform', () => ({
@@ -193,6 +198,41 @@ describe('gitBranch handlers', () => {
       const handlers = setupHandlers()
       await handlers['git:pushNewBranch'](null, '/repo', 'feature')
       expect(mockGitInstance.push).toHaveBeenCalledWith(['--set-upstream', 'origin', 'feature'])
+    })
+
+    it('returns friendly error on directory file conflict', async () => {
+      mockGitInstance.push.mockRejectedValue(new Error(
+        '! refs/heads/release:refs/heads/release [remote rejected] (directory file conflict)'
+      ))
+      const handlers = setupHandlers()
+      const result = await handlers['git:pushNewBranch'](null, '/repo', 'release')
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('conflicts with existing branches')
+      expect(result.error).toContain('"release/"')
+      expect(result.error).toContain('feature/release')
+      // Should NOT contain the raw git error
+      expect(result.error).not.toContain('refs/heads')
+    })
+
+    it('returns error with auth hint on generic push failure', async () => {
+      mockGitInstance.push.mockRejectedValue(new Error('Authentication failed'))
+      mockGitInstance.getRemotes.mockResolvedValue([
+        { name: 'origin', refs: { push: 'https://github.com/org/repo.git' } },
+      ])
+      const handlers = setupHandlers()
+      const result = await handlers['git:pushNewBranch'](null, '/repo', 'feature')
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Authentication failed')
+    })
+
+    it('returns friendly error on cannot lock ref', async () => {
+      mockGitInstance.push.mockRejectedValue(new Error(
+        'cannot lock ref \'refs/heads/release\': \'refs/heads/release/linux\' exists'
+      ))
+      const handlers = setupHandlers()
+      const result = await handlers['git:pushNewBranch'](null, '/repo', 'release')
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('conflicts with existing branches')
     })
   })
 

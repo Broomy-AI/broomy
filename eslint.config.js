@@ -145,4 +145,13 @@ export default tseslint.config(
       'max-lines-per-function': 'off',
     },
   },
+
+  // Mock/scenario data files: no line limits
+  {
+    files: ['**/handlers/scenarios.ts', '**/test/setup.ts', '**/test/react-setup.ts'],
+    rules: {
+      'max-lines': 'off',
+      'max-lines-per-function': 'off',
+    },
+  },
 )

@@ -251,27 +251,9 @@ function isValidProfileId(id: string): boolean {
 
 ---
 
-### 11. Validate URL Schemes Before `openExternal`
+### 11. ~~Validate URL Schemes Before `openExternal`~~ ✅ Resolved
 
-**Problem**: Markdown link clicks call `window.shell.openExternal(href)` without validating the URL scheme, which could open arbitrary protocol handlers.
-
-**Current state**: In both `src/renderer/components/fileViewers/MarkdownViewer.tsx` (line 35) and `src/renderer/components/review/ReviewContent.tsx` (line 30):
-
-```typescript
-if (href) void window.shell.openExternal(href)
-```
-
-A markdown link with `file:///etc/passwd` or a custom protocol handler could be opened.
-
-**Proposed solution**: Validate the URL scheme before opening:
-
-```typescript
-if (href && /^https?:\/\//i.test(href)) {
-  void window.shell.openExternal(href)
-}
-```
-
-**Expected benefit**: Prevents opening unexpected protocol handlers from user-controlled markdown content.
+**Resolved**: `ReviewContent.tsx` was removed in the modular review rewrite. The review panel now uses custom link handling that routes GitHub URLs to the embedded webview and other `https://` URLs to `openExternal`. The `MarkdownViewer.tsx` file still uses `openExternal` without scheme validation — this remaining instance should be addressed separately.
 
 ---
 
@@ -291,19 +273,9 @@ Both define a `Divider` component with identical drag-to-resize behavior, hover 
 
 ---
 
-### 13. Deduplicate Markdown Rendering Configuration
+### 13. ~~Deduplicate Markdown Rendering Configuration~~ ✅ Resolved
 
-**Problem**: Custom Markdown component configuration (link handling, code block styling) is duplicated across two files.
-
-**Current state**:
-- `src/renderer/components/fileViewers/MarkdownViewer.tsx` (lines 20-61)
-- `src/renderer/components/review/ReviewContent.tsx` (lines 14-61, `MarkdownBody` function)
-
-Both define identical custom component maps for the Markdown renderer.
-
-**Proposed solution**: Extract the shared Markdown component configuration into a shared utility, e.g. `src/renderer/utils/markdownComponents.tsx`.
-
-**Expected benefit**: Consistent markdown rendering behavior. Changes to link handling or code styling propagate automatically.
+**Resolved**: `ReviewContent.tsx` was removed in the modular review rewrite. The review panel now renders markdown sections directly in `index.tsx` using `react-markdown` with its own link handler (GitHub URLs → webview, others → system browser). The duplication no longer exists.
 
 ---
 
@@ -391,13 +363,13 @@ Add `console.error` logging to all catch blocks that currently swallow errors si
 
 ### 18. Reduce Review File Polling Frequency
 
-**Problem**: The review file poller creates aggressive IPC traffic with 1-second interval polling.
+**Problem**: The review file poller creates IPC traffic with 1-second interval polling.
 
-**Current state**: In `src/renderer/components/review/useReviewFilePoller.ts` (lines 62-105), a `setInterval` polls at 1-second intervals, creating 60+ IPC calls per minute per session. Multiple review sessions compound this.
+**Current state**: In `src/renderer/components/review/useReviewFilePoller.ts`, a `setInterval` polls `.broomy/review.md` at 1-second intervals. The poller also resolves `<!-- include: path -->` directives, adding extra `fs:exists` and `fs:readFile` calls per include. The poller skips updates when content hasn't changed, but the IPC calls still happen.
 
 **Proposed solution**: Either:
-- Increase the interval to 3-5 seconds (review content doesn't change that fast)
 - Use a file watcher instead of polling (the infrastructure already exists in `fsCore.ts`)
+- Increase the interval to 3-5 seconds when the review is not actively being generated
 - Debounce/batch the IPC calls
 
 **Expected benefit**: Reduced IPC overhead and CPU usage, especially with multiple sessions.

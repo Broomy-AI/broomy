@@ -8,6 +8,7 @@ import type { NavigationTarget } from '../../utils/fileNavigation'
 import { StatusBadge } from './icons'
 import { statusLabel, getStatusColor } from '../../utils/explorerHelpers'
 import { useFileTree, navigateTreeItem } from '../../hooks/useFileTree'
+import { DialogErrorBanner } from '../ErrorBanner'
 
 function handleTreeKeyDown(
   e: React.KeyboardEvent<HTMLDivElement>,
@@ -140,6 +141,8 @@ export function FileTree({
     renameInput,
     renameInputValue,
     setRenameInputValue,
+    error,
+    clearError,
     draggedPath,
     dropTargetPath,
     loadDirectory,
@@ -320,6 +323,7 @@ export function FileTree({
 
   return (
     <>
+      {error && <div className="px-2 mb-1"><DialogErrorBanner error={error} onDismiss={clearError} /></div>}
       <div className="text-text-secondary mb-2 px-2 truncate text-xs cursor-context-menu" onContextMenu={(e) => handleContextMenu(e, directory)}>{directory}</div>
       {inlineInput && <InlineCreateInput parentPath={directory} inlineInput={inlineInput} inlineInputValue={inlineInputValue} setInlineInputValue={setInlineInputValue} submitInlineInput={submitInlineInput} setInlineInput={setInlineInput} inputRef={inlineInputRef} depth={0} />}
       {tree.length === 0 ? (

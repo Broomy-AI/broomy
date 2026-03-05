@@ -23,6 +23,7 @@ vi.mock('../crashLog', () => ({
 import { register } from './app'
 import { E2EScenario, type HandlerContext } from './types'
 import type { IpcMain } from 'electron'
+import { readLatestCrashLog, deleteCrashLog } from '../crashLog'
 
 describe('app handler register', () => {
   let mockIpcMain: { handle: ReturnType<typeof vi.fn> }
@@ -158,5 +159,48 @@ describe('app handler register', () => {
     const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === 'app:getCrashReportUrl')
     const handler = call![1] as () => unknown
     expect(handler()).toBeNull()
+  })
+
+  it('app:dismissCrashLog does nothing in E2E mode', () => {
+    const e2eCtx = { ...mockCtx, isE2ETest: true } as unknown as HandlerContext
+    register(mockIpcMain as unknown as IpcMain, e2eCtx)
+    const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === 'app:dismissCrashLog')
+    const handler = call![1] as () => void
+    handler()
+    expect(deleteCrashLog).not.toHaveBeenCalled()
+  })
+
+  it('app:dismissCrashLog deletes crash log when one exists', () => {
+    vi.mocked(readLatestCrashLog).mockReturnValue({ path: '/tmp/crash.log', report: { timestamp: '2024-01-01', message: 'test', stack: '', electronVersion: '28.0.0', appVersion: '0.6.1', platform: 'darwin', processType: 'main' } })
+    register(mockIpcMain as unknown as IpcMain, mockCtx)
+    const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === 'app:dismissCrashLog')
+    const handler = call![1] as () => void
+    handler()
+    expect(deleteCrashLog).toHaveBeenCalledWith('/tmp/crash.log')
+  })
+
+  it('app:getCrashReportUrl returns URL when crash log exists', () => {
+    vi.mocked(readLatestCrashLog).mockReturnValue({ path: '/tmp/crash.log', report: { timestamp: '2024-01-01', message: 'test', stack: '', electronVersion: '28.0.0', appVersion: '0.6.1', platform: 'darwin', processType: 'main' } })
+    register(mockIpcMain as unknown as IpcMain, mockCtx)
+    const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === 'app:getCrashReportUrl')
+    const handler = call![1] as () => unknown
+    expect(handler()).toBe('https://github.com/Broomy-AI/broomy/issues/new?title=test')
+  })
+
+  it('app:getCrashReportUrl returns null in E2E mode', () => {
+    const e2eCtx = { ...mockCtx, isE2ETest: true } as unknown as HandlerContext
+    register(mockIpcMain as unknown as IpcMain, e2eCtx)
+    const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === 'app:getCrashReportUrl')
+    const handler = call![1] as () => unknown
+    expect(handler()).toBeNull()
+  })
+
+  it('app:getCrashLog returns report when crash log exists', () => {
+    const report = { timestamp: '2024-01-01', message: 'crash', stack: 'trace', electronVersion: '28.0.0', appVersion: '0.6.1', platform: 'darwin', processType: 'main' as const }
+    vi.mocked(readLatestCrashLog).mockReturnValue({ path: '/tmp/crash.log', report })
+    register(mockIpcMain as unknown as IpcMain, mockCtx)
+    const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === 'app:getCrashLog')
+    const handler = call![1] as () => unknown
+    expect(handler()).toEqual(report)
   })
 })

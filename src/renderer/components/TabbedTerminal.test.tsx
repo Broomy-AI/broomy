@@ -103,7 +103,7 @@ beforeEach(() => {
 describe('TabbedTerminal', () => {
   it('renders tab bar and terminal for active tab', () => {
     render(
-      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} />
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} isolated={false} />
     )
     expect(screen.getByTestId('tab-bar')).toBeTruthy()
     expect(screen.getByText('Terminal 1')).toBeTruthy()
@@ -112,7 +112,7 @@ describe('TabbedTerminal', () => {
 
   it('renders a Terminal for each tab', () => {
     render(
-      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} />
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} isolated={false} />
     )
     expect(screen.getByTestId(`terminal-user-session-1-${tab1Id}`)).toBeTruthy()
     expect(screen.getByTestId(`terminal-user-session-1-${tab2Id}`)).toBeTruthy()
@@ -122,7 +122,7 @@ describe('TabbedTerminal', () => {
     const setActiveTerminalTab = vi.fn()
     useSessionStore.setState({ setActiveTerminalTab } as unknown as Record<string, unknown>)
     render(
-      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} />
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} isolated={false} />
     )
     fireEvent.click(screen.getByTestId(`tab-${tab2Id}`))
     expect(setActiveTerminalTab).toHaveBeenCalledWith('session-1', tab2Id)
@@ -132,7 +132,7 @@ describe('TabbedTerminal', () => {
     const addTerminalTab = vi.fn()
     useSessionStore.setState({ addTerminalTab } as unknown as Record<string, unknown>)
     render(
-      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} />
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} isolated={false} />
     )
     fireEvent.click(screen.getByTestId('add-tab'))
     expect(addTerminalTab).toHaveBeenCalledWith('session-1')
@@ -142,7 +142,7 @@ describe('TabbedTerminal', () => {
     const removeTerminalTab = vi.fn()
     useSessionStore.setState({ removeTerminalTab } as unknown as Record<string, unknown>)
     render(
-      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} />
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} isolated={false} />
     )
     fireEvent.click(screen.getByTestId(`close-${tab1Id}`))
     expect(removeTerminalTab).toHaveBeenCalledWith('session-1', tab1Id)
@@ -151,14 +151,14 @@ describe('TabbedTerminal', () => {
   it('handles missing session gracefully', () => {
     useSessionStore.setState({ sessions: [] })
     const { container } = render(
-      <TabbedTerminal sessionId="nonexistent" cwd="/tmp/test" isActive={true} />
+      <TabbedTerminal sessionId="nonexistent" cwd="/tmp/test" isActive={true} isolated={false} />
     )
     expect(container.querySelector('[data-testid="tab-bar"]')).toBeTruthy()
   })
 
   it('starts rename on double-click of user tab', () => {
     render(
-      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} />
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} isolated={false} />
     )
     fireEvent.click(screen.getByTestId('dblclick-first'))
     // After double-click, editing should be active (editingTabId set)
@@ -168,7 +168,7 @@ describe('TabbedTerminal', () => {
 
   it('renders agent terminal always visible', () => {
     render(
-      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} />
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} isolated={false} />
     )
     // Agent terminal should be rendered
     expect(screen.getByTestId('terminal-session-1')).toBeTruthy()
@@ -176,7 +176,7 @@ describe('TabbedTerminal', () => {
 
   it('passes agentCommand to agent terminal', () => {
     render(
-      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} agentCommand="claude" />
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} agentCommand="claude" isolated={false} />
     )
     expect(screen.getByTestId('terminal-session-1')).toBeTruthy()
   })
@@ -184,7 +184,7 @@ describe('TabbedTerminal', () => {
   it('shows active tab content only', () => {
     // With tab1 active, both terminals should be rendered but tab2 hidden
     const { container } = render(
-      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} />
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} isolated={false} />
     )
     const terminals = container.querySelectorAll('[class*="absolute inset-0"]')
     // Agent + 2 user tabs = 3 terminal containers
@@ -194,7 +194,7 @@ describe('TabbedTerminal', () => {
   it('passes agentNotInstalled=true when agent is not installed', async () => {
     vi.mocked(window.agents.isInstalled).mockResolvedValue(false)
     render(
-      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} agentCommand="claude" />
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} agentCommand="claude" isolated={false} />
     )
     await waitFor(() => {
       const agentTerminal = screen.getByTestId('terminal-session-1')
@@ -205,7 +205,7 @@ describe('TabbedTerminal', () => {
   it('does not pass agentNotInstalled when agent is installed', async () => {
     vi.mocked(window.agents.isInstalled).mockResolvedValue(true)
     render(
-      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} agentCommand="claude" />
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} agentCommand="claude" isolated={false} />
     )
     await waitFor(() => {
       expect(window.agents.isInstalled).toHaveBeenCalledWith('claude')
@@ -216,7 +216,7 @@ describe('TabbedTerminal', () => {
 
   it('shows add menu when isolation is enabled and add button is clicked', () => {
     render(
-      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} isolation={{ isolated: true, dockerImage: 'test-image' }} />
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} isolated={true} />
     )
     fireEvent.click(screen.getByTestId('add-tab'))
     // Add menu should appear with Local/Container options
@@ -228,7 +228,7 @@ describe('TabbedTerminal', () => {
     const addTerminalTab = vi.fn()
     useSessionStore.setState({ addTerminalTab } as unknown as Record<string, unknown>)
     render(
-      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} isolation={{ isolated: true }} />
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} isolated={true} />
     )
     fireEvent.click(screen.getByTestId('add-tab'))
     fireEvent.click(screen.getByText('Local Terminal'))
@@ -239,35 +239,35 @@ describe('TabbedTerminal', () => {
     const addTerminalTab = vi.fn()
     useSessionStore.setState({ addTerminalTab } as unknown as Record<string, unknown>)
     render(
-      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} isolation={{ isolated: true }} />
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} isolated={true} />
     )
     fireEvent.click(screen.getByTestId('add-tab'))
     fireEvent.click(screen.getByText('Container Terminal'))
     expect(addTerminalTab).toHaveBeenCalledWith('session-1', undefined, true)
   })
 
-  it('renders docker info panel tab when isolated', () => {
+  it('renders container info panel tab when isolated', () => {
     render(
-      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} isolation={{ isolated: true }} />,
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} isolated={true} />,
     )
-    // Docker tab should be in the tab bar
-    expect(screen.getByText('(docker)')).toBeTruthy()
-    // DockerInfoPanel should be rendered
-    expect(screen.getByTestId('docker-info')).toBeTruthy()
+    // Container tab should be in the tab bar
+    expect(screen.getByText('(container)')).toBeTruthy()
+    // ContainerInfoPanel should be rendered (it shows "Dev Container Isolation" heading)
+    expect(screen.getByText('Dev Container Isolation')).toBeTruthy()
   })
 
-  it('does not render docker tab when not isolated', () => {
+  it('does not render container tab when not isolated', () => {
     render(
-      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} />,
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} isolated={false} />,
     )
-    expect(screen.queryByText('(docker)')).toBeNull()
+    expect(screen.queryByText('(container)')).toBeNull()
   })
 
   it('does not remove agent tab when close is clicked', () => {
     const removeTerminalTab = vi.fn()
     useSessionStore.setState({ removeTerminalTab } as unknown as Record<string, unknown>)
     render(
-      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} />,
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} isolated={false} />,
     )
     // Try to close agent tab (via the close button on tab-1 which is a user tab, should work)
     fireEvent.click(screen.getByTestId(`close-${tab1Id}`))
@@ -276,7 +276,7 @@ describe('TabbedTerminal', () => {
 
   it('closes add menu on outside click', () => {
     render(
-      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} isolation={{ isolated: true }} />,
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} isolated={true} />,
     )
     // Open add menu
     fireEvent.click(screen.getByTestId('add-tab'))
@@ -328,7 +328,7 @@ describe('TabbedTerminal', () => {
       ],
     })
     render(
-      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} />
+      <TabbedTerminal sessionId="session-1" cwd="/tmp/test" isActive={true} isolated={false} />
     )
     // Should not crash and should render the tab bar
     expect(screen.getByTestId('tab-bar')).toBeTruthy()

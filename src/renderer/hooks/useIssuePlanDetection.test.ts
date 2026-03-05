@@ -33,7 +33,7 @@ describe('useIssuePlanDetection', () => {
     })
 
     expect(result!.current).toBe(true)
-    expect(window.fs.exists).toHaveBeenCalledWith('/repos/project/.broomy/plan.md')
+    expect(window.fs.exists).toHaveBeenCalledWith('/repos/project/.broomy/output/plan.md')
   })
 
   it('sets up a file watcher', () => {
@@ -74,7 +74,7 @@ describe('useIssuePlanDetection', () => {
       vi.advanceTimersByTime(500)
     })
 
-    expect(window.fs.exists).toHaveBeenCalledWith('/repos/project/.broomy/plan.md')
+    expect(window.fs.exists).toHaveBeenCalledWith('/repos/project/.broomy/output/plan.md')
 
     vi.useRealTimers()
   })

@@ -42,11 +42,14 @@ export function useLayoutClamp({
       const totalWidth = el.getBoundingClientRect().width
       if (totalWidth <= 0) return
 
-      // Calculate current space consumed by side panels
+      // Calculate current space consumed by side panels (including dividers between them)
+      const DIVIDER_WIDTH = 6 // px — matches the Divider component's hit area
       let usedWidth = 0
-      if (showSidebar) usedWidth += sidebarWidth
-      if (showExplorer) usedWidth += layoutSizes.explorerWidth
-      if (showTutorial) usedWidth += layoutSizes.tutorialPanelWidth
+      let dividerCount = 0
+      if (showSidebar) { usedWidth += sidebarWidth; dividerCount++ }
+      if (showExplorer) { usedWidth += layoutSizes.explorerWidth; dividerCount++ }
+      if (showTutorial) { usedWidth += layoutSizes.tutorialPanelWidth; dividerCount++ }
+      usedWidth += dividerCount * DIVIDER_WIDTH
 
       const agentWidth = totalWidth - usedWidth
       if (agentWidth >= AGENT_MIN_WIDTH) return

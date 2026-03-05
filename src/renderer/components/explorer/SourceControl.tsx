@@ -1,7 +1,8 @@
 /**
  * Top-level source control container that composes the PR banner, view toggle, and sub-views.
+ * Integrates the modular commands.json action system.
  */
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { GitFileStatus, GitStatusResult } from '../../../preload/index'
 import type { BranchStatus, PrState } from '../../store/sessions'
 import type { NavigationTarget } from '../../utils/fileNavigation'
@@ -12,10 +13,11 @@ import { SCPrBanner } from './SCPrBanner'
 import { SCCommitsView } from './SCCommitsView'
 import { SCBranchView } from './SCBranchView'
 import { SCWorkingView } from './SCWorkingView'
-import { SkillBanner } from './SkillBanner'
-import { SkillsDialog } from './SkillsDialog'
-import { isSkillBannerDismissed, dismissSkillBanner } from '../../utils/skillBannerState'
-import type { SkillAwarePromptResult } from '../../utils/skillAwarePrompt'
+import { CommandsSetupBanner } from './CommandsSetupBanner'
+import { CommandsSetupDialog } from './CommandsSetupDialog'
+import { useCommandsConfig } from '../../hooks/useCommandsConfig'
+import { computeConditionState } from '../../utils/conditionState'
+import type { TemplateVars } from '../../utils/commandsConfig'
 
 interface SourceControlProps {
   directory?: string
@@ -35,7 +37,7 @@ interface SourceControlProps {
   pushedToMainCommit?: string
   onRecordPushToMain?: (commitHash: string) => void
   onClearPushToMain?: () => void
-  onOpenReview?: () => void
+  onSwitchTab?: (tab: string) => void
 }
 
 export function SourceControl({
@@ -56,27 +58,18 @@ export function SourceControl({
   pushedToMainCommit,
   onRecordPushToMain,
   onClearPushToMain,
-  onOpenReview,
+  onSwitchTab,
 }: SourceControlProps) {
   const [scView, setScView] = useState<'working' | 'branch' | 'commits'>('working')
-  const [showSkillBanner, setShowSkillBanner] = useState(false)
-  const [showSkillsDialog, setShowSkillsDialog] = useState(false)
+  const [showSetupDialog, setShowSetupDialog] = useState(false)
+  const [noDevcontainer, setNoDevcontainer] = useState(false)
+
+  // Load commands.json
+  const { config: commandsConfig, exists: commandsExists } = useCommandsConfig(directory)
 
   // Reset view when directory (session) changes
   useEffect(() => {
     setScView('working')
-    setShowSkillBanner(false)
-  }, [directory])
-
-  const handleSkillCheck = useCallback((result: SkillAwarePromptResult) => {
-    if (result.isClaudeCode && !result.skillExists && directory && !isSkillBannerDismissed(directory)) {
-      setShowSkillBanner(true)
-    }
-  }, [directory])
-
-  const handleDismissBanner = useCallback(() => {
-    if (directory) dismissSkillBanner(directory)
-    setShowSkillBanner(false)
   }, [directory])
 
   const data = useSourceControlData({
@@ -85,9 +78,71 @@ export function SourceControl({
     repoId, scView,
   })
 
+  // Check if repo has isolation enabled but no devcontainer config
+  useEffect(() => {
+    if (!directory || !repoId) { setNoDevcontainer(false); return }
+    if (!data.currentRepo?.isolated) { setNoDevcontainer(false); return }
+    let cancelled = false
+    window.devcontainer.hasConfig(directory).then((has) => {
+      if (!cancelled) setNoDevcontainer(!has)
+    }).catch(() => {
+      if (!cancelled) setNoDevcontainer(false)
+    })
+    return () => { cancelled = true }
+  }, [directory, repoId, data.currentRepo?.isolated])
+
   const actions = useSourceControlActions({
-    directory, onGitStatusRefresh, agentPtyId, agentId, onRecordPushToMain, onSkillCheck: handleSkillCheck, data,
+    directory, onGitStatusRefresh, agentPtyId, agentId, onRecordPushToMain, data,
   })
+
+  // Compute condition state for action button visibility
+  const conditionState = useMemo(() =>
+    computeConditionState({
+      gitStatus,
+      syncStatus,
+      branchStatus,
+      prNumber: data.prStatus?.number,
+      hasWriteAccess: data.hasWriteAccess,
+      allowPushToMain: data.currentRepo?.allowPushToMain ?? true,
+      behindMainCount: data.behindMainCount,
+      issueNumber,
+      noDevcontainer,
+    }),
+    [gitStatus, syncStatus, branchStatus, data.prStatus, data.hasWriteAccess, data.currentRepo, data.behindMainCount, issueNumber, noDevcontainer]
+  )
+
+  // Template variables for action labels and prompts
+  const templateVars: TemplateVars = useMemo(() => ({
+    main: data.branchBaseName || 'main',
+    branch: syncStatus?.current ?? '',
+    directory: directory ?? '',
+  }), [data.branchBaseName, syncStatus?.current, directory])
+
+  const handleWritePrompt = useCallback(async (builder: string, outputPath: string) => {
+    // Built-in prompt builders for complex prompts
+    if (!directory) return
+
+    const { buildCreatePrPrompt } = await import('../../utils/prPromptBuilder')
+    const { buildMergePrompt } = await import('../../utils/mergePromptBuilder')
+
+    const outputDir = `${directory}/.broomy/output`
+    await window.fs.mkdir(`${directory}/.broomy`)
+    await window.fs.mkdir(outputDir)
+
+    if (builder === 'create-pr') {
+      const prompt = buildCreatePrPrompt(data.branchBaseName || 'main')
+      await window.fs.writeFile(outputPath, prompt)
+      // Remove stale pr-result.json
+      await window.fs.rm(`${outputDir}/pr-result.json`)
+    } else if (builder === 'resolve-conflicts') {
+      const prompt = buildMergePrompt(data.branchBaseName || 'main')
+      await window.fs.writeFile(outputPath, prompt)
+    } else if (builder === 'review') {
+      // Review has its own flow via the review panel — the writePrompt just ensures
+      // the review-prompt.md is generated. The review panel handles this.
+      // For now, we don't generate it here — the review action triggers the review panel.
+    }
+  }, [directory, data.branchBaseName])
 
   if (!directory) return null
 
@@ -95,40 +150,37 @@ export function SourceControl({
     <SCViewToggle scView={scView} setScView={setScView} />
   )
 
-  const skillsDialog = showSkillsDialog && directory && (
-    <SkillsDialog
+  const setupDialog = showSetupDialog && directory && (
+    <CommandsSetupDialog
       directory={directory}
-      onClose={() => setShowSkillsDialog(false)}
-      onInstalled={() => setShowSkillBanner(false)}
+      onClose={() => setShowSetupDialog(false)}
+      onCreated={() => {/* config will auto-reload via file watcher */}}
     />
   )
 
   const banners = (
     <>
-    {showSkillBanner && (
-      <SkillBanner
-        onOpenDialog={() => setShowSkillsDialog(true)}
-        onDismiss={handleDismissBanner}
+      {!commandsExists && (
+        <CommandsSetupBanner onSetup={() => setShowSetupDialog(true)} />
+      )}
+      <SCPrBanner
+        prStatus={data.prStatus}
+        isPrLoading={data.isPrLoading}
+        branchStatus={branchStatus}
+        branchBaseName={data.branchBaseName}
+        gitStatus={gitStatus}
+        syncStatus={syncStatus}
+        isSyncingWithMain={data.isSyncingWithMain}
+        onSyncWithMain={actions.handleSyncWithMain}
+        gitOpError={data.gitOpError}
+        onDismissError={() => data.setGitOpError(null)}
+        agentMergeMessage={data.agentMergeMessage}
+        onDismissAgentMerge={() => data.setAgentMergeMessage(null)}
+        issueNumber={issueNumber}
+        issueTitle={issueTitle}
+        issueUrl={issueUrl}
+        onRetryGitOp={actions.handleSync}
       />
-    )}
-    <SCPrBanner
-      prStatus={data.prStatus}
-      isPrLoading={data.isPrLoading}
-      branchStatus={branchStatus}
-      branchBaseName={data.branchBaseName}
-      gitStatus={gitStatus}
-      syncStatus={syncStatus}
-      isSyncingWithMain={data.isSyncingWithMain}
-      onSyncWithMain={actions.handleSyncWithMain}
-      gitOpError={data.gitOpError}
-      onDismissError={() => data.setGitOpError(null)}
-      agentMergeMessage={data.agentMergeMessage}
-      onDismissAgentMerge={() => data.setAgentMergeMessage(null)}
-      issueNumber={issueNumber}
-      issueTitle={issueTitle}
-      issueUrl={issueUrl}
-      onRetryGitOp={actions.handleSync}
-    />
     </>
   )
 
@@ -137,7 +189,7 @@ export function SourceControl({
       <div className="flex flex-col h-full">
         {viewToggle}
         {banners}
-        {skillsDialog}
+        {setupDialog}
         <SCCommitsView
           directory={directory}
           branchCommits={data.branchCommits}
@@ -158,7 +210,7 @@ export function SourceControl({
       <div className="flex flex-col h-full">
         {viewToggle}
         {banners}
-        {skillsDialog}
+        {setupDialog}
         <SCBranchView
           directory={directory}
           branchChanges={data.branchChanges}
@@ -176,7 +228,7 @@ export function SourceControl({
     <div className="flex flex-col h-full">
       {viewToggle}
       {banners}
-      {skillsDialog}
+      {setupDialog}
       <SCWorkingView
         directory={directory}
         gitStatus={gitStatus}
@@ -188,28 +240,20 @@ export function SourceControl({
         isMerging={syncStatus?.isMerging ?? false}
         hasConflicts={syncStatus?.hasConflicts ?? false}
         isCommitting={data.isCommitting}
-        isSyncing={data.isSyncing}
         onCommit={actions.handleCommit}
-        onCommitWithAI={actions.handleCommitWithAI}
         onCommitMerge={actions.handleCommitMerge}
-        onResolveConflicts={actions.handleResolveConflicts}
-        askedAgentToResolve={data.askedAgentToResolve}
-        onSync={actions.handleSync}
-        onSyncWithMain={actions.handleSyncWithMain}
-        onPushNewBranch={actions.handlePushNewBranch}
         onStage={actions.handleStage}
         onStageAll={actions.handleStageAll}
         onUnstage={actions.handleUnstage}
         onFileSelect={onFileSelect}
-        onOpenReview={onOpenReview}
-        prStatus={data.prStatus}
-        hasWriteAccess={data.hasWriteAccess}
-        allowPushToMain={data.currentRepo?.allowPushToMain ?? true}
-        onCreatePr={actions.handleCreatePr}
-        onPushToMain={actions.handlePushToMain}
-        behindMainCount={data.behindMainCount}
-        isFetchingBehindMain={data.isFetchingBehindMain}
-        isSyncingWithMain={data.isSyncingWithMain}
+        onSwitchTab={onSwitchTab}
+        onGitStatusRefresh={onGitStatusRefresh}
+        actions={commandsConfig?.actions ?? null}
+        conditionState={conditionState}
+        templateVars={templateVars}
+        agentPtyId={agentPtyId}
+        agentId={agentId}
+        onWritePrompt={handleWritePrompt}
       />
     </div>
   )

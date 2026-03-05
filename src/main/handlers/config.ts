@@ -78,6 +78,52 @@ async function fileExists(filePath: string): Promise<boolean> {
   }
 }
 
+async function loadConfigFile(configFile: string): Promise<Record<string, unknown>> {
+  try {
+    if (!await fileExists(configFile)) {
+      return { agents: DEFAULT_AGENTS, sessions: [] }
+    }
+    const data = await readFile(configFile, 'utf-8')
+    const config = JSON.parse(data)
+    // Ensure agents array exists with defaults
+    if (!config.agents || config.agents.length === 0) {
+      config.agents = DEFAULT_AGENTS
+    } else {
+      const defaultsById = new Map(DEFAULT_AGENTS.map((a) => [a.id, a]))
+      const existingIds = new Set(config.agents.map((a: { id: string }) => a.id))
+      for (const defaultAgent of DEFAULT_AGENTS) {
+        if (!existingIds.has(defaultAgent.id)) {
+          config.agents.push(defaultAgent)
+        }
+      }
+      for (const agent of config.agents) {
+        const def = defaultsById.get(agent.id)
+        if (def && 'skipApprovalFlag' in def && agent.skipApprovalFlag === undefined) {
+          agent.skipApprovalFlag = def.skipApprovalFlag
+        }
+      }
+    }
+    return config
+  } catch {
+    const backupFile = `${configFile}.backup`
+    try {
+      if (await fileExists(backupFile)) {
+        console.warn(`[config:load] Primary config corrupt, falling back to backup: ${backupFile}`)
+        const data = await readFile(backupFile, 'utf-8')
+        const config = JSON.parse(data)
+        if (!config.agents || config.agents.length === 0) {
+          config.agents = DEFAULT_AGENTS
+        }
+        config.recovered = 'backup'
+        return config
+      }
+    } catch {
+      // backup also failed
+    }
+    return { agents: DEFAULT_AGENTS, sessions: [], recovered: 'defaults' }
+  }
+}
+
 export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   const legacyConfigFile = getLegacyConfigFile(ctx.isDev)
 
@@ -138,8 +184,13 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     // register this handler itself. For now, we emit an event.
     // Actually, the plan says profiles:openWindow needs createWindow access.
     // We'll handle this by having createWindow passed via context.
-    if ((ctx as HandlerContext & { createWindow?: (profileId?: string) => void }).createWindow) {
-      (ctx as HandlerContext & { createWindow?: (profileId?: string) => void }).createWindow!(profileId)
+    try {
+      if ((ctx as HandlerContext & { createWindow?: (profileId?: string) => void }).createWindow) {
+        (ctx as HandlerContext & { createWindow?: (profileId?: string) => void }).createWindow!(profileId)
+      }
+    } catch (err) {
+      console.error('[profiles:openWindow] Failed to create window:', err)
+      return { success: false, error: String(err) }
     }
     return { success: true, alreadyOpen: false }
   })
@@ -177,53 +228,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     }
 
     const configFile = profileId ? getProfileConfigFile(profileId, ctx.isDev) : legacyConfigFile
-    try {
-      if (!await fileExists(configFile)) {
-        return { agents: DEFAULT_AGENTS, sessions: [] }
-      }
-      const data = await readFile(configFile, 'utf-8')
-      const config = JSON.parse(data)
-      // Ensure agents array exists with defaults
-      if (!config.agents || config.agents.length === 0) {
-        config.agents = DEFAULT_AGENTS
-      } else {
-        // Merge in any new default agents that aren't already present,
-        // and backfill new default fields (like skipApprovalFlag) on existing agents
-        const defaultsById = new Map(DEFAULT_AGENTS.map((a) => [a.id, a]))
-        const existingIds = new Set(config.agents.map((a: { id: string }) => a.id))
-        for (const defaultAgent of DEFAULT_AGENTS) {
-          if (!existingIds.has(defaultAgent.id)) {
-            config.agents.push(defaultAgent)
-          }
-        }
-        // Backfill skipApprovalFlag on existing agents that match a default.
-        // User-set values win; only fill if the field is completely absent.
-        for (const agent of config.agents) {
-          const def = defaultsById.get(agent.id)
-          if (def && 'skipApprovalFlag' in def && agent.skipApprovalFlag === undefined) {
-            agent.skipApprovalFlag = def.skipApprovalFlag
-          }
-        }
-      }
-      return config
-    } catch {
-      // Primary config failed to parse — try backup
-      const backupFile = `${configFile}.backup`
-      try {
-        if (await fileExists(backupFile)) {
-          console.warn(`[config:load] Primary config corrupt, falling back to backup: ${backupFile}`)
-          const data = await readFile(backupFile, 'utf-8')
-          const config = JSON.parse(data)
-          if (!config.agents || config.agents.length === 0) {
-            config.agents = DEFAULT_AGENTS
-          }
-          return config
-        }
-      } catch {
-        // backup also failed
-      }
-      return { agents: DEFAULT_AGENTS, sessions: [] }
-    }
+    return loadConfigFile(configFile)
   })
 
   ipcMain.handle('config:save', async (_event, config: { profileId?: string; agents?: unknown[]; sessions: unknown[]; repos?: unknown[]; defaultCloneDir?: string; defaultShell?: string; showSidebar?: boolean; sidebarWidth?: number; toolbarPanels?: string[] }) => {

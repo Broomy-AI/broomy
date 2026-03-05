@@ -8,6 +8,7 @@
 import { useState } from 'react'
 import { AuthTerminal } from './AuthTerminal'
 import { GitIdentitySetup, isGitConfigError } from './GitIdentitySetup'
+import { DialogErrorBanner } from './ErrorBanner'
 
 export const AUTH_ERROR_MARKERS = [
   'could not authenticate',
@@ -38,17 +39,24 @@ export function AuthSetupSection({
 
   const showAuthButton = error && isAuthError(error) && !authPtyId
 
+  const [setupError, setSetupError] = useState<string | null>(null)
+
   const handleSetupAuth = async () => {
     if (!ghAvailable) {
       await window.shell.openExternal('https://cli.github.com')
       return
     }
 
-    const id = `auth-setup-${Date.now()}`
-    const homedir = await window.app.homedir()
-    await window.pty.create({ id, cwd: homedir })
-    void window.pty.write(id, 'gh auth login\r')
-    setAuthPtyId(id)
+    try {
+      setSetupError(null)
+      const id = `auth-setup-${Date.now()}`
+      const homedir = await window.app.homedir()
+      await window.pty.create({ id, cwd: homedir })
+      void window.pty.write(id, 'gh auth login\r')
+      setAuthPtyId(id)
+    } catch (err) {
+      setSetupError(err instanceof Error ? err.message : String(err))
+    }
   }
 
   const handleAuthDone = () => {
@@ -70,6 +78,10 @@ export function AuthSetupSection({
             <span className="text-xs text-text-secondary">Install GitHub CLI, then try again</span>
           )}
         </div>
+      )}
+
+      {setupError && (
+        <DialogErrorBanner error={setupError} onDismiss={() => setSetupError(null)} />
       )}
 
       {authPtyId && (

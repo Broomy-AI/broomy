@@ -4,17 +4,13 @@
  */
 import type { DockerStatus, DevcontainerStatus } from '../../preload/index'
 
-export function IsolationSettings({ isolated, isolationMode, dockerImage, skipApproval, dockerStatus, devcontainerStatus, hasDevcontainerConfig, onIsolatedChange, onIsolationModeChange, onDockerImageChange, onSkipApprovalChange, onGenerateDevcontainerConfig }: {
+export function IsolationSettings({ isolated, skipApproval, dockerStatus, devcontainerStatus, hasDevcontainerConfig, onIsolatedChange, onSkipApprovalChange, onGenerateDevcontainerConfig }: {
   isolated: boolean
-  isolationMode: 'docker' | 'devcontainer'
-  dockerImage: string
   skipApproval: boolean
   dockerStatus: DockerStatus | null
   devcontainerStatus: DevcontainerStatus | null
   hasDevcontainerConfig: boolean | null
   onIsolatedChange: (v: boolean) => void
-  onIsolationModeChange: (v: 'docker' | 'devcontainer') => void
-  onDockerImageChange: (v: string) => void
   onSkipApprovalChange: (v: boolean) => void
   onGenerateDevcontainerConfig?: () => void
 }) {
@@ -26,87 +22,47 @@ export function IsolationSettings({ isolated, isolationMode, dockerImage, skipAp
           <span className="text-xs text-text-secondary">Run agent in isolated container</span>
         </label>
         {isolated && (
-          <div className="ml-6 space-y-3">
-            {/* Mode selector */}
-            <div className="flex gap-4">
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="radio"
-                  name="isolationMode"
-                  checked={isolationMode === 'docker'}
-                  onChange={() => onIsolationModeChange('docker')}
-                  className="border-border"
-                />
-                <span className="text-xs text-text-secondary">Lightweight Docker</span>
-              </label>
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="radio"
-                  name="isolationMode"
-                  checked={isolationMode === 'devcontainer'}
-                  onChange={() => onIsolationModeChange('devcontainer')}
-                  className="border-border"
-                />
-                <span className="text-xs text-text-secondary">Dev Container</span>
-              </label>
-            </div>
-
-            {/* Docker mode settings */}
-            {isolationMode === 'docker' && (
-              <div className="space-y-2">
-                <input
-                  type="text" value={dockerImage} onChange={(e) => onDockerImageChange(e.target.value)}
-                  placeholder="node:22-slim"
-                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary font-mono placeholder-text-secondary focus:outline-none focus:border-accent"
-                />
-                {dockerStatus && (
-                  <div className={`text-xs flex items-center gap-1.5 ${dockerStatus.available ? 'text-green-400' : 'text-yellow-400'}`}>
-                    <span className={`w-2 h-2 rounded-full ${dockerStatus.available ? 'bg-green-400' : 'bg-yellow-400'}`} />
-                    {dockerStatus.available ? 'Docker available' : (dockerStatus.error || 'Docker not available')}
-                    {!dockerStatus.available && dockerStatus.installUrl && (
-                      <button onClick={() => void window.shell.openExternal(dockerStatus.installUrl!)} className="underline hover:text-text-primary transition-colors ml-1">Install</button>
-                    )}
-                  </div>
+          <div className="ml-6 space-y-2">
+            {devcontainerStatus && (
+              <div className={`text-xs flex items-center gap-1.5 ${devcontainerStatus.available ? 'text-green-400' : 'text-yellow-400'}`}>
+                <span className={`w-2 h-2 rounded-full ${devcontainerStatus.available ? 'bg-green-400' : 'bg-yellow-400'}`} />
+                {devcontainerStatus.available
+                  ? `devcontainer CLI ${devcontainerStatus.version || ''}`
+                  : (devcontainerStatus.error || 'devcontainer CLI not available')
+                }
+                {!devcontainerStatus.available && (
+                  <span className="text-text-secondary ml-1">npm install -g @devcontainers/cli</span>
                 )}
               </div>
             )}
-
-            {/* Devcontainer mode settings */}
-            {isolationMode === 'devcontainer' && (
-              <div className="space-y-2">
-                {devcontainerStatus && (
-                  <div className={`text-xs flex items-center gap-1.5 ${devcontainerStatus.available ? 'text-green-400' : 'text-yellow-400'}`}>
-                    <span className={`w-2 h-2 rounded-full ${devcontainerStatus.available ? 'bg-green-400' : 'bg-yellow-400'}`} />
-                    {devcontainerStatus.available
-                      ? `devcontainer CLI ${devcontainerStatus.version || ''}`
-                      : (devcontainerStatus.error || 'devcontainer CLI not available')
-                    }
-                    {!devcontainerStatus.available && (
-                      <span className="text-text-secondary ml-1">npm install -g @devcontainers/cli</span>
-                    )}
-                  </div>
+            {dockerStatus && (
+              <div className={`text-xs flex items-center gap-1.5 ${dockerStatus.available ? 'text-green-400' : 'text-yellow-400'}`}>
+                <span className={`w-2 h-2 rounded-full ${dockerStatus.available ? 'bg-green-400' : 'bg-yellow-400'}`} />
+                {dockerStatus.available ? 'Docker available' : (dockerStatus.error || 'Docker not available')}
+                {!dockerStatus.available && dockerStatus.installUrl && (
+                  <button onClick={() => void window.shell.openExternal(dockerStatus.installUrl!)} className="underline hover:text-text-primary transition-colors ml-1">Install</button>
                 )}
-                {hasDevcontainerConfig !== null && (
-                  <div className={`text-xs flex items-center gap-1.5 ${hasDevcontainerConfig ? 'text-green-400' : 'text-zinc-500'}`}>
-                    <span className={`w-2 h-2 rounded-full ${hasDevcontainerConfig ? 'bg-green-400' : 'bg-zinc-500'}`} />
-                    {hasDevcontainerConfig
-                      ? '.devcontainer/devcontainer.json found'
-                      : (
-                        <>
-                          <span>No .devcontainer config found</span>
-                          {onGenerateDevcontainerConfig && (
-                            <button
-                              onClick={onGenerateDevcontainerConfig}
-                              className="underline hover:text-text-primary transition-colors ml-1"
-                            >
-                              Generate default
-                            </button>
-                          )}
-                        </>
-                      )
-                    }
-                  </div>
-                )}
+              </div>
+            )}
+            {hasDevcontainerConfig !== null && (
+              <div className={`text-xs flex items-center gap-1.5 ${hasDevcontainerConfig ? 'text-green-400' : 'text-zinc-500'}`}>
+                <span className={`w-2 h-2 rounded-full ${hasDevcontainerConfig ? 'bg-green-400' : 'bg-zinc-500'}`} />
+                {hasDevcontainerConfig
+                  ? '.devcontainer/devcontainer.json found'
+                  : (
+                    <>
+                      <span>No .devcontainer config found</span>
+                      {onGenerateDevcontainerConfig && (
+                        <button
+                          onClick={onGenerateDevcontainerConfig}
+                          className="underline hover:text-text-primary transition-colors ml-1"
+                        >
+                          Generate default
+                        </button>
+                      )}
+                    </>
+                  )
+                }
               </div>
             )}
           </div>

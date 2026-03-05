@@ -162,7 +162,7 @@ describe('configPersistence', () => {
     })
 
     it('refuses to save when repos are empty but were previously loaded', async () => {
-      setLoadedCounts({ repos: 1 })
+      setLoadedCounts({ repos: 5 })
       useAgentStore.setState({ agents: [{ id: 'a1', name: 'Test', command: 'test' }] })
       // repos is empty (default)
 

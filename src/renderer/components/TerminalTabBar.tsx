@@ -39,6 +39,7 @@ interface TerminalTabBarProps {
   isOverflowing: boolean
   showDropdown: boolean
   agentTabId?: string
+  fixedTabIds?: Set<string>
   handleTabClick: (tabId: string) => void
   handleCloseTab: (e: React.MouseEvent, tabId: string) => void
   handleContextMenu: (e: React.MouseEvent, tabId: string) => void
@@ -68,6 +69,7 @@ export default function TerminalTabBar({
   isOverflowing,
   showDropdown,
   agentTabId,
+  fixedTabIds,
   handleTabClick,
   handleCloseTab,
   handleContextMenu,
@@ -92,7 +94,7 @@ export default function TerminalTabBar({
       {/* Tabs container */}
       <div ref={tabsContainerRef} role="tablist" aria-label="Terminal tabs" className="flex-1 flex items-center overflow-x-auto scrollbar-thin min-w-0 gap-1 px-1">
         {tabs.map((tab) => {
-          const isAgent = tab.id === agentTabId
+          const isAgent = tab.id === agentTabId || (fixedTabIds?.has(tab.id) ?? false)
           return (
           <div
             key={tab.id}

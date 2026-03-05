@@ -7,7 +7,7 @@ import { useRepoStore } from '../../store/repos'
 import { DialogErrorBanner } from '../ErrorBanner'
 import { AuthSetupSection } from '../AuthSetupSection'
 import { IsolationSettings } from '../IsolationSettings'
-import type { DockerStatus, DevcontainerStatus } from '../../../preload/index'
+import type { DevcontainerStatus } from '../../../preload/index'
 
 export function CloneView({
   onBack,
@@ -25,25 +25,16 @@ export function CloneView({
   const [initScript, setInitScript] = useState('')
   const [showInitScript, setShowInitScript] = useState(false)
   const [isolated, setIsolated] = useState(false)
-  const [isolationMode, setIsolationMode] = useState<'docker' | 'devcontainer'>('docker')
-  const [dockerImage, setDockerImage] = useState('')
   const [skipApproval, setSkipApproval] = useState(false)
-  const [dockerStatus, setDockerStatus] = useState<DockerStatus | null>(null)
   const [devcontainerStatus, setDevcontainerStatus] = useState<DevcontainerStatus | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (isolated || dockerStatus === null) {
-      void window.docker.status().then(setDockerStatus)
+    if (isolated) {
+      void window.devcontainer.status().then(setDevcontainerStatus).catch(() => setDevcontainerStatus({ available: false, error: 'Failed to check devcontainer status' }))
     }
   }, [isolated])
-
-  useEffect(() => {
-    if (isolated && isolationMode === 'devcontainer') {
-      void window.devcontainer.status().then(setDevcontainerStatus)
-    }
-  }, [isolated, isolationMode])
 
   // Derive repo name from URL
   const repoName = url
@@ -88,8 +79,6 @@ export function CloneView({
         defaultAgentId: selectedAgentId || undefined,
         allowPushToMain,
         isolated: isolated || undefined,
-        isolationMode: isolated ? isolationMode : undefined,
-        dockerImage: dockerImage.trim() || undefined,
         skipApproval: skipApproval || undefined,
       })
 
@@ -180,11 +169,10 @@ export function CloneView({
         </div>
 
         <IsolationSettings
-          isolated={isolated} isolationMode={isolationMode} dockerImage={dockerImage} skipApproval={skipApproval}
-          dockerStatus={dockerStatus} devcontainerStatus={devcontainerStatus}
+          isolated={isolated} skipApproval={skipApproval}
+          dockerStatus={null} devcontainerStatus={devcontainerStatus}
           hasDevcontainerConfig={null}
-          onIsolatedChange={setIsolated} onIsolationModeChange={setIsolationMode}
-          onDockerImageChange={setDockerImage} onSkipApprovalChange={setSkipApproval}
+          onIsolatedChange={setIsolated} onSkipApprovalChange={setSkipApproval}
         />
 
         <div>

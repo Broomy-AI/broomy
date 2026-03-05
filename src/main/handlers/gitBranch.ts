@@ -97,6 +97,15 @@ async function handlePushNewBranch(ctx: HandlerContext, repoPath: string, branch
     return { success: true }
   } catch (error) {
     const errorStr = String(error)
+
+    // Detect ref namespace conflicts (e.g. trying to create "release" when "release/linux" exists)
+    if (errorStr.includes('directory file conflict') || errorStr.includes('cannot lock ref')) {
+      return {
+        success: false,
+        error: `Branch name "${branchName}" conflicts with existing branches on the remote.\n\nThis happens when the remote already has branches that start with "${branchName}/" (e.g. "${branchName}/something"), so Git can't create a branch with that exact name.\n\nTry using a prefix like "feature/${branchName}" or "work/${branchName}" instead.`,
+      }
+    }
+
     let url: string | undefined
     try {
       const remotes = await simpleGit(expandHomePath(repoPath)).getRemotes(true)

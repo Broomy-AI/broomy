@@ -1,16 +1,66 @@
 /**
- * Top-level ReviewPanel that orchestrates review generation, comment management, and the review display.
+ * Markdown-based ReviewPanel that renders .broomy/review.md with auto-collapsing headings.
  */
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
 import type { Session } from '../../store/sessions'
 import type { ManagedRepo } from '../../../preload/index'
-import type { FetchingStatus, NormalizedComment } from './useReviewData'
-import type { ReviewData, CodeLocation } from '../../types/review'
+import type { FetchingStatus } from './useReviewData'
 import { CollapsibleSection } from './CollapsibleSection'
 import { GitignoreModal } from './GitignoreModal'
-import { MarkdownBody, ReviewContent } from './ReviewContent'
-import { PrCommentsSection } from './PrComments'
+import { createMarkdownComponents } from '../../utils/markdownComponents'
 import { useReviewData } from './useReviewData'
 import { useReviewActions } from './useReviewActions'
+
+/** Split markdown into sections by `## ` headings (skipping headings inside fenced code blocks) */
+function splitMarkdownSections(markdown: string): { title: string; body: string }[] {
+  const lines = markdown.split('\n')
+  const sections: { title: string; body: string }[] = []
+  let currentTitle: string | null = null
+  let currentLines: string[] = []
+  let preambleLines: string[] = []
+  let inCodeBlock = false
+
+  for (const line of lines) {
+    // Track fenced code blocks (``` or ~~~)
+    if (/^(`{3,}|~{3,})/.test(line.trimStart())) {
+      inCodeBlock = !inCodeBlock
+    }
+
+    if (!inCodeBlock && line.startsWith('## ')) {
+      if (currentTitle !== null) {
+        sections.push({ title: currentTitle, body: currentLines.join('\n').trim() })
+      } else if (currentLines.length > 0) {
+        preambleLines = currentLines
+      }
+      currentTitle = line.slice(3).trim()
+      currentLines = []
+    } else {
+      currentLines.push(line)
+    }
+  }
+
+  // Push final section
+  if (currentTitle !== null) {
+    sections.push({ title: currentTitle, body: currentLines.join('\n').trim() })
+  } else if (currentLines.length > 0) {
+    preambleLines = [...preambleLines, ...currentLines]
+  }
+
+  // If there's preamble (content before first ##), add it as a section
+  const preamble = preambleLines.join('\n').trim()
+  if (preamble) {
+    sections.unshift({ title: 'Overview', body: preamble })
+  }
+
+  return sections
+}
+
+/** Check if a section body contains incomplete task checkboxes */
+function hasIncompleteCheckboxes(body: string): boolean {
+  return body.includes('- [ ]')
+}
 
 function ReviewEmptyState({
   fetching, waitingForAgent, fetchingStatus, prBaseBranch,
@@ -53,7 +103,7 @@ function ReviewEmptyState({
                 Review instructions have been sent to your agent terminal.
               </div>
               <div className="text-xs text-text-secondary">
-                The review will appear here once your agent writes it to <code className="font-mono bg-bg-tertiary px-1 rounded">.broomy/review.json</code>
+                The review will appear here once your agent writes it to <code className="font-mono bg-bg-tertiary px-1 rounded">.broomy/output/review.md</code>
               </div>
             </>
           )}
@@ -65,10 +115,10 @@ function ReviewEmptyState({
   return null
 }
 
-function GenerateButton({ fetching, waitingForAgent, reviewData, disabled, onClick }: {
+function GenerateButton({ fetching, waitingForAgent, reviewMarkdown, disabled, onClick }: {
   fetching: boolean
   waitingForAgent: boolean
-  reviewData: ReviewData | null
+  reviewMarkdown: string | null
   disabled: boolean
   onClick: () => void
 }) {
@@ -94,61 +144,15 @@ function GenerateButton({ fetching, waitingForAgent, reviewData, disabled, onCli
           </svg>
           Waiting for agent...
         </span>
-      ) : reviewData ? 'Regenerate Review' : 'Generate Review'}
+      ) : reviewMarkdown ? 'Regenerate Review' : 'Generate Review'}
     </button>
   )
 }
 
-function PreReviewContent({
-  session,
-  prDescription,
-  prGitHubComments,
-  prCommentsLoading,
-  prCommentsHasMore,
-  loadOlderComments,
-  refreshComments,
-  handleClickLocation,
-}: {
-  session: Session
-  prDescription: string | null
-  prGitHubComments: NormalizedComment[]
-  prCommentsLoading: boolean
-  prCommentsHasMore: boolean
-  loadOlderComments: () => void
-  refreshComments: () => void
-  handleClickLocation: (location: CodeLocation) => void
-}) {
-  return (
-    <div className="px-3 py-2">
-      {prDescription && (
-        <CollapsibleSection title="PR Description" defaultOpen={false}>
-          <MarkdownBody content={prDescription} />
-        </CollapsibleSection>
-      )}
-      {prGitHubComments.length > 0 && session.prNumber && (
-        <PrCommentsSection
-          prGitHubComments={prGitHubComments}
-          prCommentsLoading={prCommentsLoading}
-          prCommentsHasMore={prCommentsHasMore}
-          onLoadOlderComments={loadOlderComments}
-          onClickLocation={handleClickLocation}
-          repoDir={session.directory}
-          prNumber={session.prNumber}
-          onRefreshComments={refreshComments}
-        />
-      )}
-      <div className="mt-4 text-center text-sm text-text-secondary px-4">
-        <p>Click "Generate Review" to get an AI-generated structured review of this PR.</p>
-      </div>
-    </div>
-  )
-}
-
-function ReviewPanelHeader({ session, fetching, waitingForAgent, reviewData, pushing, unpushedCount, showPushButton, showDraftPlan, error, pushResult, onGenerate, onPush, onOpenPr, onDraftPlan }: {
-  session: Session; fetching: boolean; waitingForAgent: boolean; reviewData: ReviewData | null
-  pushing: boolean; unpushedCount: number; showPushButton: boolean; showDraftPlan: boolean
-  error: string | null; pushResult: string | null
-  onGenerate: () => void; onPush: () => void; onOpenPr: () => void; onDraftPlan: () => void
+function ReviewPanelHeader({ session, fetching, waitingForAgent, reviewMarkdown, error, onGenerate, onOpenPr }: {
+  session: Session; fetching: boolean; waitingForAgent: boolean; reviewMarkdown: string | null
+  error: string | null
+  onGenerate: () => void; onOpenPr: () => void
 }) {
   return (
     <div className="px-3 py-2 border-b border-border flex-shrink-0">
@@ -163,20 +167,81 @@ function ReviewPanelHeader({ session, fetching, waitingForAgent, reviewData, pus
         )}
       </div>
       <div className="flex items-center gap-2">
-        <GenerateButton fetching={fetching} waitingForAgent={waitingForAgent} reviewData={reviewData} disabled={fetching || waitingForAgent || !session.agentPtyId} onClick={onGenerate} />
-        {showPushButton && (
-          <button onClick={onPush} disabled={pushing || unpushedCount === 0} className="py-1.5 px-2 text-xs rounded border border-border text-text-secondary hover:text-text-primary hover:border-accent disabled:opacity-50 transition-colors" title="Push comments to GitHub as draft review">
-            {pushing ? 'Pushing...' : `Push (${unpushedCount})`}
-          </button>
-        )}
+        <GenerateButton fetching={fetching} waitingForAgent={waitingForAgent} reviewMarkdown={reviewMarkdown} disabled={fetching || waitingForAgent || !session.agentPtyId} onClick={onGenerate} />
       </div>
-      {showDraftPlan && (
-        <button onClick={onDraftPlan} className="w-full mt-1.5 py-1 text-xs rounded border border-border text-text-secondary hover:text-text-primary hover:border-accent transition-colors" title="Ask agent to help draft a response plan for the review findings">
-          Draft Response Plan
-        </button>
-      )}
       {error && <div className="text-xs text-red-400 mt-1">{error}</div>}
-      {pushResult && <div className="text-xs text-green-400 mt-1">{pushResult}</div>}
+    </div>
+  )
+}
+
+/** Render a markdown section with custom link handling */
+function MarkdownSection({ body, onSelectFile }: {
+  body: string
+  onSelectFile: (filePath: string, openInDiffMode: boolean) => void
+}) {
+  const components = createMarkdownComponents('compact')
+
+  // Override link handler: GitHub URLs open in file panel webview, others in system browser
+  const customComponents = {
+    ...components,
+    a: ({ href, children }: { href?: string; children?: React.ReactNode }) => {
+      const handleClick = (e: React.MouseEvent) => {
+        e.preventDefault()
+        if (!href) return
+        if (href.startsWith('https://github.com/')) {
+          onSelectFile(href, false)
+        } else if (href.startsWith('https://') || href.startsWith('http://')) {
+          void window.shell.openExternal(href)
+        }
+      }
+      return (
+        <a href={href} className="text-accent hover:underline cursor-pointer" onClick={handleClick}>
+          {children}
+        </a>
+      )
+    },
+  }
+
+  return (
+    <div className="px-3">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeRaw]}
+        components={customComponents}
+        urlTransform={(url: string) => url}
+      >
+        {body}
+      </ReactMarkdown>
+    </div>
+  )
+}
+
+/** Render the full markdown review with collapsible sections */
+function MarkdownReviewContent({ markdown, onSelectFile }: {
+  markdown: string
+  onSelectFile: (filePath: string, openInDiffMode: boolean) => void
+}) {
+  const sections = splitMarkdownSections(markdown)
+
+  if (sections.length === 0) {
+    return (
+      <div className="px-3 py-2">
+        <MarkdownSection body={markdown} onSelectFile={onSelectFile} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="px-3 py-2">
+      {sections.map((section, i) => (
+        <CollapsibleSection
+          key={`${section.title}-${i}`}
+          title={section.title}
+          defaultOpen={hasIncompleteCheckboxes(section.body) || i === 0}
+        >
+          <MarkdownSection body={section.body} onSelectFile={onSelectFile} />
+        </CollapsibleSection>
+      ))}
     </div>
   )
 }
@@ -188,34 +253,20 @@ interface ReviewPanelProps {
 }
 
 export default function ReviewPanel({ session, repo, onSelectFile }: ReviewPanelProps) {
-  const state = useReviewData(session.id, session.directory, session.prBaseBranch, session.prNumber)
+  const state = useReviewData(session.id, session.directory, session.prBaseBranch)
 
   const {
-    reviewData, comments, fetching, waitingForAgent, fetchingStatus,
-    pushing, pushResult, error, showGitignoreModal, unpushedCount, lastPushTime,
-    prDescription, prGitHubComments, prCommentsLoading, prCommentsHasMore,
-    loadOlderComments, refreshComments,
+    reviewMarkdown, fetching, waitingForAgent, fetchingStatus,
+    error, showGitignoreModal,
   } = state
 
   const {
-    handleGenerateReview, handlePushComments, handleDeleteComment, handleOpenPrUrl,
-    handleClickLocation, handleExplainIssue, handleAddComment, handleDraftResponsePlan,
+    handleGenerateReview, handleOpenPrUrl,
     handleGitignoreAdd, handleGitignoreContinue, handleGitignoreCancel,
   } = useReviewActions(session, repo, onSelectFile, state)
 
-  const hasPreReviewContent = !!(prDescription || prGitHubComments.length > 0)
-  const isIdle = !reviewData && !fetching && !waitingForAgent
-  const showPreReview = isIdle && hasPreReviewContent
-  const showPromo = isIdle && !hasPreReviewContent
-  const showPushButton = comments.length > 0 && !!session.prNumber
-  // Draft Response Plan: only for your own PR (not review sessions), only if there are
-  // PR comments newer than the last time we pushed comments
-  const hasNewCommentsSinceLastPush = lastPushTime
-    ? prGitHubComments.some(c => c.createdAt > lastPushTime)
-    : prGitHubComments.length > 0
-  const showDraftPlan = !!reviewData && !!session.agentPtyId
-    && session.sessionType !== 'review' && hasNewCommentsSinceLastPush
-  const showEmptyState = !reviewData && (fetching || waitingForAgent)
+  const showEmptyState = !reviewMarkdown && (fetching || waitingForAgent)
+  const showPromo = !reviewMarkdown && !fetching && !waitingForAgent
 
   return (
     <div className="h-full flex flex-col bg-bg-secondary overflow-hidden">
@@ -229,11 +280,10 @@ export default function ReviewPanel({ session, repo, onSelectFile }: ReviewPanel
 
       <ReviewPanelHeader
         session={session} fetching={fetching} waitingForAgent={waitingForAgent}
-        reviewData={reviewData} pushing={pushing} unpushedCount={unpushedCount}
-        showPushButton={showPushButton} showDraftPlan={showDraftPlan}
-        error={error} pushResult={pushResult}
-        onGenerate={handleGenerateReview} onPush={handlePushComments}
-        onOpenPr={handleOpenPrUrl} onDraftPlan={handleDraftResponsePlan}
+        reviewMarkdown={reviewMarkdown}
+        error={error}
+        onGenerate={handleGenerateReview}
+        onOpenPr={handleOpenPrUrl}
       />
 
       <div className="flex-1 overflow-y-auto">
@@ -244,44 +294,15 @@ export default function ReviewPanel({ session, repo, onSelectFile }: ReviewPanel
         {showPromo && (
           <div className="flex items-center justify-center h-full text-text-primary text-sm px-4 text-center">
             <div>
-              <p className="mb-2">Click "Generate Review" to get an AI-generated structured review of this PR.</p>
-              <p className="text-xs text-text-secondary">The review data will be stored in <code className="font-mono bg-bg-tertiary px-1 rounded">.broomy/</code> so your agent can reference it.</p>
+              <p className="mb-2">Click "Generate Review" to get an AI-generated review of this PR.</p>
+              <p className="text-xs text-text-secondary">The review will be written as markdown to <code className="font-mono bg-bg-tertiary px-1 rounded">.broomy/output/review.md</code></p>
+              <p className="text-xs text-text-secondary mt-1">Customize the review process by editing <code className="font-mono bg-bg-tertiary px-1 rounded">.claude/commands/broomy-action-review-md.md</code></p>
             </div>
           </div>
         )}
 
-        {showPreReview && (
-          <PreReviewContent
-            session={session}
-            prDescription={prDescription}
-            prGitHubComments={prGitHubComments}
-            prCommentsLoading={prCommentsLoading}
-            prCommentsHasMore={prCommentsHasMore}
-            loadOlderComments={loadOlderComments}
-            refreshComments={refreshComments}
-            handleClickLocation={handleClickLocation}
-          />
-        )}
-
-        {reviewData && (
-          <ReviewContent
-            reviewData={reviewData}
-            comments={comments}
-            unpushedCount={unpushedCount}
-            directory={session.directory}
-            prDescription={prDescription}
-            prGitHubComments={prGitHubComments}
-            prCommentsLoading={prCommentsLoading}
-            prCommentsHasMore={prCommentsHasMore}
-            onLoadOlderComments={loadOlderComments}
-            onClickLocation={handleClickLocation}
-            onExplainIssue={handleExplainIssue}
-            onAddComment={handleAddComment}
-            onDeleteComment={handleDeleteComment}
-            repoDir={session.directory}
-            prNumber={session.prNumber || 0}
-            onRefreshComments={refreshComments}
-          />
+        {reviewMarkdown && (
+          <MarkdownReviewContent markdown={reviewMarkdown} onSelectFile={onSelectFile} />
         )}
       </div>
     </div>

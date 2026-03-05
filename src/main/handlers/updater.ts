@@ -11,6 +11,7 @@ import { getScenarioData } from './scenarios'
 export type UpdateCheckResult = {
   updateAvailable: boolean
   version?: string
+  checkFailed?: boolean
 }
 
 export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
@@ -57,8 +58,8 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
         version: info.version,
       }
     } catch {
-      // Network errors, rate limits, etc. — silently fail
-      return { updateAvailable: false }
+      // Network errors, rate limits, etc.
+      return { updateAvailable: false, checkFailed: true }
     }
   })
 

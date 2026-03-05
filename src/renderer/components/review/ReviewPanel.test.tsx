@@ -6,37 +6,24 @@ import type { Session } from '../../store/sessions'
 
 // Mock the hooks to control state
 const mockReviewDataState = {
-  reviewData: null as unknown,
-  comments: [] as unknown[],
+  reviewMarkdown: null as string | null,
 
   fetching: false,
   waitingForAgent: false,
   fetchingStatus: null as string | null,
-  pushing: false,
-  pushResult: null as string | null,
   error: null as string | null,
   showGitignoreModal: false,
-  unpushedCount: 0,
   mergeBase: 'abc123',
   broomyDir: '/test/.broomy',
-  reviewFilePath: '/test/.broomy/review.json',
-  commentsFilePath: '/test/.broomy/comments.json',
-  historyFilePath: '/test/.broomy/review-history.json',
-  promptFilePath: '/test/.broomy/review-prompt.md',
+  outputDir: '/test/.broomy/output',
+  reviewFilePath: '/test/.broomy/output/review.md',
+  promptFilePath: '/test/.broomy/output/review-prompt.md',
   pendingGenerate: false,
-  prDescription: null as string | null,
-  prGitHubComments: [] as unknown[],
-  prCommentsLoading: false,
-  prCommentsHasMore: false,
-  loadOlderComments: vi.fn(),
-  setReviewData: vi.fn(),
-  setComments: vi.fn(),
+  setReviewMarkdown: vi.fn(),
 
   setFetching: vi.fn(),
   setWaitingForAgent: vi.fn(),
   setFetchingStatus: vi.fn(),
-  setPushing: vi.fn(),
-  setPushResult: vi.fn(),
   setError: vi.fn(),
   setShowGitignoreModal: vi.fn(),
   setPendingGenerate: vi.fn(),
@@ -45,10 +32,7 @@ const mockReviewDataState = {
 
 const mockActions = {
   handleGenerateReview: vi.fn(),
-  handlePushComments: vi.fn(),
-  handleDeleteComment: vi.fn(),
   handleOpenPrUrl: vi.fn(),
-  handleClickLocation: vi.fn(),
   handleGitignoreAdd: vi.fn(),
   handleGitignoreContinue: vi.fn(),
   handleGitignoreCancel: vi.fn(),
@@ -108,13 +92,10 @@ function makeSession(overrides: Partial<Session> = {}): Session {
 afterEach(() => {
   cleanup()
   // Reset state
-  mockReviewDataState.reviewData = null
-  mockReviewDataState.comments = []
+  mockReviewDataState.reviewMarkdown = null
   mockReviewDataState.waitingForAgent = false
   mockReviewDataState.error = null
-  mockReviewDataState.pushResult = null
   mockReviewDataState.showGitignoreModal = false
-  mockReviewDataState.unpushedCount = 0
 })
 
 beforeEach(() => {
@@ -143,15 +124,8 @@ describe('ReviewPanel', () => {
     expect(mockActions.handleGenerateReview).toHaveBeenCalled()
   })
 
-  it('shows Regenerate Review when reviewData exists', () => {
-    mockReviewDataState.reviewData = {
-      version: 1,
-      generatedAt: '2024-01-01',
-      overview: { purpose: 'test', approach: 'testing' },
-      changePatterns: [],
-      potentialIssues: [],
-      designDecisions: [],
-    }
+  it('shows Regenerate Review when reviewMarkdown exists', () => {
+    mockReviewDataState.reviewMarkdown = '## Overview\nTest review content'
     render(<ReviewPanel session={makeSession()} onSelectFile={vi.fn()} />)
     expect(screen.getByText('Regenerate Review')).toBeTruthy()
   })
@@ -174,12 +148,6 @@ describe('ReviewPanel', () => {
     expect(screen.getByText('Something went wrong')).toBeTruthy()
   })
 
-  it('shows push result message', () => {
-    mockReviewDataState.pushResult = 'Pushed 3 comments'
-    render(<ReviewPanel session={makeSession()} onSelectFile={vi.fn()} />)
-    expect(screen.getByText('Pushed 3 comments')).toBeTruthy()
-  })
-
   it('shows initial guidance when no review data and not waiting', () => {
     render(<ReviewPanel session={makeSession()} onSelectFile={vi.fn()} />)
     expect(screen.getByText(/Click "Generate Review"/)).toBeTruthy()
@@ -196,5 +164,17 @@ describe('ReviewPanel', () => {
     render(<ReviewPanel session={session} onSelectFile={vi.fn()} />)
     const btn = screen.getByText('Generate Review')
     expect(btn.hasAttribute('disabled')).toBe(true)
+  })
+
+  it('renders markdown review content with collapsible sections', () => {
+    mockReviewDataState.reviewMarkdown = '## Overview\nThis is the overview.\n\n## Issues\n- [ ] Security check\n- [x] Style check'
+    render(<ReviewPanel session={makeSession()} onSelectFile={vi.fn()} />)
+    expect(screen.getByText('Overview')).toBeTruthy()
+    expect(screen.getByText('Issues')).toBeTruthy()
+  })
+
+  it('mentions customization in promo state', () => {
+    render(<ReviewPanel session={makeSession()} onSelectFile={vi.fn()} />)
+    expect(screen.getByText(/Customize the review process/)).toBeTruthy()
   })
 })

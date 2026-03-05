@@ -472,8 +472,43 @@ const DEFAULT: ScenarioData = {
     if (filePath.endsWith('src/utils.ts')) {
       return 'export function add(a: number, b: number): number {\n  return a + b\n}\n\nexport function multiply(a: number, b: number): number {\n  return a * b\n}\n'
     }
-    // Default scenario review data (dark mode theme)
-    if (/\.broomy[/\\]review\.json$/.exec(filePath) || /broomy-review-[^/\\]+[/\\]review\.json$/.exec(filePath)) {
+    // Default scenario markdown review data (dark mode theme)
+    if (/\.broomy[/\\]output[/\\]review\.md$/.exec(filePath)) {
+      return [
+        '## Overview',
+        'Add dark mode theme support with user preference persistence. Uses CSS custom properties for theming with a React context provider. Theme preference persisted in localStorage.',
+        '',
+        '## Change Analysis',
+        '- [x] Reviewed file structure',
+        '- [x] Identified change patterns',
+        '',
+        '### Theme context and provider',
+        'New ThemeContext and ThemeProvider for managing dark/light mode state.',
+        '[src/contexts/ThemeContext.tsx:1](https://github.com/user/demo-project/blob/main/src/contexts/ThemeContext.tsx#L1)',
+        '',
+        '### CSS variable updates',
+        'Updated CSS custom properties in `:root` and `[data-theme="dark"]` selectors.',
+        '[src/styles/theme.css:12](https://github.com/user/demo-project/blob/main/src/styles/theme.css#L12)',
+        '',
+        '## Potential Issues',
+        '',
+        '### Flash of unstyled content on load',
+        '- [ ] Resolved',
+        '',
+        'Theme is read from localStorage after React hydration, causing a brief flash of default theme.',
+        'Location: [src/contexts/ThemeContext.tsx:15](https://github.com/user/demo-project/blob/main/src/contexts/ThemeContext.tsx#L15)',
+        '',
+        '## Design Decisions',
+        '',
+        '### localStorage over cookies',
+        '- [x] Reviewed',
+        '',
+        'Theme preference stored in localStorage — simpler but not available server-side.',
+        'Alternatives: HTTP cookie, Server-side session',
+      ].join('\n')
+    }
+    // Default scenario review data (dark mode theme) — legacy JSON format
+    if (/\.broomy[/\\]output[/\\]review\.json$/.exec(filePath) || /broomy-review-[^/\\]+[/\\]review\.json$/.exec(filePath)) {
       return JSON.stringify({
         generatedAt: '2025-01-15T10:30:00Z',
         headCommit: 'abc123',
@@ -515,7 +550,7 @@ const DEFAULT: ScenarioData = {
         ],
       })
     }
-    if (/\.broomy[/\\]comments\.json$/.exec(filePath) || /\/tmp\/broomy-review-[^/]+\/comments\.json$/.exec(filePath)) {
+    if (/\.broomy[/\\]output[/\\]comments\.json$/.exec(filePath) || /\/tmp\/broomy-review-[^/]+\/comments\.json$/.exec(filePath)) {
       return '[]'
     }
     return null

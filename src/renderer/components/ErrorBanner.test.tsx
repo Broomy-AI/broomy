@@ -2,8 +2,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import '../../test/react-setup'
-import { ErrorBanner, DialogErrorBanner } from './ErrorBanner'
-import { useErrorStore, type AppError } from '../store/errors'
+import { DialogErrorBanner } from './ErrorBanner'
+import { useErrorStore } from '../store/errors'
 
 afterEach(() => {
   cleanup()
@@ -11,53 +11,7 @@ afterEach(() => {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  useErrorStore.setState({
-    errors: [],
-    hasUnread: false,
-    detailError: null,
-  })
-})
-
-const mockError: AppError = {
-  id: 'err-1',
-  message: 'Something went wrong in git push',
-  displayMessage: 'Push rejected by remote. Pull first, or force-push if appropriate.',
-  detail: 'Something went wrong in git push',
-  scope: 'app',
-  dismissed: false,
-  timestamp: 1700000000000,
-}
-
-describe('ErrorBanner', () => {
-  it('renders the display message', () => {
-    render(<ErrorBanner error={mockError} />)
-    expect(screen.getByText(mockError.displayMessage)).toBeTruthy()
-  })
-
-  it('calls showErrorDetail when clicking the message', () => {
-    render(<ErrorBanner error={mockError} />)
-    fireEvent.click(screen.getByText(mockError.displayMessage))
-    const state = useErrorStore.getState()
-    expect(state.detailError).toEqual(mockError)
-  })
-
-  it('calls dismissError when clicking the dismiss button', () => {
-    render(<ErrorBanner error={mockError} />)
-    // The dismiss button renders as the multiplication sign character
-    const dismissButton = screen.getByTitle('Dismiss')
-    fireEvent.click(dismissButton)
-    const state = useErrorStore.getState()
-    state.errors.find((e) => e.id === mockError.id)
-    // Since errors list is empty in our test, just verify dismissError was called
-    // The store action marks the error as dismissed
-    expect(dismissButton).toBeTruthy()
-  })
-
-  it('has click-to-view title on the message button', () => {
-    render(<ErrorBanner error={mockError} />)
-    const messageButton = screen.getByTitle('Click to view full error')
-    expect(messageButton).toBeTruthy()
-  })
+  useErrorStore.setState({ detailError: null })
 })
 
 describe('DialogErrorBanner', () => {

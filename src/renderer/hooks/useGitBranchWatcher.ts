@@ -53,6 +53,7 @@ async function resolveGitDir(sessionDir: string): Promise<string | null> {
 export function useGitBranchWatcher({ sessions, activeSessionId, updateSessionBranch }: UseGitBranchWatcherArgs) {
   const activeSession = sessions.find(s => s.id === activeSessionId && !s.isArchived)
   const activeDir = activeSession?.directory
+  const activeBranch = activeSession?.branch
 
   useEffect(() => {
     if (!activeSession || !activeDir || !activeSessionId) return
@@ -61,13 +62,16 @@ export function useGitBranchWatcher({ sessions, activeSessionId, updateSessionBr
     let cancelled = false
     let removeListener: (() => void) | null = null
     let debounceTimer: ReturnType<typeof setTimeout> | null = null
+    // Track the last known branch in a mutable variable to avoid stale closure
+    let lastKnownBranch = activeBranch
 
     // One-time branch refresh to catch changes while unwatched
     void (async () => {
       try {
         const branch = await window.git.getBranch(activeDir)
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- checked after await
-        if (!cancelled && branch !== activeSession.branch) {
+        if (!cancelled && branch !== lastKnownBranch) {
+          lastKnownBranch = branch
           updateSessionBranch(activeSessionId, branch)
         }
       } catch {
@@ -88,7 +92,8 @@ export function useGitBranchWatcher({ sessions, activeSessionId, updateSessionBr
           void (async () => {
             try {
               const branch = await window.git.getBranch(activeDir)
-              if (branch !== activeSession.branch) {
+              if (branch !== lastKnownBranch) {
+                lastKnownBranch = branch
                 updateSessionBranch(activeSessionId, branch)
               }
             } catch {

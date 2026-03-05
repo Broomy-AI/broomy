@@ -92,7 +92,7 @@ describe('RepoSettingsEditor', () => {
     })
     fireEvent.click(screen.getByText('Save'))
     await waitFor(() => {
-      expect(onUpdate).toHaveBeenCalledWith({ defaultAgentId: undefined, allowPushToMain: false, isolated: undefined, dockerImage: undefined, skipApproval: undefined })
+      expect(onUpdate).toHaveBeenCalledWith({ defaultAgentId: undefined, allowPushToMain: false, isolated: undefined, skipApproval: undefined })
       expect(onClose).toHaveBeenCalled()
     })
   })
@@ -129,7 +129,7 @@ describe('RepoSettingsEditor', () => {
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'agent-1' } })
     fireEvent.click(screen.getByText('Save'))
     await waitFor(() => {
-      expect(onUpdate).toHaveBeenCalledWith({ defaultAgentId: 'agent-1', allowPushToMain: false, isolated: undefined, dockerImage: undefined, skipApproval: undefined })
+      expect(onUpdate).toHaveBeenCalledWith({ defaultAgentId: 'agent-1', allowPushToMain: false, isolated: undefined, skipApproval: undefined })
     })
   })
 
@@ -224,14 +224,6 @@ describe('RepoSettingsEditor', () => {
     expect(screen.getByText('Auto-approve agent commands')).toBeTruthy()
   })
 
-  it('shows docker image input when isolation is toggled on', async () => {
-    renderEditor({ repo: { ...mockRepo, isolated: true } })
-    await waitFor(() => {
-      expect(screen.queryByText('Loading...')).toBeNull()
-    })
-    expect(screen.getByPlaceholderText('node:22-slim')).toBeTruthy()
-  })
-
   it('shows warning when skip-approval is on without isolation', async () => {
     renderEditor({ repo: { ...mockRepo, skipApproval: true } })
     await waitFor(() => {
@@ -242,7 +234,7 @@ describe('RepoSettingsEditor', () => {
 
   it('saves isolation fields', async () => {
     const onUpdate = vi.fn()
-    renderEditor({ onUpdate, repo: { ...mockRepo, isolated: true, dockerImage: 'my-image', skipApproval: true } })
+    renderEditor({ onUpdate, repo: { ...mockRepo, isolated: true, skipApproval: true } })
     await waitFor(() => {
       expect(screen.queryByText('Loading...')).toBeNull()
     })
@@ -250,24 +242,8 @@ describe('RepoSettingsEditor', () => {
     await waitFor(() => {
       expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({
         isolated: true,
-        isolationMode: 'docker',
-        dockerImage: 'my-image',
         skipApproval: true,
       }))
-    })
-  })
-
-  it('toggles isolation checkbox and shows docker image input', async () => {
-    renderEditor()
-    await waitFor(() => {
-      expect(screen.queryByText('Loading...')).toBeNull()
-    })
-    const checkboxes = screen.getAllByRole('checkbox')
-    // isolation checkbox is second (after push-to-main)
-    const isolationCheckbox = checkboxes[1]
-    fireEvent.click(isolationCheckbox)
-    await waitFor(() => {
-      expect(screen.getByPlaceholderText('node:22-slim')).toBeTruthy()
     })
   })
 
@@ -282,23 +258,6 @@ describe('RepoSettingsEditor', () => {
     fireEvent.click(skipApprovalCheckbox)
     await waitFor(() => {
       expect(screen.getByText(/Auto-approving without container isolation/)).toBeTruthy()
-    })
-  })
-
-  it('saves docker image value', async () => {
-    const onUpdate = vi.fn()
-    renderEditor({ onUpdate, repo: { ...mockRepo, isolated: true } })
-    await waitFor(() => {
-      expect(screen.queryByText('Loading...')).toBeNull()
-    })
-    const imageInput = screen.getByPlaceholderText('node:22-slim')
-    fireEvent.change(imageInput, { target: { value: 'custom-image:v2' } })
-    fireEvent.click(screen.getByText('Save'))
-    await waitFor(() => {
-      expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({
-        isolated: true,
-        dockerImage: 'custom-image:v2',
-      }))
     })
   })
 

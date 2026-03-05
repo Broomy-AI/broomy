@@ -14,10 +14,8 @@ import type { PanelDefinition } from '../panels'
 import { useDividerResize } from '../hooks/useDividerResize'
 import { useLayoutClamp } from '../hooks/useLayoutClamp'
 import { useLayoutKeyboard } from '../hooks/useLayoutKeyboard'
-import { useAppBannerError } from '../hooks/useErrorBanners'
 import LayoutToolbar from './LayoutToolbar'
 import LayoutContentArea from './LayoutContentArea'
-import { ErrorBanner } from './ErrorBanner'
 import PanelErrorBoundary from './PanelErrorBoundary'
 import { Divider } from './Divider'
 
@@ -94,7 +92,6 @@ export default function Layout({
 }: LayoutProps) {
   const [isDev, setIsDev] = useState(false)
   const { registry, toolbarPanels, getShortcutKey } = usePanelContext()
-  const appBannerError = useAppBannerError()
   useEffect(() => { void window.app.isDev().then(setIsDev) }, [])
 
   const isPanelVisible = useCallback((panelId: string): boolean => {
@@ -180,7 +177,6 @@ export default function Layout({
       />
 
       {topBanner}
-      {appBannerError && <ErrorBanner error={appBannerError} />}
 
       {/* Main content area */}
       <div ref={mainContentRef} className="flex-1 flex min-h-0">

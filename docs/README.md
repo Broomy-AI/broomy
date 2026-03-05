@@ -19,6 +19,7 @@ Technical documentation for the Broomy codebase. These docs are intended for dev
 | [state-management.md](./state-management.md) | Zustand store conventions, persistence, runtime-only state, and migration patterns. |
 | [terminal-integration.md](./terminal-integration.md) | xterm.js and node-pty integration, scroll behavior, buffer registry, and terminal tabs. |
 | [git-integration.md](./git-integration.md) | Git and GitHub CLI integration patterns, branch status computation, and PR state management. |
+| [review-system.md](./review-system.md) | Modular markdown-driven review system: how reviews are generated, rendered, and customized. |
 | [style-guide.md](./style-guide.md) | Code style conventions, Tailwind CSS patterns, and component organization. |
 | [code-improvements.md](./code-improvements.md) | Tracked technical debt, refactoring opportunities, and improvement proposals. |
 

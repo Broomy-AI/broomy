@@ -21,6 +21,7 @@ function makeDeps(overrides: Partial<Parameters<typeof useAppCallbacks>[0]> = {}
     updatePrState: vi.fn(),
     setShowNewSessionDialog: vi.fn(),
     onSessionAlreadyExists: vi.fn(),
+    onError: vi.fn(),
     ...overrides,
   }
 }
@@ -28,7 +29,7 @@ function makeDeps(overrides: Partial<Parameters<typeof useAppCallbacks>[0]> = {}
 describe('useAppCallbacks', () => {
   beforeEach(() => {
     allowConsoleError()
-    useErrorStore.setState({ errors: [], hasUnread: false, detailError: null })
+    useErrorStore.setState({ detailError: null })
     vi.clearAllMocks()
   })
 
@@ -93,15 +94,14 @@ describe('useAppCallbacks', () => {
     const { result } = renderHook(() => useAppCallbacks(deps))
     await act(() => result.current.handleNewSessionComplete('/dir', 'a1'))
     expect(deps.setShowNewSessionDialog).toHaveBeenCalledWith(false)
-    expect(useErrorStore.getState().errors).toHaveLength(1)
-    expect(useErrorStore.getState().errors[0].message).toContain('boom')
+    expect(deps.onError).toHaveBeenCalledWith(expect.stringContaining('boom'))
   })
 
   it('handleNewSessionComplete handles non-Error rejections', async () => {
     const deps = makeDeps({ addSession: vi.fn().mockRejectedValue('string-error') })
     const { result } = renderHook(() => useAppCallbacks(deps))
     await act(() => result.current.handleNewSessionComplete('/dir', null))
-    expect(useErrorStore.getState().errors[0].message).toContain('string-error')
+    expect(deps.onError).toHaveBeenCalledWith(expect.stringContaining('string-error'))
   })
 
   // --- refreshPrStatus ---
@@ -268,7 +268,7 @@ describe('useAppCallbacks', () => {
     const { result } = renderHook(() => useAppCallbacks(deps))
     act(() => result.current.handleDeleteSession('s1', true))
     await vi.waitFor(() => {
-      expect(useErrorStore.getState().errors.some(e => e.message.includes('in use'))).toBe(true)
+      expect(deps.onError).toHaveBeenCalledWith(expect.stringContaining('in use'))
     })
   })
 
@@ -281,7 +281,7 @@ describe('useAppCallbacks', () => {
     const { result } = renderHook(() => useAppCallbacks(deps))
     act(() => result.current.handleDeleteSession('s1', true))
     await vi.waitFor(() => {
-      expect(useErrorStore.getState().errors.some(e => e.message.includes('crash'))).toBe(true)
+      expect(deps.onError).toHaveBeenCalledWith(expect.stringContaining('crash'))
     })
   })
 
@@ -294,7 +294,7 @@ describe('useAppCallbacks', () => {
     const { result } = renderHook(() => useAppCallbacks(deps))
     act(() => result.current.handleDeleteSession('s1', true))
     await vi.waitFor(() => {
-      expect(useErrorStore.getState().errors.some(e => e.message.includes('not merged'))).toBe(true)
+      expect(deps.onError).toHaveBeenCalledWith(expect.stringContaining('not merged'))
     })
   })
 
@@ -307,7 +307,7 @@ describe('useAppCallbacks', () => {
     const { result } = renderHook(() => useAppCallbacks(deps))
     act(() => result.current.handleDeleteSession('s1', true))
     await vi.waitFor(() => {
-      expect(useErrorStore.getState().errors.some(e => e.message.includes('branch error'))).toBe(true)
+      expect(deps.onError).toHaveBeenCalledWith(expect.stringContaining('branch error'))
     })
   })
 
@@ -363,10 +363,10 @@ describe('useAppCallbacks', () => {
 
   // --- getRepoIsolation ---
   it('getRepoIsolation returns isolation info when repo is isolated', () => {
-    const repos = [{ id: 'r1', rootDir: '/r', defaultBranch: 'main', isolated: true, dockerImage: 'my-image' }]
+    const repos = [{ id: 'r1', rootDir: '/r', defaultBranch: 'main', isolated: true }]
     const deps = makeDeps({ repos })
     const { result } = renderHook(() => useAppCallbacks(deps))
-    expect(result.current.getRepoIsolation({ repoId: 'r1' } as never)).toEqual({ isolated: true, isolationMode: 'docker', dockerImage: 'my-image', repoRootDir: '/r' })
+    expect(result.current.getRepoIsolation({ repoId: 'r1' } as never)).toEqual({ isolated: true, repoRootDir: '/r' })
   })
 
   it('getRepoIsolation returns undefined when repo is not isolated', () => {
