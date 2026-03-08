@@ -92,7 +92,7 @@ describe('RepoSettingsEditor', () => {
     })
     fireEvent.click(screen.getByText('Save'))
     await waitFor(() => {
-      expect(onUpdate).toHaveBeenCalledWith({ defaultAgentId: undefined, allowApproveAndMerge: false, isolated: undefined, skipApproval: undefined })
+      expect(onUpdate).toHaveBeenCalledWith({ defaultAgentId: undefined, allowApproveAndMerge: true, isolated: undefined, skipApproval: undefined })
       expect(onClose).toHaveBeenCalled()
     })
   })
@@ -129,7 +129,7 @@ describe('RepoSettingsEditor', () => {
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'agent-1' } })
     fireEvent.click(screen.getByText('Save'))
     await waitFor(() => {
-      expect(onUpdate).toHaveBeenCalledWith({ defaultAgentId: 'agent-1', allowApproveAndMerge: false, isolated: undefined, skipApproval: undefined })
+      expect(onUpdate).toHaveBeenCalledWith({ defaultAgentId: 'agent-1', allowApproveAndMerge: true, isolated: undefined, skipApproval: undefined })
     })
   })
 
@@ -140,7 +140,9 @@ describe('RepoSettingsEditor', () => {
       expect(screen.queryByText('Loading...')).toBeNull()
     })
     const checkboxes = screen.getAllByRole('checkbox')
-    fireEvent.click(checkboxes[0]) // approve-and-merge is first
+    // Checkbox defaults to checked; uncheck first, then re-check to trigger write access validation
+    fireEvent.click(checkboxes[0])
+    fireEvent.click(checkboxes[0])
     await waitFor(() => {
       expect(screen.getByText('Write access check failed')).toBeTruthy()
     })
@@ -154,6 +156,7 @@ describe('RepoSettingsEditor', () => {
     })
     const checkboxes = screen.getAllByRole('checkbox')
     fireEvent.click(checkboxes[0])
+    fireEvent.click(checkboxes[0])
     await waitFor(() => {
       expect(screen.getByText('Failed to check write access')).toBeTruthy()
     })
@@ -161,7 +164,8 @@ describe('RepoSettingsEditor', () => {
 
   it('enables approve and merge when write access is confirmed', async () => {
     vi.mocked(window.gh.hasWriteAccess).mockResolvedValue(true)
-    renderEditor()
+    // Start with allowApproveAndMerge explicitly false so clicking checks it
+    renderEditor({ repo: { ...mockRepo, allowApproveAndMerge: false } })
     await waitFor(() => {
       expect(screen.queryByText('Loading...')).toBeNull()
     })
@@ -180,6 +184,7 @@ describe('RepoSettingsEditor', () => {
     })
     const checkboxes = screen.getAllByRole('checkbox')
     fireEvent.click(checkboxes[0])
+    fireEvent.click(checkboxes[0])
     await waitFor(() => {
       expect(screen.getByText('Write access check failed')).toBeTruthy()
     })
@@ -195,6 +200,7 @@ describe('RepoSettingsEditor', () => {
       expect(screen.queryByText('Loading...')).toBeNull()
     })
     const checkboxes = screen.getAllByRole('checkbox')
+    fireEvent.click(checkboxes[0])
     fireEvent.click(checkboxes[0])
     await waitFor(() => {
       expect(screen.getByText('Write access check failed')).toBeTruthy()

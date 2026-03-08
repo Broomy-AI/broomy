@@ -61,7 +61,7 @@ export function RepoSettingsEditor({
   onClose: () => void
 }) {
   const [defaultAgentId, setDefaultAgentId] = useState(repo.defaultAgentId || '')
-  const [allowApproveAndMerge, setAllowApproveAndMerge] = useState(repo.allowApproveAndMerge ?? false)
+  const [allowApproveAndMerge, setAllowApproveAndMerge] = useState(repo.allowApproveAndMerge ?? true)
   const [isolated, setIsolated] = useState(repo.isolated ?? false)
   const [skipApproval, setSkipApproval] = useState(repo.skipApproval ?? false)
   const [devcontainerStatus, setDevcontainerStatus] = useState<DevcontainerStatus | null>(null)

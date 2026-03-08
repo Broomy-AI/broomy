@@ -6,6 +6,8 @@
  */
 import { IpcMain } from 'electron'
 import { execFile } from 'child_process'
+import { readdirSync, statSync, existsSync } from 'fs'
+import { join } from 'path'
 import { promisify } from 'util'
 import simpleGit from 'simple-git'
 import { buildPrCreateUrl } from '../gitStatusParser'
@@ -15,6 +17,40 @@ import { getScenarioData } from './scenarios'
 import { getDefaultBranch } from './gitUtils'
 
 const execFileAsync = promisify(execFile)
+
+/** Check if the authenticated user has write (or higher) access to the GitHub repo at `cwd`. */
+async function checkWriteAccess(cwd: string): Promise<boolean> {
+  const result = await runCommand('gh', ['repo', 'view', '--json', 'viewerPermission', '--jq', '.viewerPermission'], {
+    cwd,
+    timeout: 10000,
+  })
+  const permission = result.trim()
+  return ['ADMIN', 'MAINTAIN', 'WRITE'].includes(permission)
+}
+
+/**
+ * Resolve write access for a directory that may not itself be a git repo
+ * (e.g. a worktree parent directory). Falls back to scanning subdirectories.
+ */
+async function resolveWriteAccess(repoDir: string): Promise<boolean> {
+  try {
+    return await checkWriteAccess(repoDir)
+  } catch {
+    // If the directory isn't a git repo (e.g. worktree parent), try subdirectories
+    try {
+      const entries = readdirSync(repoDir)
+      for (const entry of entries) {
+        const subdir = join(repoDir, entry)
+        if (statSync(subdir).isDirectory() && existsSync(join(subdir, '.git'))) {
+          return await checkWriteAccess(subdir)
+        }
+      }
+    } catch {
+      // Fall through
+    }
+    return false
+  }
+}
 
 function parseIssuesJson(result: string) {
   const issues = JSON.parse(result)
@@ -179,17 +215,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     if (ctx.isE2ETest) {
       return true
     }
-
-    try {
-      const result = await runCommand('gh', ['repo', 'view', '--json', 'viewerPermission', '--jq', '.viewerPermission'], {
-        cwd: expandHomePath(repoDir),
-        timeout: 10000,
-      })
-      const permission = result.trim()
-      return ['ADMIN', 'MAINTAIN', 'WRITE'].includes(permission)
-    } catch {
-      return false
-    }
+    return resolveWriteAccess(expandHomePath(repoDir))
   })
 
   ipcMain.handle('gh:prChecksStatus', async (_event, repoDir: string) => {
