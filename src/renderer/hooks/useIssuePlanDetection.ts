@@ -1,11 +1,11 @@
 /**
- * Watches for the existence of a `.broomy/output/plan.md` file in a session's directory using filesystem events.
+ * Checks for the existence of a `.broomy/output/plan.md` file in a session's directory on mount.
  */
 import { useState, useEffect } from 'react'
 
 /**
- * Watches for the existence of `.broomy/output/plan.md` in a session's directory.
- * Uses the same fs.watch + onChange pattern as FileTree for file system events.
+ * Checks for the existence of `.broomy/output/plan.md` in a session's directory.
+ * Runs once on mount / when session changes — no file watcher needed.
  */
 export function useIssuePlanDetection(
   sessionId: string | null | undefined,
@@ -20,27 +20,7 @@ export function useIssuePlanDetection(
     }
 
     const planPath = `${directory}/.broomy/output/plan.md`
-
-    // Check initial state
     void window.fs.exists(planPath).then(setIssuePlanExists)
-
-    // Watch directory for changes
-    const watcherId = `issue-plan-${sessionId}`
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null
-
-    void window.fs.watch(watcherId, directory)
-    const removeListener = window.fs.onChange(watcherId, () => {
-      if (debounceTimer) clearTimeout(debounceTimer)
-      debounceTimer = setTimeout(() => {
-        void window.fs.exists(planPath).then(setIssuePlanExists)
-      }, 500)
-    })
-
-    return () => {
-      if (debounceTimer) clearTimeout(debounceTimer)
-      removeListener()
-      void window.fs.unwatch(watcherId)
-    }
   }, [sessionId, directory])
 
   return issuePlanExists

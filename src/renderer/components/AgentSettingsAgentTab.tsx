@@ -14,14 +14,12 @@ interface AgentSettingsAgentTabProps {
   color: string
   env: Record<string, string>
   skipApprovalFlag: string
-  resumeCommand: string
   envEditorRef: RefObject<EnvVarEditorRef>
   onNameChange: (v: string) => void
   onCommandChange: (v: string) => void
   onColorChange: (v: string) => void
   onEnvChange: (v: Record<string, string>) => void
   onSkipApprovalFlagChange: (v: string) => void
-  onResumeCommandChange: (v: string) => void
   onEdit: (agent: AgentConfig) => void
   onUpdate: () => void
   onDelete: (id: string) => void
@@ -39,14 +37,12 @@ export function AgentSettingsAgentTab({
   color,
   env,
   skipApprovalFlag,
-  resumeCommand,
   envEditorRef,
   onNameChange,
   onCommandChange,
   onColorChange,
   onEnvChange,
   onSkipApprovalFlagChange,
-  onResumeCommandChange,
   onEdit,
   onUpdate,
   onDelete,
@@ -77,14 +73,12 @@ export function AgentSettingsAgentTab({
                 color={color}
                 env={env}
                 skipApprovalFlag={skipApprovalFlag}
-                resumeCommand={resumeCommand}
                 envEditorRef={envEditorRef}
                 onNameChange={onNameChange}
                 onCommandChange={onCommandChange}
                 onColorChange={onColorChange}
                 onEnvChange={onEnvChange}
                 onSkipApprovalFlagChange={onSkipApprovalFlagChange}
-                onResumeCommandChange={onResumeCommandChange}
                 onSave={onUpdate}
                 onCancel={onCancel}
               />
@@ -142,19 +136,6 @@ export function AgentSettingsAgentTab({
               Appended to the command when the repo has auto-approve enabled.
             </p>
           </div>
-          <div className="space-y-1">
-            <label className="text-xs text-text-secondary">Resume command</label>
-            <input
-              type="text"
-              value={resumeCommand}
-              onChange={(e) => onResumeCommandChange(e.target.value)}
-              placeholder="e.g., /resume"
-              className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary font-mono placeholder-text-secondary focus:outline-none focus:border-accent"
-            />
-            <p className="text-xs text-text-tertiary">
-              In-session command to resume a previous conversation on restart.
-            </p>
-          </div>
           <div className="flex gap-2">
             <button
               onClick={onAdd}
@@ -194,14 +175,12 @@ function AgentEditForm({
   color,
   env,
   skipApprovalFlag,
-  resumeCommand,
   envEditorRef,
   onNameChange,
   onCommandChange,
   onColorChange,
   onEnvChange,
   onSkipApprovalFlagChange,
-  onResumeCommandChange,
   onSave,
   onCancel,
 }: {
@@ -210,14 +189,12 @@ function AgentEditForm({
   color: string
   env: Record<string, string>
   skipApprovalFlag: string
-  resumeCommand: string
   envEditorRef: RefObject<EnvVarEditorRef>
   onNameChange: (v: string) => void
   onCommandChange: (v: string) => void
   onColorChange: (v: string) => void
   onEnvChange: (v: Record<string, string>) => void
   onSkipApprovalFlagChange: (v: string) => void
-  onResumeCommandChange: (v: string) => void
   onSave: () => void
   onCancel: () => void
 }) {
@@ -256,19 +233,6 @@ function AgentEditForm({
         />
         <p className="text-xs text-text-tertiary">
           Appended to the command when the repo has auto-approve enabled.
-        </p>
-      </div>
-      <div className="space-y-1">
-        <label className="text-xs text-text-secondary">Resume command</label>
-        <input
-          type="text"
-          value={resumeCommand}
-          onChange={(e) => onResumeCommandChange(e.target.value)}
-          placeholder="e.g., /resume"
-          className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary font-mono placeholder-text-secondary focus:outline-none focus:border-accent"
-        />
-        <p className="text-xs text-text-tertiary">
-          In-session command to resume a previous conversation on restart.
         </p>
       </div>
       <div className="flex gap-2">

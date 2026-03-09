@@ -11,6 +11,7 @@ interface SettingsRepoScreenProps {
   agents: AgentConfig[]
   onUpdateRepo: (repoId: string, updates: Partial<Omit<ManagedRepo, 'id'>>) => void
   onOpenCommandsEditor: (directory: string) => void
+  onBack: () => void
 }
 
 export function SettingsRepoScreen({
@@ -18,6 +19,7 @@ export function SettingsRepoScreen({
   agents,
   onUpdateRepo,
   onOpenCommandsEditor,
+  onBack,
 }: SettingsRepoScreenProps) {
   return (
     <div className="space-y-4">
@@ -25,7 +27,7 @@ export function SettingsRepoScreen({
         repo={repo}
         agents={agents}
         onUpdate={(updates) => onUpdateRepo(repo.id, updates)}
-        onClose={() => {/* noop — navigation handles going back */}}
+        onClose={onBack}
       />
 
       <div className="border-t border-border pt-4">
@@ -37,7 +39,7 @@ export function SettingsRepoScreen({
           <div>
             <div className="text-sm text-text-primary">Edit Commands</div>
             <div className="text-xs text-text-secondary">
-              Configure action buttons shown in source control
+              Configure actions shown in the Broomy UI
             </div>
           </div>
           <svg

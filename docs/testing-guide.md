@@ -330,14 +330,19 @@ test('should show branch names for sessions', async () => {
 })
 
 test('should toggle Explorer panel', async () => {
-  const filesButton = page.locator('button:has-text("Explorer")')
-  await filesButton.click()
-  await page.waitForTimeout(300)
+  const explorerBtn = page.locator('button:has-text("Explorer")')
+  await explorerBtn.click()
 
-  const explorerHeader = page.locator('text=Explorer').nth(1)
-  await expect(explorerHeader).toBeVisible()
+  const explorerPanel = page.locator('[data-panel-id="explorer"]')
+  await expect(explorerPanel).toBeVisible()
 })
 ```
+
+**Avoiding flaky tests:** Never use `page.waitForTimeout()`. Instead:
+- Use `await expect(locator).toBeVisible()` / `.not.toBeVisible()` for UI state
+- Use `await expect(locator).toHaveClass(/pattern/)` for class-based assertions
+- Use `await expect.poll(() => asyncFn(), { timeout }).toContain(value)` for polling async data (e.g., terminal buffers)
+- Wait for sessions to load in `beforeAll` with `await page.waitForSelector('.cursor-pointer', { timeout: 10000 })`
 
 E2E tests never write to real config files, touch real git repos, or call real APIs.
 All data comes from the mock handlers in `src/main/index.ts`.

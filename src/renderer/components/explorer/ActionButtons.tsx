@@ -4,7 +4,7 @@
  */
 import { useState, useCallback } from 'react'
 import type { ActionDefinition, ConditionState, TemplateVars } from '../../utils/commandsConfig'
-import { evaluateShowWhen, resolveTemplateVars, getDefaultCommandsConfig } from '../../utils/commandsConfig'
+import { evaluateShowWhen, resolveTemplateVars, getDefaultCommandsConfig, matchesSurface } from '../../utils/commandsConfig'
 import { executeAction, type ActionExecutionContext } from '../../utils/actionExecutor'
 
 interface ActionButtonsProps {
@@ -17,6 +17,8 @@ interface ActionButtonsProps {
   onGitStatusRefresh?: () => void
   /** Called when an action specifies switchTab (e.g. "review") */
   onSwitchTab?: (tab: string) => void
+  /** Filter actions by surface (e.g. 'source-control', 'review'). Defaults to 'source-control'. */
+  surface?: string
   /** Opens the commands.json editor */
   onOpenCommandsEditor?: () => void
 }
@@ -37,6 +39,7 @@ export function ActionButtons({
   agentId,
   onGitStatusRefresh,
   onSwitchTab,
+  surface = 'source-control',
   onOpenCommandsEditor,
 }: ActionButtonsProps) {
   const [loadingActions, setLoadingActions] = useState<Set<string>>(new Set())
@@ -45,7 +48,7 @@ export function ActionButtons({
   const effectiveActions = actions ?? getDefaultCommandsConfig().actions
 
   const visibleActions = effectiveActions.filter(action =>
-    evaluateShowWhen(action.showWhen, conditionState)
+    matchesSurface(action, surface) && evaluateShowWhen(action.showWhen, conditionState)
   )
 
   const handleClick = useCallback(async (action: ActionDefinition) => {

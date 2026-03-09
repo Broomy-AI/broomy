@@ -45,6 +45,21 @@ export async function sendAgentPrompt(agentPtyId: string, prompt: string): Promi
 }
 
 /**
+ * Focus the currently active terminal tab's xterm input without switching tabs.
+ * Uses requestAnimationFrame to ensure the DOM has updated after any state changes.
+ */
+export function focusActiveTerminal(): void {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const container = document.querySelector('[data-panel-id="terminal"]')
+      if (!container) return
+      const textarea = container.querySelector<HTMLElement>('.xterm-helper-textarea')
+      textarea?.focus()
+    })
+  })
+}
+
+/**
  * Focus the explorer search input.
  * Uses requestAnimationFrame to ensure the DOM has updated after any state changes.
  */

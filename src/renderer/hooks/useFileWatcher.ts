@@ -2,7 +2,6 @@
  * Watches a file on disk for external changes and provides conflict resolution when the file is modified outside the editor.
  */
 import { useEffect, useCallback, useRef, useState } from 'react'
-import { dirname, basename } from 'path-browserify'
 
 interface UseFileWatcherParams {
   filePath: string | null
@@ -43,20 +42,15 @@ export function useFileWatcher({
     isDirtyRef.current = isDirty
   }, [isDirty])
 
-  // Watch parent directory for external changes (handles atomic writes)
+  // Watch the file directly for external changes
   useEffect(() => {
     if (!filePath || !enabled) return
 
-    const parentDir = dirname(filePath)
-    const fileName = basename(filePath)
     const watcherId = `fileviewer-${filePath}`
     let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
-    void window.fs.watch(watcherId, parentDir)
-    const removeListener = window.fs.onChange(watcherId, (event) => {
-      // Only react to changes for our target file
-      if (event.filename && event.filename !== fileName) return
-
+    void window.fs.watch(watcherId, filePath)
+    const removeListener = window.fs.onChange(watcherId, () => {
       // Debounce to avoid multiple triggers
       if (debounceTimer) clearTimeout(debounceTimer)
       debounceTimer = setTimeout(() => {

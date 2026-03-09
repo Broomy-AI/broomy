@@ -114,6 +114,13 @@ function mapCompilerOptions(opts: Record<string, unknown>, projectRoot: string):
   }
   if (opts.paths && typeof opts.paths === 'object') {
     result.paths = opts.paths as Record<string, string[]>
+    // TypeScript 4.1+ allows `paths` without `baseUrl` (resolves relative to
+    // tsconfig location). Monaco's TS service doesn't support this, so we
+    // default baseUrl to the project root when paths are present but baseUrl
+    // wasn't explicitly set.
+    if (!result.baseUrl) {
+      result.baseUrl = projectRoot
+    }
   }
 
   return result

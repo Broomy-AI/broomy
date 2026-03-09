@@ -24,12 +24,14 @@ interface TerminalProps {
   env?: Record<string, string>
   isAgentTerminal?: boolean
   isServicesTerminal?: boolean
-  isActive?: boolean
   agentNotInstalled?: boolean
-  agentResumeCommand?: string
   isRestored?: boolean
   isolated?: boolean
   repoRootDir?: string
+  /** Store session ID — for activation detection without re-rendering. */
+  storeSessionId?: string
+  /** Tab ID within the session — for activation detection without re-rendering. */
+  tabId?: string
 }
 
 function ExitErrorBanner({ exitInfo, onDismiss }: { exitInfo: ExitInfo; onDismiss: () => void }) {
@@ -65,19 +67,33 @@ function ExitErrorBanner({ exitInfo, onDismiss }: { exitInfo: ExitInfo; onDismis
   )
 }
 
-export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal = false, isServicesTerminal = false, isActive = false, agentNotInstalled = false, agentResumeCommand, isRestored, isolated, repoRootDir }: TerminalProps) {
+function AgentExitBanner({ exitInfo, onRestart }: { exitInfo: ExitInfo; onRestart: () => void }) {
+  return (
+    <div className="mx-2 mt-2 px-3 py-2 rounded bg-yellow-500/10 border border-yellow-500/30 text-xs text-yellow-300 shrink-0 flex items-center justify-between">
+      <span>{exitInfo.message}</span>
+      <button
+        className="ml-3 px-2 py-0.5 rounded bg-yellow-500/20 hover:bg-yellow-500/30 font-medium transition-colors"
+        onClick={onRestart}
+      >
+        Restart Agent
+      </button>
+    </div>
+  )
+}
+
+export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal = false, isServicesTerminal = false, agentNotInstalled = false, isRestored, isolated, repoRootDir, storeSessionId, tabId }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [restartKey, setRestartKey] = useState(0)
   const [resumeDismissed, setResumeDismissed] = useState(false)
 
-  const showResumeBanner = isAgentTerminal && isRestored && !!agentResumeCommand && !resumeDismissed && !agentNotInstalled
+  const showResumeBanner = isAgentTerminal && isRestored && !resumeDismissed && !agentNotInstalled
 
   const handleResume = useCallback(() => {
-    if (ptyIdRef.current && agentResumeCommand) {
-      void sendAgentPrompt(ptyIdRef.current, agentResumeCommand)
+    if (ptyIdRef.current) {
+      void sendAgentPrompt(ptyIdRef.current, '/resume')
     }
     setResumeDismissed(true)
-  }, [agentResumeCommand])
+  }, [])
 
   const config: TerminalConfig = {
     sessionId,
@@ -86,25 +102,41 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
     env,
     isAgentTerminal,
     isServicesTerminal,
-    isActive,
     restartKey,
     isolated,
     repoRootDir,
+    storeSessionId,
+    tabId,
   }
 
-  const { terminalRef, ptyIdRef, showScrollButton, handleScrollToBottom, exitInfo } = useTerminalSetup(config, containerRef)
+  const { terminalRef, ptyIdRef, isActiveRef, showScrollButton, handleScrollToBottom, exitInfo } = useTerminalSetup(config, containerRef)
   const [exitDismissed, setExitDismissed] = useState(false)
+
+  const handleRestart = useCallback(() => {
+    setRestartKey((k) => k + 1)
+    setExitDismissed(false)
+  }, [])
+
+  // Listen for Agent > Restart Agent menu action
+  useEffect(() => {
+    if (!isAgentTerminal) return
+    const handler = () => {
+      if (isActiveRef.current) handleRestart()
+    }
+    window.addEventListener('agent:restart', handler)
+    return () => window.removeEventListener('agent:restart', handler)
+  }, [isAgentTerminal, isActiveRef, handleRestart])
 
   // Select all terminal content when this terminal is the active one
   useEffect(() => {
     const handleSelectAll = () => {
-      if (isActive && terminalRef.current) {
+      if (isActiveRef.current && terminalRef.current) {
         terminalRef.current.selectAll()
       }
     }
     window.addEventListener('app:select-all', handleSelectAll)
     return () => window.removeEventListener('app:select-all', handleSelectAll)
-  }, [isActive, terminalRef])
+  }, [isActiveRef, terminalRef])
 
   const handleContextMenu = useCallback(async (e: React.MouseEvent) => {
     e.preventDefault()
@@ -130,7 +162,7 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
           console.warn('[Terminal] Clipboard read failed:', err)
         }
       } else if (result === 'restart-agent') {
-        setRestartKey((k) => k + 1)
+        handleRestart()
       }
     } catch (err) {
       console.warn('[Terminal] Context menu failed:', err)
@@ -173,7 +205,7 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
           <span>
             Resume your previous conversation?{' '}
             <button className="underline hover:text-accent/80 font-medium" onClick={handleResume}>
-              Run {agentResumeCommand} &rarr;
+              Run /resume &rarr;
             </button>
           </span>
           <button className="ml-2 hover:text-accent/80" onClick={() => setResumeDismissed(true)} aria-label="Dismiss">
@@ -181,8 +213,11 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
           </button>
         </div>
       )}
-      {exitInfo && !exitDismissed && (
+      {exitInfo && !exitDismissed && exitInfo.detail && (
         <ExitErrorBanner exitInfo={exitInfo} onDismiss={() => setExitDismissed(true)} />
+      )}
+      {exitInfo && isAgentTerminal && !exitInfo.detail && (
+        <AgentExitBanner exitInfo={exitInfo} onRestart={handleRestart} />
       )}
       <div className="flex-1 min-h-0 p-2 relative">
         <div ref={containerRef} className="h-full w-full" />

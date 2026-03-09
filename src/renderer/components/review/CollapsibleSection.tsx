@@ -20,7 +20,7 @@ export function CollapsibleSection({
     <div className="border-b border-border">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-text-primary hover:bg-bg-tertiary/50 transition-colors"
+        className="w-full flex items-center gap-2 px-2 py-2 text-sm font-medium text-text-primary hover:bg-bg-tertiary/50 transition-colors"
       >
         <svg
           className={`w-3 h-3 transition-transform text-text-secondary ${open ? 'rotate-90' : ''}`}
@@ -37,7 +37,7 @@ export function CollapsibleSection({
           </span>
         )}
       </button>
-      {open && <div className="px-3 pb-3">{children}</div>}
+      {open && <div className="px-1.5 pb-2">{children}</div>}
     </div>
   )
 }

@@ -12,8 +12,6 @@ export interface ReviewDataState {
   waitingForAgent: boolean
   fetchingStatus: FetchingStatus
   error: string | null
-  showGitignoreModal: boolean
-  pendingGenerate: boolean
   mergeBase: string
   broomyDir: string
   outputDir: string
@@ -24,8 +22,6 @@ export interface ReviewDataState {
   setWaitingForAgent: React.Dispatch<React.SetStateAction<boolean>>
   setFetchingStatus: React.Dispatch<React.SetStateAction<FetchingStatus>>
   setError: React.Dispatch<React.SetStateAction<string | null>>
-  setShowGitignoreModal: React.Dispatch<React.SetStateAction<boolean>>
-  setPendingGenerate: React.Dispatch<React.SetStateAction<boolean>>
   setMergeBase: React.Dispatch<React.SetStateAction<string>>
 }
 
@@ -37,8 +33,6 @@ export function useReviewData(sessionId: string, sessionDirectory: string, prBas
   const [waitingForAgent, setWaitingForAgent] = useState(false)
   const [fetchingStatus, setFetchingStatus] = useState<FetchingStatus>(null)
   const [error, setError] = useState<string | null>(null)
-  const [showGitignoreModal, setShowGitignoreModal] = useState(false)
-  const [pendingGenerate, setPendingGenerate] = useState(false)
   const [mergeBase, setMergeBase] = useState<string>('')
 
   // Generated files live in .broomy/output/ (gitignored via .broomy/.gitignore)
@@ -101,8 +95,6 @@ export function useReviewData(sessionId: string, sessionDirectory: string, prBas
     waitingForAgent,
     fetchingStatus,
     error,
-    showGitignoreModal,
-    pendingGenerate,
     mergeBase,
     broomyDir,
     outputDir,
@@ -113,8 +105,6 @@ export function useReviewData(sessionId: string, sessionDirectory: string, prBas
     setWaitingForAgent,
     setFetchingStatus,
     setError,
-    setShowGitignoreModal,
-    setPendingGenerate,
     setMergeBase,
   }
 }

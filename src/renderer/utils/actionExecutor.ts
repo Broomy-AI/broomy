@@ -67,7 +67,7 @@ async function executeAgentAction(
     await window.fs.writeFile(`${outputDir}/context.json`, JSON.stringify(ctx.templateVars, null, 2))
 
     // Determine what to send: agent-specific override or default
-    const prompt = await resolveAgentPrompt(action, ctx)
+    const prompt = resolveAgentPrompt(action, ctx)
     await sendAgentPrompt(ctx.agentPtyId, prompt)
 
     return { success: true }
@@ -79,42 +79,24 @@ async function executeAgentAction(
 /**
  * Resolve the prompt to send, considering agent-specific overrides.
  *
- * When a skill override is specified, checks whether the skill file exists
- * on disk (`.claude/commands/<skill>.md`). If missing, falls through to the
- * action's default prompt/promptFile so the action still works without skills.
+ * Priority: agent-specific override prompt > base action prompt > label fallback.
  */
-async function resolveAgentPrompt(action: ActionDefinition, ctx: ActionExecutionContext): Promise<string> {
-  // Check for agent-specific override
+function resolveAgentPrompt(action: ActionDefinition, ctx: ActionExecutionContext): string {
   if (action.agents && ctx.agentId) {
     const agent = useAgentStore.getState().agents.find((a: AgentConfig) => a.id === ctx.agentId)
     if (agent) {
       const agentType = detectAgentType(agent.command)
       if (agentType && agentType in action.agents) {
         const override = action.agents[agentType]
-        if (override.skill) {
-          const skillPath = `${ctx.directory}/.claude/commands/${override.skill}.md`
-          const exists = await window.fs.exists(skillPath)
-          if (exists) {
-            return `/${override.skill}`
-          }
-          // Skill file missing — fall through to default prompt/promptFile
-        }
         if (override.prompt) {
           return resolveTemplateVars(override.prompt, ctx.templateVars)
-        }
-        if (override.promptFile) {
-          return `Please read and follow the instructions in ${resolveTemplateVars(override.promptFile, ctx.templateVars)}`
         }
       }
     }
   }
 
-  // Default: use prompt or promptFile
   if (action.prompt) {
     return resolveTemplateVars(action.prompt, ctx.templateVars)
-  }
-  if (action.promptFile) {
-    return `Please read and follow the instructions in ${resolveTemplateVars(action.promptFile, ctx.templateVars)}`
   }
 
   return `Run the "${action.label}" action`

@@ -18,11 +18,11 @@ React UI components that make up Broomy's visual interface. Each component is a 
 | `FileViewerToolbar.tsx` | Toolbar for the file viewer with breadcrumb, edit/save/diff controls |
 | `SessionList.tsx` | Sidebar session cards with status indicators, branch chips, and archive/unarchive support |
 | `NewSessionDialog.tsx` | Entry point for the new session wizard (delegates to `newSession/`) |
-| `AgentSettings.tsx` | Agent CRUD and per-repo settings (default agent, push-to-main, init scripts) |
+| `AgentSettings.tsx` | Agent CRUD and per-repo settings (default agent, approve-and-merge, init scripts) |
 | `AgentSettingsAgentTab.tsx` | Agent configuration tab within AgentSettings |
 | `AgentSettingsRepoTab.tsx` | Repository configuration tab within AgentSettings |
 | `EnvVarEditor.tsx` | Editable key-value list for agent environment variables |
-| `RepoSettingsEditor.tsx` | Per-repo settings editor (default agent, push-to-main, init scripts) |
+| `RepoSettingsEditor.tsx` | Per-repo settings editor (default agent, approve-and-merge, init scripts) |
 | `TabbedTerminal.tsx` | Tab bar container for multiple user terminal instances per session |
 | `TerminalTabBar.tsx` | Tab bar component for switching between user terminal tabs |
 | `PanelPicker.tsx` | Toolbar configuration overlay for adding, removing, and reordering panel buttons |

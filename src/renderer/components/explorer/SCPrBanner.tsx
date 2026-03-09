@@ -3,6 +3,7 @@
  */
 import type { GitFileStatus, GitStatusResult, GitHubPrStatus } from '../../../preload/index'
 import type { BranchStatus } from '../../store/sessions'
+import type { NavigationTarget } from '../../utils/fileNavigation'
 import { prStateBadgeClass } from '../../utils/explorerHelpers'
 import { humanizeError } from '../../utils/knownErrors'
 import { useErrorStore } from '../../store/errors'
@@ -27,6 +28,7 @@ interface SCPrBannerProps {
   issueTitle?: string
   issueUrl?: string
   onRetryGitOp?: () => void
+  onFileSelect?: (target: NavigationTarget) => void
 }
 
 export function SCPrBanner({
@@ -46,6 +48,7 @@ export function SCPrBanner({
   issueTitle,
   issueUrl,
   onRetryGitOp,
+  onFileSelect,
 }: SCPrBannerProps) {
   const { showErrorDetail } = useErrorStore()
   const { ghAvailable } = useRepoStore()
@@ -55,14 +58,16 @@ export function SCPrBanner({
       <div className="px-3 py-2 border-b border-border bg-bg-secondary">
         {isPrLoading ? (
           <div className="text-xs text-text-secondary">Loading PR status...</div>
-        ) : prStatus ? (
+        ) : prStatus?.number && prStatus.url ? (
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
               <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${prStateBadgeClass(prStatus.state)}`}>
                 {prStatus.state}
               </span>
               <button
-                onClick={() => window.shell.openExternal(prStatus.url)}
+                onClick={() => onFileSelect
+                  ? onFileSelect({ filePath: prStatus.url, openInDiffMode: false })
+                  : window.shell.openExternal(prStatus.url)}
                 className="text-xs text-accent hover:underline truncate flex-1 text-left"
               >
                 #{prStatus.number}: {prStatus.title}

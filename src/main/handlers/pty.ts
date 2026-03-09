@@ -9,26 +9,38 @@ import { join } from 'path'
 import { homedir } from 'os'
 import * as pty from 'node-pty'
 import type { IPty } from 'node-pty'
-import { isWindows, getDefaultShell, resolveWindowsCommand } from '../platform'
+import { isWindows, getDefaultShell, resolveCommand, enhancedPath } from '../platform'
 import { HandlerContext } from './types'
 import { getScenarioData } from './scenarios'
 import { isDockerAvailable, dockerSetupMessage, ensureAgentInstalled, acquireSetupLock } from '../containerUtils'
 import { isDevcontainerCliAvailable, hasDevcontainerConfig, devcontainerUp, buildDevcontainerExecArgs, devcontainerSetupMessage } from '../devcontainer'
 
 /**
- * On Windows, resolve the base command to its full path so agents installed
- * outside PATH (e.g. %USERPROFILE%\.local\bin) can still be launched.
+ * Resolve the base command to its full path so agents installed outside
+ * PATH (e.g. ~/.local/bin, %USERPROFILE%\.local\bin) can still be launched.
  */
 function resolveInitialCommand(command: string, isE2ETest: boolean): string {
-  if (!isWindows || isE2ETest) return command
+  if (isE2ETest) return command
   const parts = command.trim().split(/\s+/)
   const baseCmd = parts[0]
-  const resolved = resolveWindowsCommand(baseCmd)
+  const resolved = resolveCommand(baseCmd)
   if (resolved && resolved !== baseCmd) {
-    parts[0] = `"${resolved}"`
+    parts[0] = isWindows ? `"${resolved}"` : resolved
     return parts.join(' ')
   }
   return command
+}
+
+/** Disposables for each PTY's onData/onExit listeners, keyed by PTY id. */
+const ptyDisposables = new Map<string, { dispose: () => void }[]>()
+
+/** Dispose all event listeners for a PTY and remove from the disposables map. */
+function disposePtyListeners(id: string) {
+  const disposables = ptyDisposables.get(id)
+  if (disposables) {
+    for (const d of disposables) d.dispose()
+    ptyDisposables.delete(id)
+  }
 }
 
 /** Wire onData/onExit events for a PTY, registering it in the context maps. */
@@ -36,21 +48,24 @@ function wirePtyEvents(ctx: HandlerContext, ptyProcess: IPty, id: string, sender
   ctx.ptyProcesses.set(id, ptyProcess)
   if (senderWindow) ctx.ptyOwnerWindows.set(id, senderWindow)
 
-  ptyProcess.onData((data) => {
+  const dataDisposable = ptyProcess.onData((data) => {
     const ownerWindow = ctx.ptyOwnerWindows.get(id) || ctx.mainWindow
     if (ownerWindow && !ownerWindow.isDestroyed()) {
       ownerWindow.webContents.send(`pty:data:${id}`, data)
     }
   })
 
-  ptyProcess.onExit(({ exitCode }) => {
+  const exitDisposable = ptyProcess.onExit(({ exitCode }) => {
     const ownerWindow = ctx.ptyOwnerWindows.get(id) || ctx.mainWindow
     if (ownerWindow && !ownerWindow.isDestroyed()) {
       ownerWindow.webContents.send(`pty:exit:${id}`, exitCode)
     }
+    disposePtyListeners(id)
     ctx.ptyProcesses.delete(id)
     ctx.ptyOwnerWindows.delete(id)
   })
+
+  ptyDisposables.set(id, [dataDisposable, exitDisposable])
 }
 
 /**
@@ -139,6 +154,7 @@ function createDevcontainerPty(
     const releaseLock = await acquireSetupLock(workspaceFolder)
     let containerId: string
     let remoteUser: string
+    let remoteWorkspaceFolder: string
     let postAttachCommand: string | undefined
     try {
       // Run devcontainer up
@@ -151,6 +167,7 @@ function createDevcontainerPty(
       }
       containerId = result.result.containerId
       remoteUser = result.result.remoteUser
+      remoteWorkspaceFolder = result.result.remoteWorkspaceFolder
       postAttachCommand = result.result.postAttachCommand
 
       // Store container info for DockerInfoPanel
@@ -204,7 +221,7 @@ function createDevcontainerPty(
         }
       }
     }
-    const dockerArgs = buildDevcontainerExecArgs(containerId, remoteUser, cwd, dockerEnv, command)
+    const dockerArgs = buildDevcontainerExecArgs(containerId, remoteUser, remoteWorkspaceFolder, dockerEnv, command)
 
     let ptyProcess: IPty
     try {
@@ -219,14 +236,16 @@ function createDevcontainerPty(
       displayTerminalError(id, `Failed to spawn Docker process: ${err instanceof Error ? err.message : String(err)}`, senderWindow)
       return
     }
-    ptyProcess.onExit(() => {}) // prevent unhandled-exit crashes
+    const earlyExitDisposable = ptyProcess.onExit(() => {}) // prevent unhandled-exit crashes
 
     // Final check: session may have been killed between spawn and wire
     if (!pendingSetups.has(id)) {
+      earlyExitDisposable.dispose()
       ptyProcess.kill()
       return
     }
     pendingSetups.delete(id)
+    earlyExitDisposable.dispose()
     wirePtyEvents(ctx, ptyProcess, id, senderWindow)
   }
 
@@ -292,6 +311,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     // Kill any existing PTY with the same ID (e.g. React strict mode double-mount)
     const existing = ctx.ptyProcesses.get(options.id)
     if (existing) {
+      disposePtyListeners(options.id)
       existing.kill()
       ctx.ptyProcesses.delete(options.id)
       ctx.ptyOwnerWindows.delete(options.id)
@@ -313,8 +333,10 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     const { shell, shellArgs, initialCommand: resolvedCommand } = resolveShellConfig(ctx, options)
     let initialCommand = resolvedCommand
 
-    // Build environment
-    const baseEnv = { ...process.env } as Record<string, string>
+    // Build environment — extend PATH with common bin dirs so agents in
+    // ~/.local/bin, /opt/homebrew/bin, etc. are reachable even if the
+    // login shell profile doesn't add them or resolveShellEnv() failed.
+    const baseEnv = { ...process.env, PATH: enhancedPath(process.env.PATH) } as Record<string, string>
     delete baseEnv.CLAUDE_CONFIG_DIR
 
     const expandHome = (value: string) => {
@@ -381,6 +403,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     pendingSetups.delete(id)
     const ptyProcess = ctx.ptyProcesses.get(id)
     if (ptyProcess) {
+      disposePtyListeners(id)
       ptyProcess.kill()
       ctx.ptyProcesses.delete(id)
       ctx.ptyOwnerWindows.delete(id)

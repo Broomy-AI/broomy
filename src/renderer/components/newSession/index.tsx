@@ -71,6 +71,7 @@ export function NewSessionDialog({ onComplete, onCancel }: NewSessionDialogProps
             issue={view.issue}
             onBack={() => view.issue ? setView({ type: 'issues', repo: view.repo }) : setView({ type: 'home' })}
             onComplete={onComplete}
+            onUseExisting={() => setView({ type: 'existing-branch', repo: view.repo })}
           />
         )}
         {view.type === 'existing-branch' && (

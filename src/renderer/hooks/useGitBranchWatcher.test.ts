@@ -105,7 +105,7 @@ describe('useGitBranchWatcher', () => {
     expect(updateSessionBranch).not.toHaveBeenCalled()
   })
 
-  it('sets up a watcher on the git directory', async () => {
+  it('sets up a watcher on the HEAD file', async () => {
     const session = makeSession()
 
     renderHook(() =>
@@ -118,7 +118,7 @@ describe('useGitBranchWatcher', () => {
 
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(window.fs.watch).toHaveBeenCalledWith('git-head-sess-1', '/test/repo/.git')
+    expect(window.fs.watch).toHaveBeenCalledWith('git-head-sess-1', '/test/repo/.git/HEAD')
     expect(window.fs.onChange).toHaveBeenCalledWith('git-head-sess-1', expect.any(Function))
   })
 
@@ -146,51 +146,6 @@ describe('useGitBranchWatcher', () => {
     expect(updateSessionBranch).toHaveBeenCalledWith('sess-1', 'develop')
   })
 
-  it('ignores non-HEAD file changes', async () => {
-    const updateSessionBranch = vi.fn()
-    const session = makeSession()
-
-    renderHook(() =>
-      useGitBranchWatcher({
-        sessions: [session],
-        activeSessionId: 'sess-1',
-        updateSessionBranch,
-      }),
-    )
-
-    await vi.advanceTimersByTimeAsync(0)
-    updateSessionBranch.mockClear()
-
-    onChangeCallback?.({ eventType: 'change', filename: 'refs/heads/main' })
-
-    await vi.advanceTimersByTimeAsync(300)
-
-    expect(updateSessionBranch).not.toHaveBeenCalled()
-  })
-
-  it('responds to changes with no filename (undefined)', async () => {
-    vi.mocked(window.git.getBranch).mockResolvedValue('main')
-    const updateSessionBranch = vi.fn()
-    const session = makeSession({ branch: 'main' })
-
-    renderHook(() =>
-      useGitBranchWatcher({
-        sessions: [session],
-        activeSessionId: 'sess-1',
-        updateSessionBranch,
-      }),
-    )
-
-    await vi.advanceTimersByTimeAsync(0)
-
-    vi.mocked(window.git.getBranch).mockResolvedValue('new-branch')
-    onChangeCallback?.({ eventType: 'change', filename: null })
-
-    await vi.advanceTimersByTimeAsync(300)
-
-    expect(updateSessionBranch).toHaveBeenCalledWith('sess-1', 'new-branch')
-  })
-
   it('debounces rapid HEAD changes', async () => {
     vi.mocked(window.git.getBranch).mockResolvedValue('main')
     const updateSessionBranch = vi.fn()
@@ -209,11 +164,11 @@ describe('useGitBranchWatcher', () => {
     vi.mocked(window.git.getBranch).mockResolvedValue('final-branch')
 
     // Rapid fire changes
-    onChangeCallback?.({ eventType: 'change', filename: 'HEAD' })
+    onChangeCallback?.({ eventType: 'change', filename: null })
     await vi.advanceTimersByTimeAsync(100)
-    onChangeCallback?.({ eventType: 'change', filename: 'HEAD' })
+    onChangeCallback?.({ eventType: 'change', filename: null })
     await vi.advanceTimersByTimeAsync(100)
-    onChangeCallback?.({ eventType: 'change', filename: 'HEAD' })
+    onChangeCallback?.({ eventType: 'change', filename: null })
 
     // Only after 300ms from last change
     await vi.advanceTimersByTimeAsync(300)
@@ -243,7 +198,7 @@ describe('useGitBranchWatcher', () => {
   it('handles worktree .git file', async () => {
     vi.mocked(window.fs.readFile).mockResolvedValue('gitdir: /real/git/dir/worktrees/my-worktree')
     vi.mocked(window.fs.exists).mockImplementation(async (path) => {
-      if (path === '/real/git/dir/worktrees/my-worktree') return true
+      if (path === '/real/git/dir/worktrees/my-worktree/HEAD') return true
       return true
     })
 
@@ -259,7 +214,7 @@ describe('useGitBranchWatcher', () => {
 
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(window.fs.watch).toHaveBeenCalledWith('git-head-sess-1', '/real/git/dir/worktrees/my-worktree')
+    expect(window.fs.watch).toHaveBeenCalledWith('git-head-sess-1', '/real/git/dir/worktrees/my-worktree/HEAD')
   })
 
   it('skips when .git does not exist', async () => {
@@ -282,7 +237,7 @@ describe('useGitBranchWatcher', () => {
   it('handles worktree gitdir that does not exist', async () => {
     vi.mocked(window.fs.readFile).mockResolvedValue('gitdir: /nonexistent/path')
     vi.mocked(window.fs.exists).mockImplementation(async (path) => {
-      if (path === '/nonexistent/path') return false
+      if (path === '/nonexistent/path/HEAD') return false
       return true // .git file exists
     })
 
@@ -352,7 +307,7 @@ describe('useGitBranchWatcher', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     vi.mocked(window.git.getBranch).mockRejectedValue(new Error('repo gone'))
-    onChangeCallback?.({ eventType: 'change', filename: 'HEAD' })
+    onChangeCallback?.({ eventType: 'change', filename: null })
 
     await vi.advanceTimersByTimeAsync(300)
 

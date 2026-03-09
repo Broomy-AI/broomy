@@ -104,8 +104,9 @@ function makeConfig(overrides: Partial<TerminalConfig> = {}): TerminalConfig {
     command: undefined,
     env: undefined,
     isAgentTerminal: false,
-    isActive: true,
     restartKey: 0,
+    storeSessionId: 'session-1',
+    tabId: '__agent__',
     ...overrides,
   }
 }
@@ -349,19 +350,32 @@ describe('useTerminalSetup', () => {
   })
 
   describe('active state handling', () => {
-    it('fits and focuses terminal when becoming active', () => {
-      const config = makeConfig({ isActive: false })
+    it('fits and focuses terminal when becoming active via store', () => {
+      // Set up a session in the store with the correct terminal tabs
+      useSessionStore.setState({
+        activeSessionId: 'other-session',
+        sessions: [{
+          id: 'session-1', name: 'test', directory: '/test', branch: 'main',
+          status: 'idle', agentId: null, panelVisibility: {}, showExplorer: false,
+          showFileViewer: false, showDiff: false, selectedFilePath: null,
+          planFilePath: null, fileViewerPosition: 'top' as const,
+          layoutSizes: { explorerWidth: 256, fileViewerSize: 300, userTerminalHeight: 192, diffPanelWidth: 320, tutorialPanelWidth: 320 },
+          explorerFilter: 'files' as const, lastMessage: null, lastMessageTime: null,
+          isUnread: false, workingStartTime: null, recentFiles: [],
+          terminalTabs: { tabs: [], activeTabId: '__agent__' },
+          branchStatus: 'in-progress' as const, isArchived: false, isRestored: false,
+        }],
+      })
+      const config = makeConfig()
       const containerRef = makeContainerRef()
 
-      const { rerender } = renderHook(
-        ({ isActive }) => useTerminalSetup({ ...config, isActive }, containerRef),
-        { initialProps: { isActive: false } },
-      )
+      renderHook(() => useTerminalSetup(config, containerRef))
 
       mockFitAddonFit.mockClear()
       mockTerminalFocus.mockClear()
 
-      rerender({ isActive: true })
+      // Activate this session via the store
+      act(() => { useSessionStore.setState({ activeSessionId: 'session-1' }) })
 
       // requestAnimationFrame is mocked to call immediately
       expect(mockFitAddonFit).toHaveBeenCalled()
@@ -568,6 +582,46 @@ describe('useTerminalSetup', () => {
       if (terminalOnDataCb) {
         act(() => { terminalOnDataCb!('a') })
         expect(window.pty.write).toHaveBeenCalled()
+      }
+    })
+
+    it('does not treat cursor position reports as user input', async () => {
+      let terminalOnDataCb: ((data: string) => void) | null = null
+      mockTerminalOnData.mockImplementation((cb: (data: string) => void) => {
+        terminalOnDataCb = cb
+        return { dispose: vi.fn() }
+      })
+
+      const markSessionRead = vi.fn()
+      useSessionStore.setState({
+        activeSessionId: 'session-1',
+        markSessionRead,
+        sessions: [{
+          id: 'session-1', name: 'test', directory: '/test', branch: 'main',
+          status: 'idle', agentId: null, panelVisibility: {}, showExplorer: false,
+          showFileViewer: false, showDiff: false, selectedFilePath: null,
+          planFilePath: null, fileViewerPosition: 'top' as const,
+          layoutSizes: { explorerWidth: 256, fileViewerSize: 300, userTerminalHeight: 192, diffPanelWidth: 320, tutorialPanelWidth: 320 },
+          explorerFilter: 'files' as const, lastMessage: null, lastMessageTime: null,
+          isUnread: false, workingStartTime: null, recentFiles: [],
+          terminalTabs: { tabs: [], activeTabId: '__agent__' },
+          branchStatus: 'in-progress' as const, isArchived: false, isRestored: false,
+        }],
+      } as never)
+
+      const config = makeConfig()
+      const containerRef = makeContainerRef()
+
+      renderHook(() => useTerminalSetup(config, containerRef))
+      await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+
+      if (terminalOnDataCb) {
+        // Cursor position report (xterm auto-response to DSR query)
+        act(() => { terminalOnDataCb!('\x1b[24;80R') })
+        // Should still forward to PTY
+        expect(window.pty.write).toHaveBeenCalledWith(expect.any(String), '\x1b[24;80R')
+        // Should NOT mark session as read (not real user input)
+        expect(markSessionRead).not.toHaveBeenCalled()
       }
     })
 

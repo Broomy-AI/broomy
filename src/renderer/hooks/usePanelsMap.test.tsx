@@ -89,7 +89,6 @@ function makeConfig(overrides: Partial<PanelsMapConfig> = {}): PanelsMapConfig {
     fetchGitStatus: vi.fn(),
     getAgentCommand: vi.fn().mockReturnValue(undefined),
     getAgentEnv: vi.fn().mockReturnValue(undefined),
-    getAgentResumeCommand: vi.fn().mockReturnValue(undefined),
     getRepoIsolation: vi.fn().mockReturnValue(undefined),
     globalPanelVisibility: {
       [PANEL_IDS.SIDEBAR]: true,
@@ -98,8 +97,6 @@ function makeConfig(overrides: Partial<PanelsMapConfig> = {}): PanelsMapConfig {
     toggleGlobalPanel: vi.fn(),
     selectFile: vi.fn(),
     setExplorerFilter: vi.fn(),
-    recordPushToMain: vi.fn(),
-    clearPushToMain: vi.fn(),
     updatePrState: vi.fn(),
     setPanelVisibility: vi.fn(),
     setToolbarPanels: vi.fn(),
@@ -255,22 +252,6 @@ describe('usePanelsMap', () => {
       const onFilterChange = props.onFilterChange as (filter: string) => void
       onFilterChange('source-control')
       expect(setExplorerFilter).toHaveBeenCalledWith('session-1', 'source-control')
-    })
-
-    it('onRecordPushToMain calls recordPushToMain with active session id', () => {
-      const recordPushToMain = vi.fn()
-      const { lastExplorerProps: props } = renderExplorer({ recordPushToMain })
-      const onRecordPushToMain = props.onRecordPushToMain as (hash: string) => void
-      onRecordPushToMain('abc123')
-      expect(recordPushToMain).toHaveBeenCalledWith('session-1', 'abc123')
-    })
-
-    it('onClearPushToMain calls clearPushToMain with active session id', () => {
-      const clearPushToMain = vi.fn()
-      const { lastExplorerProps: props } = renderExplorer({ clearPushToMain })
-      const onClearPushToMain = props.onClearPushToMain as () => void
-      onClearPushToMain()
-      expect(clearPushToMain).toHaveBeenCalledWith('session-1')
     })
 
     it('onUpdatePrState calls updatePrState with active session id', () => {

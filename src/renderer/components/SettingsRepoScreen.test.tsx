@@ -27,6 +27,7 @@ describe('SettingsRepoScreen', () => {
         agents={agents}
         onUpdateRepo={vi.fn()}
         onOpenCommandsEditor={vi.fn()}
+        onBack={vi.fn()}
       />,
     )
     expect(screen.getByTestId('repo-settings-editor')).toBeTruthy()
@@ -40,6 +41,7 @@ describe('SettingsRepoScreen', () => {
         agents={agents}
         onUpdateRepo={vi.fn()}
         onOpenCommandsEditor={vi.fn()}
+        onBack={vi.fn()}
       />,
     )
     expect(screen.getByText('Edit Commands')).toBeTruthy()
@@ -53,6 +55,7 @@ describe('SettingsRepoScreen', () => {
         agents={agents}
         onUpdateRepo={vi.fn()}
         onOpenCommandsEditor={onOpen}
+        onBack={vi.fn()}
       />,
     )
     fireEvent.click(screen.getByTestId('edit-commands-link'))

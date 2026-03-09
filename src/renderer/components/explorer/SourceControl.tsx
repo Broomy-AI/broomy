@@ -2,7 +2,7 @@
  * Top-level source control container that composes the PR banner, view toggle, and sub-views.
  * Integrates the modular commands.json action system.
  */
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import type { GitFileStatus, GitStatusResult } from '../../../preload/index'
 import type { BranchStatus, PrState } from '../../store/sessions'
 import type { NavigationTarget } from '../../utils/fileNavigation'
@@ -33,10 +33,6 @@ interface SourceControlProps {
   issueNumber?: number
   issueTitle?: string
   issueUrl?: string
-  pushedToMainAt?: number
-  pushedToMainCommit?: string
-  onRecordPushToMain?: (commitHash: string) => void
-  onClearPushToMain?: () => void
   onSwitchTab?: (tab: string) => void
   onOpenCommandsEditor?: () => void
   isReview?: boolean
@@ -56,10 +52,6 @@ export function SourceControl({
   issueNumber,
   issueTitle,
   issueUrl,
-  pushedToMainAt,
-  pushedToMainCommit,
-  onRecordPushToMain,
-  onClearPushToMain,
   onSwitchTab,
   onOpenCommandsEditor,
   isReview,
@@ -67,6 +59,7 @@ export function SourceControl({
   const [scView, setScView] = useState<'working' | 'branch' | 'commits'>('working')
   const [showSetupDialog, setShowSetupDialog] = useState(false)
   const [noDevcontainer, setNoDevcontainer] = useState(false)
+  const [hasDevcontainerLoaded, setHasDevcontainerLoaded] = useState(false)
 
   // Load commands.json
   const { config: commandsConfig, exists: commandsExists } = useCommandsConfig(directory)
@@ -74,40 +67,44 @@ export function SourceControl({
   // Reset view when directory (session) changes
   useEffect(() => {
     setScView('working')
+    setHasDevcontainerLoaded(false)
   }, [directory])
 
   const data = useSourceControlData({
     directory, gitStatus, syncStatus, branchStatus, onUpdatePrState,
-    pushedToMainAt, pushedToMainCommit, onClearPushToMain,
     repoId, scView,
   })
 
   // Check if repo has isolation enabled but no devcontainer config
   useEffect(() => {
-    if (!directory || !repoId) { setNoDevcontainer(false); return }
-    if (!data.currentRepo?.isolated) { setNoDevcontainer(false); return }
+    if (!directory || !repoId) { setNoDevcontainer(false); setHasDevcontainerLoaded(true); return }
+    if (!data.currentRepo?.isolated) { setNoDevcontainer(false); setHasDevcontainerLoaded(true); return }
     let cancelled = false
     window.devcontainer.hasConfig(directory).then((has) => {
-      if (!cancelled) setNoDevcontainer(!has)
+      if (!cancelled) { setNoDevcontainer(!has); setHasDevcontainerLoaded(true) }
     }).catch(() => {
-      if (!cancelled) setNoDevcontainer(false)
+      if (!cancelled) { setNoDevcontainer(false); setHasDevcontainerLoaded(true) }
     })
     return () => { cancelled = true }
   }, [directory, repoId, data.currentRepo?.isolated])
 
   const actions = useSourceControlActions({
-    directory, onGitStatusRefresh, agentPtyId, agentId, onRecordPushToMain, data,
+    directory, onGitStatusRefresh, agentPtyId, agentId, data,
   })
 
-  // Compute condition state for action button visibility
-  const conditionState = useMemo(() =>
+  // All async sources must complete before we update condition state.
+  // This prevents buttons from appearing one-at-a-time as independent fetches resolve.
+  const allSourcesReady = !data.isInitialLoading && hasDevcontainerLoaded
+
+  const latestConditionState = useMemo(() =>
     computeConditionState({
       gitStatus,
       syncStatus,
       branchStatus,
       prNumber: data.prStatus?.number,
       hasWriteAccess: data.hasWriteAccess,
-      allowPushToMain: data.currentRepo?.allowPushToMain ?? true,
+      allowApproveAndMerge: data.currentRepo?.allowApproveAndMerge ?? true,
+      checksStatus: data.checksStatus,
       behindMainCount: data.behindMainCount,
       issueNumber,
       noDevcontainer,
@@ -115,6 +112,13 @@ export function SourceControl({
     }),
     [gitStatus, syncStatus, branchStatus, data.prStatus, data.hasWriteAccess, data.currentRepo, data.behindMainCount, issueNumber, noDevcontainer, isReview]
   )
+
+  // Hold the last settled snapshot until all sources are ready again
+  const settledConditionState = useRef(latestConditionState)
+  if (allSourcesReady) {
+    settledConditionState.current = latestConditionState
+  }
+  const conditionState = settledConditionState.current
 
   // Template variables for action labels and prompts
   const templateVars: TemplateVars = useMemo(() => ({
@@ -160,6 +164,7 @@ export function SourceControl({
         issueTitle={issueTitle}
         issueUrl={issueUrl}
         onRetryGitOp={actions.handleSync}
+        onFileSelect={onFileSelect}
       />
     </>
   )
@@ -238,4 +243,3 @@ export function SourceControl({
     </div>
   )
 }
-

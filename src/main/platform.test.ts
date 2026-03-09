@@ -129,27 +129,80 @@ describe('platform', () => {
     })
   })
 
-  describe('resolveWindowsCommand', () => {
+  describe('resolveCommand', () => {
     it('finds git via which/where on the current platform', async () => {
-      const { resolveWindowsCommand } = await import('./platform')
+      const { resolveCommand } = await import('./platform')
       // git should be on PATH in any CI/dev environment
-      const result = resolveWindowsCommand('git')
+      const result = resolveCommand('git')
       expect(result).toBeTruthy()
       expect(result!.toLowerCase()).toContain('git')
     })
 
     it('returns null for a command that does not exist', async () => {
-      const { resolveWindowsCommand } = await import('./platform')
-      const result = resolveWindowsCommand('definitely-not-a-real-command-12345')
+      const { resolveCommand } = await import('./platform')
+      const result = resolveCommand('definitely-not-a-real-command-12345')
       expect(result).toBeNull()
     })
 
-    it('returns null for unknown command on non-Windows without well-known paths', async () => {
-      const { resolveWindowsCommand, isWindows } = await import('./platform')
-      if (isWindows) return // skip on Windows
-      // On non-Windows, only whichSync is tried — no well-known paths fallback
-      const result = resolveWindowsCommand('nonexistent-tool')
+    it('returns null for unknown command without well-known paths', async () => {
+      const { resolveCommand } = await import('./platform')
+      const result = resolveCommand('nonexistent-tool')
       expect(result).toBeNull()
+    })
+
+    it('resolveWindowsCommand is an alias for resolveCommand', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-deprecated
+      const { resolveCommand, resolveWindowsCommand } = await import('./platform')
+      expect(resolveWindowsCommand).toBe(resolveCommand)
+    })
+  })
+
+  describe('getCommonBinPaths', () => {
+    it('returns an array of paths', async () => {
+      const { getCommonBinPaths } = await import('./platform')
+      const paths = getCommonBinPaths()
+      expect(Array.isArray(paths)).toBe(true)
+      expect(paths.length).toBeGreaterThan(0)
+    })
+
+    it('includes ~/.local/bin on all platforms', async () => {
+      const { getCommonBinPaths } = await import('./platform')
+      const { homedir } = await import('os')
+      const { join } = await import('path')
+      const paths = getCommonBinPaths()
+      expect(paths).toContain(join(homedir(), '.local', 'bin'))
+    })
+  })
+
+  describe('enhancedPath', () => {
+    it('appends common paths not already present', async () => {
+      const { enhancedPath, getCommonBinPaths } = await import('./platform')
+      const result = enhancedPath('/usr/bin')
+      const commonPaths = getCommonBinPaths()
+      // All common paths should appear in the result
+      for (const p of commonPaths) {
+        expect(result).toContain(p)
+      }
+    })
+
+    it('does not duplicate paths already in PATH', async () => {
+      const { enhancedPath, getCommonBinPaths, isWindows } = await import('./platform')
+      const sep = isWindows ? ';' : ':'
+      const commonPaths = getCommonBinPaths()
+      // Include one common path already
+      const existing = `/usr/bin${sep}${commonPaths[0]}`
+      const result = enhancedPath(existing)
+      const parts = result.split(sep)
+      const counts = parts.filter((p: string) => p === commonPaths[0])
+      expect(counts).toHaveLength(1)
+    })
+
+    it('handles empty/undefined PATH', async () => {
+      const { enhancedPath } = await import('./platform')
+      const result = enhancedPath(undefined)
+      expect(result.length).toBeGreaterThan(0)
+      const resultEmpty = enhancedPath('')
+      expect(resultEmpty.length).toBeGreaterThan(0)
     })
   })
 })

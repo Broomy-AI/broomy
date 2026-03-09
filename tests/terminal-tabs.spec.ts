@@ -1,6 +1,7 @@
 import { test, expect, _electron as electron, ElectronApplication, Page } from '@playwright/test'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { dockerArgs } from './electron-launch-args'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -10,7 +11,7 @@ let page: Page
 
 test.beforeAll(async () => {
   electronApp = await electron.launch({
-    args: [path.join(__dirname, '..', 'out', 'main', 'index.js')],
+    args: [...dockerArgs, path.join(__dirname, '..', 'out', 'main', 'index.js')],
     env: {
       ...process.env,
       NODE_ENV: 'production',
@@ -21,8 +22,8 @@ test.beforeAll(async () => {
   page = await electronApp.firstWindow()
   await page.waitForLoadState('domcontentloaded')
   await page.waitForSelector('#root > div', { timeout: 10000 })
-  // Wait for terminal to initialize
-  await page.waitForTimeout(1500)
+  // Wait for sessions to load
+  await page.waitForSelector('.cursor-pointer', { timeout: 10000 })
 })
 
 test.afterAll(async () => {
@@ -75,28 +76,26 @@ test.describe('Terminal Tabs', () => {
   test('should add a user terminal tab and show shell prompt', async () => {
     const addBtn = page.locator('button[title="New terminal tab"]:visible')
     await addBtn.click()
-    await page.waitForTimeout(2000) // Wait for PTY init
+
+    // Wait for user terminal shell prompt to appear in the buffer
+    await expect.poll(() => getTerminalContent(page, 'user'), { timeout: 10000 })
+      .toContain('test-shell$')
 
     // The new tab should be active (Agent tab should not be active)
     expect(await isTabActive('Agent')).toBe(false)
-
-    // The user terminal should show the shell prompt
-    const terminalText = await getTerminalContent(page, 'user')
-    expect(terminalText).toContain('test-shell$')
   })
 
   test('should switch back to Agent tab', async () => {
     // Click on Agent tab
     const agentTab = page.locator('div.cursor-pointer:has-text("Agent"):visible').first()
     await agentTab.click()
-    await page.waitForTimeout(500)
 
     // Agent tab should be active
-    expect(await isTabActive('Agent')).toBe(true)
+    await expect.poll(() => isTabActive('Agent')).toBe(true)
 
     // Terminal should show fake claude output
-    const terminalText = await getTerminalContent(page, 'agent')
-    expect(terminalText).toContain('FAKE_CLAUDE_READY')
+    await expect.poll(() => getTerminalContent(page, 'agent'), { timeout: 5000 })
+      .toContain('FAKE_CLAUDE_READY')
   })
 
   test('should close a user terminal tab', async () => {
@@ -104,14 +103,12 @@ test.describe('Terminal Tabs', () => {
     // The user tab is the one that is NOT "Agent"
     const userTab = page.locator('div.cursor-pointer:visible').filter({ hasNotText: 'Agent' }).filter({ has: page.locator('span.truncate') }).first()
     await userTab.hover()
-    await page.waitForTimeout(200)
 
     // Click the close button
     const closeBtn = userTab.locator('button').first()
     await closeBtn.click()
-    await page.waitForTimeout(300)
 
     // Should fall back to Agent tab (which becomes active)
-    expect(await isTabActive('Agent')).toBe(true)
+    await expect.poll(() => isTabActive('Agent')).toBe(true)
   })
 })

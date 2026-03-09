@@ -134,7 +134,7 @@ test.describe.serial('Feature: Agent Container Isolation', () => {
       caption: 'Repo settings editor with isolation and auto-approve checkboxes',
       description:
         'Clicking edit on a repository opens the repo settings editor. Below the default agent ' +
-        'selector and push-to-main checkbox, two isolation settings appear: ' +
+        'selector and approve-and-merge checkbox, two isolation settings appear: ' +
         '"Run agent in isolated container" and "Auto-approve agent commands".',
     })
   })

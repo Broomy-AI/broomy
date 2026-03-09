@@ -9,6 +9,26 @@ import { AuthSetupSection } from '../AuthSetupSection'
 import { IsolationSettings } from '../IsolationSettings'
 import type { DevcontainerStatus } from '../../../preload/index'
 
+function NoWriteAccessBanner({ onContinue }: { onContinue?: () => void }) {
+  return (
+    <div className="rounded border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm text-text-primary">
+      <div className="font-medium text-yellow-400">No write access</div>
+      <p className="text-xs text-text-secondary mt-1">
+        You don't have push access to this repository. You won't be able to create branches or push changes.
+        Consider forking the repo on GitHub and cloning your fork instead.
+      </p>
+      {onContinue && (
+        <button
+          onClick={onContinue}
+          className="mt-2 px-3 py-1.5 text-xs rounded border border-yellow-500/30 bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30 transition-colors"
+        >
+          Continue anyway (read-only)
+        </button>
+      )}
+    </div>
+  )
+}
+
 export function CloneView({
   onBack,
   onComplete,
@@ -29,6 +49,8 @@ export function CloneView({
   const [devcontainerStatus, setDevcontainerStatus] = useState<DevcontainerStatus | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [noWriteAccess, setNoWriteAccess] = useState(false)
+  const [pendingComplete, setPendingComplete] = useState<{ dir: string; agentId: string | null; extra: { repoId?: string; name?: string } } | null>(null)
 
   useEffect(() => {
     if (isolated) {
@@ -47,6 +69,8 @@ export function CloneView({
     if (!url || !location || !repoName) return
     setLoading(true)
     setError(null)
+    setNoWriteAccess(false)
+    setPendingComplete(null)
 
     try {
       const rootDir = `${location}/${repoName}`
@@ -62,12 +86,18 @@ export function CloneView({
       const defaultBranch = await window.git.defaultBranch(mainDir)
       const remoteUrl = await window.git.remoteUrl(mainDir) || url
 
-      // Check write access to enable push-to-main by default
-      let allowPushToMain = false
+      // Check write access to enable approve-and-merge by default
+      let allowApproveAndMerge = false
+      let hasWriteAccess = false
       try {
-        allowPushToMain = await window.gh.hasWriteAccess(mainDir)
+        hasWriteAccess = await window.gh.hasWriteAccess(mainDir)
+        allowApproveAndMerge = hasWriteAccess
       } catch {
         // gh CLI not available or other error - default to false
+      }
+
+      if (!hasWriteAccess) {
+        setNoWriteAccess(true)
       }
 
       // Save managed repo with default agent
@@ -77,7 +107,7 @@ export function CloneView({
         rootDir,
         defaultBranch,
         defaultAgentId: selectedAgentId || undefined,
-        allowPushToMain,
+        allowApproveAndMerge,
         isolated: isolated || undefined,
         skipApproval: skipApproval || undefined,
       })
@@ -90,6 +120,12 @@ export function CloneView({
       // Optionally save and run init script
       if (initScript.trim() && repoId) {
         await window.repos.saveInitScript(repoId, initScript)
+      }
+
+      // If no write access, pause to show warning before completing
+      if (!hasWriteAccess) {
+        setPendingComplete({ dir: mainDir, agentId: selectedAgentId, extra: { repoId, name: repoName } })
+        return
       }
 
       onComplete(mainDir, selectedAgentId, { repoId, name: repoName })
@@ -198,6 +234,12 @@ export function CloneView({
 
         {error && (
           <DialogErrorBanner error={error} onDismiss={() => setError(null)} />
+        )}
+
+        {noWriteAccess && (
+          <NoWriteAccessBanner
+            onContinue={pendingComplete ? () => onComplete(pendingComplete.dir, pendingComplete.agentId, pendingComplete.extra) : undefined}
+          />
         )}
 
         <AuthSetupSection error={error} ghAvailable={ghAvailable} onRetry={handleClone} retryLabel="Retry Clone" />

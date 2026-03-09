@@ -7,12 +7,9 @@ import {
   getDefaultCommandsConfig,
   commandsConfigPath,
   ensureOutputGitignore,
-} from '../../utils/commandsConfig'
-import { SKILL_ACTIONS, skillCommandPath } from '../../utils/skillActions'
-import {
   checkLegacyBroomyGitignore,
   removeLegacyBroomyGitignore,
-} from '../review/useReviewActions'
+} from '../../utils/commandsConfig'
 
 interface CommandsSetupDialogProps {
   directory: string
@@ -44,18 +41,6 @@ export function CommandsSetupDialog({ directory, onClose, onCreated }: CommandsS
       // Write .broomy/.gitignore for output/
       await ensureOutputGitignore(directory)
 
-      // Write Claude Code skill files
-      const commandsDir = `${directory}/.claude/commands`
-      await window.fs.mkdir(`${directory}/.claude`)
-      await window.fs.mkdir(commandsDir)
-      for (const action of SKILL_ACTIONS) {
-        const path = skillCommandPath(directory, action.name)
-        const exists = await window.fs.exists(path)
-        if (!exists) {
-          await window.fs.writeFile(path, action.defaultContent)
-        }
-      }
-
       // Remove legacy .broomy from .gitignore if requested
       if (hasLegacyGitignore && removeLegacy) {
         await removeLegacyBroomyGitignore(directory)
@@ -76,8 +61,8 @@ export function CommandsSetupDialog({ directory, onClose, onCreated }: CommandsS
       >
         <h3 className="text-lg font-medium text-text-primary mb-2">Set up Broomy Actions</h3>
         <p className="text-sm text-text-secondary mb-3">
-          <code className="font-mono bg-bg-tertiary px-1 rounded">commands.json</code> defines the action
-          buttons shown in source control. Each action can be a shell command or an agent prompt,
+          <code className="font-mono bg-bg-tertiary px-1 rounded">commands.json</code> defines the actions
+          shown in the Broomy UI. Each action can be a shell command or an agent prompt,
           shown based on your git state.
         </p>
         <p className="text-sm text-text-secondary mb-3">
@@ -85,8 +70,6 @@ export function CommandsSetupDialog({ directory, onClose, onCreated }: CommandsS
         </p>
         <ul className="text-sm text-text-secondary mb-4 space-y-1 list-disc list-inside">
           <li><code className="font-mono bg-bg-tertiary px-1 rounded">.broomy/commands.json</code> &mdash; action definitions</li>
-          <li><code className="font-mono bg-bg-tertiary px-1 rounded">.broomy/prompts/</code> &mdash; editable prompt templates</li>
-          <li><code className="font-mono bg-bg-tertiary px-1 rounded">.claude/commands/</code> &mdash; Claude Code skill files</li>
           <li><code className="font-mono bg-bg-tertiary px-1 rounded">.broomy/.gitignore</code> &mdash; ignores generated output</li>
         </ul>
 

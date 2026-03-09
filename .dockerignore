@@ -1,0 +1,12 @@
+node_modules/
+out/
+dist/
+docker-output/
+test-results/
+playwright-report/
+coverage/
+release-compare/
+.git/
+.cache/
+.turbo/
+*.log

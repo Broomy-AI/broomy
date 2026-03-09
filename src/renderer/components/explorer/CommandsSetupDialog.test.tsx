@@ -3,10 +3,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
 import '../../../test/react-setup'
 
-vi.mock('../review/useReviewActions', () => ({
-  checkLegacyBroomyGitignore: vi.fn().mockResolvedValue(false),
-  removeLegacyBroomyGitignore: vi.fn().mockResolvedValue(undefined),
-}))
+vi.mock('../../utils/commandsConfig', async () => {
+  const actual = await vi.importActual('../../utils/commandsConfig')
+  return {
+    ...actual,
+    checkLegacyBroomyGitignore: vi.fn().mockResolvedValue(false),
+    removeLegacyBroomyGitignore: vi.fn().mockResolvedValue(undefined),
+  }
+})
 
 import { CommandsSetupDialog } from './CommandsSetupDialog'
 
@@ -22,7 +26,7 @@ describe('CommandsSetupDialog', () => {
   it('renders dialog title and description', () => {
     render(<CommandsSetupDialog directory="/repo" onClose={vi.fn()} onCreated={vi.fn()} />)
     expect(screen.getByText('Set up Broomy Actions')).toBeTruthy()
-    expect(screen.getByText(/defines the action buttons/)).toBeTruthy()
+    expect(screen.getByText(/defines the actions/)).toBeTruthy()
   })
 
   it('renders Cancel and Create buttons', () => {
@@ -58,7 +62,7 @@ describe('CommandsSetupDialog', () => {
   })
 
   it('shows legacy gitignore warning when detected', async () => {
-    const mod = await import('../review/useReviewActions')
+    const mod = await import('../../utils/commandsConfig')
     vi.mocked(mod.checkLegacyBroomyGitignore).mockResolvedValue(true)
 
     const { unmount } = render(<CommandsSetupDialog directory="/repo" onClose={vi.fn()} onCreated={vi.fn()} />)

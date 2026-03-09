@@ -14,6 +14,29 @@ function parseJsonLines(stdout: string): unknown[] {
   }).filter(c => c !== null)
 }
 
+async function fetchMyReviewStatus(repoDir: string, prNumber: number): Promise<'pending' | 'reviewed' | null> {
+  try {
+    const dir = expandHomePath(repoDir)
+    const [slugResult, userResult] = await Promise.all([
+      execFileAsync('gh', ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'], { cwd: dir, encoding: 'utf-8', timeout: 10000 }),
+      execFileAsync('gh', ['api', 'user', '--jq', '.login'], { encoding: 'utf-8', timeout: 10000 }),
+    ])
+    const slug = slugResult.stdout.trim()
+    const login = userResult.stdout.trim()
+    if (!slug || !login) return null
+
+    const { stdout } = await execFileAsync('gh', [
+      'api', `repos/${slug}/pulls/${prNumber}/requested_reviewers`, '--jq',
+      '[.users[].login, .teams[].slug] | join("\\n")',
+    ], { cwd: dir, encoding: 'utf-8', timeout: 10000 })
+
+    const reviewers = stdout.trim().split('\n').filter(Boolean)
+    return reviewers.includes(login) ? 'pending' : 'reviewed'
+  } catch {
+    return null
+  }
+}
+
 export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   ipcMain.handle('gh:prComments', async (_event, repoDir: string, prNumber: number) => {
     if (ctx.isE2ETest) {
@@ -195,6 +218,11 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     } catch (error) {
       return { success: false, error: String(error) }
     }
+  })
+
+  ipcMain.handle('gh:myReviewStatus', async (_event, repoDir: string, prNumber: number) => {
+    if (ctx.isE2ETest) return 'pending'
+    return fetchMyReviewStatus(repoDir, prNumber)
   })
 
   ipcMain.handle('gh:submitDraftReview', async (_event, repoDir: string, prNumber: number, _comments: { path: string; line: number; body: string }[]) => {

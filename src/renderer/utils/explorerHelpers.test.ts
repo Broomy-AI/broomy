@@ -5,7 +5,7 @@ import {
   statusBadgeLetter,
   statusBadgeColor,
   truncateError,
-  shouldShowPushToMain,
+  shouldShowApproveAndMerge,
   splitStagedFiles,
   isPrOpen,
   prStateBadgeClass,
@@ -134,25 +134,25 @@ describe('truncateError', () => {
   })
 })
 
-describe('shouldShowPushToMain', () => {
-  it('returns true when both hasWriteAccess and allowPushToMain are true', () => {
-    expect(shouldShowPushToMain(true, true)).toBe(true)
+describe('shouldShowApproveAndMerge', () => {
+  it('returns true when both hasWriteAccess and allowApproveAndMerge are true', () => {
+    expect(shouldShowApproveAndMerge(true, true)).toBe(true)
   })
 
   it('returns false when hasWriteAccess is false', () => {
-    expect(shouldShowPushToMain(false, true)).toBe(false)
+    expect(shouldShowApproveAndMerge(false, true)).toBe(false)
   })
 
-  it('returns false when allowPushToMain is false', () => {
-    expect(shouldShowPushToMain(true, false)).toBe(false)
+  it('returns false when allowApproveAndMerge is false', () => {
+    expect(shouldShowApproveAndMerge(true, false)).toBe(false)
   })
 
-  it('returns false when allowPushToMain is undefined', () => {
-    expect(shouldShowPushToMain(true, undefined)).toBe(false)
+  it('returns false when allowApproveAndMerge is undefined', () => {
+    expect(shouldShowApproveAndMerge(true, undefined)).toBe(false)
   })
 
   it('returns false when both are false', () => {
-    expect(shouldShowPushToMain(false, false)).toBe(false)
+    expect(shouldShowApproveAndMerge(false, false)).toBe(false)
   })
 })
 

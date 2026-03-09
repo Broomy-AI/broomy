@@ -39,10 +39,11 @@ describe('createPtyDataHandler', () => {
     isActiveRef = { current: true }
   })
 
-  function createHandler(overrides: { isAgent?: boolean } = {}) {
+  function createHandler(overrides: { isAgent?: boolean; command?: string } = {}) {
     return createPtyDataHandler({
       terminal,
       isAgent: overrides.isAgent ?? false,
+      command: overrides.command,
       state,
       effectStartTime: Date.now(),
       isActiveRef,
@@ -119,6 +120,21 @@ describe('createPtyDataHandler', () => {
     expect(writtenData.length).toBeLessThanOrEqual(MAX_BUFFER_SIZE)
     // Should have dropped earliest chunks
     expect(writtenData.length).toBeGreaterThan(0)
+  })
+
+  it('skips buffering for codex terminals (writes through when inactive)', () => {
+    isActiveRef.current = false
+    const handler = createHandler({ isAgent: true, command: 'codex' })
+    handler.handleData('hello')
+    handler.handleData(' world')
+    expect(terminal.write).toHaveBeenCalledTimes(2)
+  })
+
+  it('still buffers non-codex agent terminals when inactive', () => {
+    isActiveRef.current = false
+    const handler = createHandler({ isAgent: true, command: 'claude' })
+    handler.handleData('hello')
+    expect(terminal.write).not.toHaveBeenCalled()
   })
 
   it('still runs activity detection when inactive (agent terminal)', async () => {

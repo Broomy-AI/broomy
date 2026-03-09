@@ -6,7 +6,7 @@ import type { Session } from '../store/sessions'
 import type { ProfileData } from '../store/profiles'
 import { terminalBufferRegistry } from '../utils/terminalBufferRegistry'
 import { loadMonacoProjectContext } from '../utils/monacoProjectContext'
-import { focusAgentTerminal } from '../utils/focusHelpers'
+import { focusActiveTerminal } from '../utils/focusHelpers'
 
 export function useSessionLifecycle({
   sessions,
@@ -23,6 +23,7 @@ export function useSessionLifecycle({
   checkGitAvailability,
   switchProfile,
   markSessionRead,
+  updateReviewStatus,
 }: {
   sessions: Session[]
   activeSession: Session | undefined
@@ -38,6 +39,7 @@ export function useSessionLifecycle({
   checkGitAvailability: () => Promise<void>
   switchProfile: (profileId: string) => Promise<void>
   markSessionRead: (sessionId: string) => void
+  updateReviewStatus: (sessionId: string, status: 'pending' | 'reviewed') => void
 }) {
   const [directoryExists, setDirectoryExists] = useState<Record<string, boolean>>({})
 
@@ -94,17 +96,31 @@ export function useSessionLifecycle({
     }
   }, [activeSession?.directory])
 
-  // Mark session as read when it becomes active, and focus agent terminal
+  // Mark session as read when it becomes active, and focus the active terminal tab
   useEffect(() => {
     if (activeSessionId) {
       markSessionRead(activeSessionId)
-      // Focus the agent terminal after a short delay to let it render
+      // Focus the active terminal after a short delay to let it render
       const timeout = setTimeout(() => {
-        focusAgentTerminal()
+        focusActiveTerminal()
       }, 100)
       return () => clearTimeout(timeout)
     }
   }, [activeSessionId, markSessionRead])
+
+  // Check review status when switching to a review session
+  useEffect(() => {
+    if (activeSession?.sessionType !== 'review' || !activeSession.prNumber) return
+
+    let cancelled = false
+    void window.gh.myReviewStatus(activeSession.directory, activeSession.prNumber).then((status) => {
+      if (cancelled || !status) return
+      updateReviewStatus(activeSession.id, status)
+    }).catch(() => {
+      // Ignore errors
+    })
+    return () => { cancelled = true }
+  }, [activeSessionId])
 
   // Branch changes are detected via .git/HEAD file watchers (useGitBranchWatcher)
   // refreshAllBranches is called explicitly after push operations

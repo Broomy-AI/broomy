@@ -7,7 +7,7 @@
  * Sessions can be archived to collapse them into a toggleable section. Keyboard navigation
  * with arrow keys, Enter to select, and Delete to remove is supported.
  */
-import { useState } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import type { Session } from '../../store/sessions'
 import type { ManagedRepo } from '../../../preload/index'
 import PanelErrorBoundary from '../PanelErrorBoundary'
@@ -17,7 +17,6 @@ import UpdateBanner from './UpdateBanner'
 
 interface SessionListProps {
   sessions: Session[]
-  activeSessionId: string | null
   repos: ManagedRepo[]
   onSelectSession: (id: string) => void
   onNewSession: () => void
@@ -29,7 +28,6 @@ interface SessionListProps {
 
 export default function SessionList({
   sessions,
-  activeSessionId,
   repos,
   onSelectSession,
   onNewSession,
@@ -42,18 +40,31 @@ export default function SessionList({
   const [showArchived, setShowArchived] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
-  const matchesSearch = (session: Session) => {
-    if (!searchQuery) return true
-    const q = searchQuery.toLowerCase()
-    return (
-      session.branch.toLowerCase().includes(q) ||
-      session.name.toLowerCase().includes(q) ||
-      (session.lastMessage?.toLowerCase().includes(q) ?? false)
-    )
-  }
+  const activeSessions = useMemo(() => {
+    const matchesSearch = (session: Session) => {
+      if (!searchQuery) return true
+      const q = searchQuery.toLowerCase()
+      return (
+        session.branch.toLowerCase().includes(q) ||
+        session.name.toLowerCase().includes(q) ||
+        (session.lastMessage?.toLowerCase().includes(q) ?? false)
+      )
+    }
+    return sessions.filter((s) => !s.isArchived && matchesSearch(s))
+  }, [sessions, searchQuery])
 
-  const activeSessions = sessions.filter((s) => !s.isArchived && matchesSearch(s))
-  const archivedSessions = sessions.filter((s) => s.isArchived && matchesSearch(s))
+  const archivedSessions = useMemo(() => {
+    const matchesSearch = (session: Session) => {
+      if (!searchQuery) return true
+      const q = searchQuery.toLowerCase()
+      return (
+        session.branch.toLowerCase().includes(q) ||
+        session.name.toLowerCase().includes(q) ||
+        (session.lastMessage?.toLowerCase().includes(q) ?? false)
+      )
+    }
+    return sessions.filter((s) => s.isArchived && matchesSearch(s))
+  }, [sessions, searchQuery])
 
   const handleRefresh = async () => {
     if (!onRefreshPrStatus || isRefreshing) return
@@ -65,31 +76,34 @@ export default function SessionList({
     }
   }
 
-  const [pendingDeleteSession, setPendingDeleteSession] = useState<Session | null>(null)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const pendingDeleteSession = useMemo(() =>
+    pendingDeleteId ? sessions.find(s => s.id === pendingDeleteId) ?? null : null,
+    [sessions, pendingDeleteId]
+  )
   const [deleteWorktree, setDeleteWorktree] = useState(true)
 
-  const handleDelete = (e: React.MouseEvent | React.KeyboardEvent, session: Session) => {
+  // Stable callbacks that accept session ID — prevents defeating SessionCard's memo
+  const handleDelete = useCallback((e: React.MouseEvent | React.KeyboardEvent, sessionId: string) => {
     e.stopPropagation()
     setDeleteWorktree(true)
-    setPendingDeleteSession(session)
-  }
+    setPendingDeleteId(sessionId)
+  }, [])
 
-  const handleArchive = (e: React.MouseEvent, session: Session) => {
+  const handleArchive = useCallback((e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation()
-    onArchiveSession(session.id)
-  }
+    onArchiveSession(sessionId)
+  }, [onArchiveSession])
 
-  const handleUnarchive = (e: React.MouseEvent, session: Session) => {
+  const handleUnarchive = useCallback((e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation()
-    onUnarchiveSession(session.id)
-  }
+    onUnarchiveSession(sessionId)
+  }, [onUnarchiveSession])
 
-  const handleSelectSession = (session: Session) => {
-    if (session.isArchived) {
-      onUnarchiveSession(session.id)
-    }
-    onSelectSession(session.id)
-  }
+  const handleSelectArchived = useCallback((sessionId: string) => {
+    onUnarchiveSession(sessionId)
+    onSelectSession(sessionId)
+  }, [onUnarchiveSession, onSelectSession])
 
   return (
     <div className="flex flex-col h-full">
@@ -152,10 +166,9 @@ export default function SessionList({
           <PanelErrorBoundary key={session.id} name={`Session ${session.branch}`}>
             <SessionCard
               session={session}
-              isActive={session.id === activeSessionId}
-              onSelect={() => handleSelectSession(session)}
-              onDelete={(e) => handleDelete(e, session)}
-              onArchive={(e) => handleArchive(e, session)}
+              onSelect={onSelectSession}
+              onDelete={handleDelete}
+              onArchive={handleArchive}
             />
           </PanelErrorBoundary>
         ))}
@@ -199,10 +212,9 @@ export default function SessionList({
                   <PanelErrorBoundary key={session.id} name={`Session ${session.branch}`}>
                     <SessionCard
                       session={session}
-                      isActive={session.id === activeSessionId}
-                      onSelect={() => handleSelectSession(session)}
-                      onDelete={(e) => handleDelete(e, session)}
-                      onArchive={(e) => handleUnarchive(e, session)}
+                      onSelect={handleSelectArchived}
+                      onDelete={handleDelete}
+                      onArchive={handleUnarchive}
                     />
                   </PanelErrorBoundary>
                 ))}
@@ -222,9 +234,9 @@ export default function SessionList({
             const repo = repos.find(r => r.id === pendingDeleteSession.repoId)
             const isManagedWorktree = !!pendingDeleteSession.repoId && !!repo && pendingDeleteSession.branch !== repo.defaultBranch
             onDeleteSession(pendingDeleteSession.id, isManagedWorktree && deleteWorktree)
-            setPendingDeleteSession(null)
+            setPendingDeleteId(null)
           }}
-          onCancel={() => setPendingDeleteSession(null)}
+          onCancel={() => setPendingDeleteId(null)}
         />
       )}
     </div>

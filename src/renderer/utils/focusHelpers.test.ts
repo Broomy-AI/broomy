@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import '../../test/react-setup'
-import { sendAgentPrompt, focusAgentTerminal, focusSearchInput } from './focusHelpers'
+import { sendAgentPrompt, focusAgentTerminal, focusActiveTerminal, focusSearchInput } from './focusHelpers'
 import { useSessionStore } from '../store/sessions'
 
 beforeEach(() => {
@@ -54,6 +54,35 @@ describe('focusAgentTerminal', () => {
 
     focusAgentTerminal()
     expect(mockSetActiveTerminalTab).not.toHaveBeenCalled()
+  })
+})
+
+describe('focusActiveTerminal', () => {
+  it('schedules focus via double-rAF without switching tabs', () => {
+    const mockSetActiveTerminalTab = vi.fn()
+    useSessionStore.setState({
+      activeSessionId: 'session-1',
+      setActiveTerminalTab: mockSetActiveTerminalTab,
+    })
+
+    const rAFs: FrameRequestCallback[] = []
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      rAFs.push(cb)
+      return rAFs.length
+    })
+
+    focusActiveTerminal()
+
+    // Should NOT switch tabs
+    expect(mockSetActiveTerminalTab).not.toHaveBeenCalled()
+    expect(rAFs).toHaveLength(1)
+
+    // Trigger first rAF → second rAF
+    rAFs[0](0)
+    expect(rAFs).toHaveLength(2)
+
+    // Trigger second rAF — no terminal panel in JSDOM, but no error
+    rAFs[1](0)
   })
 })
 

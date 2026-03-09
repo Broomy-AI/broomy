@@ -35,7 +35,7 @@ function createMockCtx(overrides: Partial<HandlerContext> = {}): HandlerContext 
   return {
     isDev: false,
     isE2ETest: false,
-    e2eScenario: E2EScenario.Default,
+    e2eScenario: E2EScenario.Default, e2eRealRepos: false,
     isWindows: false,
     ptyProcesses: new Map(),
     ptyOwnerWindows: new Map(),

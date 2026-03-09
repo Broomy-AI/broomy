@@ -9,6 +9,7 @@ vi.mock('../hooks/useTerminalSetup', () => ({
   useTerminalSetup: vi.fn().mockReturnValue({
     terminalRef: { current: null },
     ptyIdRef: { current: 'pty-123' },
+    isActiveRef: { current: false },
     showScrollButton: false,
     handleScrollToBottom: vi.fn(),
     exitInfo: null,
@@ -57,6 +58,7 @@ describe('Terminal', () => {
     vi.mocked(useTerminalSetup).mockReturnValue({
       terminalRef: { current: null },
       ptyIdRef: { current: 'pty-123' },
+      isActiveRef: { current: false },
       showScrollButton: true,
       handleScrollToBottom: vi.fn(),
       exitInfo: null,
@@ -71,6 +73,7 @@ describe('Terminal', () => {
     vi.mocked(useTerminalSetup).mockReturnValue({
       terminalRef: { current: null },
       ptyIdRef: { current: 'pty-123' },
+      isActiveRef: { current: false },
       showScrollButton: true,
       handleScrollToBottom,
       exitInfo: null,
@@ -117,7 +120,6 @@ describe('Terminal', () => {
         cwd="/tmp/test"
         command="echo hello"
         isAgentTerminal={true}
-        isActive={true}
       />
     )
     expect(useTerminalSetup).toHaveBeenCalled()
@@ -126,7 +128,6 @@ describe('Terminal', () => {
     expect(config.cwd).toBe('/tmp/test')
     expect(config.command).toBe('echo hello')
     expect(config.isAgentTerminal).toBe(true)
-    expect(config.isActive).toBe(true)
   })
 
   it('does not show not-installed banner when agent is installed', () => {
@@ -188,6 +189,7 @@ describe('Terminal', () => {
       vi.mocked(useTerminalSetup).mockReturnValue({
         terminalRef: { current: { hasSelection: mockHasSelection, getSelection: mockGetSelection, selectAll: vi.fn() } as never },
         ptyIdRef: { current: 'pty-123' },
+        isActiveRef: { current: false },
         showScrollButton: false,
         handleScrollToBottom: vi.fn(),
         exitInfo: null,
@@ -221,11 +223,12 @@ describe('Terminal', () => {
       vi.mocked(useTerminalSetup).mockReturnValue({
         terminalRef: { current: null },
         ptyIdRef: { current: 'pty-123' },
+        isActiveRef: { current: false },
         showScrollButton: false,
         handleScrollToBottom: vi.fn(),
         exitInfo: null,
       })
-      render(<Terminal sessionId="session-1" cwd="/tmp/test" isAgentTerminal isRestored agentResumeCommand="claude --continue" />)
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" isAgentTerminal isRestored />)
       expect(screen.getByText(/Resume your previous conversation/)).toBeTruthy()
     })
 
@@ -234,11 +237,12 @@ describe('Terminal', () => {
       vi.mocked(useTerminalSetup).mockReturnValue({
         terminalRef: { current: null },
         ptyIdRef: { current: 'pty-123' },
+        isActiveRef: { current: false },
         showScrollButton: false,
         handleScrollToBottom: vi.fn(),
         exitInfo: null,
       })
-      render(<Terminal sessionId="session-1" cwd="/tmp/test" isAgentTerminal isRestored agentResumeCommand="claude --continue" />)
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" isAgentTerminal isRestored />)
       fireEvent.click(screen.getByLabelText('Dismiss'))
       expect(screen.queryByText(/Resume your previous conversation/)).toBeNull()
     })
@@ -250,6 +254,7 @@ describe('Terminal', () => {
       vi.mocked(useTerminalSetup).mockReturnValue({
         terminalRef: { current: null },
         ptyIdRef: { current: 'pty-123' },
+        isActiveRef: { current: false },
         showScrollButton: false,
         handleScrollToBottom: vi.fn(),
         exitInfo: { code: 137, message: 'Agent killed by Docker out-of-memory killer (SIGKILL)', detail: 'Some detail' },
@@ -263,6 +268,7 @@ describe('Terminal', () => {
       vi.mocked(useTerminalSetup).mockReturnValue({
         terminalRef: { current: null },
         ptyIdRef: { current: 'pty-123' },
+        isActiveRef: { current: false },
         showScrollButton: false,
         handleScrollToBottom: vi.fn(),
         exitInfo: null,
@@ -276,9 +282,10 @@ describe('Terminal', () => {
       vi.mocked(useTerminalSetup).mockReturnValue({
         terminalRef: { current: null },
         ptyIdRef: { current: 'pty-123' },
+        isActiveRef: { current: false },
         showScrollButton: false,
         handleScrollToBottom: vi.fn(),
-        exitInfo: { code: 137, message: 'Process killed (SIGKILL)' },
+        exitInfo: { code: 137, message: 'Process killed (SIGKILL)', detail: 'Some detail' },
       })
       render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
       expect(screen.getByText(/SIGKILL/)).toBeTruthy()
@@ -286,19 +293,21 @@ describe('Terminal', () => {
       expect(screen.queryByText(/SIGKILL/)).toBeNull()
     })
 
-    it('does not open error detail modal when banner without detail is clicked', async () => {
+    it('does not open error detail modal when exitInfo has no detail', async () => {
       const { useTerminalSetup } = await import('../hooks/useTerminalSetup')
       const { useErrorStore } = await import('../store/errors')
       useErrorStore.setState({ detailError: null })
       vi.mocked(useTerminalSetup).mockReturnValue({
         terminalRef: { current: null },
         ptyIdRef: { current: 'pty-123' },
+        isActiveRef: { current: false },
         showScrollButton: false,
         handleScrollToBottom: vi.fn(),
         exitInfo: { code: 137, message: 'Process killed (SIGKILL)' },
       })
       render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
-      fireEvent.click(screen.getByText(/SIGKILL/))
+      // Without detail, ExitErrorBanner is not shown — AgentExitBanner shows instead (no detail button)
+      expect(screen.queryByLabelText('Dismiss')).toBeNull()
       const state = useErrorStore.getState()
       expect(state.detailError).toBeNull()
     })
@@ -309,6 +318,7 @@ describe('Terminal', () => {
       vi.mocked(useTerminalSetup).mockReturnValue({
         terminalRef: { current: null },
         ptyIdRef: { current: 'pty-123' },
+        isActiveRef: { current: false },
         showScrollButton: false,
         handleScrollToBottom: vi.fn(),
         exitInfo: { code: 137, message: 'Agent killed by OOM', detail: 'Docker Desktop runs all containers...' },

@@ -36,8 +36,8 @@ test.afterAll(async () => {
       title: 'Resume Prompt',
       description:
         'When Broomy restarts, sessions are restored but agent terminals start fresh. ' +
-        'For agents that support resuming (Claude Code, Codex, Copilot), a dismissible banner ' +
-        'appears suggesting the user resume their previous conversation.',
+        'A dismissible banner appears above any agent terminal suggesting the user resume ' +
+        'their previous conversation by running /resume.',
       steps,
     },
     FEATURE_DIR,
@@ -47,8 +47,8 @@ test.afterAll(async () => {
 
 test.describe.serial('Feature: Resume Prompt', () => {
   test('Step 1: Resume banner visible on restored session', async () => {
-    // The first session (broomy) uses Claude Code which has resumeCommand: '/resume'
-    // Sessions loaded from config have isRestored: true, so the banner should appear
+    // The first session (broomy) uses Claude Code as agent
+    // Sessions loaded from config have isRestored: true, so the resume banner should appear
     const banner = page.locator('text=Resume your previous conversation?')
     await expect(banner).toBeVisible({ timeout: 10000 })
 
@@ -61,8 +61,8 @@ test.describe.serial('Feature: Resume Prompt', () => {
       caption: 'Resume banner appears on a restored session',
       description:
         'When Broomy restarts and loads sessions from config, a blue banner appears above the ' +
-        'agent terminal for agents that support resume commands. It shows "Resume your previous ' +
-        'conversation?" with a clickable link to run the resume command.',
+        'agent terminal. It shows "Resume your previous conversation?" with a clickable link ' +
+        'to run /resume.',
     })
   })
 
@@ -74,10 +74,10 @@ test.describe.serial('Feature: Resume Prompt', () => {
     await screenshotElement(page, resumeLink, path.join(SCREENSHOTS, '02-resume-command.png'))
     steps.push({
       screenshotPath: 'screenshots/02-resume-command.png',
-      caption: 'The banner shows the agent-specific resume command',
+      caption: 'The banner shows the /resume command',
       description:
-        'The resume banner includes a clickable link that shows the exact command ' +
-        '(e.g., "/resume") that will be sent to the agent terminal.',
+        'The resume banner includes a clickable link that shows the /resume command ' +
+        'that will be sent to the agent terminal.',
     })
   })
 
@@ -104,8 +104,8 @@ test.describe.serial('Feature: Resume Prompt', () => {
     })
   })
 
-  test('Step 4: No banner on session without resume command', async () => {
-    // Switch to docs-site session (agentId: null, no resume command)
+  test('Step 4: No banner on session without agent', async () => {
+    // Switch to docs-site session (agentId: null, no agent terminal)
     const docsSession = page.locator('.cursor-pointer:has-text("docs-site")')
     await expect(docsSession).toBeVisible()
     await docsSession.click()
@@ -120,10 +120,10 @@ test.describe.serial('Feature: Resume Prompt', () => {
     })
     steps.push({
       screenshotPath: 'screenshots/04-no-banner.png',
-      caption: 'No banner on sessions without a resume command',
+      caption: 'No banner on sessions without an agent',
       description:
-        'Sessions that have no agent or whose agent has no resume command configured ' +
-        'do not show the resume banner.',
+        'Sessions that have no agent do not show the resume banner, since there is ' +
+        'no agent terminal to resume.',
     })
   })
 })

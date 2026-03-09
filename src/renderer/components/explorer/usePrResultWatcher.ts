@@ -20,6 +20,7 @@ export function usePrResultWatcher({ directory, onUpdatePrState, setPrStatus }: 
     const watcherId = `pr-result-${directory}`
     let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
+    // Start watching — may fail if .broomy/output doesn't exist yet, which is fine
     void window.fs.watch(watcherId, outputDir)
     const removeListener = window.fs.onChange(watcherId, (event: { eventType: string; filename: string | null }) => {
       if (event.filename && event.filename !== 'pr-result.json') return

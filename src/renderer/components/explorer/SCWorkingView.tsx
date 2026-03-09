@@ -4,7 +4,7 @@
  * Built-in actions (manual commit, commit merge) are always available.
  * All other actions come from commands.json via ActionButtons.
  */
-import { useState } from 'react'
+import { useState, useCallback, memo } from 'react'
 import type { GitFileStatus, GitStatusResult } from '../../../preload/index'
 import type { BranchStatus } from '../../store/sessions'
 import type { NavigationTarget } from '../../utils/fileNavigation'
@@ -144,6 +144,39 @@ function BuiltInCommitArea({ isMerging, hasConflicts, isCommitting, onCommit, on
   )
 }
 
+const FileListItem = memo(function FileListItem({ file, directory, type, onFileSelect, onAction }: {
+  file: GitFileStatus
+  directory: string
+  type: 'staged' | 'unstaged'
+  onFileSelect?: (target: NavigationTarget) => void
+  onAction: (filePath: string) => void
+}) {
+  const handleClick = useCallback(() => {
+    onFileSelect?.({ filePath: `${directory}/${file.path}`, openInDiffMode: true })
+  }, [file.path, directory, onFileSelect])
+
+  const handleAction = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    onAction(file.path)
+  }, [file.path, onAction])
+
+  return (
+    <div
+      className="flex items-center gap-2 px-3 py-1 hover:bg-bg-tertiary cursor-pointer group"
+      title={`${file.path} — ${statusLabel(file.status)}${type === 'staged' ? ' (staged)' : ''}`}
+      onClick={handleClick}
+    >
+      <span className={`truncate flex-1 text-xs ${getStatusColor(file.status)}`}>{file.path}</span>
+      <StatusBadge status={file.status} />
+      <button
+        onClick={handleAction}
+        className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-text-primary text-xs px-1"
+        title={type === 'staged' ? 'Unstage' : 'Stage'}
+      >{type === 'staged' ? '-' : '+'}</button>
+    </div>
+  )
+})
+
 function FileList({ directory, stagedFiles, unstagedFiles, onStage, onStageAll, onUnstage, onFileSelect }: {
   directory: string
   stagedFiles: GitFileStatus[]
@@ -162,20 +195,14 @@ function FileList({ directory, stagedFiles, unstagedFiles, onStage, onStageAll, 
         <div className="px-3 py-2 text-xs text-text-secondary">No staged changes</div>
       ) : (
         stagedFiles.map((file) => (
-          <div
+          <FileListItem
             key={`staged-${file.path}`}
-            className="flex items-center gap-2 px-3 py-1 hover:bg-bg-tertiary cursor-pointer group"
-            title={`${file.path} — ${statusLabel(file.status)} (staged)`}
-            onClick={() => onFileSelect?.({ filePath: `${directory}/${file.path}`, openInDiffMode: true })}
-          >
-            <span className={`truncate flex-1 text-xs ${getStatusColor(file.status)}`}>{file.path}</span>
-            <StatusBadge status={file.status} />
-            <button
-              onClick={(e) => { e.stopPropagation(); onUnstage(file.path) }}
-              className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-text-primary text-xs px-1"
-              title="Unstage"
-            >-</button>
-          </div>
+            file={file}
+            directory={directory}
+            type="staged"
+            onFileSelect={onFileSelect}
+            onAction={onUnstage}
+          />
         ))
       )}
 
@@ -194,20 +221,14 @@ function FileList({ directory, stagedFiles, unstagedFiles, onStage, onStageAll, 
         <div className="px-3 py-2 text-xs text-text-secondary">No changes</div>
       ) : (
         unstagedFiles.map((file) => (
-          <div
+          <FileListItem
             key={`unstaged-${file.path}`}
-            className="flex items-center gap-2 px-3 py-1 hover:bg-bg-tertiary cursor-pointer group"
-            title={`${file.path} — ${statusLabel(file.status)}`}
-            onClick={() => onFileSelect?.({ filePath: `${directory}/${file.path}`, openInDiffMode: true })}
-          >
-            <span className={`truncate flex-1 text-xs ${getStatusColor(file.status)}`}>{file.path}</span>
-            <StatusBadge status={file.status} />
-            <button
-              onClick={(e) => { e.stopPropagation(); onStage(file.path) }}
-              className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-text-primary text-xs px-1"
-              title="Stage"
-            >+</button>
-          </div>
+            file={file}
+            directory={directory}
+            type="unstaged"
+            onFileSelect={onFileSelect}
+            onAction={onStage}
+          />
         ))
       )}
     </div>

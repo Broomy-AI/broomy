@@ -64,6 +64,7 @@ export interface Session {
   issueUrl?: string
   // Review session fields
   sessionType?: 'default' | 'review'
+  reviewStatus?: 'pending' | 'reviewed'
   prNumber?: number
   prTitle?: string
   prUrl?: string
@@ -92,9 +93,6 @@ export interface Session {
   recentFiles: string[]
   // User terminal tabs (persisted)
   terminalTabs: TerminalTabsState
-  // Direct push to main tracking (persisted)
-  pushedToMainAt?: number  // Timestamp when branch was pushed to main
-  pushedToMainCommit?: string  // The HEAD commit when pushed (to detect new changes)
   // Track whether this session has ever had commits ahead of remote (persisted)
   hasHadCommits?: boolean
   // Branch status (runtime, derived)
@@ -130,7 +128,7 @@ interface SessionStore {
 
   // Actions
   loadSessions: (profileId?: string) => Promise<void>
-  addSession: (directory: string, agentId: string | null, extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; issueUrl?: string; name?: string; sessionType?: 'default' | 'review'; prNumber?: number; prTitle?: string; prUrl?: string; prBaseBranch?: string }) => Promise<import('./sessionCoreActions').DuplicateSessionResult | undefined>
+  addSession: (directory: string, agentId: string | null, extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; issueUrl?: string; name?: string; sessionType?: 'default' | 'review'; prNumber?: number; prTitle?: string; prUrl?: string; prBaseBranch?: string; lastKnownPrState?: PrState }) => Promise<import('./sessionCoreActions').DuplicateSessionResult | undefined>
   removeSession: (id: string) => void
   setActiveSession: (id: string | null) => void
   updateSessionBranch: (id: string, branch: string) => void
@@ -166,13 +164,11 @@ interface SessionStore {
   closeCommandsEditor: (sessionId: string) => void
   // Agent PTY tracking (runtime only)
   setAgentPtyId: (sessionId: string, ptyId: string) => void
-  // Direct push to main tracking
-  recordPushToMain: (sessionId: string, commitHash: string) => void
-  clearPushToMain: (sessionId: string) => void
   // Branch status actions
   markHasHadCommits: (sessionId: string) => void
   updateBranchStatus: (sessionId: string, status: BranchStatus) => void
   updatePrState: (sessionId: string, prState: PrState, prNumber?: number, prUrl?: string) => void
+  updateReviewStatus: (sessionId: string, reviewStatus: 'pending' | 'reviewed') => void
   // Archive actions
   archiveSession: (sessionId: string) => void
   unarchiveSession: (sessionId: string) => void

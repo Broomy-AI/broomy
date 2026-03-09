@@ -35,6 +35,20 @@ describe('useSourceControlData', () => {
     expect(result.current.gitOpError).toBeNull()
     expect(result.current.branchChanges).toEqual([])
     expect(result.current.branchBaseName).toBe('main')
+    expect(result.current.checksStatus).toBe('none')
+  })
+
+  it('sets checksStatus to none when no PR exists', async () => {
+    vi.mocked(window.gh.prStatus).mockResolvedValue(null)
+    vi.mocked(window.gh.hasWriteAccess).mockResolvedValue(false)
+
+    const { result } = renderHook(() => useSourceControlData(defaultProps))
+
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 10))
+    })
+
+    expect(result.current.checksStatus).toBe('none')
   })
 
   it('computes staged and unstaged files', () => {
@@ -276,43 +290,23 @@ describe('useSourceControlData', () => {
     expect(onUpdatePrState).toHaveBeenCalledWith(null)
   })
 
-  it('clears pushed status when there are changes since push', async () => {
-    const onClearPushToMain = vi.fn()
-    vi.mocked(window.git.headCommit).mockResolvedValue('differentcommit')
-
-    renderHook(() =>
-      useSourceControlData({
-        ...defaultProps,
-        pushedToMainAt: Date.now(),
-        pushedToMainCommit: 'oldcommit',
-        onClearPushToMain,
-      })
-    )
-
-    await act(async () => {
-      await new Promise(r => setTimeout(r, 10))
+  it('fetches checks status for open PRs', async () => {
+    vi.mocked(window.gh.prStatus).mockResolvedValue({
+      number: 42, title: 'Test', state: 'OPEN', url: 'url',
+      headRefName: 'feature', baseRefName: 'main',
     })
-
-    expect(onClearPushToMain).toHaveBeenCalled()
-  })
-
-  it('computes hasChangesSincePush as false when commits match', async () => {
-    vi.mocked(window.gh.prStatus).mockResolvedValue(null)
-    vi.mocked(window.gh.hasWriteAccess).mockResolvedValue(false)
-    vi.mocked(window.git.headCommit).mockResolvedValue('samecommit')
+    vi.mocked(window.gh.hasWriteAccess).mockResolvedValue(true)
+    vi.mocked(window.gh.prChecksStatus).mockResolvedValue('passed')
 
     const { result } = renderHook(() =>
-      useSourceControlData({
-        ...defaultProps,
-        pushedToMainCommit: 'samecommit',
-      })
+      useSourceControlData(defaultProps)
     )
 
     await act(async () => {
       await new Promise(r => setTimeout(r, 10))
     })
 
-    expect(result.current.hasChangesSincePush).toBe(false)
+    expect(result.current.checksStatus).toBe('passed')
   })
 
   it('does not fetch branch data when scView is not branch', () => {

@@ -36,10 +36,10 @@ describe('useFileWatcher', () => {
   }
 
   describe('watcher setup', () => {
-    it('watches parent directory instead of file path', () => {
+    it('watches the file directly', () => {
       renderHook(() => useFileWatcher(defaultParams))
 
-      expect(window.fs.watch).toHaveBeenCalledWith('fileviewer-/test/file.ts', '/test')
+      expect(window.fs.watch).toHaveBeenCalledWith('fileviewer-/test/file.ts', '/test/file.ts')
       expect(window.fs.onChange).toHaveBeenCalledWith('fileviewer-/test/file.ts', expect.any(Function))
     })
 
@@ -72,23 +72,6 @@ describe('useFileWatcher', () => {
 
       // Watcher should NOT be re-created when isDirty changes
       expect(window.fs.watch).not.toHaveBeenCalled()
-    })
-
-    it('ignores changes for other files in the same directory', async () => {
-      const setContent = vi.fn()
-      renderHook(() => useFileWatcher({ ...defaultParams, setContent }))
-
-      vi.mocked(window.fs.readFile).mockResolvedValue('new content')
-
-      // Trigger change for a different file in the same directory
-      onChangeCallback!('other-file.ts')
-
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(300)
-      })
-
-      expect(window.fs.readFile).not.toHaveBeenCalled()
-      expect(setContent).not.toHaveBeenCalled()
     })
 
     it('resets fileChangedOnDisk when filePath changes', () => {
@@ -284,7 +267,7 @@ describe('useFileWatcher', () => {
     it('sets up watcher when enabled is true (default)', () => {
       renderHook(() => useFileWatcher(defaultParams))
 
-      expect(window.fs.watch).toHaveBeenCalledWith('fileviewer-/test/file.ts', '/test')
+      expect(window.fs.watch).toHaveBeenCalledWith('fileviewer-/test/file.ts', '/test/file.ts')
     })
 
     it('tears down watcher when enabled transitions to false', () => {
@@ -309,7 +292,7 @@ describe('useFileWatcher', () => {
 
       rerender({ enabled: true })
 
-      expect(window.fs.watch).toHaveBeenCalledWith('fileviewer-/test/file.ts', '/test')
+      expect(window.fs.watch).toHaveBeenCalledWith('fileviewer-/test/file.ts', '/test/file.ts')
     })
 
     it('checks for external changes when transitioning from disabled to enabled', async () => {

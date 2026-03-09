@@ -22,12 +22,31 @@ function WebviewViewerComponent({ filePath }: FileViewerComponentProps) {
       setCurrentUrl(webview.getURL())
     }
 
+    // When a page finishes loading with a hash fragment, retry scrolling to the
+    // target element. GitHub lazily loads PR diffs so the anchor element may not
+    // exist when the page first renders.
+    const handleDomReady = () => {
+      const hash = new URL(webview.getURL()).hash
+      if (!hash) return
+      const id = CSS.escape(hash.slice(1))
+      void webview.executeJavaScript(`(function(){
+        var id=${JSON.stringify(id)};
+        function t(){var e=document.getElementById(id);if(e){e.scrollIntoView({block:'start'});return true}return false}
+        if(t())return;
+        var o=new MutationObserver(function(){if(t())o.disconnect()});
+        o.observe(document.body,{childList:true,subtree:true});
+        setTimeout(function(){o.disconnect()},15000);
+      })()`)
+    }
+
     webview.addEventListener('did-navigate', handleNavigation)
     webview.addEventListener('did-navigate-in-page', handleNavigation)
+    webview.addEventListener('dom-ready', handleDomReady)
 
     return () => {
       webview.removeEventListener('did-navigate', handleNavigation)
       webview.removeEventListener('did-navigate-in-page', handleNavigation)
+      webview.removeEventListener('dom-ready', handleDomReady)
     }
   }, [])
 

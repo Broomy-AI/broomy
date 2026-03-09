@@ -94,7 +94,7 @@ test.afterAll(async () => {
         'The review system uses markdown-driven reviews where the agent writes ' +
         '.broomy/review.md with auto-collapsing headings and GFM task list checkboxes. ' +
         'GitHub links open in an embedded webview. Teams can customize the review process ' +
-        'by editing .claude/commands/broomy-action-review-md.md.',
+        'by editing the review action in .broomy/commands.json.',
       steps,
     },
     FEATURE_DIR,
@@ -260,7 +260,7 @@ test.describe.serial('Feature: Modular Review System', () => {
       description:
         'Once a review has been generated, the button label changes to "Regenerate Review". ' +
         'Clicking it sends the agent new instructions to re-run the review process, ' +
-        'which can be customized via .claude/commands/broomy-action-review-md.md.',
+        'which can be customized via the review action in .broomy/commands.json.',
     })
   })
 })

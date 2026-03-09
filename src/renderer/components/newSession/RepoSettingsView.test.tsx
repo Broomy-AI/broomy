@@ -82,9 +82,10 @@ describe('RepoSettingsView', () => {
     })
   })
 
-  it('shows Saved! message after saving', async () => {
+  it('navigates back after saving', async () => {
     vi.mocked(window.repos.saveInitScript).mockResolvedValue({ success: true })
-    render(<RepoSettingsView repo={mockRepo} onBack={vi.fn()} />)
+    const onBack = vi.fn()
+    render(<RepoSettingsView repo={mockRepo} onBack={onBack} />)
 
     await waitFor(() => {
       expect(screen.getByText('Save')).toBeTruthy()
@@ -93,7 +94,7 @@ describe('RepoSettingsView', () => {
     fireEvent.click(screen.getByText('Save'))
 
     await waitFor(() => {
-      expect(screen.getByText('Saved!')).toBeTruthy()
+      expect(onBack).toHaveBeenCalled()
     })
   })
 

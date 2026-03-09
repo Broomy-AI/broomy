@@ -6,15 +6,51 @@
  */
 import { IpcMain } from 'electron'
 import { execFile } from 'child_process'
+import { readdirSync, statSync, existsSync } from 'fs'
+import { join } from 'path'
 import { promisify } from 'util'
 import simpleGit from 'simple-git'
 import { buildPrCreateUrl } from '../gitStatusParser'
-import { isWindows, getExecShell, resolveWindowsCommand } from '../platform'
+import { isWindows, getExecShell, resolveCommand, enhancedPath } from '../platform'
 import { HandlerContext, expandHomePath } from './types'
 import { getScenarioData } from './scenarios'
 import { getDefaultBranch } from './gitUtils'
 
 const execFileAsync = promisify(execFile)
+
+/** Check if the authenticated user has write (or higher) access to the GitHub repo at `cwd`. */
+async function checkWriteAccess(cwd: string): Promise<boolean> {
+  const result = await runCommand('gh', ['repo', 'view', '--json', 'viewerPermission', '--jq', '.viewerPermission'], {
+    cwd,
+    timeout: 10000,
+  })
+  const permission = result.trim()
+  return ['ADMIN', 'MAINTAIN', 'WRITE'].includes(permission)
+}
+
+/**
+ * Resolve write access for a directory that may not itself be a git repo
+ * (e.g. a worktree parent directory). Falls back to scanning subdirectories.
+ */
+async function resolveWriteAccess(repoDir: string): Promise<boolean> {
+  try {
+    return await checkWriteAccess(repoDir)
+  } catch {
+    // If the directory isn't a git repo (e.g. worktree parent), try subdirectories
+    try {
+      const entries = readdirSync(repoDir)
+      for (const entry of entries) {
+        const subdir = join(repoDir, entry)
+        if (statSync(subdir).isDirectory() && existsSync(join(subdir, '.git'))) {
+          return await checkWriteAccess(subdir)
+        }
+      }
+    } catch {
+      // Fall through
+    }
+    return false
+  }
+}
 
 function parseIssuesJson(result: string) {
   const issues = JSON.parse(result)
@@ -45,15 +81,15 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
         await execFileAsync('where', [baseCommand], { encoding: 'utf-8' })
       } else {
         const shell = getExecShell() || '/bin/sh'
-        await execFileAsync(shell, ['-c', 'command -v "$1"', '--', baseCommand], { encoding: 'utf-8', timeout: 5000 })
+        // Use enhanced PATH so common dirs like ~/.local/bin are included
+        // even if resolveShellEnv() failed at startup
+        const env = { ...process.env, PATH: enhancedPath(process.env.PATH) }
+        await execFileAsync(shell, ['-c', 'command -v "$1"', '--', baseCommand], { encoding: 'utf-8', timeout: 5000, env })
       }
       return true
     } catch {
-      // On Windows, fall back to well-known install locations
-      if (isWindows) {
-        return resolveWindowsCommand(baseCommand) !== null
-      }
-      return false
+      // Fall back to well-known install locations on all platforms
+      return resolveCommand(baseCommand) !== null
     }
   })
 
@@ -167,12 +203,10 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
         headRefName: pr.headRefName,
         baseRefName: pr.baseRefName,
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      // No PR for current branch is expected — only log unexpected errors
-      if (!message.includes('no pull requests found') && !message.includes('Could not resolve')) {
-        return { error: message }
-      }
+    } catch {
+      // No PR for current branch — return null regardless of error message.
+      // Previously we only matched specific error strings, which missed
+      // platform-specific variations (e.g. Windows gh CLI messages).
       return null
     }
   })
@@ -181,41 +215,38 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     if (ctx.isE2ETest) {
       return true
     }
-
-    try {
-      const result = await runCommand('gh', ['repo', 'view', '--json', 'viewerPermission', '--jq', '.viewerPermission'], {
-        cwd: expandHomePath(repoDir),
-        timeout: 10000,
-      })
-      const permission = result.trim()
-      return ['ADMIN', 'MAINTAIN', 'WRITE'].includes(permission)
-    } catch {
-      return false
-    }
+    return resolveWriteAccess(expandHomePath(repoDir))
   })
 
-  ipcMain.handle('gh:mergeBranchToMain', async (_event, repoDir: string) => {
+  ipcMain.handle('gh:prChecksStatus', async (_event, repoDir: string) => {
     if (ctx.isE2ETest) {
-      return { success: true }
+      return 'passed'
     }
 
     try {
-      const git = simpleGit(expandHomePath(repoDir)).env('GIT_TERMINAL_PROMPT', '0').env('GIT_SSH_COMMAND', 'ssh -o BatchMode=yes')
+      const result = await runCommand('gh', [
+        'pr', 'view', '--json', 'statusCheckRollup',
+        '--jq', '.statusCheckRollup[] | .conclusion // .state',
+      ], {
+        cwd: expandHomePath(repoDir),
+        timeout: 15000,
+      })
 
-      const status = await git.status()
-      const currentBranch = status.current
-      if (!currentBranch) {
-        return { success: false, error: 'Could not determine current branch' }
-      }
+      const lines = result.trim().split('\n').filter(Boolean)
 
-      const defaultBranch = await getDefaultBranch(git)
+      // No checks configured
+      if (lines.length === 0) return 'none'
 
-      await git.push()
-      await git.push('origin', `HEAD:${defaultBranch}`)
+      // Any check still running
+      if (lines.some(l => ['PENDING', 'QUEUED', 'IN_PROGRESS', ''].includes(l.trim().toUpperCase()))) return 'pending'
 
-      return { success: true }
-    } catch (error) {
-      return { success: false, error: String(error) }
+      // All checks must have succeeded
+      if (lines.every(l => l.trim().toUpperCase() === 'SUCCESS')) return 'passed'
+
+      return 'failed'
+    } catch {
+      // No PR or gh error — treat as no checks
+      return 'none'
     }
   })
 

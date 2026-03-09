@@ -20,10 +20,13 @@ export interface TerminalConfig {
   env: Record<string, string> | undefined
   isAgentTerminal: boolean
   isServicesTerminal?: boolean
-  isActive: boolean
   restartKey: number
   isolated?: boolean
   repoRootDir?: string
+  /** Store session ID — used to subscribe to activation state without re-rendering. */
+  storeSessionId?: string
+  /** Tab ID within the session — used with storeSessionId to detect activation. */
+  tabId?: string
 }
 
 export interface ExitInfo {
@@ -35,6 +38,7 @@ export interface ExitInfo {
 export interface TerminalSetupResult {
   terminalRef: React.MutableRefObject<XTerm | null>
   ptyIdRef: React.MutableRefObject<string | null>
+  isActiveRef: React.MutableRefObject<boolean>
   showScrollButton: boolean
   handleScrollToBottom: () => void
   exitInfo: ExitInfo | null
@@ -245,7 +249,7 @@ export function useTerminalSetup(
   config: TerminalConfig,
   containerRef: React.RefObject<HTMLDivElement | null>,
 ): TerminalSetupResult {
-  const { sessionId, isAgentTerminal, isActive, restartKey } = config
+  const { sessionId, isAgentTerminal, restartKey, storeSessionId, tabId } = config
   const s = useTerminalState(config)
   const defaultShell = useRepoStore((state) => state.defaultShell)
 
@@ -330,6 +334,7 @@ export function useTerminalSetup(
     const dataHandler = createPtyDataHandler({
       terminal,
       isAgent,
+      command: cmd,
       state: s,
       effectStartTime,
       isActiveRef: s.isActiveRef,
@@ -352,6 +357,11 @@ export function useTerminalSetup(
           terminal.write(`The process was killed (SIGKILL).\r\n`)
           s.setExitInfo({ code: 137, message: 'Process killed (SIGKILL)' })
         }
+      } else if (isAgent) {
+        s.setExitInfo({
+          code: exitCode,
+          message: exitCode === 0 ? 'Agent process has exited.' : `Agent process exited with code ${exitCode}.`,
+        })
       }
       if (isAgent && s.sessionIdRef.current) {
         s.lastStatusRef.current = 'idle'
@@ -361,18 +371,30 @@ export function useTerminalSetup(
 
     s.cleanupRef.current = () => { isStale = true; dataHandler.clearTimers(); removeDataListener(); removeExitListener() }
 
+    // Register terminal→PTY input handler BEFORE spawning the PTY so that
+    // xterm.js automatic responses (e.g. DSR cursor-position replies) are
+    // forwarded immediately. Without this, agents like Codex that query
+    // cursor position on startup may time out and crash.
+    terminal.onData((data) => {
+      // xterm.js fires onData for both real user keystrokes AND automatic
+      // responses to terminal queries (e.g. cursor position reports \x1b[row;colR
+      // in response to DSR \x1b[6n). Ink-based TUIs like Codex send these queries
+      // constantly during rendering. If we count auto-responses as user input,
+      // the activity detector stays permanently "paused" and never shows "working".
+      const isAutoResponse = /^\x1b\[\d+;\d+R$/.test(data)
+      if (!isAutoResponse) {
+        s.lastUserInputRef.current = Date.now()
+        if (s.sessionIdRef.current) s.markSessionReadRef.current(s.sessionIdRef.current)
+      }
+      void window.pty.write(id, data)
+    })
+
     window.pty.create({ id, cwd: effectCwd, command: cmd, sessionId, env: envVars, shell: defaultShell || undefined, isolated: s.isolatedRef.current, repoRootDir: s.repoRootDirRef.current })
       .then(() => {
         // Guard against stale effect: terminal may have been disposed during async setup
         if (isStale) return
 
         if (isAgentTerminal && sessionId) s.setAgentPtyId(sessionId, id)
-
-        terminal.onData((data) => {
-          s.lastUserInputRef.current = Date.now()
-          if (s.sessionIdRef.current) s.markSessionReadRef.current(s.sessionIdRef.current)
-          void window.pty.write(id, data)
-        })
       })
       .catch((err: unknown) => {
         if (isStale) return
@@ -386,9 +408,13 @@ export function useTerminalSetup(
     const resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0] as ResizeObserverEntry | undefined
       if (!entry || entry.contentRect.width === 0 || entry.contentRect.height === 0) return
-      try { fitAddon.fit() } catch { /* ignore */ }
+      // Debounce fit() and pty.resize() together so xterm and the child process
+      // learn about the new size atomically. Without this, TUI agents like Codex
+      // render frames for the old size into a terminal that already changed,
+      // leaving orphaned lines and blank gaps in the scrollback.
       if (ptyResizeTimeout) clearTimeout(ptyResizeTimeout)
       ptyResizeTimeout = setTimeout(() => {
+        try { fitAddon.fit() } catch { /* ignore */ }
         if (s.ptyIdRef.current && terminal.cols > 0 && terminal.rows > 0) {
           void window.pty.resize(s.ptyIdRef.current, terminal.cols, terminal.rows)
         }
@@ -417,19 +443,36 @@ export function useTerminalSetup(
     }
   }, [sessionId, restartKey]) // Recreate terminal when session identity changes or on restart
 
-  // Fit, focus, and flush buffered data when terminal becomes visible
+  // Subscribe to store for activation changes — imperative only, no re-render.
   useEffect(() => {
-    s.isActiveRef.current = isActive
-    s.lastInteractionRef.current = Date.now()
-    if (isActive) {
-      // Replay any data that arrived while the terminal was in the background
-      s.dataHandlerRef.current?.flush()
-      requestAnimationFrame(() => {
+    if (!storeSessionId || !tabId) return
+    // Derive initial state
+    const initState = useSessionStore.getState()
+    const initSession = initState.sessions.find((ss) => ss.id === storeSessionId)
+    const resolveTabId = (s_: { terminalTabs: { activeTabId: string | null } } | undefined) =>
+      s_?.terminalTabs.activeTabId ?? '__agent__'
+    s.isActiveRef.current = initState.activeSessionId === storeSessionId && resolveTabId(initSession) === tabId
+
+    return useSessionStore.subscribe((state, prevState) => {
+      const session = state.sessions.find((ss) => ss.id === storeSessionId)
+      const prevSession = prevState.sessions.find((ss) => ss.id === storeSessionId)
+      const isNowActive = state.activeSessionId === storeSessionId && resolveTabId(session) === tabId
+      const wasActive = prevState.activeSessionId === storeSessionId && resolveTabId(prevSession) === tabId
+      if (isNowActive === wasActive) return
+      s.isActiveRef.current = isNowActive
+      s.lastInteractionRef.current = Date.now()
+      if (isNowActive) {
+        // Fit first so the terminal has correct dimensions before flushing.
+        // Without this, buffered TUI frames render at stale dimensions and
+        // leave orphaned lines / blank gaps in the scrollback.
         try { s.fitAddonRef.current?.fit() } catch { /* ignore */ }
-        s.terminalRef.current?.focus()
-      })
-    }
-  }, [isActive])
+        s.dataHandlerRef.current?.flush()
+        requestAnimationFrame(() => {
+          s.terminalRef.current?.focus()
+        })
+      }
+    })
+  }, [storeSessionId, tabId])
 
   // Track window focus/blur to suppress activity detection briefly
   useEffect(() => {
@@ -442,5 +485,5 @@ export function useTerminalSetup(
     }
   }, [])
 
-  return { terminalRef: s.terminalRef, ptyIdRef: s.ptyIdRef, showScrollButton: s.showScrollButton, handleScrollToBottom: s.handleScrollToBottom, exitInfo: s.exitInfo }
+  return { terminalRef: s.terminalRef, ptyIdRef: s.ptyIdRef, isActiveRef: s.isActiveRef, showScrollButton: s.showScrollButton, handleScrollToBottom: s.handleScrollToBottom, exitInfo: s.exitInfo }
 }

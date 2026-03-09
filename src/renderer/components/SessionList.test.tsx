@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import '../../test/react-setup'
 import SessionList from './sessionList'
+import { useSessionStore } from '../store/sessions'
 import type { Session } from '../store/sessions'
 
 function makeSession(overrides: Partial<Session> = {}): Session {
@@ -44,7 +45,6 @@ function makeSession(overrides: Partial<Session> = {}): Session {
 function makeProps(overrides: Record<string, unknown> = {}) {
   return {
     sessions: [] as Session[],
-    activeSessionId: null as string | null,
     repos: [] as { id: string; name: string; remoteUrl: string; rootDir: string; defaultBranch: string }[],
     onSelectSession: vi.fn(),
     onNewSession: vi.fn(),
@@ -86,8 +86,9 @@ describe('SessionList', () => {
       makeSession({ id: 's1', branch: 'active-branch' }),
       makeSession({ id: 's2', branch: 'other-branch' }),
     ]
+    useSessionStore.setState({ activeSessionId: 's1' })
     const { container } = render(
-      <SessionList {...makeProps({ sessions, activeSessionId: 's1' })} />
+      <SessionList {...makeProps({ sessions })} />
     )
     const sessionCards = container.querySelectorAll('[tabindex="0"]')
     expect(sessionCards[0].className).toContain('bg-accent')
@@ -181,6 +182,13 @@ describe('SessionList', () => {
     const sessions = [makeSession({ id: 's1', branch: 'b1', sessionType: 'review' })]
     render(<SessionList {...makeProps({ sessions })} />)
     expect(screen.getByText('Review')).toBeTruthy()
+  })
+
+  it('shows Reviewed chip for reviewed review sessions', () => {
+    const sessions = [makeSession({ id: 's1', branch: 'b1', sessionType: 'review', reviewStatus: 'reviewed' })]
+    render(<SessionList {...makeProps({ sessions })} />)
+    expect(screen.getByText('Reviewed')).toBeTruthy()
+    expect(screen.queryByText('Review')).toBeNull()
   })
 
   describe('keyboard navigation', () => {

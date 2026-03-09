@@ -79,7 +79,7 @@ export default function LayoutContentArea({
         <div
           data-panel-id={PANEL_IDS.FILE_VIEWER}
           tabIndex={-1}
-          className={`relative bg-bg-secondary min-h-0 outline-none ${showFileViewer && fileViewer ? '' : 'hidden'} ${showAgent ? 'flex-shrink-0' : 'flex-1'}`}
+          className={`relative bg-bg-secondary min-h-0 outline-none ${showFileViewer && fileViewer ? '' : 'hidden'} ${showAgent ? 'flex-shrink-0' : 'flex-1'} ${draggingDivider ? 'pointer-events-none' : ''}`}
           style={showFileViewer && fileViewer && showAgent ? getFileViewerStyle(fileViewerPosition, layoutSizes.fileViewerSize) : undefined}
         >
           <FlashOverlay panelId={PANEL_IDS.FILE_VIEWER} flashedPanel={flashedPanel} />

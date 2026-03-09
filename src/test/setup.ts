@@ -39,6 +39,7 @@ const mockGit: Mocked<GitApi> = {
   status: vi.fn().mockResolvedValue({ files: [], ahead: 0, behind: 0, tracking: null, current: 'main', isMerging: false }),
   diff: vi.fn().mockResolvedValue(''),
   show: vi.fn().mockResolvedValue(''),
+  showBase64: vi.fn().mockResolvedValue(''),
   stage: vi.fn().mockResolvedValue({ success: true }),
   stageAll: vi.fn().mockResolvedValue({ success: true }),
   unstage: vi.fn().mockResolvedValue({ success: true }),
@@ -110,7 +111,7 @@ const mockGh: Mocked<GhApi> = {
   repoSlug: vi.fn().mockResolvedValue(null),
   prStatus: vi.fn().mockResolvedValue(null),
   hasWriteAccess: vi.fn().mockResolvedValue(false),
-  mergeBranchToMain: vi.fn().mockResolvedValue({ success: true }),
+  prChecksStatus: vi.fn().mockResolvedValue('none'),
   getPrCreateUrl: vi.fn().mockResolvedValue(null),
   prComments: vi.fn().mockResolvedValue([]),
   prDescription: vi.fn().mockResolvedValue(null),
@@ -119,6 +120,7 @@ const mockGh: Mocked<GhApi> = {
   addReaction: vi.fn().mockResolvedValue({ success: true }),
   prsToReview: vi.fn().mockResolvedValue([]),
   submitDraftReview: vi.fn().mockResolvedValue({ success: true }),
+  myReviewStatus: vi.fn().mockResolvedValue('pending'),
   currentUser: vi.fn().mockResolvedValue('test-user'),
 }
 

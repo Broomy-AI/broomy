@@ -15,12 +15,7 @@ export interface ExplorerProps {
   onFilterChange: (filter: ExplorerFilter) => void
   onGitStatusRefresh?: () => void
   recentFiles?: string[]
-  // Push to main tracking
   sessionId?: string
-  pushedToMainAt?: number
-  pushedToMainCommit?: string
-  onRecordPushToMain?: (commitHash: string) => void
-  onClearPushToMain?: () => void
   // Plan file
   planFilePath?: string | null
   // Branch status

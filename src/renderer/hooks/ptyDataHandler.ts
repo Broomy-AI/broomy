@@ -20,6 +20,7 @@ interface TerminalStateForPtyData {
 interface CreatePtyDataHandlerArgs {
   terminal: XTerm
   isAgent: boolean
+  command: string | undefined
   state: TerminalStateForPtyData
   effectStartTime: number
   isActiveRef: React.MutableRefObject<boolean>
@@ -36,7 +37,11 @@ interface PtyDataHandlerController {
 }
 
 export function createPtyDataHandler(args: CreatePtyDataHandlerArgs): PtyDataHandlerController {
-  const { terminal, isAgent, state, effectStartTime, isActiveRef } = args
+  const { terminal, isAgent, command, state, effectStartTime, isActiveRef } = args
+  // Codex (Ink-based TUI) uses cursor movement to redraw in-place. Buffering
+  // these frames and replaying them in a batch corrupts the scrollback with
+  // duplicate status bars and blank gaps. Disable buffering entirely for Codex.
+  const skipBuffering = isAgent && !!command && /\bcodex\b/i.test(command)
   const bufferedChunks: string[] = []
   let bufferedSize = 0
 
@@ -69,7 +74,7 @@ export function createPtyDataHandler(args: CreatePtyDataHandlerArgs): PtyDataHan
     // Activity detection is cheap — always run it even for background terminals
     processActivityDetection(data)
 
-    if (!isActiveRef.current) {
+    if (!isActiveRef.current && !skipBuffering) {
       // Buffer data for background terminals instead of writing to xterm
       bufferedChunks.push(data)
       bufferedSize += data.length

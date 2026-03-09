@@ -15,7 +15,8 @@ export interface ConditionStateInput {
   prState?: PrState
   prNumber?: number
   hasWriteAccess: boolean
-  allowPushToMain: boolean
+  allowApproveAndMerge: boolean
+  checksStatus: 'passed' | 'failed' | 'pending' | 'none'
   behindMainCount: number
   issueNumber?: number
   noDevcontainer?: boolean
@@ -29,7 +30,8 @@ export function computeConditionState(input: ConditionStateInput): ConditionStat
     branchStatus,
     prNumber,
     hasWriteAccess,
-    allowPushToMain,
+    allowApproveAndMerge,
+    checksStatus,
     behindMainCount,
     issueNumber,
     noDevcontainer,
@@ -60,7 +62,8 @@ export function computeConditionState(input: ConditionStateInput): ConditionStat
     'closed': branchStatus === 'closed',
     'no-pr': !prNumber,
     'has-write-access': hasWriteAccess,
-    'allow-push-to-main': allowPushToMain,
+    'allow-approve-and-merge': allowApproveAndMerge,
+    'checks-passed': checksStatus === 'passed' || checksStatus === 'none',
     'has-issue': !!issueNumber,
     'no-devcontainer': noDevcontainer ?? false,
     'review': isReview ?? false,

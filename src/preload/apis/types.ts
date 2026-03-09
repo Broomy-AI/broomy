@@ -41,7 +41,7 @@ export type ManagedRepo = {
   defaultBranch: string
   defaultAgentId?: string  // Default agent for sessions in this repo
   reviewInstructions?: string  // Custom instructions for AI review generation
-  allowPushToMain?: boolean  // Whether "Push to main" button is shown for this repo
+  allowApproveAndMerge?: boolean  // Whether "Approve and merge" button is shown for this repo
   isolated?: boolean         // Run sessions in this repo inside a dev container
   skipApproval?: boolean     // Auto-approve agent commands when isolated
 }
@@ -127,7 +127,6 @@ export type AgentData = {
   color?: string
   env?: Record<string, string>  // Environment variables for this agent
   skipApprovalFlag?: string    // Free-text flag to append for auto-approval (e.g. "--dangerously-skip-permissions")
-  resumeCommand?: string       // In-session command to resume previous conversation (e.g. "/resume")
 }
 
 export type DockerStatus = {
@@ -174,6 +173,7 @@ export type SessionData = {
   issueUrl?: string
   // Review session fields
   sessionType?: 'default' | 'review'
+  reviewStatus?: 'pending' | 'reviewed'
   prNumber?: number
   prTitle?: string
   prUrl?: string
@@ -188,7 +188,7 @@ export type SessionData = {
   layoutSizes?: LayoutSizesData
   explorerFilter?: 'all' | 'changed' | 'files' | 'source-control' | 'search' | 'recent' | 'review'
   terminalTabs?: unknown
-  // Push to main tracking
+  // Legacy push-to-main tracking (deprecated, kept for config compat)
   pushedToMainAt?: number
   pushedToMainCommit?: string
   // Branch status PR tracking
@@ -240,6 +240,12 @@ export type TsProjectContext = {
   files: { path: string; content: string }[]
 }
 
+export type ErrorLogEntry = {
+  timestamp: string
+  source: string
+  message: string
+}
+
 export type CrashReport = {
   timestamp: string
   message: string
@@ -248,4 +254,5 @@ export type CrashReport = {
   appVersion: string
   platform: string
   processType: 'main' | 'renderer'
+  recentErrors?: ErrorLogEntry[]
 }

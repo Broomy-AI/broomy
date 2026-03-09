@@ -4,9 +4,24 @@ import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/re
 import '../../test/react-setup'
 import { CommandsEditor } from './CommandsEditor'
 
-vi.mock('./review/useReviewActions', () => ({
-  checkLegacyBroomyGitignore: vi.fn().mockResolvedValue(false),
-  removeLegacyBroomyGitignore: vi.fn().mockResolvedValue(undefined),
+vi.mock('../utils/commandsConfig', async () => {
+  const actual = await vi.importActual('../utils/commandsConfig')
+  return {
+    ...actual,
+    checkLegacyBroomyGitignore: vi.fn().mockResolvedValue(false),
+    removeLegacyBroomyGitignore: vi.fn().mockResolvedValue(undefined),
+  }
+})
+
+vi.mock('../store/agents', () => ({
+  useAgentStore: vi.fn((selector: (s: unknown) => unknown) =>
+    selector({
+      agents: [
+        { id: 'agent-1', name: 'Claude', command: 'claude' },
+        { id: 'agent-2', name: 'Aider', command: 'aider --model gpt-4' },
+      ],
+    }),
+  ),
 }))
 
 afterEach(() => {
@@ -156,55 +171,199 @@ describe('CommandsEditor', () => {
     })
   })
 
-  describe('prompt toggle', () => {
-    it('defaults to inline prompt mode when action has prompt', async () => {
+  describe('validation error state', () => {
+    it('shows error banner when commands.json has invalid JSON', async () => {
+      vi.mocked(window.fs.exists).mockResolvedValue(true)
+      vi.mocked(window.fs.readFile).mockResolvedValue('not valid json {{{')
+      render(<CommandsEditor directory="/test/repo" onClose={vi.fn()} />)
+      await waitFor(() => {
+        // humanizeError transforms "Invalid JSON" to a user-friendly message
+        expect(screen.getByText(/corrupt|restored/i)).toBeTruthy()
+      })
+    })
+
+    it('shows error banner when commands.json fails validation', async () => {
+      vi.mocked(window.fs.exists).mockResolvedValue(true)
+      vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify({ version: 1 }))
+      render(<CommandsEditor directory="/test/repo" onClose={vi.fn()} />)
+      await waitFor(() => {
+        // humanizeError transforms the validation error message
+        expect(screen.getByText(/corrupt|restored|"actions"/i)).toBeTruthy()
+      })
+    })
+
+    it('shows reload button on error', async () => {
+      vi.mocked(window.fs.exists).mockResolvedValue(true)
+      vi.mocked(window.fs.readFile).mockResolvedValue('bad json')
+      render(<CommandsEditor directory="/test/repo" onClose={vi.fn()} />)
+      await waitFor(() => {
+        expect(screen.getByTestId('reload-commands')).toBeTruthy()
+      })
+    })
+  })
+
+  describe('surface field', () => {
+    it('shows surface checkboxes when action is expanded', async () => {
       mockExistingConfig()
       render(<CommandsEditor directory="/test/repo" onClose={vi.fn()} />)
       await waitFor(() => {
         expect(screen.getByTestId('action-header-action-1')).toBeTruthy()
       })
       fireEvent.click(screen.getByTestId('action-header-action-1'))
-      // Inline prompt toggle should be active (accent bg)
-      expect(screen.getByTestId('prompt-mode-inline-action-1')).toBeTruthy()
-      expect(screen.getByTestId('action-prompt-action-1')).toBeTruthy()
-      // promptFile input should not be visible
-      expect(screen.queryByTestId('action-promptFile-action-1')).toBeNull()
+      expect(screen.getByTestId('action-surface-source-control-action-1')).toBeTruthy()
+      expect(screen.getByTestId('action-surface-review-action-1')).toBeTruthy()
     })
 
-    it('defaults to file mode when only promptFile is set', async () => {
-      const fileConfig = {
+    it('defaults to source-control checked', async () => {
+      mockExistingConfig()
+      render(<CommandsEditor directory="/test/repo" onClose={vi.fn()} />)
+      await waitFor(() => {
+        expect(screen.getByTestId('action-header-action-1')).toBeTruthy()
+      })
+      fireEvent.click(screen.getByTestId('action-header-action-1'))
+      const sc = screen.getByTestId<HTMLInputElement>('action-surface-source-control-action-1')
+      const review = screen.getByTestId<HTMLInputElement>('action-surface-review-action-1')
+      expect(sc.checked).toBe(true)
+      expect(review.checked).toBe(false)
+    })
+
+    it('enables save when surface is changed', async () => {
+      mockExistingConfig()
+      render(<CommandsEditor directory="/test/repo" onClose={vi.fn()} />)
+      await waitFor(() => {
+        expect(screen.getByTestId('action-header-action-1')).toBeTruthy()
+      })
+      fireEvent.click(screen.getByTestId('action-header-action-1'))
+      fireEvent.click(screen.getByTestId('action-surface-review-action-1'))
+      expect(screen.getByTestId('save-commands')).not.toBeDisabled()
+    })
+  })
+
+  describe('prompt variants', () => {
+    it('shows generic variant toggle for agent actions', async () => {
+      mockExistingConfig()
+      render(<CommandsEditor directory="/test/repo" onClose={vi.fn()} />)
+      await waitFor(() => {
+        expect(screen.getByTestId('action-header-action-1')).toBeTruthy()
+      })
+      fireEvent.click(screen.getByTestId('action-header-action-1'))
+      expect(screen.getByTestId('variant-generic-action-1')).toBeTruthy()
+    })
+
+    it('shows prompt textarea when generic variant is expanded', async () => {
+      mockExistingConfig()
+      render(<CommandsEditor directory="/test/repo" onClose={vi.fn()} />)
+      await waitFor(() => {
+        expect(screen.getByTestId('action-header-action-1')).toBeTruthy()
+      })
+      fireEvent.click(screen.getByTestId('action-header-action-1'))
+      fireEvent.click(screen.getByTestId('variant-generic-action-1'))
+      expect(screen.getByTestId('action-prompt-action-1')).toBeTruthy()
+    })
+
+    it('shows add variant button', async () => {
+      mockExistingConfig()
+      render(<CommandsEditor directory="/test/repo" onClose={vi.fn()} />)
+      await waitFor(() => {
+        expect(screen.getByTestId('action-header-action-1')).toBeTruthy()
+      })
+      fireEvent.click(screen.getByTestId('action-header-action-1'))
+      expect(screen.getByTestId('add-variant-action-1')).toBeTruthy()
+    })
+
+    it('adds an agent variant via picker', async () => {
+      mockExistingConfig()
+      render(<CommandsEditor directory="/test/repo" onClose={vi.fn()} />)
+      await waitFor(() => {
+        expect(screen.getByTestId('action-header-action-1')).toBeTruthy()
+      })
+      fireEvent.click(screen.getByTestId('action-header-action-1'))
+      fireEvent.click(screen.getByTestId('add-variant-action-1'))
+      expect(screen.getByTestId('variant-picker-action-1')).toBeTruthy()
+      fireEvent.click(screen.getByTestId('pick-variant-claude-action-1'))
+      // Variant should now be visible and expanded
+      expect(screen.getByTestId('variant-claude-action-1')).toBeTruthy()
+      expect(screen.getByTestId('variant-prompt-claude-action-1')).toBeTruthy()
+      // Save should be enabled
+      expect(screen.getByTestId('save-commands')).not.toBeDisabled()
+    })
+
+    it('removes an agent variant', async () => {
+      // Use config with an existing agent override
+      const configWithOverride = {
         version: 1,
         actions: [
-          { id: 'action-f', label: 'File Action', type: 'agent', promptFile: '.broomy/prompts/test.md', showWhen: [], style: 'primary' },
+          {
+            id: 'action-1', label: 'Commit', type: 'agent',
+            prompt: 'commit things', showWhen: ['has-changes'], style: 'primary',
+            agents: { claude: { prompt: 'claude-specific' } },
+          },
         ],
       }
       vi.mocked(window.fs.exists).mockResolvedValue(true)
-      vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify(fileConfig))
+      vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify(configWithOverride))
+
       render(<CommandsEditor directory="/test/repo" onClose={vi.fn()} />)
       await waitFor(() => {
-        expect(screen.getByTestId('action-header-action-f')).toBeTruthy()
+        expect(screen.getByTestId('action-header-action-1')).toBeTruthy()
       })
-      fireEvent.click(screen.getByTestId('action-header-action-f'))
-      expect(screen.getByTestId('action-promptFile-action-f')).toBeTruthy()
-      expect(screen.queryByTestId('action-prompt-action-f')).toBeNull()
+      fireEvent.click(screen.getByTestId('action-header-action-1'))
+      expect(screen.getByTestId('variant-claude-action-1')).toBeTruthy()
+      fireEvent.click(screen.getByTestId('remove-variant-claude-action-1'))
+      expect(screen.queryByTestId('variant-claude-action-1')).toBeNull()
+      expect(screen.getByTestId('save-commands')).not.toBeDisabled()
     })
 
-    it('switches between inline and file mode', async () => {
+    it('edits an agent variant prompt', async () => {
+      const configWithOverride = {
+        version: 1,
+        actions: [
+          {
+            id: 'action-1', label: 'Commit', type: 'agent',
+            prompt: 'commit things', showWhen: ['has-changes'], style: 'primary',
+            agents: { claude: { prompt: 'old prompt' } },
+          },
+        ],
+      }
+      vi.mocked(window.fs.exists).mockResolvedValue(true)
+      vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify(configWithOverride))
+
+      render(<CommandsEditor directory="/test/repo" onClose={vi.fn()} />)
+      await waitFor(() => {
+        expect(screen.getByTestId('action-header-action-1')).toBeTruthy()
+      })
+      fireEvent.click(screen.getByTestId('action-header-action-1'))
+      fireEvent.click(screen.getByTestId('variant-claude-action-1'))
+      const textarea = screen.getByTestId('variant-prompt-claude-action-1')
+      fireEvent.change(textarea, { target: { value: 'new prompt' } })
+      expect(screen.getByTestId('save-commands')).not.toBeDisabled()
+    })
+  })
+
+  describe('switch tab', () => {
+    it('shows switch tab dropdown when action is expanded', async () => {
       mockExistingConfig()
       render(<CommandsEditor directory="/test/repo" onClose={vi.fn()} />)
       await waitFor(() => {
         expect(screen.getByTestId('action-header-action-1')).toBeTruthy()
       })
       fireEvent.click(screen.getByTestId('action-header-action-1'))
-      // Start in inline mode
-      expect(screen.getByTestId('action-prompt-action-1')).toBeTruthy()
-      // Switch to file mode
-      fireEvent.click(screen.getByTestId('prompt-mode-file-action-1'))
-      expect(screen.getByTestId('action-promptFile-action-1')).toBeTruthy()
-      expect(screen.queryByTestId('action-prompt-action-1')).toBeNull()
-      // Switch back
-      fireEvent.click(screen.getByTestId('prompt-mode-inline-action-1'))
-      expect(screen.getByTestId('action-prompt-action-1')).toBeTruthy()
+      const select = screen.getByTestId<HTMLSelectElement>('action-switch-tab-action-1')
+      expect(select).toBeTruthy()
+      expect(select.value).toBe('') // None by default
+    })
+
+    it('updates switchTab when changed', async () => {
+      mockExistingConfig()
+      render(<CommandsEditor directory="/test/repo" onClose={vi.fn()} />)
+      await waitFor(() => {
+        expect(screen.getByTestId('action-header-action-1')).toBeTruthy()
+      })
+      fireEvent.click(screen.getByTestId('action-header-action-1'))
+      const select = screen.getByTestId<HTMLSelectElement>('action-switch-tab-action-1')
+      fireEvent.change(select, { target: { value: 'review' } })
+      expect(select.value).toBe('review')
+      expect(screen.getByTestId('save-commands')).not.toBeDisabled()
     })
   })
 

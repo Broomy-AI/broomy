@@ -116,6 +116,50 @@ export function getAvailableShells(): ShellOption[] {
   return shells
 }
 
+/**
+ * Common bin directories on Unix (macOS/Linux) that GUI apps may not
+ * inherit. These act as a safety net when resolveShellEnv() fails or
+ * the user's PATH setup is non-standard.
+ */
+function getUnixCommonBinPaths(): string[] {
+  const home = homedir()
+  return [
+    join(home, '.local', 'bin'),       // Claude installer, pipx
+    '/usr/local/bin',                   // Homebrew (Intel Mac), general
+    '/opt/homebrew/bin',                // Homebrew (Apple Silicon)
+    join(home, '.cargo', 'bin'),        // Rust / cargo
+    '/usr/local/sbin',
+  ]
+}
+
+/**
+ * Return well-known bin directories for the current platform.
+ * Used to extend PATH for both detection and execution.
+ */
+export function getCommonBinPaths(): string[] {
+  if (isWindows) {
+    const home = homedir()
+    return [
+      join(home, '.local', 'bin'),
+      join(home, 'AppData', 'Roaming', 'npm'),
+    ]
+  }
+  return getUnixCommonBinPaths()
+}
+
+/**
+ * Extend a PATH string with common bin directories that aren't already present.
+ * Returns the enhanced PATH string.
+ */
+export function enhancedPath(currentPath?: string): string {
+  const sep = isWindows ? ';' : ':'
+  const current = currentPath || ''
+  const dirs = current.split(sep).filter(Boolean)
+  const dirSet = new Set(dirs)
+  const extra = getCommonBinPaths().filter((p) => !dirSet.has(p))
+  return [...dirs, ...extra].join(sep)
+}
+
 /** Well-known install locations for common CLI tools on Windows. */
 const WINDOWS_KNOWN_PATHS: Record<string, string[]> = {
   git: [
@@ -169,28 +213,35 @@ function getWindowsKnownPaths(cmd: string): string[] {
 }
 
 /**
- * Resolve a command to its full path on Windows.
+ * Resolve a command to its full path.
  *
- * Tries `whichSync()` first (which uses `where`), then falls back to
- * well-known install directories for git and gh. Returns null if not found.
- * On non-Windows platforms, delegates entirely to whichSync.
+ * Tries `whichSync()` first, then falls back to well-known install
+ * directories for the current platform. Returns null if not found.
  */
-export function resolveWindowsCommand(cmd: string): string | null {
+export function resolveCommand(cmd: string): string | null {
   // Try PATH first (works on all platforms)
   const fromPath = whichSync(cmd)
   if (fromPath) return fromPath
 
-  // On non-Windows, nothing more to try
-  if (!isWindows) return null
-
-  // Check well-known install locations (includes user-relative paths)
-  const knownPaths = getWindowsKnownPaths(cmd)
-  for (const p of knownPaths) {
-    if (existsSync(p)) return p
+  if (isWindows) {
+    // Check Windows-specific well-known install locations
+    const knownPaths = getWindowsKnownPaths(cmd)
+    for (const p of knownPaths) {
+      if (existsSync(p)) return p
+    }
+  } else {
+    // Check Unix common bin directories
+    for (const dir of getUnixCommonBinPaths()) {
+      const p = join(dir, cmd)
+      if (existsSync(p)) return p
+    }
   }
 
   return null
 }
+
+/** @deprecated Use resolveCommand instead */
+export const resolveWindowsCommand = resolveCommand
 
 export function getExecShell(): string | undefined {
   if (isWindows) return undefined // Node defaults to cmd.exe

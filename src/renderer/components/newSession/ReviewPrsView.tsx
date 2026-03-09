@@ -1,8 +1,9 @@
 /**
  * View for browsing open pull requests and selecting one to review in a new session.
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useAgentStore } from '../../store/agents'
+import { useSessionStore } from '../../store/sessions'
 import type { ManagedRepo, GitHubPrForReview } from '../../../preload/index'
 import { DialogErrorBanner } from '../ErrorBanner'
 
@@ -62,6 +63,37 @@ async function createReviewWorktree(repo: ManagedRepo, pr: GitHubPrForReview): P
   return { worktreePath }
 }
 
+function PrRow({ pr, hasSession, onSelect }: { pr: GitHubPrForReview; hasSession: boolean; onSelect: () => void }) {
+  return (
+    <button
+      onClick={onSelect}
+      className="w-full flex items-start gap-3 p-2 rounded border border-border bg-bg-primary hover:bg-bg-tertiary hover:border-purple-500/50 transition-colors text-left"
+    >
+      <span className="text-purple-400 font-mono text-xs mt-0.5 flex-shrink-0">#{pr.number}</span>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm text-text-primary flex items-center gap-2">
+          {pr.title}
+          {hasSession && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 flex-shrink-0">
+              reviewing
+            </span>
+          )}
+        </div>
+        <div className="text-xs text-text-secondary mt-0.5">by {pr.author}</div>
+        {pr.labels.length > 0 && (
+          <div className="flex gap-1 mt-1 flex-wrap">
+            {pr.labels.map((label) => (
+              <span key={label} className="text-xs px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400">
+                {label}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </button>
+  )
+}
+
 export function ReviewPrsView({
   repo,
   onBack,
@@ -69,9 +101,21 @@ export function ReviewPrsView({
 }: {
   repo: ManagedRepo
   onBack: () => void
-  onComplete: (directory: string, agentId: string | null, extra?: { repoId?: string; name?: string; sessionType?: 'default' | 'review'; prNumber?: number; prTitle?: string; prUrl?: string; prBaseBranch?: string }) => void
+  onComplete: (directory: string, agentId: string | null, extra?: { repoId?: string; name?: string; sessionType?: 'default' | 'review'; prNumber?: number; prTitle?: string; prUrl?: string; prBaseBranch?: string; lastKnownPrState?: 'OPEN' | 'MERGED' | 'CLOSED' | null }) => void
 }) {
   const { agents } = useAgentStore()
+  const sessions = useSessionStore((s) => s.sessions)
+
+  // PR numbers that already have an active (non-archived) review session for this repo
+  const reviewedPrNumbers = useMemo(() => {
+    const nums = new Set<number>()
+    for (const s of sessions) {
+      if (s.sessionType === 'review' && s.prNumber !== undefined && s.repoId === repo.id) {
+        nums.add(s.prNumber)
+      }
+    }
+    return nums
+  }, [sessions, repo.id])
 
   const [prs, setPrs] = useState<GitHubPrForReview[]>([])
   const [loading, setLoading] = useState(true)
@@ -118,6 +162,7 @@ export function ReviewPrsView({
         prTitle: selectedPr.title,
         prUrl: selectedPr.url,
         prBaseBranch: selectedPr.baseRefName,
+        lastKnownPrState: 'OPEN',
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -235,26 +280,7 @@ export function ReviewPrsView({
         {!loading && !error && prs.length > 0 && (
           <div className="space-y-1">
             {prs.map((pr) => (
-              <button
-                key={pr.number}
-                onClick={() => handleSelectPr(pr)}
-                className="w-full flex items-start gap-3 p-2 rounded border border-border bg-bg-primary hover:bg-bg-tertiary hover:border-purple-500/50 transition-colors text-left"
-              >
-                <span className="text-purple-400 font-mono text-xs mt-0.5 flex-shrink-0">#{pr.number}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm text-text-primary">{pr.title}</div>
-                  <div className="text-xs text-text-secondary mt-0.5">by {pr.author}</div>
-                  {pr.labels.length > 0 && (
-                    <div className="flex gap-1 mt-1 flex-wrap">
-                      {pr.labels.map((label) => (
-                        <span key={label} className="text-xs px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400">
-                          {label}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </button>
+              <PrRow key={pr.number} pr={pr} hasSession={reviewedPrNumbers.has(pr.number)} onSelect={() => handleSelectPr(pr)} />
             ))}
           </div>
         )}

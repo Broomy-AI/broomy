@@ -4,22 +4,44 @@
  * Shows an accordion list of action definitions with editable fields.
  * When no commands.json exists, shows a setup prompt with a "Create" button.
  */
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useMemo } from 'react'
 import {
   loadCommandsConfig,
   commandsConfigPath,
   getDefaultCommandsConfig,
   ensureOutputGitignore,
-  type ActionDefinition,
-} from '../utils/commandsConfig'
-import { SKILL_ACTIONS, skillCommandPath } from '../utils/skillActions'
-import {
+  getAgentTypes,
   checkLegacyBroomyGitignore,
   removeLegacyBroomyGitignore,
-} from './review/useReviewActions'
+  type ActionDefinition,
+} from '../utils/commandsConfig'
+import { DialogErrorBanner } from './ErrorBanner'
 import { ShowWhenPicker } from './ShowWhenPicker'
+import { PromptVariants } from './PromptVariants'
+import { useAgentStore } from '../store/agents'
 
 const STYLE_OPTIONS = ['primary', 'secondary', 'accent', 'danger'] as const
+const SURFACE_OPTIONS = [
+  { value: 'source-control', label: 'Source Control' },
+  { value: 'review', label: 'Review' },
+] as const
+
+const SWITCH_TAB_OPTIONS = [
+  { value: '', label: 'None' },
+  { value: 'source-control', label: 'Source Control' },
+  { value: 'files', label: 'Files' },
+  { value: 'search', label: 'Search' },
+  { value: 'recent', label: 'Recent Files' },
+  { value: 'review', label: 'Review' },
+] as const
+
+/** Normalize the surface field to a string array for the UI. */
+function normalizeSurface(surface: string | string[] | undefined): string[] {
+  if (!surface) return ['source-control']
+  if (Array.isArray(surface)) return surface
+  return [surface]
+}
 
 interface CommandsEditorProps {
   directory: string
@@ -45,15 +67,34 @@ export function CommandsEditor({ directory, onClose }: CommandsEditorProps) {
   const [saving, setSaving] = useState(false)
   const [creating, setCreating] = useState(false)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const agents = useAgentStore((s) => s.agents)
+
+  // Agent types from configured agents + any types already referenced in actions
+  const knownAgentTypes = useMemo(() => {
+    const fromStore = getAgentTypes(agents)
+    const fromActions = new Set<string>()
+    for (const action of actions ?? []) {
+      for (const key of Object.keys(action.agents ?? {})) {
+        fromActions.add(key)
+      }
+    }
+    return [...new Set([...fromStore, ...fromActions])].sort()
+  }, [agents, actions])
 
   const load = useCallback(async () => {
-    const config = await loadCommandsConfig(directory)
-    if (config) {
-      setActions(config.actions)
-      setExists(true)
-    } else {
+    setLoadError(null)
+    const result = await loadCommandsConfig(directory)
+    if (result === null) {
       setActions(null)
       setExists(false)
+    } else if (!result.ok) {
+      setActions(null)
+      setExists(true)
+      setLoadError(result.error)
+    } else {
+      setActions(result.config.actions)
+      setExists(true)
     }
     setIsDirty(false)
   }, [directory])
@@ -73,18 +114,6 @@ export function CommandsEditor({ directory, onClose }: CommandsEditorProps) {
       await window.fs.writeFile(commandsConfigPath(directory), JSON.stringify(config, null, 2))
 
       await ensureOutputGitignore(directory)
-
-      // Write Claude Code skill files
-      const commandsDir = `${directory}/.claude/commands`
-      await window.fs.mkdir(`${directory}/.claude`)
-      await window.fs.mkdir(commandsDir)
-      for (const action of SKILL_ACTIONS) {
-        const path = skillCommandPath(directory, action.name)
-        const fileExists = await window.fs.exists(path)
-        if (!fileExists) {
-          await window.fs.writeFile(path, action.defaultContent)
-        }
-      }
 
       // Remove legacy .broomy from .gitignore if present
       const hasLegacy = await checkLegacyBroomyGitignore(directory)
@@ -139,6 +168,27 @@ export function CommandsEditor({ directory, onClose }: CommandsEditorProps) {
     )
   }
 
+  if (loadError) {
+    return (
+      <div className="h-full flex flex-col">
+        <EditorHeader title="Commands" onClose={onClose} isDirty={false} />
+        <div className="flex-1 p-4 space-y-4">
+          <DialogErrorBanner error={loadError} onDismiss={() => setLoadError(null)} />
+          <p className="text-sm text-text-secondary">
+            Fix the errors in <code className="font-mono bg-bg-tertiary px-1 rounded">.broomy/commands.json</code> and reload.
+          </p>
+          <button
+            onClick={() => void load()}
+            className="px-4 py-2 text-sm rounded bg-accent text-white hover:bg-accent/80 transition-colors"
+            data-testid="reload-commands"
+          >
+            Reload
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   if (!exists || !actions) {
     return (
       <div className="h-full flex flex-col">
@@ -148,7 +198,7 @@ export function CommandsEditor({ directory, onClose }: CommandsEditorProps) {
             <h3 className="text-lg font-medium text-text-primary">No commands.json</h3>
             <p className="text-sm text-text-secondary">
               <code className="font-mono bg-bg-tertiary px-1 rounded">commands.json</code> defines
-              the action buttons shown in source control. Each action can be a shell command or an
+              the actions shown in the Broomy UI. Each action can be a shell command or an
               agent prompt, shown based on your git state.
             </p>
             <button
@@ -177,6 +227,7 @@ export function CommandsEditor({ directory, onClose }: CommandsEditorProps) {
             isExpanded={expandedId === action.id}
             onToggle={() => setExpandedId(expandedId === action.id ? null : action.id)}
             onUpdate={(updates) => updateAction(action.id, updates)}
+            agentTypes={knownAgentTypes}
             onDelete={() => {
               if (deleteConfirmId === action.id) {
                 deleteAction(action.id)
@@ -244,6 +295,7 @@ function ActionCard({
   isExpanded,
   onToggle,
   onUpdate,
+  agentTypes,
   onDelete,
   deleteConfirm,
   onCancelDelete,
@@ -252,19 +304,11 @@ function ActionCard({
   isExpanded: boolean
   onToggle: () => void
   onUpdate: (updates: Partial<ActionDefinition>) => void
+  agentTypes: string[]
   onDelete: () => void
   deleteConfirm: boolean
   onCancelDelete: () => void
 }) {
-  // Derive prompt mode from action data, allow manual override
-  const derivedMode = (action.promptFile && !action.prompt) ? 'file' as const : 'inline' as const
-  const [promptMode, setPromptMode] = useState<'inline' | 'file'>(derivedMode)
-  const prevActionId = useRef(action.id)
-  if (prevActionId.current !== action.id) {
-    prevActionId.current = action.id
-    setPromptMode(derivedMode)
-  }
-
   return (
     <div className="rounded border border-border bg-bg-primary overflow-hidden">
       {/* Collapsed header */}
@@ -337,51 +381,7 @@ function ActionCard({
           )}
 
           {action.type === 'agent' && (
-            <Field label="Prompt">
-              <div className="flex gap-1 mb-2">
-                <button
-                  onClick={() => setPromptMode('inline')}
-                  className={`px-3 py-1 text-xs rounded ${
-                    promptMode === 'inline'
-                      ? 'bg-accent text-white'
-                      : 'bg-bg-tertiary text-text-secondary hover:text-text-primary'
-                  } transition-colors`}
-                  data-testid={`prompt-mode-inline-${action.id}`}
-                >
-                  Inline Prompt
-                </button>
-                <button
-                  onClick={() => setPromptMode('file')}
-                  className={`px-3 py-1 text-xs rounded ${
-                    promptMode === 'file'
-                      ? 'bg-accent text-white'
-                      : 'bg-bg-tertiary text-text-secondary hover:text-text-primary'
-                  } transition-colors`}
-                  data-testid={`prompt-mode-file-${action.id}`}
-                >
-                  Prompt File
-                </button>
-              </div>
-              {promptMode === 'inline' ? (
-                <textarea
-                  value={action.prompt ?? ''}
-                  onChange={(e) => onUpdate({ prompt: e.target.value })}
-                  className="w-full px-2 py-1.5 text-sm rounded border border-border bg-bg-secondary text-text-primary font-mono focus:outline-none focus:border-accent resize-y min-h-[60px]"
-                  placeholder="Enter an inline prompt..."
-                  rows={3}
-                  data-testid={`action-prompt-${action.id}`}
-                />
-              ) : (
-                <input
-                  type="text"
-                  value={action.promptFile ?? ''}
-                  onChange={(e) => onUpdate({ promptFile: e.target.value })}
-                  className="w-full px-2 py-1.5 text-sm rounded border border-border bg-bg-secondary text-text-primary font-mono focus:outline-none focus:border-accent"
-                  placeholder=".broomy/prompts/my-action.md"
-                  data-testid={`action-promptFile-${action.id}`}
-                />
-              )}
-            </Field>
+            <PromptVariants action={action} onUpdate={onUpdate} fieldSlot={Field} agentTypes={agentTypes} />
           )}
 
           <Field label="Show When">
@@ -400,6 +400,45 @@ function ActionCard({
             >
               {STYLE_OPTIONS.map((s) => (
                 <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Surface" hint="Where this action appears (defaults to Source Control)">
+            <div className="flex gap-2">
+              {SURFACE_OPTIONS.map((opt) => {
+                const surfaces = normalizeSurface(action.surface)
+                const checked = surfaces.includes(opt.value)
+                return (
+                  <label key={opt.value} className="flex items-center gap-1.5 text-sm text-text-secondary cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        const next = checked
+                          ? surfaces.filter((s) => s !== opt.value)
+                          : [...surfaces, opt.value]
+                        onUpdate({ surface: next.length === 0 ? undefined : next.length === 1 ? next[0] : next })
+                      }}
+                      className="accent-accent"
+                      data-testid={`action-surface-${opt.value}-${action.id}`}
+                    />
+                    {opt.label}
+                  </label>
+                )
+              })}
+            </div>
+          </Field>
+
+          <Field label="Switch Tab" hint="Navigate to an explorer tab after running this action">
+            <select
+              value={action.switchTab ?? ''}
+              onChange={(e) => onUpdate({ switchTab: e.target.value || undefined })}
+              className="w-full px-2 py-1.5 text-sm rounded border border-border bg-bg-secondary text-text-primary focus:outline-none focus:border-accent"
+              data-testid={`action-switch-tab-${action.id}`}
+            >
+              {SWITCH_TAB_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
           </Field>

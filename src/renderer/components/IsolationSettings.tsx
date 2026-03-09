@@ -20,6 +20,7 @@ export function IsolationSettings({ isolated, skipApproval, dockerStatus, devcon
         <label className="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" checked={isolated} onChange={(e) => onIsolatedChange(e.target.checked)} className="rounded border-border" />
           <span className="text-xs text-text-secondary">Run agent in isolated container</span>
+          <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">Experimental</span>
         </label>
         {isolated && (
           <div className="ml-6 space-y-2">

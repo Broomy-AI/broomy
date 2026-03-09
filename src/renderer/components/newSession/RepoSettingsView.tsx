@@ -26,7 +26,6 @@ export function RepoSettingsView({
   const [reviewInstructions, setReviewInstructions] = useState(repo.reviewInstructions || '')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     if (isolated) {
@@ -53,7 +52,6 @@ export function RepoSettingsView({
 
   const handleSave = async () => {
     setSaving(true)
-    setSaved(false)
 
     try {
       // Update repo default agent, isolation, and review instructions
@@ -67,8 +65,7 @@ export function RepoSettingsView({
       // Save init script
       await window.repos.saveInitScript(repo.id, initScript)
 
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
+      onBack()
     } finally {
       setSaving(false)
     }
@@ -187,10 +184,7 @@ export function RepoSettingsView({
         )}
       </div>
 
-      <div className="px-4 py-3 border-t border-border flex justify-between items-center">
-        <div className="text-xs text-green-400">
-          {saved && 'Saved!'}
-        </div>
+      <div className="px-4 py-3 border-t border-border flex justify-end items-center">
         <div className="flex gap-2">
           <button
             onClick={onBack}

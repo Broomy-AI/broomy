@@ -33,7 +33,9 @@ vi.mock('../platform', () => ({
   isWindows: false,
   normalizePath: (p: string) => p.replace(/\\/g, '/'),
   getExecShell: vi.fn(() => undefined),
+  resolveCommand: vi.fn(() => null),
   resolveWindowsCommand: vi.fn(() => null),
+  enhancedPath: vi.fn((p: string) => p || ''),
 }))
 
 vi.mock('./types', async (importOriginal) => {
@@ -51,7 +53,7 @@ import { E2EScenario, type HandlerContext } from './types'
 function createMockCtx(overrides: Partial<HandlerContext> = {}): HandlerContext {
   return {
     isE2ETest: false,
-    e2eScenario: E2EScenario.Default,
+    e2eScenario: E2EScenario.Default, e2eRealRepos: false,
     isDev: false,
     isWindows: false,
     ptyProcesses: new Map(),
@@ -94,7 +96,7 @@ describe('ghCore handlers', () => {
       expect(handlers['gh:repoSlug']).toBeDefined()
       expect(handlers['gh:prStatus']).toBeDefined()
       expect(handlers['gh:hasWriteAccess']).toBeDefined()
-      expect(handlers['gh:mergeBranchToMain']).toBeDefined()
+      expect(handlers['gh:prChecksStatus']).toBeDefined()
       expect(handlers['gh:getPrCreateUrl']).toBeDefined()
     })
   })
@@ -279,10 +281,10 @@ describe('ghCore handlers', () => {
       expect(result.state).toBe('OPEN')
     })
 
-    it('returns error object on unexpected error', async () => {
+    it('returns null on unexpected error', async () => {
       vi.mocked(execFile).mockRejectedValue(new Error('no PR'))
       const handlers = setupHandlers()
-      expect(await handlers['gh:prStatus'](null, '/repo')).toEqual({ error: 'no PR' })
+      expect(await handlers['gh:prStatus'](null, '/repo')).toBeNull()
     })
   })
 
@@ -323,53 +325,46 @@ describe('ghCore handlers', () => {
     })
   })
 
-  describe('gh:mergeBranchToMain', () => {
-    it('returns success in E2E mode', async () => {
+  describe('gh:prChecksStatus', () => {
+    it('returns passed in E2E mode', async () => {
       const handlers = setupHandlers(createMockCtx({ isE2ETest: true }))
-      const result = await handlers['gh:mergeBranchToMain'](null, '/repo')
-      expect(result).toEqual({ success: true })
+      const result = await handlers['gh:prChecksStatus'](null, '/repo')
+      expect(result).toBe('passed')
     })
 
-    it('pushes current branch and to default branch', async () => {
-      mockGitInstance.status.mockResolvedValue({ current: 'feature' })
-      mockGitInstance.raw.mockResolvedValue('refs/remotes/origin/main\n')
-      mockGitInstance.push.mockResolvedValue(undefined)
-
+    it('returns passed when all checks succeed', async () => {
+      vi.mocked(execFile).mockResolvedValue({ stdout: 'SUCCESS\nSUCCESS\n', stderr: '' } as never)
       const handlers = setupHandlers()
-      const result = await handlers['gh:mergeBranchToMain'](null, '/repo')
-      expect(result).toEqual({ success: true })
-      expect(mockGitInstance.push).toHaveBeenCalledTimes(2)
+      const result = await handlers['gh:prChecksStatus'](null, '/repo')
+      expect(result).toBe('passed')
     })
 
-    it('returns error when current branch cannot be determined', async () => {
-      mockGitInstance.status.mockResolvedValue({ current: null })
-
+    it('returns pending when checks are in progress', async () => {
+      vi.mocked(execFile).mockResolvedValue({ stdout: 'SUCCESS\nPENDING\n', stderr: '' } as never)
       const handlers = setupHandlers()
-      const result = await handlers['gh:mergeBranchToMain'](null, '/repo')
-      expect(result).toEqual({ success: false, error: 'Could not determine current branch' })
+      const result = await handlers['gh:prChecksStatus'](null, '/repo')
+      expect(result).toBe('pending')
     })
 
-    it('returns error on push failure', async () => {
-      mockGitInstance.status.mockResolvedValue({ current: 'feature' })
-      mockGitInstance.raw.mockResolvedValue('refs/remotes/origin/main\n')
-      mockGitInstance.push.mockRejectedValue(new Error('push failed'))
-
+    it('returns failed when a check fails', async () => {
+      vi.mocked(execFile).mockResolvedValue({ stdout: 'SUCCESS\nFAILURE\n', stderr: '' } as never)
       const handlers = setupHandlers()
-      const result = await handlers['gh:mergeBranchToMain'](null, '/repo')
-      expect(result).toEqual({ success: false, error: expect.stringContaining('push failed') })
+      const result = await handlers['gh:prChecksStatus'](null, '/repo')
+      expect(result).toBe('failed')
     })
 
-    it('falls back to master when origin/main does not exist', async () => {
-      mockGitInstance.status.mockResolvedValue({ current: 'feature' })
-      mockGitInstance.raw.mockRejectedValueOnce(new Error('no symbolic ref'))
-        .mockRejectedValueOnce(new Error('no main'))
-      mockGitInstance.push.mockResolvedValue(undefined)
-
+    it('returns none when no checks exist', async () => {
+      vi.mocked(execFile).mockResolvedValue({ stdout: '', stderr: '' } as never)
       const handlers = setupHandlers()
-      const result = await handlers['gh:mergeBranchToMain'](null, '/repo')
-      expect(result).toEqual({ success: true })
-      // Should push to master
-      expect(mockGitInstance.push).toHaveBeenCalledWith('origin', 'HEAD:master')
+      const result = await handlers['gh:prChecksStatus'](null, '/repo')
+      expect(result).toBe('none')
+    })
+
+    it('returns none on error', async () => {
+      vi.mocked(execFile).mockRejectedValue(new Error('no PR'))
+      const handlers = setupHandlers()
+      const result = await handlers['gh:prChecksStatus'](null, '/repo')
+      expect(result).toBe('none')
     })
   })
 

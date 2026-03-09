@@ -255,7 +255,7 @@ exists only during the app's lifetime.
 
 - `id`, `name`, `directory`, `agentId`, `repoId`
 - `panelVisibility`, `fileViewerPosition`, `layoutSizes`, `explorerFilter`
-- `terminalTabs`, `pushedToMainAt`, `pushedToMainCommit`, `hasHadCommits`
+- `terminalTabs`, `hasHadCommits`
 - `lastKnownPrState`, `lastKnownPrNumber`, `lastKnownPrUrl`
 - `isArchived`, `sessionType`, `prNumber`, `prTitle`, `prUrl`, `prBaseBranch`
 

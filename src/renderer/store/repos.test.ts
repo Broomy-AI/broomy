@@ -126,36 +126,36 @@ describe('useRepoStore', () => {
       expect(window.config.save).toHaveBeenCalled()
     })
 
-    it('updates allowPushToMain and schedules save', async () => {
+    it('updates allowApproveAndMerge and schedules save', async () => {
       useRepoStore.setState({
         repos: [{ id: 'r1', name: 'repo', remoteUrl: 'url', rootDir: '/root', defaultBranch: 'main' }],
       })
 
-      useRepoStore.getState().updateRepo('r1', { allowPushToMain: true })
-      expect(useRepoStore.getState().repos[0].allowPushToMain).toBe(true)
+      useRepoStore.getState().updateRepo('r1', { allowApproveAndMerge: true })
+      expect(useRepoStore.getState().repos[0].allowApproveAndMerge).toBe(true)
 
       await vi.advanceTimersByTimeAsync(600)
       expect(window.config.save).toHaveBeenCalled()
     })
 
-    it('sets allowPushToMain to false', () => {
+    it('sets allowApproveAndMerge to false', () => {
       useRepoStore.setState({
-        repos: [{ id: 'r1', name: 'repo', remoteUrl: 'url', rootDir: '/root', defaultBranch: 'main', allowPushToMain: true }],
+        repos: [{ id: 'r1', name: 'repo', remoteUrl: 'url', rootDir: '/root', defaultBranch: 'main', allowApproveAndMerge: true }],
       })
 
-      useRepoStore.getState().updateRepo('r1', { allowPushToMain: false })
-      expect(useRepoStore.getState().repos[0].allowPushToMain).toBe(false)
+      useRepoStore.getState().updateRepo('r1', { allowApproveAndMerge: false })
+      expect(useRepoStore.getState().repos[0].allowApproveAndMerge).toBe(false)
     })
 
-    it('preserves allowPushToMain when updating other fields', () => {
+    it('preserves allowApproveAndMerge when updating other fields', () => {
       useRepoStore.setState({
-        repos: [{ id: 'r1', name: 'repo', remoteUrl: 'url', rootDir: '/root', defaultBranch: 'main', allowPushToMain: true }],
+        repos: [{ id: 'r1', name: 'repo', remoteUrl: 'url', rootDir: '/root', defaultBranch: 'main', allowApproveAndMerge: true }],
       })
 
       useRepoStore.getState().updateRepo('r1', { name: 'updated' })
       const repo = useRepoStore.getState().repos[0]
       expect(repo.name).toBe('updated')
-      expect(repo.allowPushToMain).toBe(true)
+      expect(repo.allowApproveAndMerge).toBe(true)
     })
   })
 

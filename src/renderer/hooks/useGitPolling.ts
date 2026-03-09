@@ -31,13 +31,9 @@ export function useGitPolling({
       const status = await window.git.status(activeSession.directory)
       const normalized = normalizeGitStatus(status)
 
-      // Track if the session has ever had commits ahead of remote
-      if (normalized.ahead > 0) {
-        markHasHadCommits(activeSession.id)
-      }
-
       // Check if branch is merged into the default branch
       let merged = false
+      let shouldMarkHasHadCommits = normalized.ahead > 0
       const isOnMain = normalized.current === 'main' || normalized.current === 'master'
       if (!isOnMain && normalized.current) {
         const repo = repos.find(r => r.id === activeSession.repoId)
@@ -49,14 +45,15 @@ export function useGitPolling({
         merged = mergedResult
         // Also mark hasHadCommits if the branch has diverged from main
         if (hasBranchCommitsResult) {
-          markHasHadCommits(activeSession.id)
+          shouldMarkHasHadCommits = true
         }
       }
 
-      // Update both states in the same synchronous block so React batches
-      // them into one render. Previously gitStatus was set before the
-      // isMergedInto check, creating a window where ahead=0 (fresh) paired
-      // with a stale isMergedToMain=true would incorrectly show 'merged'.
+      // Update all state in the same synchronous block so React batches
+      // them into one render. markHasHadCommits must happen AFTER the
+      // await and alongside setGitStatusBySession/setIsMergedBySession —
+      // otherwise the Zustand update triggers a render with stale
+      // isMergedBySession data, briefly computing 'merged' for new sessions.
       setGitStatusBySession(prev => ({
         ...prev,
         [activeSession.id]: normalized
@@ -65,6 +62,9 @@ export function useGitPolling({
         ...prev,
         [activeSession.id]: merged
       }))
+      if (shouldMarkHasHadCommits) {
+        markHasHadCommits(activeSession.id)
+      }
     } catch {
       // Ignore errors
     }

@@ -110,8 +110,13 @@ describe('CloneView', () => {
 
     await waitFor(() => {
       expect(window.git.clone).toHaveBeenCalled()
-      expect(onComplete).toHaveBeenCalled()
+      // No write access — shows warning with "Continue anyway" button
+      expect(screen.getByText('No write access')).toBeTruthy()
     })
+
+    // Click "Continue anyway" to proceed
+    fireEvent.click(screen.getByText('Continue anyway (read-only)'))
+    expect(onComplete).toHaveBeenCalled()
   })
 
   it('updates location when Browse returns a folder', async () => {

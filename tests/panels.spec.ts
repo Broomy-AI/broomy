@@ -1,6 +1,7 @@
 import { test, expect, _electron as electron, ElectronApplication, Page } from '@playwright/test'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { dockerArgs } from './electron-launch-args'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -10,7 +11,7 @@ let page: Page
 
 test.beforeAll(async () => {
   electronApp = await electron.launch({
-    args: [path.join(__dirname, '..', 'out', 'main', 'index.js')],
+    args: [...dockerArgs, path.join(__dirname, '..', 'out', 'main', 'index.js')],
     env: {
       ...process.env,
       NODE_ENV: 'production',
@@ -21,6 +22,8 @@ test.beforeAll(async () => {
   page = await electronApp.firstWindow()
   await page.waitForLoadState('domcontentloaded')
   await page.waitForSelector('#root > div', { timeout: 10000 })
+  // Wait for sessions to load
+  await page.waitForSelector('.cursor-pointer', { timeout: 10000 })
 })
 
 test.afterAll(async () => {
@@ -156,7 +159,7 @@ test.describe('Settings Panel', () => {
     // Switch session
     const backendSession = page.locator('.cursor-pointer:has-text("backend-api")')
     await backendSession.click()
-    await page.waitForTimeout(300)
+    await expect(backendSession).toHaveClass(/bg-accent\/15/)
 
     // Settings should still be visible
     await expect(settingsPanel).toBeVisible()
@@ -193,7 +196,6 @@ test.describe('Explorer Panel', () => {
     // Click Source Control filter button
     const scButton = explorerPanel.locator('button[title="Source Control"]')
     await scButton.click()
-    await page.waitForTimeout(500) // Wait for git status to load
 
     // Should show mock changed files: src/index.ts and README.md (from non-screenshot E2E mock)
     await expect(explorerPanel.locator('text=src/index.ts').first()).toBeVisible({ timeout: 5000 })
@@ -206,7 +208,6 @@ test.describe('Explorer Panel', () => {
     // Click Files filter button
     const filesButton = explorerPanel.locator('button[title="Files"]')
     await filesButton.click()
-    await page.waitForTimeout(300)
 
     // Should show file tree again (src folder)
     await expect(explorerPanel.locator('text=src').first()).toBeVisible()

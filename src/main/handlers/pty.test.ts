@@ -51,6 +51,8 @@ vi.mock('../platform', () => ({
   isWindows: false,
   getDefaultShell: () => '/bin/zsh',
   normalizePath: (p: string) => p.replace(/\\/g, '/'),
+  resolveCommand: () => null,
+  enhancedPath: (p: string) => p || '',
 }))
 
 function createMockPtyProcess() {
@@ -66,7 +68,7 @@ function createMockPtyProcess() {
 function createCtx(overrides: Partial<HandlerContext> = {}): HandlerContext {
   return {
     isE2ETest: false,
-    e2eScenario: E2EScenario.Default,
+    e2eScenario: E2EScenario.Default, e2eRealRepos: false,
     isDev: false,
     isWindows: false,
     ptyProcesses: new Map(),
@@ -337,6 +339,11 @@ describe('pty handlers', () => {
       const ctx = createCtx()
       register(mockIpcMain as never, ctx)
 
+      const dataDispose = vi.fn()
+      const exitDispose = vi.fn()
+      mockPtyOnData.mockReturnValue({ dispose: dataDispose })
+      mockPtyOnExit.mockReturnValue({ dispose: exitDispose })
+
       const mockProcess = createMockPtyProcess()
       mockPtySpawn.mockReturnValue(mockProcess)
       mockBrowserWindowFromWebContents.mockReturnValue(mockSenderWindow)
@@ -355,6 +362,9 @@ describe('pty handlers', () => {
       expect(mockSenderWindow.webContents.send).toHaveBeenCalledWith('pty:exit:exit-1', 0)
       expect(ctx.ptyProcesses.has('exit-1')).toBe(false)
       expect(ctx.ptyOwnerWindows.has('exit-1')).toBe(false)
+      // Disposables should be cleaned up on exit too
+      expect(dataDispose).toHaveBeenCalled()
+      expect(exitDispose).toHaveBeenCalled()
     })
 
     it('does not send data if owner window is destroyed', async () => {
@@ -487,6 +497,28 @@ describe('pty handlers', () => {
 
       expect(ctx.ptyProcesses.has('no-sender')).toBe(true)
       expect(ctx.ptyOwnerWindows.has('no-sender')).toBe(false)
+    })
+    it('kills existing PTY with the same ID before creating a new one', async () => {
+      const { register } = await import('./pty')
+      const ctx = createCtx()
+      register(mockIpcMain as never, ctx)
+
+      // Pre-populate an existing PTY in the context
+      const existingProcess = createMockPtyProcess()
+      ctx.ptyProcesses.set('dup-id', existingProcess as never)
+      ctx.ptyOwnerWindows.set('dup-id', mockSenderWindow as never)
+
+      const newProcess = createMockPtyProcess()
+      mockPtySpawn.mockReturnValue(newProcess)
+      mockBrowserWindowFromWebContents.mockReturnValue(mockSenderWindow)
+
+      await handlers['pty:create'](mockEvent, {
+        id: 'dup-id',
+        cwd: '/tmp',
+      })
+
+      expect(existingProcess.kill).toHaveBeenCalled()
+      expect(ctx.ptyProcesses.get('dup-id')).toBe(newProcess)
     })
   })
 
@@ -636,7 +668,7 @@ describe('pty handlers', () => {
       mockIsDockerAvailable.mockResolvedValue({ available: true })
       mockDevcontainerUp.mockResolvedValue({
         success: true,
-        result: { containerId: 'dc-123', remoteUser: 'node' },
+        result: { containerId: 'dc-123', remoteUser: 'node', remoteWorkspaceFolder: '/workspaces/repo' },
       })
       mockBuildDevcontainerExecArgs.mockReturnValue(['exec', '-it', '-u', 'node', 'dc-123', 'bash', '-l'])
       mockEnsureAgentInstalled.mockResolvedValue({ success: true })
@@ -653,6 +685,9 @@ describe('pty handlers', () => {
       })
 
       await vi.waitFor(() => {
+        expect(mockBuildDevcontainerExecArgs).toHaveBeenCalledWith(
+          'dc-123', 'node', '/workspaces/repo', expect.any(Object), 'claude',
+        )
         expect(mockPtySpawn).toHaveBeenCalledWith(
           'docker',
           ['exec', '-it', '-u', 'node', 'dc-123', 'bash', '-l'],
@@ -672,7 +707,7 @@ describe('pty handlers', () => {
       mockIsDockerAvailable.mockResolvedValue({ available: true })
       mockDevcontainerUp.mockResolvedValue({
         success: true,
-        result: { containerId: 'dc-svc', remoteUser: 'node', postAttachCommand: 'npm start' },
+        result: { containerId: 'dc-svc', remoteUser: 'node', remoteWorkspaceFolder: '/workspaces/repo', postAttachCommand: 'npm start' },
       })
       mockBuildDevcontainerExecArgs.mockReturnValue(['exec', '-it', 'dc-svc', 'bash', '-l'])
 
@@ -768,6 +803,30 @@ describe('pty handlers', () => {
 
       await handlers['pty:kill'](mockEvent, 'nonexistent')
       expect(mockPtyKill).not.toHaveBeenCalled()
+    })
+
+    it('disposes event listeners when killing a PTY', async () => {
+      const { register } = await import('./pty')
+      const ctx = createCtx()
+      register(mockIpcMain as never, ctx)
+
+      const dataDispose = vi.fn()
+      const exitDispose = vi.fn()
+      mockPtyOnData.mockReturnValue({ dispose: dataDispose })
+      mockPtyOnExit.mockReturnValue({ dispose: exitDispose })
+
+      const mockProcess = createMockPtyProcess()
+      mockPtySpawn.mockReturnValue(mockProcess)
+      mockBrowserWindowFromWebContents.mockReturnValue(mockSenderWindow)
+
+      await handlers['pty:create'](mockEvent, {
+        id: 'dispose-1',
+        cwd: '/tmp',
+      })
+
+      await handlers['pty:kill'](mockEvent, 'dispose-1')
+      expect(dataDispose).toHaveBeenCalled()
+      expect(exitDispose).toHaveBeenCalled()
     })
   })
 })

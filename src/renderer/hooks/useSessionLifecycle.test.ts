@@ -82,6 +82,7 @@ function makeHookParams(overrides: Partial<Parameters<typeof useSessionLifecycle
     checkGitAvailability: vi.fn().mockResolvedValue(undefined),
     switchProfile: vi.fn().mockResolvedValue(undefined),
     markSessionRead: vi.fn(),
+    updateReviewStatus: vi.fn(),
     ...overrides,
   }
 }
@@ -245,6 +246,42 @@ describe('useSessionLifecycle', () => {
       renderLifecycleHook(params)
 
       expect(params.markSessionRead).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('review status check on session switch', () => {
+    it('checks review status when switching to a review session', async () => {
+      vi.mocked(window.gh.myReviewStatus).mockResolvedValue('reviewed' as never)
+      const session = makeSession({ sessionType: 'review', prNumber: 42 })
+      const params = makeHookParams({ activeSession: session, sessions: [session] })
+      renderLifecycleHook(params)
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+
+      expect(window.gh.myReviewStatus).toHaveBeenCalledWith('/test/dir', 42)
+      expect(params.updateReviewStatus).toHaveBeenCalledWith('session-1', 'reviewed')
+    })
+
+    it('does not check review status for non-review sessions', async () => {
+      vi.mocked(window.gh.myReviewStatus).mockClear()
+      const session = makeSession({ sessionType: undefined })
+      const params = makeHookParams({ activeSession: session, sessions: [session] })
+      renderLifecycleHook(params)
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+
+      expect(window.gh.myReviewStatus).not.toHaveBeenCalled()
+    })
+
+    it('updates to pending when review is re-requested', async () => {
+      vi.mocked(window.gh.myReviewStatus).mockResolvedValue('pending' as never)
+      const session = makeSession({ sessionType: 'review', prNumber: 10, reviewStatus: 'reviewed' })
+      const params = makeHookParams({ activeSession: session, sessions: [session] })
+      renderLifecycleHook(params)
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+
+      expect(params.updateReviewStatus).toHaveBeenCalledWith('session-1', 'pending')
     })
   })
 

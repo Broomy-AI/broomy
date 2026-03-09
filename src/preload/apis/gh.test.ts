@@ -40,9 +40,9 @@ describe('preload gh API', () => {
     expect(mockInvoke).toHaveBeenCalledWith('gh:hasWriteAccess', '/repo')
   })
 
-  it('mergeBranchToMain invokes gh:mergeBranchToMain', async () => {
-    await ghApi.mergeBranchToMain('/repo')
-    expect(mockInvoke).toHaveBeenCalledWith('gh:mergeBranchToMain', '/repo')
+  it('prChecksStatus invokes gh:prChecksStatus', async () => {
+    await ghApi.prChecksStatus('/repo')
+    expect(mockInvoke).toHaveBeenCalledWith('gh:prChecksStatus', '/repo')
   })
 
   it('getPrCreateUrl invokes gh:getPrCreateUrl', async () => {

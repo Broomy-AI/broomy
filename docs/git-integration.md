@@ -295,7 +295,7 @@ GitHub operations use the `gh` CLI tool. The main process wraps `gh` commands vi
 | `gh:repoSlug` | Get `owner/repo` slug |
 | `gh:prStatus` | Get PR status for current branch |
 | `gh:hasWriteAccess` | Check if user has write permissions |
-| `gh:mergeBranchToMain` | Merge current branch into default branch |
+| `gh:prChecksStatus` | Get CI/status check rollup for current PR |
 | `gh:getPrCreateUrl` | Build a GitHub PR creation URL |
 | `gh:prComments` | Fetch review comments on a PR |
 | `gh:replyToComment` | Reply to a PR review comment |

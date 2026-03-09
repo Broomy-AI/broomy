@@ -172,4 +172,25 @@ describe('FileViewerToolbar', () => {
     render(<FileViewerToolbar {...defaultProps} availableViewers={singleViewer} canShowDiff={false} />)
     expect(screen.queryByTitle('Code')).toBeNull()
   })
+
+  it('Show on GitHub calls onOpenFile instead of openExternal when provided', async () => {
+    const onOpenFile = vi.fn()
+    // Mock crypto.subtle.digest for buildPrFileUrl
+    const mockDigest = vi.spyOn(crypto.subtle, 'digest').mockResolvedValue(new ArrayBuffer(32))
+    render(<FileViewerToolbar {...defaultProps} viewMode="diff" prFilesUrl="https://github.com/org/repo/pull/1/files" onOpenFile={onOpenFile} />)
+    const btn = screen.getByTitle('Open PR diff on GitHub to add comments')
+    fireEvent.click(btn)
+    await vi.waitFor(() => expect(onOpenFile).toHaveBeenCalledOnce())
+    expect(window.shell.openExternal).not.toHaveBeenCalled()
+    mockDigest.mockRestore()
+  })
+
+  it('Show on GitHub falls back to openExternal when onOpenFile is not provided', async () => {
+    const mockDigest = vi.spyOn(crypto.subtle, 'digest').mockResolvedValue(new ArrayBuffer(32))
+    render(<FileViewerToolbar {...defaultProps} viewMode="diff" prFilesUrl="https://github.com/org/repo/pull/1/files" />)
+    const btn = screen.getByTitle('Open PR diff on GitHub to add comments')
+    fireEvent.click(btn)
+    await vi.waitFor(() => expect(window.shell.openExternal).toHaveBeenCalledOnce())
+    mockDigest.mockRestore()
+  })
 })

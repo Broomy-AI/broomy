@@ -15,7 +15,11 @@ interface ProfileChipProps {
 }
 
 export default function ProfileChip({ onSwitchProfile }: ProfileChipProps) {
-  const { profiles, currentProfileId, addProfile, deleteProfile, updateProfile } = useProfileStore()
+  const profiles = useProfileStore(s => s.profiles)
+  const currentProfileId = useProfileStore(s => s.currentProfileId)
+  const addProfile = useProfileStore(s => s.addProfile)
+  const deleteProfile = useProfileStore(s => s.deleteProfile)
+  const updateProfile = useProfileStore(s => s.updateProfile)
   const [showDropdown, setShowDropdown] = useState(false)
   const [showNewForm, setShowNewForm] = useState(false)
   const [showEditForm, setShowEditForm] = useState(false)

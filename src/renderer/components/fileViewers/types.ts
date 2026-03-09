@@ -30,6 +30,8 @@ export interface FileViewerComponentProps {
   filePath: string
   /** The file content (already loaded) */
   content: string
+  /** The project/session directory (for resolving tsconfig paths, etc.) */
+  directory?: string
   /** Callback when content is modified and should be saved */
   onSave?: (content: string) => Promise<boolean>
   /** Callback when content is modified (for dirty tracking). Passes current content for external save button. */

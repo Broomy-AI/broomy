@@ -1,7 +1,7 @@
 /**
  * Builds the map of panel ID to rendered React element for the layout system, wiring up each panel to active session state.
  */
-import { useMemo, useState, useEffect, useCallback } from 'react'
+import { useMemo, useState, useEffect, useCallback, memo } from 'react'
 import TabbedTerminal from '../components/TabbedTerminal'
 import PanelErrorBoundary from '../components/PanelErrorBoundary'
 import Explorer from '../components/explorer'
@@ -11,13 +11,40 @@ import AgentSettings from '../components/AgentSettings'
 import SessionList from '../components/sessionList'
 import WelcomeScreen from '../components/WelcomeScreen'
 import TutorialPanel from '../components/TutorialPanel'
-import { type Session } from '../store/sessions'
+import { useSessionStore, type Session } from '../store/sessions'
 import { PANEL_IDS } from '../panels'
 import { useIssuePlanDetection } from './useIssuePlanDetection'
 import type { FileStatus, ViewMode } from '../components/FileViewer'
 import type { GitFileStatus, GitStatusResult, ManagedRepo } from '../../preload/index'
 import type { ExplorerFilter, PrState } from '../store/sessions'
 import type { NavigationTarget } from '../utils/fileNavigation'
+
+/** Wrapper that subscribes each session terminal to its own visibility from the store. */
+const SessionTerminal = memo(function SessionTerminal({
+  sessionId, cwd, branch, agentCommand, agentEnv, isRestored, isolated, repoRootDir,
+}: {
+  sessionId: string; cwd: string; branch: string
+  agentCommand?: string; agentEnv?: Record<string, string>
+  isRestored?: boolean
+  isolated: boolean; repoRootDir?: string
+}) {
+  const isVisible = useSessionStore((s) => s.activeSessionId === sessionId)
+  return (
+    <div className={`absolute inset-0 ${isVisible ? '' : 'invisible pointer-events-none'}`}>
+      <PanelErrorBoundary name={`Session ${branch || sessionId}`}>
+        <TabbedTerminal
+          sessionId={sessionId}
+          cwd={cwd}
+          agentCommand={agentCommand}
+          agentEnv={agentEnv}
+          isRestored={isRestored}
+          isolated={isolated}
+          repoRootDir={repoRootDir}
+        />
+      </PanelErrorBoundary>
+    </div>
+  )
+})
 
 export interface PanelsMapConfig {
   sessions: Session[]
@@ -47,14 +74,11 @@ export interface PanelsMapConfig {
   fetchGitStatus: () => void | Promise<void>
   getAgentCommand: (session: Session) => string | undefined
   getAgentEnv: (session: Session) => Record<string, string> | undefined
-  getAgentResumeCommand: (session: Session) => string | undefined
   getRepoIsolation: (session: Session) => { isolated: boolean; repoRootDir?: string } | undefined
   globalPanelVisibility: Record<string, boolean>
   toggleGlobalPanel: (panelId: string) => void
   selectFile: (sessionId: string, filePath: string) => void
   setExplorerFilter: (sessionId: string, filter: ExplorerFilter) => void
-  recordPushToMain: (sessionId: string, commitHash: string) => void
-  clearPushToMain: (sessionId: string) => void
   updatePrState: (sessionId: string, prState: PrState, prNumber?: number, prUrl?: string) => void
   setPanelVisibility: (sessionId: string, panelId: string, visible: boolean) => void
   setToolbarPanels: (panels: string[]) => void
@@ -66,10 +90,23 @@ function useExplorerPanel(config: PanelsMapConfig) {
   const {
     activeSessionId, activeSession, activeSessionGitStatus, activeSessionGitStatusResult,
     navigateToFile, fetchGitStatus, setExplorerFilter,
-    recordPushToMain, clearPushToMain, updatePrState, repos,
+    updatePrState, repos,
   } = config
 
   const issuePlanExists = useIssuePlanDetection(activeSessionId, activeSession?.directory)
+
+  const activeRepo = useMemo(() =>
+    repos.find(r => r.id === activeSession?.repoId),
+    [repos, activeSession?.repoId]
+  )
+
+  const handleFilterChange = useCallback((filter: ExplorerFilter) => {
+    if (activeSessionId) setExplorerFilter(activeSessionId, filter)
+  }, [activeSessionId, setExplorerFilter])
+
+  const handleUpdatePrState = useCallback((prState: PrState, prNumber?: number, prUrl?: string) => {
+    if (activeSessionId) updatePrState(activeSessionId, prState, prNumber, prUrl)
+  }, [activeSessionId, updatePrState])
 
   return useMemo(() => {
     if (!activeSession?.showExplorer) return null
@@ -81,30 +118,24 @@ function useExplorerPanel(config: PanelsMapConfig) {
         gitStatus={activeSessionGitStatus}
         syncStatus={activeSessionGitStatusResult}
         filter={activeSession.explorerFilter}
-        onFilterChange={(filter) => {
-          if (activeSessionId) setExplorerFilter(activeSessionId, filter)
-        }}
+        onFilterChange={handleFilterChange}
         onGitStatusRefresh={fetchGitStatus}
         recentFiles={activeSession.recentFiles}
         sessionId={activeSessionId ?? undefined}
-        pushedToMainAt={activeSession.pushedToMainAt}
-        pushedToMainCommit={activeSession.pushedToMainCommit}
-        onRecordPushToMain={(commitHash) => activeSessionId && recordPushToMain(activeSessionId, commitHash)}
-        onClearPushToMain={() => activeSessionId && clearPushToMain(activeSessionId)}
         planFilePath={activeSession.planFilePath}
         branchStatus={activeSession.branchStatus}
-        onUpdatePrState={(prState, prNumber, prUrl) => activeSessionId && updatePrState(activeSessionId, prState, prNumber, prUrl)}
+        onUpdatePrState={handleUpdatePrState}
         repoId={activeSession.repoId}
         agentPtyId={activeSession.agentPtyId}
         session={activeSession}
-        repo={repos.find(r => r.id === activeSession.repoId)}
+        repo={activeRepo}
         issueNumber={activeSession.issueNumber}
         issueTitle={activeSession.issueTitle}
         issueUrl={activeSession.issueUrl}
         issuePlanExists={issuePlanExists}
       />
     )
-  }, [activeSessionId, activeSession, activeSessionGitStatus, activeSessionGitStatusResult, navigateToFile, fetchGitStatus, repos, issuePlanExists])
+  }, [activeSessionId, activeSession, activeSessionGitStatus, activeSessionGitStatusResult, navigateToFile, fetchGitStatus, activeRepo, issuePlanExists, handleFilterChange, handleUpdatePrState])
 }
 
 function useFileViewerPanel(config: PanelsMapConfig) {
@@ -186,6 +217,7 @@ function useFileViewerPanel(config: PanelsMapConfig) {
                   sessionDirectory: session.directory,
                   commentsFilePath: `${session.directory}/.broomy/comments.json`,
                 } : undefined}
+                prFilesUrl={session.sessionType === 'review' && session.prUrl ? session.prUrl : undefined}
                 onOpenFile={isActive ? (targetPath, line) => navigateToFile({ filePath: targetPath, openInDiffMode: false, scrollToLine: line }) : undefined}
               />
             </div>
@@ -198,10 +230,10 @@ function useFileViewerPanel(config: PanelsMapConfig) {
 
 export function usePanelsMap(config: PanelsMapConfig) {
   const {
-    sessions, activeSessionId, activeSession,
+    sessions,
     handleSelectSession, handleNewSession, removeSession, refreshPrStatus,
     archiveSession, unarchiveSession,
-    getAgentCommand, getAgentEnv, getAgentResumeCommand,
+    getAgentCommand, getAgentEnv,
     globalPanelVisibility, toggleGlobalPanel,
     repos,
   } = config
@@ -220,49 +252,43 @@ export function usePanelsMap(config: PanelsMapConfig) {
       {sessions.filter(s => !s.isArchived).map((session) => {
         const repo = session.repoId ? repos.find(r => r.id === session.repoId) : undefined
         return (
-          <div
+          <SessionTerminal
             key={session.id}
-            className={`absolute inset-0 ${session.id === activeSessionId ? '' : 'invisible pointer-events-none'}`}
-          >
-            <PanelErrorBoundary name={`Session ${session.branch || session.id}`}>
-              <TabbedTerminal
-                sessionId={session.id}
-                cwd={session.directory}
-                isActive={session.id === activeSessionId}
-                agentCommand={getAgentCommand(session)}
-                agentEnv={getAgentEnv(session)}
-                agentResumeCommand={getAgentResumeCommand(session)}
-                isRestored={session.isRestored}
-                isolated={repo?.isolated ?? false}
-                repoRootDir={repo?.rootDir}
-              />
-            </PanelErrorBoundary>
-          </div>
+            sessionId={session.id}
+            cwd={session.directory}
+            branch={session.branch}
+            agentCommand={getAgentCommand(session)}
+            agentEnv={getAgentEnv(session)}
+            isRestored={session.isRestored}
+            isolated={repo?.isolated ?? false}
+            repoRootDir={repo?.rootDir}
+          />
         )
       })}
       {sessions.length === 0 && (
         <WelcomeScreen onNewSession={handleNewSession} />
       )}
     </div>
-  ), [terminalSessionKey, activeSessionId, getAgentCommand, getAgentEnv, getAgentResumeCommand, handleNewSession, repos])
+  ), [terminalSessionKey, getAgentCommand, getAgentEnv, handleNewSession, repos])
 
   const explorerPanel = useExplorerPanel(config)
   const fileViewerPanel = useFileViewerPanel(config)
 
+  const sidebarPanel = useMemo(() => (
+    <SessionList
+      sessions={sessions}
+      repos={repos}
+      onSelectSession={handleSelectSession}
+      onNewSession={handleNewSession}
+      onDeleteSession={removeSession}
+      onRefreshPrStatus={refreshPrStatus}
+      onArchiveSession={archiveSession}
+      onUnarchiveSession={unarchiveSession}
+    />
+  ), [sessions, repos, handleSelectSession, handleNewSession, removeSession, refreshPrStatus, archiveSession, unarchiveSession])
+
   const panelsMap = useMemo(() => ({
-    [PANEL_IDS.SIDEBAR]: (
-      <SessionList
-        sessions={sessions}
-        activeSessionId={activeSessionId}
-        repos={repos}
-        onSelectSession={handleSelectSession}
-        onNewSession={handleNewSession}
-        onDeleteSession={removeSession}
-        onRefreshPrStatus={refreshPrStatus}
-        onArchiveSession={archiveSession}
-        onUnarchiveSession={unarchiveSession}
-      />
-    ),
+    [PANEL_IDS.SIDEBAR]: sidebarPanel,
     terminal: terminalPanel,
     [PANEL_IDS.EXPLORER]: explorerPanel,
     [PANEL_IDS.FILE_VIEWER]: fileViewerPanel,
@@ -275,11 +301,10 @@ export function usePanelsMap(config: PanelsMapConfig) {
       <TutorialPanel />
     ),
   }), [
-    sessions, activeSessionId, activeSession,
+    sidebarPanel,
     terminalPanel,
     explorerPanel, fileViewerPanel,
     globalPanelVisibility,
-    repos,
   ])
 
   return panelsMap

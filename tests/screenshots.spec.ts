@@ -1,6 +1,7 @@
 import { test, _electron as electron, ElectronApplication, Page } from '@playwright/test'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { dockerArgs } from './electron-launch-args'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -19,7 +20,7 @@ test.beforeAll(async () => {
 
   // Launch Electron app in screenshot mode
   electronApp = await electron.launch({
-    args: [mainJs],
+    args: [...dockerArgs, mainJs],
     env: {
       ...process.env,
       NODE_ENV: 'production',

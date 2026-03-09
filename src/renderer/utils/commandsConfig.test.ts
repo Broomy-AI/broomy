@@ -7,9 +7,15 @@ import {
   commandsConfigPath,
   loadCommandsConfig,
   detectAgentType,
+  getAgentTypes,
   getDefaultCommandsConfig,
   ensureOutputGitignore,
+  matchesSurface,
+  checkLegacyBroomyGitignore,
+  removeLegacyBroomyGitignore,
+  validateCommandsConfig,
 } from './commandsConfig'
+import type { ActionDefinition } from './commandsConfig'
 import type { ConditionState, TemplateVars } from './commandsConfig'
 
 beforeEach(() => {
@@ -40,7 +46,7 @@ describe('evaluateShowWhen', () => {
     'no-tracking': false, ahead: false, behind: false, 'behind-main': false,
     'on-main': false, 'in-progress': true, pushed: true, empty: false,
     open: false, merged: false, closed: false, 'no-pr': true,
-    'has-write-access': true, 'allow-push-to-main': false, 'has-issue': false, 'no-devcontainer': false, review: false,
+    'has-write-access': true, 'allow-approve-and-merge': false, 'checks-passed': false, 'has-issue': false, 'no-devcontainer': false, review: false,
   }
 
   it('returns true for empty conditions', () => {
@@ -91,23 +97,79 @@ describe('loadCommandsConfig', () => {
     vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify(config))
 
     const result = await loadCommandsConfig('/repo')
-    expect(result).toEqual(config)
+    expect(result).toEqual({ ok: true, config })
   })
 
-  it('returns null for invalid config (missing version)', async () => {
+  it('returns error for invalid config (missing version)', async () => {
     vi.mocked(window.fs.exists).mockResolvedValue(true)
     vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify({ actions: [] }))
 
     const result = await loadCommandsConfig('/repo')
-    expect(result).toBeNull()
+    expect(result).not.toBeNull()
+    expect(result!.ok).toBe(false)
+    if (!result!.ok) expect(result!.error).toContain('"version"')
   })
 
-  it('returns null for invalid config (missing actions array)', async () => {
+  it('returns error for invalid config (missing actions array)', async () => {
     vi.mocked(window.fs.exists).mockResolvedValue(true)
     vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify({ version: 1 }))
 
     const result = await loadCommandsConfig('/repo')
-    expect(result).toBeNull()
+    expect(result).not.toBeNull()
+    expect(result!.ok).toBe(false)
+    if (!result!.ok) expect(result!.error).toContain('"actions"')
+  })
+
+  it('returns error for invalid JSON', async () => {
+    vi.mocked(window.fs.exists).mockResolvedValue(true)
+    vi.mocked(window.fs.readFile).mockResolvedValue('not valid json {{{')
+
+    const result = await loadCommandsConfig('/repo')
+    expect(result).not.toBeNull()
+    expect(result!.ok).toBe(false)
+    if (!result!.ok) expect(result!.error).toContain('Invalid JSON')
+  })
+
+  it('strips agent overrides with no prompt (legacy skill-only entries)', async () => {
+    const config = {
+      version: 1,
+      actions: [
+        {
+          id: 'commit', label: 'Commit', type: 'agent', showWhen: [],
+          prompt: 'default prompt',
+          agents: { claude: { skill: 'broomy-action-commit' }, aider: { prompt: 'aider prompt' } },
+        },
+      ],
+    }
+    vi.mocked(window.fs.exists).mockResolvedValue(true)
+    vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify(config))
+
+    const result = await loadCommandsConfig('/repo')
+    expect(result!.ok).toBe(true)
+    if (result!.ok) {
+      // claude override (skill-only, no prompt) should be stripped
+      expect(result!.config.actions[0].agents).toEqual({ aider: { prompt: 'aider prompt' } })
+    }
+  })
+
+  it('removes agents field entirely when all overrides are skill-only', async () => {
+    const config = {
+      version: 1,
+      actions: [
+        {
+          id: 'commit', label: 'Commit', type: 'agent', showWhen: [],
+          agents: { claude: { skill: 'broomy-action-commit' } },
+        },
+      ],
+    }
+    vi.mocked(window.fs.exists).mockResolvedValue(true)
+    vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify(config))
+
+    const result = await loadCommandsConfig('/repo')
+    expect(result!.ok).toBe(true)
+    if (result!.ok) {
+      expect(result!.config.actions[0].agents).toBeUndefined()
+    }
   })
 
   it('returns null on read error', async () => {
@@ -133,9 +195,46 @@ describe('detectAgentType', () => {
     expect(detectAgentType('cursor')).toBe('cursor')
   })
 
+  it('detects codex', () => {
+    expect(detectAgentType('codex')).toBe('codex')
+    expect(detectAgentType('/usr/local/bin/codex --flag')).toBe('codex')
+  })
+
+  it('detects gemini', () => {
+    expect(detectAgentType('gemini')).toBe('gemini')
+  })
+
   it('returns null for unknown agent', () => {
     expect(detectAgentType('unknown-agent')).toBeNull()
     expect(detectAgentType('vim')).toBeNull()
+  })
+})
+
+describe('getAgentTypes', () => {
+  it('returns unique sorted agent types', () => {
+    const agents = [
+      { command: 'claude' },
+      { command: 'aider --model gpt-4' },
+      { command: 'claude --flag' },
+    ]
+    expect(getAgentTypes(agents)).toEqual(['aider', 'claude'])
+  })
+
+  it('returns empty array when no recognized agents', () => {
+    expect(getAgentTypes([{ command: 'vim' }])).toEqual([])
+  })
+
+  it('returns empty array for empty input', () => {
+    expect(getAgentTypes([])).toEqual([])
+  })
+
+  it('includes codex and gemini', () => {
+    const agents = [
+      { command: 'codex' },
+      { command: 'gemini' },
+      { command: 'claude' },
+    ]
+    expect(getAgentTypes(agents)).toEqual(['claude', 'codex', 'gemini'])
   })
 })
 
@@ -145,6 +244,172 @@ describe('getDefaultCommandsConfig', () => {
     expect(config.version).toBe(1)
     expect(config.actions.length).toBeGreaterThan(0)
     expect(config.actions.every(a => a.id && a.label && a.type)).toBe(true)
+  })
+})
+
+describe('validateCommandsConfig', () => {
+  it('returns empty array for valid config', () => {
+    expect(validateCommandsConfig({
+      version: 1,
+      actions: [{ id: 'test', label: 'Test', type: 'agent', showWhen: [] }],
+    })).toEqual([])
+  })
+
+  it('catches missing version', () => {
+    const errors = validateCommandsConfig({ actions: [] })
+    expect(errors.some(e => e.includes('"version"'))).toBe(true)
+  })
+
+  it('catches missing actions', () => {
+    const errors = validateCommandsConfig({ version: 1 })
+    expect(errors.some(e => e.includes('"actions"'))).toBe(true)
+  })
+
+  it('catches non-object config', () => {
+    expect(validateCommandsConfig('string').length).toBeGreaterThan(0)
+    expect(validateCommandsConfig(null).length).toBeGreaterThan(0)
+    expect(validateCommandsConfig([]).length).toBeGreaterThan(0)
+  })
+
+  it('catches invalid action type', () => {
+    const errors = validateCommandsConfig({
+      version: 1,
+      actions: [{ id: 'test', label: 'Test', type: 'invalid', showWhen: [] }],
+    })
+    expect(errors.some(e => e.includes('"type"'))).toBe(true)
+  })
+
+  it('catches invalid style', () => {
+    const errors = validateCommandsConfig({
+      version: 1,
+      actions: [{ id: 'test', label: 'Test', type: 'agent', showWhen: [], style: 'nope' }],
+    })
+    expect(errors.some(e => e.includes('"style"'))).toBe(true)
+  })
+
+  it('catches invalid surface type', () => {
+    const errors = validateCommandsConfig({
+      version: 1,
+      actions: [{ id: 'test', label: 'Test', type: 'agent', showWhen: [], surface: 123 }],
+    })
+    expect(errors.some(e => e.includes('"surface"'))).toBe(true)
+  })
+
+  it('accepts valid surface as string or array', () => {
+    expect(validateCommandsConfig({
+      version: 1,
+      actions: [{ id: 'test', label: 'Test', type: 'agent', showWhen: [], surface: 'review' }],
+    })).toEqual([])
+    expect(validateCommandsConfig({
+      version: 1,
+      actions: [{ id: 'test', label: 'Test', type: 'agent', showWhen: [], surface: ['source-control', 'review'] }],
+    })).toEqual([])
+  })
+
+  it('catches missing action id', () => {
+    const errors = validateCommandsConfig({
+      version: 1,
+      actions: [{ label: 'Test', type: 'agent', showWhen: [] }],
+    })
+    expect(errors.some(e => e.includes('"id"'))).toBe(true)
+  })
+
+  it('catches non-array showWhen', () => {
+    const errors = validateCommandsConfig({
+      version: 1,
+      actions: [{ id: 'test', label: 'Test', type: 'agent', showWhen: 'oops' }],
+    })
+    expect(errors.some(e => e.includes('"showWhen"'))).toBe(true)
+  })
+})
+
+describe('matchesSurface', () => {
+  const base: ActionDefinition = { id: 'test', label: 'Test', type: 'agent', showWhen: [] }
+
+  it('defaults to source-control when no surface specified', () => {
+    expect(matchesSurface(base, 'source-control')).toBe(true)
+    expect(matchesSurface(base, 'review')).toBe(false)
+  })
+
+  it('matches string surface', () => {
+    expect(matchesSurface({ ...base, surface: 'review' }, 'review')).toBe(true)
+    expect(matchesSurface({ ...base, surface: 'review' }, 'source-control')).toBe(false)
+  })
+
+  it('matches array surface', () => {
+    const action = { ...base, surface: ['source-control', 'review'] }
+    expect(matchesSurface(action, 'source-control')).toBe(true)
+    expect(matchesSurface(action, 'review')).toBe(true)
+    expect(matchesSurface(action, 'other')).toBe(false)
+  })
+})
+
+describe('checkLegacyBroomyGitignore', () => {
+  it('returns false when .gitignore does not exist', async () => {
+    vi.mocked(window.fs.exists).mockResolvedValue(false)
+    expect(await checkLegacyBroomyGitignore('/repo')).toBe(false)
+  })
+
+  it('returns true when .broomy/ is in .gitignore', async () => {
+    vi.mocked(window.fs.exists).mockResolvedValue(true)
+    vi.mocked(window.fs.readFile).mockResolvedValue('node_modules/\n.broomy/\n')
+    expect(await checkLegacyBroomyGitignore('/repo')).toBe(true)
+  })
+
+  it('returns true for .broomy without trailing slash', async () => {
+    vi.mocked(window.fs.exists).mockResolvedValue(true)
+    vi.mocked(window.fs.readFile).mockResolvedValue('.broomy\n')
+    expect(await checkLegacyBroomyGitignore('/repo')).toBe(true)
+  })
+
+  it('returns true for /.broomy/ with leading slash', async () => {
+    vi.mocked(window.fs.exists).mockResolvedValue(true)
+    vi.mocked(window.fs.readFile).mockResolvedValue('/.broomy/\n')
+    expect(await checkLegacyBroomyGitignore('/repo')).toBe(true)
+  })
+
+  it('returns false when .broomy is not in .gitignore', async () => {
+    vi.mocked(window.fs.exists).mockResolvedValue(true)
+    vi.mocked(window.fs.readFile).mockResolvedValue('node_modules/\n')
+    expect(await checkLegacyBroomyGitignore('/repo')).toBe(false)
+  })
+
+  it('returns false on error', async () => {
+    vi.mocked(window.fs.exists).mockRejectedValue(new Error('fail'))
+    expect(await checkLegacyBroomyGitignore('/repo')).toBe(false)
+  })
+})
+
+describe('removeLegacyBroomyGitignore', () => {
+  it('does nothing when .gitignore does not exist', async () => {
+    vi.mocked(window.fs.exists).mockResolvedValue(false)
+    await removeLegacyBroomyGitignore('/repo')
+    expect(window.fs.writeFile).not.toHaveBeenCalled()
+  })
+
+  it('removes .broomy/ entries from .gitignore', async () => {
+    vi.mocked(window.fs.exists).mockResolvedValue(true)
+    vi.mocked(window.fs.readFile).mockResolvedValue('node_modules/\n.broomy/\ndist/\n')
+    await removeLegacyBroomyGitignore('/repo')
+    expect(window.fs.writeFile).toHaveBeenCalledWith(
+      '/repo/.gitignore',
+      'node_modules/\ndist/\n'
+    )
+  })
+
+  it('removes # Broomy review data comment lines', async () => {
+    vi.mocked(window.fs.exists).mockResolvedValue(true)
+    vi.mocked(window.fs.readFile).mockResolvedValue('node_modules/\n# Broomy review data\n.broomy/\n')
+    await removeLegacyBroomyGitignore('/repo')
+    const written = vi.mocked(window.fs.writeFile).mock.calls[0][1]
+    expect(written).not.toContain('Broomy review data')
+    expect(written).not.toContain('.broomy')
+  })
+
+  it('handles errors gracefully', async () => {
+    vi.mocked(window.fs.exists).mockRejectedValue(new Error('fail'))
+    // Should not throw
+    await removeLegacyBroomyGitignore('/repo')
   })
 })
 

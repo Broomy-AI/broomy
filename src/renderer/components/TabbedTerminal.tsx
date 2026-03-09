@@ -109,10 +109,8 @@ function isFixedTab(tabId: string): boolean {
 interface TabbedTerminalProps {
   sessionId: string
   cwd: string
-  isActive: boolean
   agentCommand?: string
   agentEnv?: Record<string, string>
-  agentResumeCommand?: string
   isRestored?: boolean
   isolated: boolean
   repoRootDir?: string
@@ -178,10 +176,10 @@ function tabPanelClass(tabId: string, activeTabId: string): string {
 }
 
 /** Renders the terminal panels (Agent, Services, Docker, user tabs). */
-const TerminalPanels = React.memo(function TerminalPanels({ sessionId, cwd, isActive, activeTabId, agentCommand, agentEnv, agentInstalled, agentResumeCommand, isRestored, isolated, repoRootDir, servicesInfo, userTabs }: {
-  sessionId: string; cwd: string; isActive: boolean; activeTabId: string
+const TerminalPanels = React.memo(function TerminalPanels({ sessionId, cwd, activeTabId, agentCommand, agentEnv, agentInstalled, isRestored, isolated, repoRootDir, servicesInfo, userTabs }: {
+  sessionId: string; cwd: string; activeTabId: string
   agentCommand?: string; agentEnv?: Record<string, string>; agentInstalled: boolean
-  agentResumeCommand?: string; isRestored?: boolean
+  isRestored?: boolean
   isolated: boolean; repoRootDir?: string
   servicesInfo: ServicesInfo | null
   userTabs: TerminalTab[]
@@ -192,10 +190,11 @@ const TerminalPanels = React.memo(function TerminalPanels({ sessionId, cwd, isAc
         <PanelErrorBoundary name="Agent Terminal">
           <Terminal
             sessionId={sessionId} cwd={cwd} command={agentCommand} env={agentEnv}
-            isAgentTerminal={!!agentCommand} isActive={isActive && activeTabId === AGENT_TAB_ID}
-            agentNotInstalled={!!agentCommand && !agentInstalled} agentResumeCommand={agentResumeCommand}
+            isAgentTerminal={!!agentCommand}
+            agentNotInstalled={!!agentCommand && !agentInstalled}
             isRestored={isRestored} isolated={isolated}
             repoRootDir={repoRootDir}
+            storeSessionId={sessionId} tabId={AGENT_TAB_ID}
           />
         </PanelErrorBoundary>
       </div>
@@ -204,8 +203,9 @@ const TerminalPanels = React.memo(function TerminalPanels({ sessionId, cwd, isAc
           <PanelErrorBoundary name="Services Terminal">
             <Terminal
               sessionId={`services-${sessionId}`} cwd={cwd} command={servicesInfo.postAttachCommand}
-              isServicesTerminal isActive={isActive && activeTabId === SERVICES_TAB_ID}
+              isServicesTerminal
               isolated repoRootDir={repoRootDir}
+              storeSessionId={sessionId} tabId={SERVICES_TAB_ID}
             />
           </PanelErrorBoundary>
         </div>
@@ -220,8 +220,9 @@ const TerminalPanels = React.memo(function TerminalPanels({ sessionId, cwd, isAc
           <PanelErrorBoundary name={`Terminal ${tab.name}`}>
             <Terminal
               sessionId={`user-${sessionId}-${tab.id}`} cwd={cwd}
-              isActive={isActive && tab.id === activeTabId} isolated={tab.isolated && isolated}
+              isolated={tab.isolated && isolated}
               repoRootDir={tab.isolated && isolated ? repoRootDir : undefined}
+              storeSessionId={sessionId} tabId={tab.id}
             />
           </PanelErrorBoundary>
         </div>
@@ -230,7 +231,7 @@ const TerminalPanels = React.memo(function TerminalPanels({ sessionId, cwd, isAc
   )
 })
 
-export default function TabbedTerminal({ sessionId, cwd, isActive, agentCommand, agentEnv, agentResumeCommand, isRestored, isolated, repoRootDir }: TabbedTerminalProps) {
+export default function TabbedTerminal({ sessionId, cwd, agentCommand, agentEnv, isRestored, isolated, repoRootDir }: TabbedTerminalProps) {
   // Targeted selector: only re-render when this session's terminalTabs change
   const terminalTabs = useSessionStore((state) => {
     const session = state.sessions.find((s) => s.id === sessionId)
@@ -401,9 +402,9 @@ export default function TabbedTerminal({ sessionId, cwd, isActive, agentCommand,
       )}
 
       <TerminalPanels
-        sessionId={sessionId} cwd={cwd} isActive={isActive} activeTabId={activeTabId}
+        sessionId={sessionId} cwd={cwd} activeTabId={activeTabId}
         agentCommand={agentCommand} agentEnv={agentEnv} agentInstalled={agentInstalled}
-        agentResumeCommand={agentResumeCommand} isRestored={isRestored}
+        isRestored={isRestored}
         isolated={isolated} repoRootDir={repoRootDir}
         servicesInfo={servicesInfo} userTabs={userTabs}
       />

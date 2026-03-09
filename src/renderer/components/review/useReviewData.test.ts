@@ -26,8 +26,7 @@ describe('useReviewData', () => {
     expect(result.current.reviewMarkdown).toBeNull()
     expect(result.current.waitingForAgent).toBe(false)
     expect(result.current.error).toBeNull()
-    expect(result.current.showGitignoreModal).toBe(false)
-    expect(result.current.pendingGenerate).toBe(false)
+    expect(result.current.fetching).toBe(false)
   })
 
   it('computes correct file paths', () => {
@@ -115,8 +114,7 @@ describe('useReviewData', () => {
     expect(typeof result.current.setReviewMarkdown).toBe('function')
     expect(typeof result.current.setWaitingForAgent).toBe('function')
     expect(typeof result.current.setError).toBe('function')
-    expect(typeof result.current.setShowGitignoreModal).toBe('function')
-    expect(typeof result.current.setPendingGenerate).toBe('function')
+    expect(typeof result.current.setFetching).toBe('function')
   })
 
   it('sets mergeBase to empty string when branchChanges fails', async () => {

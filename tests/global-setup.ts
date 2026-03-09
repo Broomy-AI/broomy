@@ -126,6 +126,9 @@ export default async function globalSetup() {
     // Set ELECTRON_RENDERER_URL so all test specs pick it up via ...process.env
     process.env.ELECTRON_RENDERER_URL = url
     console.log(`  Renderer dev server ready at ${url}\n`)
+  } else if (process.env.E2E_SKIP_BUILD === 'true') {
+    // Pre-built mode (Docker): skip building, app is already compiled
+    console.log('\n  Skipping build (E2E_SKIP_BUILD=true) — using pre-built output\n')
   } else {
     // Standard mode: full production build
     console.log('\n  Building app for E2E tests…\n')

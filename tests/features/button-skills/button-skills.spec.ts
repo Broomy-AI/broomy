@@ -1,8 +1,8 @@
 /**
  * Feature Documentation: Button Skills (Claude Code Command Integration)
  *
- * Documents the skill-aware prompt system that integrates Broomy UI actions
- * with Claude Code's slash command system (.claude/commands/).
+ * Documents the action button system that sends agent-agnostic inline prompts
+ * from .broomy/commands.json to the active agent terminal.
  *
  * Run with: pnpm test:feature-docs button-skills
  */
@@ -57,9 +57,8 @@ test.afterAll(async () => {
       title: 'Button Skills: Claude Code Command Integration',
       description:
         'Broomy UI actions (Commit, Push to Main, Create PR, Resolve Conflicts, Review, Plan Issue) ' +
-        'integrate with Claude Code\'s slash command system. When a matching .claude/commands/broomy-action-*.md ' +
-        'file exists in the repo, the UI sends the slash command instead of a hardcoded prompt. ' +
-        'A dismissible banner nudges Claude Code users toward installing skill files.',
+        'send agent-agnostic inline prompts defined in .broomy/commands.json. ' +
+        'Actions can have per-agent prompt overrides for agent-specific behavior.',
       steps,
     },
     FEATURE_DIR,
@@ -81,7 +80,7 @@ test.describe.serial('Feature: Button Skills', () => {
       description:
         'The Source Control tab in the explorer panel displays git status, ' +
         'action buttons (Commit, Sync, Push to Main, Create PR), and branch information. ' +
-        'When a Claude Code agent is active, these buttons use skill-aware prompts.',
+        'These buttons send inline prompts from .broomy/commands.json.',
     })
   })
 
@@ -94,10 +93,9 @@ test.describe.serial('Feature: Button Skills', () => {
       screenshotPath: 'screenshots/02-action-buttons.png',
       caption: 'Action buttons in working changes view',
       description:
-        'Each action button (Commit, Push to Main, Create PR, Resolve Conflicts) sends a ' +
-        'skill-aware prompt. For Claude Code agents with a matching broomy-action-*.md skill file, ' +
-        'it sends a slash command (e.g., /broomy-action-commit). For other agents or when the ' +
-        'skill file is missing, it sends the original hardcoded prompt as a fallback.',
+        'Each action button (Commit, Push to Main, Create PR, Resolve Conflicts) sends ' +
+        'the inline prompt defined in .broomy/commands.json. Actions can have per-agent ' +
+        'prompt overrides for agent-specific behavior.',
     })
   })
 
@@ -110,12 +108,9 @@ test.describe.serial('Feature: Button Skills', () => {
       screenshotPath: 'screenshots/03-agent-terminal.png',
       caption: 'Agent terminal receives skill-aware commands',
       description:
-        'When a UI button is clicked, the skill-aware prompt system checks: ' +
-        '(1) Is the agent Claude Code? (command starts with "claude") ' +
-        '(2) Does a matching .claude/commands/broomy-action-*.md skill file exist? ' +
-        'If both are true, it sends the slash command. Otherwise, it sends the fallback prompt. ' +
-        'For Claude Code users without skill files, a dismissible info banner appears suggesting ' +
-        'they install the standard Broomy skills via a dialog.',
+        'When a UI button is clicked, the action system sends the inline prompt from ' +
+        '.broomy/commands.json to the agent terminal. If the action has a per-agent override ' +
+        'matching the active agent type, that override prompt is used instead.',
     })
   })
 })

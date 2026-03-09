@@ -25,10 +25,6 @@ export default function Explorer({
   onGitStatusRefresh,
   recentFiles = [],
   sessionId,
-  pushedToMainAt,
-  pushedToMainCommit,
-  onRecordPushToMain,
-  onClearPushToMain,
   planFilePath,
   branchStatus,
   onUpdatePrState,
@@ -97,10 +93,7 @@ export default function Explorer({
       {/* Issue plan chip */}
       <IssuePlanChip
         directory={directory}
-        issueNumber={issueNumber}
         issuePlanExists={issuePlanExists}
-        agentPtyId={agentPtyId}
-        agentId={session?.agentId}
         onFileSelect={onFileSelect}
       />
 
@@ -133,10 +126,6 @@ export default function Explorer({
               issueNumber={issueNumber}
               issueTitle={issueTitle}
               issueUrl={issueUrl}
-              pushedToMainAt={pushedToMainAt}
-              pushedToMainCommit={pushedToMainCommit}
-              onRecordPushToMain={onRecordPushToMain}
-              onClearPushToMain={onClearPushToMain}
               onSwitchTab={(tab) => onFilterChange(tab as Parameters<typeof onFilterChange>[0])}
               onOpenCommandsEditor={handleOpenCommandsEditor}
               isReview={session?.sessionType === 'review'}
@@ -172,6 +161,10 @@ export default function Explorer({
               onSelectFile={(filePath, openInDiffMode, scrollToLine, diffBaseRef) => {
                 onFileSelect?.({ filePath, openInDiffMode, scrollToLine, diffBaseRef })
               }}
+              gitStatus={gitStatus}
+              syncStatus={syncStatus}
+              branchStatus={branchStatus}
+              onGitStatusRefresh={onGitStatusRefresh}
             />
           </PanelErrorBoundary>
         )}

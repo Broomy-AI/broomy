@@ -4,6 +4,7 @@ import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/re
 import '../../../test/react-setup'
 import { useAgentStore } from '../../store/agents'
 import { useRepoStore } from '../../store/repos'
+import { useSessionStore } from '../../store/sessions'
 import { NewBranchView } from './NewBranchView'
 import type { ManagedRepo } from '../../../preload/index'
 
@@ -199,6 +200,114 @@ describe('NewBranchView', () => {
       <NewBranchView repo={mockRepo} onBack={vi.fn()} onComplete={vi.fn()} />
     )
     expect(screen.getByText('Claude')).toBeTruthy()
+  })
+
+  describe('branch already exists on remote', () => {
+    beforeEach(() => {
+      vi.mocked(window.git.pull).mockResolvedValue({ success: true })
+      vi.mocked(window.git.worktreeAdd).mockResolvedValue({ success: true })
+      vi.mocked(window.git.worktreeRemove).mockResolvedValue({ success: true })
+      vi.mocked(window.git.deleteBranch).mockResolvedValue({ success: true })
+    })
+
+    it('shows "Open existing session" when a session exists for that branch', async () => {
+      vi.mocked(window.git.pushNewBranch).mockResolvedValue({
+        success: false,
+        error: 'BRANCH_EXISTS:The remote branch "fix/lint" has diverged.',
+      })
+
+      useSessionStore.setState({
+        sessions: [{
+          id: 'existing-session',
+          name: 'test',
+          directory: '/repos/my-project/fix/lint',
+          branch: 'fix/lint',
+          status: 'idle' as const,
+          agentId: null,
+          repoId: 'repo-1',
+          panelVisibility: {},
+          showExplorer: false,
+          showFileViewer: false,
+          showDiff: false,
+          selectedFilePath: null,
+          planFilePath: null,
+          fileViewerPosition: 'top' as const,
+          layoutSizes: { explorerWidth: 256, fileViewerSize: 300, userTerminalHeight: 192, diffPanelWidth: 320, tutorialPanelWidth: 320 },
+          explorerFilter: 'files' as const,
+          lastMessage: null,
+          lastMessageTime: null,
+          isUnread: false,
+          workingStartTime: null,
+          recentFiles: [],
+          terminalTabs: { tabs: [{ id: 'tab-1', name: 'Terminal' }], activeTabId: 'tab-1' },
+          branchStatus: 'in-progress' as const,
+          isArchived: false,
+          isRestored: false,
+        }],
+        activeSessionId: null,
+      })
+
+      render(
+        <NewBranchView repo={mockRepo} onBack={vi.fn()} onComplete={vi.fn()} />
+      )
+
+      const input = screen.getByPlaceholderText('feature/my-feature')
+      fireEvent.change(input, { target: { value: 'fix/lint' } })
+      fireEvent.click(screen.getByText('Create Branch'))
+
+      await waitFor(() => {
+        expect(screen.getByText(/has diverged/)).toBeTruthy()
+        expect(screen.getByText('Open existing session')).toBeTruthy()
+      })
+    })
+
+    it('shows "Use existing branch" when no session exists but branch is on remote', async () => {
+      vi.mocked(window.git.pushNewBranch).mockResolvedValue({
+        success: false,
+        error: 'BRANCH_EXISTS:The remote branch "fix/lint" has diverged.',
+      })
+
+      useSessionStore.setState({ sessions: [], activeSessionId: null })
+
+      const onUseExisting = vi.fn()
+      render(
+        <NewBranchView repo={mockRepo} onBack={vi.fn()} onComplete={vi.fn()} onUseExisting={onUseExisting} />
+      )
+
+      const input = screen.getByPlaceholderText('feature/my-feature')
+      fireEvent.change(input, { target: { value: 'fix/lint' } })
+      fireEvent.click(screen.getByText('Create Branch'))
+
+      await waitFor(() => {
+        expect(screen.getByText(/has diverged/)).toBeTruthy()
+        expect(screen.getByText('Use existing branch instead')).toBeTruthy()
+      })
+
+      fireEvent.click(screen.getByText('Use existing branch instead'))
+      expect(onUseExisting).toHaveBeenCalledWith('fix/lint')
+    })
+
+    it('cleans up worktree and local branch on BRANCH_EXISTS error', async () => {
+      vi.mocked(window.git.pushNewBranch).mockResolvedValue({
+        success: false,
+        error: 'BRANCH_EXISTS:The remote branch "fix/lint" has diverged.',
+      })
+
+      useSessionStore.setState({ sessions: [], activeSessionId: null })
+
+      render(
+        <NewBranchView repo={mockRepo} onBack={vi.fn()} onComplete={vi.fn()} />
+      )
+
+      const input = screen.getByPlaceholderText('feature/my-feature')
+      fireEvent.change(input, { target: { value: 'fix/lint' } })
+      fireEvent.click(screen.getByText('Create Branch'))
+
+      await waitFor(() => {
+        expect(window.git.worktreeRemove).toHaveBeenCalledWith('/repos/my-project/main', '/repos/my-project/fix/lint')
+        expect(window.git.deleteBranch).toHaveBeenCalledWith('/repos/my-project/main', 'fix/lint')
+      })
+    })
   })
 
   describe('auth error flow', () => {

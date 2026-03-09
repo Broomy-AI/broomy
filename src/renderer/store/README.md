@@ -22,7 +22,7 @@ All stores follow the same lifecycle: **load from config on mount, mutate in-mem
 |------|-------------|
 | `sessions.ts` | Session state management: CRUD, panel visibility, layout sizes, agent monitoring, terminal tabs, branch status, PR tracking, and archive. The largest store. |
 | `sessionCoreActions.ts` | Core session actions extracted from the session store: creating, selecting, removing, and updating sessions, plus default layout sizes. |
-| `sessionBranchActions.ts` | Session store actions for branch status, PR state, and push-to-main tracking. |
+| `sessionBranchActions.ts` | Session store actions for branch status, PR state, and session lifecycle. |
 | `sessionPanelActions.ts` | Session store actions for toggling panels, managing layout sizes, and toolbar configuration. |
 | `sessionTerminalTabs.ts` | Session store actions for managing terminal tabs (add, remove, rename, reorder, activate). |
 | `sessionPersistence.ts` | Helpers for persisting session state to disk and migrating legacy panel visibility fields. |

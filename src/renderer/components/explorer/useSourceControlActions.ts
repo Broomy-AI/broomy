@@ -1,7 +1,7 @@
 /**
  * Hook providing git infrastructure action handlers (commit, stage, sync).
  *
- * Agent-dispatching actions (commit with AI, create PR, push to main, resolve conflicts, review)
+ * Agent-dispatching actions (commit with AI, create PR, approve and merge, resolve conflicts, review)
  * are now handled by the modular commands.json system via ActionButtons.
  */
 import type { SourceControlData } from './useSourceControlData'
@@ -13,7 +13,6 @@ export interface SourceControlActionsProps {
   onGitStatusRefresh?: () => void
   agentPtyId?: string
   agentId?: string | null
-  onRecordPushToMain?: (commitHash: string) => void
   data: SourceControlData
 }
 

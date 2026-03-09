@@ -32,12 +32,11 @@ function useAgentForm(addAgent: ReturnType<typeof useAgentStore.getState>['addAg
   const [color, setColor] = useState('')
   const [env, setEnv] = useState<Record<string, string>>({})
   const [skipApprovalFlag, setSkipApprovalFlag] = useState('')
-  const [resumeCommand, setResumeCommand] = useState('')
   const envEditorRef = useRef<EnvVarEditorRef>(null)
 
   const resetForm = useCallback(() => {
     setName(''); setCommand(''); setColor(''); setEnv({})
-    setSkipApprovalFlag(''); setResumeCommand('')
+    setSkipApprovalFlag('')
     setShowAddForm(false); setEditingId(null)
   }, [])
 
@@ -48,7 +47,6 @@ function useAgentForm(addAgent: ReturnType<typeof useAgentStore.getState>['addAg
       name: name.trim(), command: command.trim(), color: color.trim() || undefined,
       env: Object.keys(finalEnv).length > 0 ? finalEnv : undefined,
       skipApprovalFlag: skipApprovalFlag.trim() || undefined,
-      resumeCommand: resumeCommand.trim() || undefined,
     })
     resetForm()
   }
@@ -56,8 +54,7 @@ function useAgentForm(addAgent: ReturnType<typeof useAgentStore.getState>['addAg
   const handleEdit = (agent: AgentConfig) => {
     setEditingId(agent.id); setName(agent.name); setCommand(agent.command)
     setColor(agent.color || ''); setEnv(agent.env || {})
-    setSkipApprovalFlag(agent.skipApprovalFlag || '')
-    setResumeCommand(agent.resumeCommand || ''); setShowAddForm(false)
+    setSkipApprovalFlag(agent.skipApprovalFlag || ''); setShowAddForm(false)
   }
 
   const handleUpdate = () => {
@@ -67,7 +64,6 @@ function useAgentForm(addAgent: ReturnType<typeof useAgentStore.getState>['addAg
       name: name.trim(), command: command.trim(), color: color.trim() || undefined,
       env: Object.keys(finalEnv).length > 0 ? finalEnv : undefined,
       skipApprovalFlag: skipApprovalFlag.trim() || undefined,
-      resumeCommand: resumeCommand.trim() || undefined,
     })
     resetForm()
   }
@@ -78,8 +74,8 @@ function useAgentForm(addAgent: ReturnType<typeof useAgentStore.getState>['addAg
   }
 
   return {
-    editingId, showAddForm, name, command, color, env, skipApprovalFlag, resumeCommand, envEditorRef,
-    setName, setCommand, setColor, setEnv, setSkipApprovalFlag, setResumeCommand,
+    editingId, showAddForm, name, command, color, env, skipApprovalFlag, envEditorRef,
+    setName, setCommand, setColor, setEnv, setSkipApprovalFlag,
     setShowAddForm, resetForm, handleAdd, handleEdit, handleUpdate, handleDelete,
   }
 }
@@ -137,12 +133,11 @@ export default function AgentSettings({ onClose }: AgentSettingsProps) {
           <AgentSettingsAgentTab
             agents={agents} editingId={form.editingId} showAddForm={form.showAddForm}
             name={form.name} command={form.command} color={form.color} env={form.env}
-            skipApprovalFlag={form.skipApprovalFlag} resumeCommand={form.resumeCommand}
+            skipApprovalFlag={form.skipApprovalFlag}
             envEditorRef={form.envEditorRef}
             onNameChange={form.setName} onCommandChange={form.setCommand}
             onColorChange={form.setColor} onEnvChange={form.setEnv}
             onSkipApprovalFlagChange={form.setSkipApprovalFlag}
-            onResumeCommandChange={form.setResumeCommand}
             onEdit={form.handleEdit} onUpdate={form.handleUpdate}
             onDelete={form.handleDelete} onAdd={form.handleAdd}
             onShowAddForm={() => form.setShowAddForm(true)} onCancel={form.resetForm}
@@ -155,6 +150,7 @@ export default function AgentSettings({ onClose }: AgentSettingsProps) {
             <SettingsRepoScreen
               repo={repo} agents={agents}
               onUpdateRepo={updateRepo} onOpenCommandsEditor={handleOpenCommandsEditor}
+              onBack={popScreen}
             />
           )
         })()}

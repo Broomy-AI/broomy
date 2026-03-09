@@ -153,5 +153,52 @@ describe('sessionPanelActions', () => {
       useSessionStore.getState().toggleFileViewer('test-session')
       expect(useSessionStore.getState().sessions[0].panelVisibility[PANEL_IDS.FILE_VIEWER]).toBe(true)
     })
+
+    it('toggleSidebar delegates to toggleGlobalPanel', () => {
+      addTestSession()
+      expect(useSessionStore.getState().showSidebar).toBe(true)
+      useSessionStore.getState().toggleSidebar()
+      expect(useSessionStore.getState().showSidebar).toBe(false)
+      expect(useSessionStore.getState().globalPanelVisibility[PANEL_IDS.SIDEBAR]).toBe(false)
+    })
+  })
+
+  describe('openCommandsEditor', () => {
+    it('opens the commands editor for a session', () => {
+      addTestSession()
+      useSessionStore.getState().openCommandsEditor('test-session', '/repo/dir')
+      const session = useSessionStore.getState().sessions[0]
+      expect(session.commandsEditorDirectory).toBe('/repo/dir')
+      expect(session.panelVisibility[PANEL_IDS.FILE_VIEWER]).toBe(true)
+      expect(session.showFileViewer).toBe(true)
+    })
+
+    it('does not affect other sessions', () => {
+      addTestSession('s1')
+      const s2 = { ...useSessionStore.getState().sessions[0], id: 's2' }
+      useSessionStore.setState({ sessions: [...useSessionStore.getState().sessions, s2] })
+
+      useSessionStore.getState().openCommandsEditor('s1', '/repo')
+      expect(useSessionStore.getState().sessions[1].commandsEditorDirectory).toBeUndefined()
+    })
+  })
+
+  describe('closeCommandsEditor', () => {
+    it('closes the commands editor for a session', () => {
+      addTestSession()
+      useSessionStore.getState().openCommandsEditor('test-session', '/repo/dir')
+      useSessionStore.getState().closeCommandsEditor('test-session')
+      const session = useSessionStore.getState().sessions[0]
+      expect(session.commandsEditorDirectory).toBeNull()
+    })
+
+    it('does not affect other sessions', () => {
+      addTestSession('s1')
+      const s2 = { ...useSessionStore.getState().sessions[0], id: 's2', commandsEditorDirectory: '/other' }
+      useSessionStore.setState({ sessions: [...useSessionStore.getState().sessions, s2] })
+
+      useSessionStore.getState().closeCommandsEditor('s1')
+      expect(useSessionStore.getState().sessions[1].commandsEditorDirectory).toBe('/other')
+    })
   })
 })

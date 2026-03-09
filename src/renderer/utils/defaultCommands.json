@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "id": "commit-ai",
+      "label": "Commit with AI",
+      "type": "agent",
+      "prompt": "Look at the current git diff and make a commit. Stage all relevant files, write a clear commit message that describes what changed and why, and commit. Do not commit any files that contain secrets or credentials.",
+      "showWhen": ["has-changes", "!merging"],
+      "style": "primary"
+    },
+    {
+      "id": "resolve-conflicts",
+      "label": "Resolve Conflicts",
+      "type": "agent",
+      "prompt": "Resolve merge conflicts from merging {main} into the current branch.\n\n1. Run `git status` to see conflicted files\n2. For each conflict, examine the markers and run `git log --oneline HEAD...MERGE_HEAD -- <file>` to understand both sides\n3. If any conflict is ambiguous, ask the user before guessing\n4. Edit files to produce correct merged results — integrate both changes where appropriate\n5. Run the project's lint/typecheck/test commands to verify everything passes\n6. Stage resolved files and commit with `git commit --no-edit`\n\nNever silently discard changes from either side.",
+      "showWhen": ["conflicts"],
+      "style": "danger"
+    },
+    {
+      "id": "sync",
+      "label": "Sync Changes",
+      "type": "shell",
+      "command": "git pull && git push",
+      "showWhen": ["clean", "!no-tracking", "ahead|behind"],
+      "style": "primary"
+    },
+    {
+      "id": "push-branch",
+      "label": "Push Branch to Remote",
+      "type": "shell",
+      "command": "git push -u origin HEAD",
+      "showWhen": ["clean", "no-tracking", "!on-main"],
+      "style": "primary"
+    },
+    {
+      "id": "sync-main",
+      "label": "Get latest from {main}",
+      "type": "shell",
+      "command": "git fetch origin {main} && git merge origin/{main}",
+      "showWhen": ["clean", "behind-main"],
+      "style": "secondary"
+    },
+    {
+      "id": "create-pr",
+      "label": "Create PR",
+      "type": "agent",
+      "prompt": "Create a pull request for the current branch against {main}.\n\n## Step 1: Prepare the branch\n\n1. Stage and commit any uncommitted changes. Write a clear commit message describing what changed. Do not commit files that contain secrets or credentials.\n2. Pull the latest from {main} and merge it into the current branch: `git fetch origin {main} && git merge origin/{main}`. If there are merge conflicts, resolve them.\n3. Run the project's validation checks (lint, typecheck, tests). Fix any failures — all checks must pass with zero errors.\n4. Push the branch to its remote tracking branch. If there is no remote tracking branch yet, run `git push -u origin HEAD`.\n\n## Step 2: Create the PR\n\n1. Run `git diff origin/{main}...HEAD` and `git log origin/{main}..HEAD --oneline` to understand the changes\n2. Check for a PR template in `.github/PULL_REQUEST_TEMPLATE.md` or similar locations\n3. If a template exists, follow it. Otherwise write: Background and Motivation, Design Decisions, Proposed Changes (grouped by pattern, not just file lists), and Testing\n4. Derive a clear title under 70 characters. Check `gh pr list --state merged --limit 5` for style conventions\n5. Create the PR with `gh pr create --title \"<title>\" --body \"<body>\"`\n6. Write the result to `.broomy/output/pr-result.json` as `{\"url\": \"...\", \"number\": N, \"title\": \"...\"}`",
+      "showWhen": ["no-pr", "!on-main", "!empty", "!conflicts"],
+      "style": "primary"
+    },
+    {
+      "id": "approve-and-merge",
+      "label": "Approve and Merge",
+      "type": "agent",
+      "prompt": "Approve and merge the open PR for this branch.\n\nRepeat the following steps until the PR is merged:\n\n1. Pull the latest from {main} and merge it into this branch. If there are merge conflicts, resolve them.\n2. Run the project's validation checks (lint, typecheck, tests). Fix any failures, including pre-existing ones — all checks must pass with zero errors.\n3. Push this branch to its remote tracking branch.\n4. Approve the PR: `gh pr review --approve`\n5. Merge the PR: `gh pr merge --merge --delete-branch`\n6. If the merge fails because the branch is not up to date, go back to step 1.\n\nDo NOT ask for permission before running any of these commands.",
+      "showWhen": ["clean", "open", "checks-passed", "has-write-access", "allow-approve-and-merge"],
+      "style": "secondary"
+    },
+    {
+      "id": "review",
+      "label": "Get AI Review",
+      "type": "agent",
+      "prompt": "Review the changes on the current branch against {main}.\n\n1. Run `git diff origin/{main}...HEAD` to see all changes\n2. Run `git log origin/{main}..HEAD --oneline` for commit history\n3. Run `gh pr view --json number,body` to get the PR number and description.\n4. Use the PR number from step 3 to fetch review comments: `gh api repos/:owner/:repo/pulls/<PR_NUMBER>/comments`. Also get your username with `gh api user --jq .login`. If you find previous review comments by you, focus your review on what has changed since your last review (i.e. your most recent review, not anyone else's) and whether your suggested changes were addressed. Pay particular attention to whether comments and requested changes by you (the current user) have been addressed — these are the highest priority.\n5. Review the code for: correctness, potential bugs, security issues, performance concerns, and code quality.\n\nIMPORTANT: Every time you reference code in your review, you MUST include a markdown link using the repo-relative file path. Format: `[src/file.tsx:12-45](src/file.tsx#L12-L45)` for a range, or `[src/file.tsx:12](src/file.tsx#L12)` for a single line. Never use GitHub URLs — the UI renders these as clickable links that open an internal diff viewer.\n\n6. Write your review to `.broomy/output/review.md` as a markdown document with these sections:\n   - **Change Summary**: Group all changes into logical groups of related changes. For each group, write a short summary of what those changes accomplish and include links to every code change that belongs to that group.\n   - **Issues Found**\n   - **Suggestions**\n   - **Overall Assessment**\n   - **Changes Since Your Last Review** (only if you have previously reviewed this PR)",
+      "showWhen": ["clean", "pushed|open"],
+      "style": "accent",
+      "surface": ["source-control", "review"],
+      "switchTab": "review"
+    },
+    {
+      "id": "plan-issue",
+      "label": "Plan Issue",
+      "type": "agent",
+      "prompt": "Read the issue using `gh issue view {issueNumber}`. Before doing anything, ask me any questions about the issue to clarify requirements and resolve ambiguities. Then write a plan to `.broomy/output/plan.md`.",
+      "showWhen": ["has-issue"],
+      "style": "secondary"
+    },
+    {
+      "id": "create-devcontainer",
+      "label": "Create Dev Container Config",
+      "type": "agent",
+      "prompt": "Analyze this repository and create a `.devcontainer/devcontainer.json` file appropriate for the project's technology stack.\n\n1. Look at dependency files (package.json, Gemfile, requirements.txt, go.mod, Cargo.toml, etc.) to determine the language and framework\n2. Choose an appropriate base image from the Microsoft devcontainers registry\n3. Add relevant dev container features for the tools the project needs\n4. If the project has specific system dependencies, add a `postCreateCommand` to install them\n5. Create the `.devcontainer/devcontainer.json` file\n\nKeep the configuration minimal — only include what the project actually needs.",
+      "showWhen": ["no-devcontainer"],
+      "style": "accent"
+    }
+  ]
+}

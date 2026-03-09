@@ -85,7 +85,7 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
   {
     id: 'used-review',
     title: 'Use review tab',
-    description: 'The Review tab generates markdown-based reviews of your pull requests. Click "Generate Review" and your agent writes a structured review to .broomy/review.md. Customize the review process by editing .claude/commands/broomy-action-review-md.md — add your own checks, sections, and validation steps. Links in the review open GitHub pages in the file panel for inline commenting.',
+    description: 'The Review tab generates markdown-based reviews of your pull requests. Click "Generate Review" and your agent writes a structured review to .broomy/review.md. Customize review prompts by editing the review action in .broomy/commands.json. Links in the review open GitHub pages in the file panel for inline commenting.',
   },
   {
     id: 'viewed-settings',

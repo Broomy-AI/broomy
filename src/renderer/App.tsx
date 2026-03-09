@@ -7,7 +7,7 @@
  * manages file navigation with unsaved-changes guards and global keyboard shortcuts.
  * The outer App component wraps AppContent in the PanelProvider context.
  */
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import Layout from './components/Layout'
 import NewSessionDialog from './components/NewSessionDialog'
 import PanelPicker from './components/PanelPicker'
@@ -34,6 +34,7 @@ import { focusSearchInput } from './utils/focusHelpers'
 import { useMenuButton } from './hooks/useMenuButton'
 import CrashRecoveryBanner from './components/CrashRecoveryBanner'
 import { DialogErrorBanner } from './components/ErrorBanner'
+import ExperimentalPlatformModal from './components/ExperimentalPlatformModal'
 
 // Re-export types for backwards compatibility
 export type { Session, SessionStatus }
@@ -138,15 +139,15 @@ function AppContent() {
   const sidebarWidth = useSessionStore(s => s.sidebarWidth)
   const toolbarPanels = useSessionStore(s => s.toolbarPanels)
   const globalPanelVisibility = useSessionStore(s => s.globalPanelVisibility)
-  // Actions are referentially stable — destructure together
+  // Actions are referentially stable in Zustand — get them once without subscribing to state changes
   const {
     loadSessions, addSession, removeSession, setActiveSession,
     togglePanel, toggleGlobalPanel, setSidebarWidth, setToolbarPanels,
     selectFile, setExplorerFilter, setFileViewerPosition, updateLayoutSize,
-    markSessionRead, recordPushToMain, clearPushToMain, markHasHadCommits,
-    updateBranchStatus, updatePrState, archiveSession, unarchiveSession, setPanelVisibility, updateSessionBranch,
+    markSessionRead, markHasHadCommits,
+    updateBranchStatus, updatePrState, updateReviewStatus, archiveSession, unarchiveSession, setPanelVisibility, updateSessionBranch,
     closeCommandsEditor,
-  } = useSessionStore()
+  } = useMemo(() => useSessionStore.getState(), [])
 
   useGitBranchWatcher({ sessions, activeSessionId, updateSessionBranch })
 
@@ -195,6 +196,7 @@ function AppContent() {
     checkGhAvailability, checkGitAvailability,
     switchProfile,
     markSessionRead,
+    updateReviewStatus,
   })
 
   // App callbacks hook
@@ -206,7 +208,6 @@ function AppContent() {
     refreshPrStatus,
     getAgentCommand,
     getAgentEnv,
-    getAgentResumeCommand,
     getRepoIsolation,
     handleLayoutSizeChange,
     handleFileViewerPositionChange,
@@ -265,9 +266,9 @@ function AppContent() {
     removeSession: (id, deleteWorktree) => { handleDeleteSession(id, deleteWorktree) },
     refreshPrStatus, archiveSession, unarchiveSession,
     handleToggleFileViewer, handleFileViewerPositionChange,
-    fetchGitStatus, getAgentCommand, getAgentEnv, getAgentResumeCommand, getRepoIsolation,
+    fetchGitStatus, getAgentCommand, getAgentEnv, getRepoIsolation,
     globalPanelVisibility, toggleGlobalPanel, selectFile, setExplorerFilter,
-    recordPushToMain, clearPushToMain, updatePrState,
+    updatePrState,
     setPanelVisibility, setToolbarPanels, closeCommandsEditor, repos,
   })
 
@@ -347,12 +348,16 @@ function AppContent() {
       {duplicateSessionInfo && (
         <DuplicateSessionModal info={duplicateSessionInfo} onDismiss={() => setDuplicateSessionInfo(null)} />
       )}
+
+      {/* Experimental Platform Modal (Windows/Linux) */}
+      <ExperimentalPlatformModal />
     </>
   )
 }
 
 function App() {
-  const { toolbarPanels, setToolbarPanels } = useSessionStore()
+  const toolbarPanels = useSessionStore(s => s.toolbarPanels)
+  const setToolbarPanels = useSessionStore(s => s.setToolbarPanels)
 
   // Expose stores for Playwright screenshot manipulation
   useEffect(() => {

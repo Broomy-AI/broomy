@@ -19,7 +19,7 @@ const BASE_STATE: ConditionState = {
   'no-tracking': false, ahead: false, behind: false, 'behind-main': false,
   'on-main': false, 'in-progress': true, pushed: false, empty: false,
   open: false, merged: false, closed: false, 'no-pr': true,
-  'has-write-access': true, 'allow-push-to-main': false, 'has-issue': false, 'no-devcontainer': false, review: false,
+  'has-write-access': true, 'allow-approve-and-merge': false, 'checks-passed': false, 'has-issue': false, 'no-devcontainer': false, review: false,
 }
 const VARS: TemplateVars = { main: 'main', branch: 'feature/test', directory: '/repo' }
 
@@ -93,6 +93,30 @@ describe('ActionButtons', () => {
     )
     // Default config has a "Commit with AI" action for has-changes
     expect(screen.getByText('Commit with AI')).toBeTruthy()
+  })
+
+  it('filters actions by surface', () => {
+    const actions: ActionDefinition[] = [
+      { id: 'commit', label: 'Commit', type: 'agent', prompt: 'commit', showWhen: ['has-changes'] },
+      { id: 'review', label: 'Review', type: 'agent', prompt: 'review', showWhen: ['has-changes'], surface: 'review' },
+      { id: 'both', label: 'Both', type: 'agent', prompt: 'both', showWhen: ['has-changes'], surface: ['source-control', 'review'] },
+    ]
+    render(
+      <ActionButtons actions={actions} conditionState={BASE_STATE} templateVars={VARS}
+        directory="/repo" agentPtyId="pty-1" surface="source-control" />
+    )
+    expect(screen.getByText('Commit')).toBeTruthy()
+    expect(screen.queryByText('Review')).toBeNull()
+    expect(screen.getByText('Both')).toBeTruthy()
+
+    cleanup()
+    render(
+      <ActionButtons actions={actions} conditionState={BASE_STATE} templateVars={VARS}
+        directory="/repo" agentPtyId="pty-1" surface="review" />
+    )
+    expect(screen.queryByText('Commit')).toBeNull()
+    expect(screen.getByText('Review')).toBeTruthy()
+    expect(screen.getByText('Both')).toBeTruthy()
   })
 
   it('calls onSwitchTab when action has switchTab', async () => {

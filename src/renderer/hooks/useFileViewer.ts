@@ -7,6 +7,7 @@ import { useFileLoading } from './useFileLoading'
 import { useFileDiff } from './useFileDiff'
 import { useFileWatcher } from './useFileWatcher'
 import type { FileStatus, ViewMode } from '../components/FileViewer'
+import { isImageFile as isImagePath } from '../components/fileViewers/ImageDiffViewer'
 
 interface UseFileViewerParams {
   filePath: string | null
@@ -56,15 +57,17 @@ export function useFileViewer({
     setSelectedViewerId,
   })
 
-  // Only allow diff view for text files — skip when a non-text viewer (e.g. image) is the primary viewer
   const primaryViewer = availableViewers.length > 0 ? availableViewers[0] : null
-  const isTextFile = primaryViewer ? primaryViewer.id !== 'image' : true
-  const canShowDiff = isTextFile && (fileStatus === 'modified' || fileStatus === 'deleted' || !!diffBaseRef || !!diffCurrentRef)
+  // Use viewer registry when available, fall back to extension check (avoids stale state during async loading)
+  const isImageFile = primaryViewer ? primaryViewer.id === 'image' : (filePath ? isImagePath(filePath) : false)
+  const canShowDiff = fileStatus === 'modified' || fileStatus === 'deleted' || !!diffBaseRef || !!diffCurrentRef
 
+  // Text diff only for non-image files; image diffs are handled by ImageDiffViewer
+  const canShowTextDiff = canShowDiff && !isImageFile
   const { originalContent, diffModifiedContent, isLoadingDiff } = useFileDiff({
     filePath,
     directory,
-    canShowDiff,
+    canShowDiff: canShowTextDiff,
     viewMode,
     diffBaseRef,
     diffCurrentRef,
@@ -198,6 +201,7 @@ export function useFileViewer({
   return {
     // State
     canShowDiff,
+    isImageFile,
     selectedViewerId,
     isDirty,
     isSaving,

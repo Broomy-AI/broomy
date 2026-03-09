@@ -62,6 +62,11 @@ ipcRenderer.on('menu:select-all', () => {
   window.dispatchEvent(new CustomEvent('app:select-all'))
 })
 
+// Forward agent:restart from main process to a DOM CustomEvent
+ipcRenderer.on('agent:restart', () => {
+  window.dispatchEvent(new CustomEvent('agent:restart'))
+})
+
 // Expose all APIs to the renderer process via context bridge
 contextBridge.exposeInMainWorld('pty', ptyApi)
 contextBridge.exposeInMainWorld('dialog', dialogApi)

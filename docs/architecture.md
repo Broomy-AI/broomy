@@ -103,7 +103,7 @@ The preload exposes these APIs on the `window` object:
 | `window.pty` | Terminal operations | `create()`, `write()`, `resize()`, `kill()`, `onData()` |
 | `window.fs` | File system | `readDir()`, `readFile()`, `writeFile()`, `watch()`, `search()` |
 | `window.git` | Git operations | `status()`, `commit()`, `push()`, `diff()`, `worktreeAdd()` |
-| `window.gh` | GitHub CLI | `issues()`, `prStatus()`, `prComments()`, `mergeBranchToMain()` |
+| `window.gh` | GitHub CLI | `issues()`, `prStatus()`, `prComments()`, `prChecksStatus()` |
 | `window.config` | Config persistence | `load(profileId)`, `save(config)` |
 | `window.profiles` | Profile management | `list()`, `save()`, `openWindow()` |
 | `window.shell` | Shell execution | `exec(command, cwd)`, `openExternal(url)` |
@@ -197,7 +197,7 @@ interface ManagedRepo {
   rootDir: string
   defaultBranch: string
   defaultAgentId?: string
-  allowPushToMain?: boolean
+  allowApproveAndMerge?: boolean
 }
 ```
 
