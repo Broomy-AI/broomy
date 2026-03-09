@@ -19,7 +19,7 @@ vi.mock('./handlers/types', () => ({
   CONFIG_DIR: '/mock/.broomy',
 }))
 
-import { writeCrashLog, readLatestCrashLog, deleteCrashLog, buildCrashReportUrl, appendErrorLog, getRecentErrors, type CrashReport } from './crashLog'
+import { writeCrashLog, readLatestCrashLog, deleteCrashLog, deleteAllCrashLogs, buildCrashReportUrl, appendErrorLog, getRecentErrors, type CrashReport } from './crashLog'
 
 const CRASH_DIR = '/mock/.broomy/crash-reports'
 
@@ -112,6 +112,38 @@ describe('crashLog', () => {
     it('silently ignores errors', () => {
       vi.mocked(unlinkSync).mockImplementation(() => { throw new Error('ENOENT') })
       expect(() => deleteCrashLog('/nonexistent')).not.toThrow()
+    })
+  })
+
+  describe('deleteAllCrashLogs', () => {
+    it('deletes all crash files in the directory', () => {
+      vi.mocked(readdirSync).mockReturnValue([
+        'crash-1700000000000.json',
+        'crash-1700000001000.json',
+      ] as unknown as ReturnType<typeof readdirSync>)
+
+      deleteAllCrashLogs()
+
+      expect(unlinkSync).toHaveBeenCalledTimes(2)
+      expect(unlinkSync).toHaveBeenCalledWith(join(CRASH_DIR, 'crash-1700000000000.json'))
+      expect(unlinkSync).toHaveBeenCalledWith(join(CRASH_DIR, 'crash-1700000001000.json'))
+    })
+
+    it('ignores non-crash files', () => {
+      vi.mocked(readdirSync).mockReturnValue([
+        'crash-1700000000000.json',
+        'other-file.txt',
+      ] as unknown as ReturnType<typeof readdirSync>)
+
+      deleteAllCrashLogs()
+
+      expect(unlinkSync).toHaveBeenCalledTimes(1)
+      expect(unlinkSync).toHaveBeenCalledWith(join(CRASH_DIR, 'crash-1700000000000.json'))
+    })
+
+    it('silently ignores errors', () => {
+      vi.mocked(readdirSync).mockImplementation(() => { throw new Error('ENOENT') })
+      expect(() => deleteAllCrashLogs()).not.toThrow()
     })
   })
 

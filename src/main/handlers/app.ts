@@ -6,7 +6,11 @@ import { app, IpcMain } from 'electron'
 import { homedir, tmpdir } from 'os'
 import { normalizePath } from '../platform'
 import { HandlerContext } from './types'
-import { readLatestCrashLog, deleteCrashLog, buildCrashReportUrl } from '../crashLog'
+import {
+  readLatestCrashLog,
+  deleteAllCrashLogs,
+  buildCrashReportUrl,
+} from '../crashLog'
 
 export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   ipcMain.handle('app:isDev', () => ctx.isDev)
@@ -23,8 +27,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
 
   ipcMain.handle('app:dismissCrashLog', () => {
     if (ctx.isE2ETest) return
-    const result = readLatestCrashLog()
-    if (result) deleteCrashLog(result.path)
+    deleteAllCrashLogs()
   })
 
   ipcMain.handle('app:getCrashReportUrl', () => {

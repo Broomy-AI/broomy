@@ -90,6 +90,23 @@ export function deleteCrashLog(filepath: string): void {
   }
 }
 
+export function deleteAllCrashLogs(): void {
+  try {
+    const files = readdirSync(CRASH_DIR).filter(
+      f => f.startsWith('crash-') && f.endsWith('.json'),
+    )
+    for (const file of files) {
+      try {
+        unlinkSync(join(CRASH_DIR, file))
+      } catch {
+        // ignore individual failures
+      }
+    }
+  } catch {
+    // directory doesn't exist or inaccessible — ignore
+  }
+}
+
 export function buildCrashReportUrl(report: CrashReport): string {
   const title = `Crash: ${report.message.slice(0, 80)}`
   const lines = [

@@ -142,4 +142,34 @@ describe('sessionBranchActions', () => {
       expect(useSessionStore.getState().sessions[0].isArchived).toBe(false)
     })
   })
+
+  describe('updateReviewStatus', () => {
+    it('updates review status for a session', () => {
+      addTestSession()
+      useSessionStore.getState().updateReviewStatus('test-session', 'reviewed')
+      expect(useSessionStore.getState().sessions[0].reviewStatus).toBe('reviewed')
+    })
+
+    it('is a no-op when status is already the same', () => {
+      addTestSession()
+      useSessionStore.getState().updateReviewStatus('test-session', 'reviewed')
+      vi.clearAllMocks()
+      useSessionStore.getState().updateReviewStatus('test-session', 'reviewed')
+      // Should not trigger another save since status did not change
+      expect(useSessionStore.getState().sessions[0].reviewStatus).toBe('reviewed')
+    })
+
+    it('is a no-op for non-existent session', () => {
+      addTestSession()
+      useSessionStore.getState().updateReviewStatus('nonexistent', 'reviewed')
+      expect(useSessionStore.getState().sessions[0].reviewStatus).toBeUndefined()
+    })
+
+    it('changes from reviewed back to pending', () => {
+      addTestSession()
+      useSessionStore.getState().updateReviewStatus('test-session', 'reviewed')
+      useSessionStore.getState().updateReviewStatus('test-session', 'pending')
+      expect(useSessionStore.getState().sessions[0].reviewStatus).toBe('pending')
+    })
+  })
 })
