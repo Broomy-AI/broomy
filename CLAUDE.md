@@ -14,6 +14,9 @@ pnpm install         # Install dependencies (use pnpm, not npm/yarn)
 pnpm dev             # Development with hot reload (renderer only; restart for main/preload changes)
 pnpm build           # Build without packaging
 pnpm dist            # Build and package for macOS
+pnpm storybook       # Storybook dev server on port 6006
+pnpm storybook:test  # Visual regression test (screenshot + pixel-diff + report)
+pnpm storybook:update-refs  # Accept current screenshots as reference baseline
 ```
 
 ## Shell Commands
@@ -79,7 +82,18 @@ Session store debounces saves with 500ms delay. Runtime-only state (`status`, `i
 
 ## Testing
 
-Unit tests are co-located with source files (`src/**/*.test.ts`). Vitest with 90% line coverage threshold. E2E tests use Playwright with `E2E_TEST=true` for deterministic mock data. See `docs/testing-guide.md` for patterns and conventions.
+Unit tests are co-located with source files (`src/**/*.test.ts`). Vitest with 90% line coverage threshold. E2E tests use Playwright with `E2E_TEST=true` for deterministic mock data. Storybook visual regression tests screenshot every component and diff against reference images. See `docs/testing-guide.md` for patterns and conventions.
+
+### Storybook Visual Regression
+
+```bash
+pnpm storybook              # Dev server on port 6006
+pnpm storybook:build        # Build to storybook-static/
+pnpm storybook:test         # Screenshot all stories, diff against refs, generate report
+pnpm storybook:update-refs  # Accept current screenshots as new references
+```
+
+Stories are co-located as `*.stories.tsx` next to source files. Reference images live in `.storybook-refs/` (checked into git). The diff report is generated at `.storybook-report/index.html`.
 
 ### Adding a new store
 

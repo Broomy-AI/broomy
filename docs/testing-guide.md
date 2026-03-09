@@ -358,6 +358,10 @@ All data comes from the mock handlers in `src/main/index.ts`.
 | `pnpm test:e2e:headed` | E2E tests with visible Electron window |
 | `pnpm test:e2e:built` | E2E tests against production build (for CI) |
 | `pnpm test:e2e:built:headed` | Production build E2E tests with visible window |
+| `pnpm storybook` | Start Storybook dev server on port 6006 |
+| `pnpm storybook:build` | Build Storybook to `storybook-static/` |
+| `pnpm storybook:test` | Visual regression: screenshot all stories, diff against refs, report |
+| `pnpm storybook:update-refs` | Accept current screenshots as new reference baseline |
 
 ### Shared Electron Fixture for Feature Docs
 
@@ -415,6 +419,116 @@ pnpm test:feature-docs:view             # Open generated docs in browser
 
 Feature doc tests are **not** run as part of `pnpm test:e2e`. They are separate, on-demand tests. See `CLAUDE.md` for the full specification and screenshot guidelines.
 
+## Storybook Visual Regression Testing
+
+Broomy uses Storybook + Playwright + pixelmatch for visual regression testing. Every UI
+component has co-located stories (`*.stories.tsx`), and a screenshot pipeline captures,
+compares, and reports pixel-level differences against reference images.
+
+### How It Works
+
+1. **Stories** — Each component has a `*.stories.tsx` file next to its source. Stories
+   render the component in various states (empty, loaded, error, etc.) with mock data.
+2. **Screenshot capture** — Storybook is built to static HTML, served locally, and
+   Playwright takes a PNG screenshot of every story at 1280×720.
+3. **Pixel diff** — Each screenshot is compared against a reference image using
+   `pixelmatch` with a 0.1 threshold. Differences above 0.1% of pixels fail.
+4. **HTML report** — A self-contained report at `.storybook-report/index.html` shows
+   reference / current / diff side-by-side for every story.
+
+### Directory Layout
+
+```
+.storybook/              # Storybook configuration
+  main.ts                # Vite config, aliases, process shim
+  preview.tsx            # Global decorators, dark theme, CSS import
+  electronMocks.ts       # Browser-compatible window.* API mocks
+  decorators.tsx         # Reusable decorators (PanelProvider, store state)
+  mockData.ts            # Factory functions for test data
+.storybook-refs/         # Reference screenshots (checked into git)
+.storybook-screenshots/  # Current screenshots (gitignored)
+.storybook-report/       # HTML diff report (gitignored)
+scripts/
+  storybook-screenshot-test.mjs   # Main orchestrator
+  storybook-update-refs.mjs       # Copy current screenshots to refs
+  lib/pixelDiff.mjs               # pixelmatch wrapper
+  lib/generateReport.mjs          # HTML report generator
+```
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `pnpm storybook` | Start Storybook dev server on port 6006 |
+| `pnpm storybook:build` | Build Storybook to `storybook-static/` |
+| `pnpm storybook:test` | Build, screenshot all stories, diff against refs, generate report |
+| `pnpm storybook:update-refs` | Accept current screenshots as the new references |
+
+### Typical Workflow
+
+**First time (no references yet):**
+
+```bash
+pnpm storybook:test          # All stories marked "new" (no refs to compare)
+pnpm storybook:update-refs   # Accept screenshots as baseline references
+pnpm storybook:test          # All stories pass with 0% diff
+```
+
+**After making UI changes:**
+
+```bash
+pnpm storybook:test           # Run visual regression check
+open .storybook-report/index.html  # Review the diff report
+# If the changes are intentional:
+pnpm storybook:update-refs    # Update references to match new screenshots
+```
+
+**Custom reference directory:**
+
+Set `STORYBOOK_REFS_DIR` to use a different location for reference images:
+
+```bash
+STORYBOOK_REFS_DIR=/path/to/shared/refs pnpm storybook:test
+```
+
+### Writing Stories
+
+Stories are co-located with components as `ComponentName.stories.tsx`:
+
+```tsx
+import type { Meta, StoryObj } from '@storybook/react'
+import MyComponent from './MyComponent'
+
+const meta: Meta<typeof MyComponent> = {
+  title: 'UI/MyComponent',
+  component: MyComponent,
+}
+export default meta
+type Story = StoryObj<typeof MyComponent>
+
+export const Default: Story = {
+  args: { label: 'Click me' },
+}
+
+export const Loading: Story = {
+  args: { label: 'Click me', isLoading: true },
+}
+```
+
+**Key conventions:**
+
+- Title follows the pattern: `UI/ComponentName`, `Explorer/SubComponent`, `Settings/TabName`
+- Use `.storybook/mockData.ts` factories (`makeSession()`, `makeRepo()`, etc.) for test data
+- Use `.storybook/decorators.tsx` for components that need `PanelProvider` or Zustand store state
+- Electron API mocks are installed globally in `preview.tsx` — no per-story setup needed
+
+### Electron API Mocks
+
+`.storybook/electronMocks.ts` provides browser-compatible mocks for all `window.*` APIs
+(pty, fs, git, gh, config, profiles, agents, repos, shell, dialog, app, menu, update, ts,
+help, devcontainer, windowControls). These use plain functions (not `vi.fn()`) and return
+sensible defaults. They are installed once in `preview.tsx` before any story renders.
+
 ### Recommended Workflow
 
 1. Make code changes
@@ -422,4 +536,5 @@ Feature doc tests are **not** run as part of `pnpm test:e2e`. They are separate,
 3. Run `pnpm test:unit` to verify unit tests pass
 4. Run `/coverage-run` to confirm coverage stays above 90% (or `pnpm test:unit:coverage` directly). Use `/coverage-check <file>` for incremental checks on individual files.
 5. Run `pnpm test:e2e` to verify E2E tests still pass
-6. Create or update a feature doc screenshot walkthrough, then run `pnpm test:feature-docs <feature-slug>` to verify
+6. Run `pnpm storybook:test` to catch visual regressions
+7. Create or update a feature doc screenshot walkthrough, then run `pnpm test:feature-docs <feature-slug>` to verify

@@ -5,6 +5,7 @@ import pixelmatch from 'pixelmatch'
 
 /**
  * Compare two PNG images and return diff statistics.
+ * Fast path: if the files are byte-identical, skip PNG decoding entirely.
  * @param {string} currentPath - Path to current screenshot
  * @param {string} referencePath - Path to reference screenshot
  * @param {string} diffPath - Path to write diff image
@@ -12,15 +13,23 @@ import pixelmatch from 'pixelmatch'
  * @returns {{ storyId: string, diffPixels: number, totalPixels: number, diffPercent: number, status: 'pass'|'fail'|'new' }}
  */
 export function pixelDiff(currentPath, referencePath, diffPath, storyId) {
-  let refData
+  const currentBuf = readFileSync(currentPath)
+
+  let refBuf
   try {
-    refData = readFileSync(referencePath)
+    refBuf = readFileSync(referencePath)
   } catch {
     return { storyId, diffPixels: 0, totalPixels: 0, diffPercent: 0, status: 'new' }
   }
 
-  const current = PNG.sync.read(readFileSync(currentPath))
-  const reference = PNG.sync.read(refData)
+  // Fast path: byte-identical files need no pixel comparison
+  if (currentBuf.equals(refBuf)) {
+    return { storyId, diffPixels: 0, totalPixels: 0, diffPercent: 0, status: 'pass' }
+  }
+
+  // Slow path: decode PNGs and run pixelmatch
+  const current = PNG.sync.read(currentBuf)
+  const reference = PNG.sync.read(refBuf)
 
   // Use larger dimensions if sizes differ
   const width = Math.max(current.width, reference.width)
@@ -50,8 +59,11 @@ export function pixelDiff(currentPath, referencePath, diffPath, storyId) {
   const totalPixels = width * height
   const diffPercent = totalPixels > 0 ? (diffPixels / totalPixels) * 100 : 0
 
-  mkdirSync(dirname(diffPath), { recursive: true })
-  writeFileSync(diffPath, PNG.sync.write(diff))
+  // Only write diff image when there's an actual difference
+  if (diffPixels > 0) {
+    mkdirSync(dirname(diffPath), { recursive: true })
+    writeFileSync(diffPath, PNG.sync.write(diff))
+  }
 
   const threshold = 0.1 // percent
   return {

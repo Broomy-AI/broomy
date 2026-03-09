@@ -45,6 +45,7 @@
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build -o storybook-static",
     "storybook:test": "node scripts/storybook-screenshot-test.mjs",
+    "storybook:test:quick": "node scripts/storybook-screenshot-test.mjs --no-build",
     "storybook:update-refs": "node scripts/storybook-update-refs.mjs"
   },
   "dependencies": {
