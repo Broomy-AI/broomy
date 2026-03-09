@@ -1,7 +1,8 @@
+import React from 'react'
 import type { Meta, StoryObj } from '@storybook/react'
 import PanelErrorBoundary from './PanelErrorBoundary'
 
-function ThrowingComponent() {
+function ThrowingComponent(): React.ReactNode {
   throw new Error('Something went wrong in this panel')
 }
 

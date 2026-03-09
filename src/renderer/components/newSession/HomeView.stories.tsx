@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react'
 import { HomeView } from './HomeView'
 import { useRepoStore } from '../../store/repos'
-import React from 'react'
 import type { Decorator } from '@storybook/react'
 import { makeRepo } from '../../../../.storybook/mockData'
 
@@ -9,37 +8,31 @@ const noop = () => {}
 const noopRepo = () => {}
 
 const withPopulatedRepos: Decorator = (Story) => {
-  React.useEffect(() => {
-    useRepoStore.setState({
-      repos: [
-        makeRepo({ id: 'repo-1', name: 'my-app', rootDir: '/Users/test/repos/my-app', defaultBranch: 'main' }),
-        makeRepo({ id: 'repo-2', name: 'backend', rootDir: '/Users/test/repos/backend', defaultBranch: 'main' }),
-      ],
-      ghAvailable: true,
-    })
-  }, [])
+  useRepoStore.setState({
+    repos: [
+      makeRepo({ id: 'repo-1', name: 'my-app', rootDir: '/Users/test/repos/my-app', defaultBranch: 'main' }),
+      makeRepo({ id: 'repo-2', name: 'backend', rootDir: '/Users/test/repos/backend', defaultBranch: 'main' }),
+    ],
+    ghAvailable: true,
+  })
   return <Story />
 }
 
 const withEmptyRepos: Decorator = (Story) => {
-  React.useEffect(() => {
-    useRepoStore.setState({
-      repos: [],
-      ghAvailable: true,
-    })
-  }, [])
+  useRepoStore.setState({
+    repos: [],
+    ghAvailable: true,
+  })
   return <Story />
 }
 
 const withGhUnavailable: Decorator = (Story) => {
-  React.useEffect(() => {
-    useRepoStore.setState({
-      repos: [
-        makeRepo({ id: 'repo-1', name: 'my-app', rootDir: '/Users/test/repos/my-app', defaultBranch: 'main' }),
-      ],
-      ghAvailable: false,
-    })
-  }, [])
+  useRepoStore.setState({
+    repos: [
+      makeRepo({ id: 'repo-1', name: 'my-app', rootDir: '/Users/test/repos/my-app', defaultBranch: 'main' }),
+    ],
+    ghAvailable: false,
+  })
   return <Story />
 }
 

@@ -2,22 +2,19 @@ import type { Meta, StoryObj } from '@storybook/react'
 import { CloneView } from './CloneView'
 import { useAgentStore } from '../../store/agents'
 import { useRepoStore } from '../../store/repos'
-import React from 'react'
 import type { Decorator } from '@storybook/react'
 import { makeAgent } from '../../../../.storybook/mockData'
 
 const withStores: Decorator = (Story) => {
-  React.useEffect(() => {
-    useAgentStore.setState({
-      agents: [
-        makeAgent({ id: 'agent-1', name: 'Claude Code', command: 'claude' }),
-      ],
-    })
-    useRepoStore.setState({
-      defaultCloneDir: '/Users/test/repos',
-      ghAvailable: true,
-    })
-  }, [])
+  useAgentStore.setState({
+    agents: [
+      makeAgent({ id: 'agent-1', name: 'Claude Code', command: 'claude' }),
+    ],
+  })
+  useRepoStore.setState({
+    defaultCloneDir: '/Users/test/repos',
+    ghAvailable: true,
+  })
   return <Story />
 }
 

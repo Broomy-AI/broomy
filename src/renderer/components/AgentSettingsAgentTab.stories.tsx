@@ -11,6 +11,11 @@ const agents = [
 
 const noop = () => {}
 
+function AgentTabWrapper(args: React.ComponentProps<typeof AgentSettingsAgentTab>) {
+  const ref = useRef<EnvVarEditorRef>(null)
+  return <AgentSettingsAgentTab {...args} envEditorRef={ref} />
+}
+
 const meta: Meta<typeof AgentSettingsAgentTab> = {
   title: 'Settings/AgentSettingsAgentTab',
   component: AgentSettingsAgentTab,
@@ -40,10 +45,7 @@ export const WithAgents: Story = {
     onShowAddForm: noop,
     onCancel: noop,
   },
-  render: (args) => {
-    const ref = useRef<EnvVarEditorRef>(null)
-    return <AgentSettingsAgentTab {...args} envEditorRef={ref} />
-  },
+  render: (args) => <AgentTabWrapper {...args} />,
 }
 
 export const ShowingAddForm: Story = {
@@ -68,10 +70,7 @@ export const ShowingAddForm: Story = {
     onShowAddForm: noop,
     onCancel: noop,
   },
-  render: (args) => {
-    const ref = useRef<EnvVarEditorRef>(null)
-    return <AgentSettingsAgentTab {...args} envEditorRef={ref} />
-  },
+  render: (args) => <AgentTabWrapper {...args} />,
 }
 
 export const EditingAgent: Story = {
@@ -96,10 +95,7 @@ export const EditingAgent: Story = {
     onShowAddForm: noop,
     onCancel: noop,
   },
-  render: (args) => {
-    const ref = useRef<EnvVarEditorRef>(null)
-    return <AgentSettingsAgentTab {...args} envEditorRef={ref} />
-  },
+  render: (args) => <AgentTabWrapper {...args} />,
 }
 
 export const Empty: Story = {
@@ -124,8 +120,5 @@ export const Empty: Story = {
     onShowAddForm: noop,
     onCancel: noop,
   },
-  render: (args) => {
-    const ref = useRef<EnvVarEditorRef>(null)
-    return <AgentSettingsAgentTab {...args} envEditorRef={ref} />
-  },
+  render: (args) => <AgentTabWrapper {...args} />,
 }

@@ -1,26 +1,21 @@
 import type { Meta, StoryObj } from '@storybook/react'
 import { AgentPickerView } from './AgentPickerView'
 import { useAgentStore } from '../../store/agents'
-import React from 'react'
 import type { Decorator } from '@storybook/react'
 import { makeAgent } from '../../../../.storybook/mockData'
 
 const withAgents: Decorator = (Story) => {
-  React.useEffect(() => {
-    useAgentStore.setState({
-      agents: [
-        makeAgent({ id: 'agent-1', name: 'Claude Code', command: 'claude', color: '#4a9eff' }),
-        makeAgent({ id: 'agent-2', name: 'Aider', command: 'aider', color: '#22c55e' }),
-      ],
-    })
-  }, [])
+  useAgentStore.setState({
+    agents: [
+      makeAgent({ id: 'agent-1', name: 'Claude Code', command: 'claude', color: '#4a9eff' }),
+      makeAgent({ id: 'agent-2', name: 'Aider', command: 'aider', color: '#22c55e' }),
+    ],
+  })
   return <Story />
 }
 
 const withNoAgents: Decorator = (Story) => {
-  React.useEffect(() => {
-    useAgentStore.setState({ agents: [] })
-  }, [])
+  useAgentStore.setState({ agents: [] })
   return <Story />
 }
 
