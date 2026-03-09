@@ -154,6 +154,7 @@ function createDevcontainerPty(
     const releaseLock = await acquireSetupLock(workspaceFolder)
     let containerId: string
     let remoteUser: string
+    let remoteWorkspaceFolder: string
     let postAttachCommand: string | undefined
     try {
       // Run devcontainer up
@@ -166,6 +167,7 @@ function createDevcontainerPty(
       }
       containerId = result.result.containerId
       remoteUser = result.result.remoteUser
+      remoteWorkspaceFolder = result.result.remoteWorkspaceFolder
       postAttachCommand = result.result.postAttachCommand
 
       // Store container info for DockerInfoPanel
@@ -219,7 +221,7 @@ function createDevcontainerPty(
         }
       }
     }
-    const dockerArgs = buildDevcontainerExecArgs(containerId, remoteUser, cwd, dockerEnv, command)
+    const dockerArgs = buildDevcontainerExecArgs(containerId, remoteUser, remoteWorkspaceFolder, dockerEnv, command)
 
     let ptyProcess: IPty
     try {
