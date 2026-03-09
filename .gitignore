@@ -55,5 +55,10 @@ build/node-pty-prebuilds/
 # Docker E2E output
 docker-output/
 
+# Storybook
+storybook-static/
+.storybook-screenshots/
+.storybook-report/
+
 # Broomy review data
 .broomy/
