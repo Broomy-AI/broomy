@@ -63,7 +63,7 @@ export function computeConditionState(input: ConditionStateInput): ConditionStat
     'no-pr': !prNumber,
     'has-write-access': hasWriteAccess,
     'allow-approve-and-merge': allowApproveAndMerge,
-    'checks-passed': checksStatus === 'passed',
+    'checks-passed': checksStatus === 'passed' || checksStatus === 'none',
     'has-issue': !!issueNumber,
     'no-devcontainer': noDevcontainer ?? false,
     'review': isReview ?? false,
