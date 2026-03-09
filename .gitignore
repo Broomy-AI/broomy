@@ -41,6 +41,7 @@ coverage/
 !build/icon.png
 !website/public/**/*.png
 !website/public/*.png
+!.storybook-refs/**/*.png
 
 # Feature documentation generated artifacts
 tests/features/*/index.html

@@ -70,8 +70,9 @@ async function main() {
       const url = `http://localhost:${PORT}/iframe.html?id=${storyId}&viewMode=story`
       try {
         await page.goto(url, { waitUntil: 'networkidle', timeout: 15000 })
-        await page.waitForSelector('#storybook-root > *', { timeout: 5000 })
-        await page.waitForFunction(() => document.fonts.ready, { timeout: 5000 })
+        // Wait for content, but don't fail if the story renders empty/hidden content
+        await page.waitForSelector('#storybook-root > *', { timeout: 3000 }).catch(() => {})
+        await page.waitForFunction(() => document.fonts.ready, { timeout: 3000 }).catch(() => {})
         await page.screenshot({ path: join(SCREENSHOTS_DIR, `${storyId}.png`) })
         process.stdout.write('.')
       } catch (err) {

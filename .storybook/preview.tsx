@@ -17,7 +17,7 @@ document.body.style.color = '#e0e0e0'
 const preview: Preview = {
   decorators: [
     (Story) => (
-      <div className="bg-bg-primary text-text-primary min-h-0">
+      <div className="bg-bg-primary text-text-primary">
         <Story />
       </div>
     ),
