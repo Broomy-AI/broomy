@@ -2,6 +2,7 @@
  * Root screen of the settings panel showing General settings and navigation rows
  * for Agents and individual repositories.
  */
+import { useState, useEffect } from 'react'
 import type { AgentConfig } from '../store/agents'
 import type { ManagedRepo } from '../../preload/index'
 import type { ShellOption } from '../../preload/apis/types'
@@ -29,6 +30,13 @@ export function SettingsRootScreen({
   onNavigateToAgents,
   onNavigateToRepo,
 }: SettingsRootScreenProps) {
+  const [isWindows, setIsWindows] = useState(false)
+  useEffect(() => {
+    void window.app.platform().then((p) => setIsWindows(p === 'win32'))
+  }, [])
+
+  const isWslSelected = isWindows && (defaultShell || '').toLowerCase().includes('wsl')
+
   return (
     <div className="space-y-4">
       {/* General section */}
@@ -73,6 +81,13 @@ export function SettingsRootScreen({
         <p className="text-xs text-text-tertiary">
           Applied to new terminal sessions. Existing sessions are not affected.
         </p>
+        {isWslSelected && (
+          <p className="text-xs text-yellow-400/80 mt-1">
+            Ensure your default WSL distro has your agents installed.
+            Run <span className="font-mono">wsl --set-default &lt;distro&gt;</span> in
+            PowerShell to change it (check with <span className="font-mono">wsl -l -v</span>).
+          </p>
+        )}
       </div>
 
       {/* Agents nav row */}

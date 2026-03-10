@@ -106,11 +106,19 @@ function GitMissingBanner() {
 
 function GhMissingBanner() {
   const { ghAvailable } = useRepoStore()
+  const [isWindows, setIsWindows] = useState(false)
+  useEffect(() => {
+    void window.app.platform().then((p) => setIsWindows(p === 'win32'))
+  }, [])
   if (ghAvailable !== false) return null
   return (
     <div className="bg-yellow-900/30 border-b border-yellow-500/30 px-4 py-2 text-xs text-yellow-300 flex items-center gap-2">
       <span className="font-medium">GitHub CLI (gh) is not installed.</span>
-      <span className="text-yellow-400">Install it for authentication, issues, and PR features.</span>
+      <span className="text-yellow-400">
+        {isWindows
+          ? 'Install it on Windows (not WSL) for authentication, issues, and PR features.'
+          : 'Install it for authentication, issues, and PR features.'}
+      </span>
       <button onClick={() => window.shell.openExternal('https://cli.github.com')} className="text-accent hover:underline ml-1">Install gh</button>
     </div>
   )

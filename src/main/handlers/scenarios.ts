@@ -379,7 +379,7 @@ const MARKETING: ScenarioData = {
   readFile(filePath: string): string | null {
     if (filePath.includes('auth.ts')) return buildMarketingAuthTs()
     if (/broomy-review-[^/\\]+[/\\]review\.json$/.exec(filePath)) return buildMarketingReviewJson()
-    if (/\/tmp\/broomy-review-[^/]+\/comments\.json$/.exec(filePath)) return '[]'
+    if (/broomy-review-[^/\\]+[/\\]comments\.json$/.exec(filePath)) return '[]'
     return null
   },
   hasMarketingReviewFiles: true,

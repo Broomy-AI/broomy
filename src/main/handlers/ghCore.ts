@@ -89,7 +89,19 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
       return true
     } catch {
       // Fall back to well-known install locations on all platforms
-      return resolveCommand(baseCommand) !== null
+      if (resolveCommand(baseCommand) !== null) return true
+
+      // On Windows, also check inside WSL — many agents (e.g. Claude Code)
+      // are only installed there
+      if (isWindows && /^[a-zA-Z0-9_.-]+$/.test(baseCommand)) {
+        try {
+          await execFileAsync('wsl', ['which', baseCommand], { encoding: 'utf-8', timeout: 5000 })
+          return true
+        } catch {
+          // not in WSL either
+        }
+      }
+      return false
     }
   })
 

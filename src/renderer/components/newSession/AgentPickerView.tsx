@@ -22,6 +22,11 @@ export function AgentPickerView({
   const folderName = repoName || directory.split('/').pop() || directory
   const [installedStatus, setInstalledStatus] = useState<Record<string, boolean>>({})
   const [warningAgentId, setWarningAgentId] = useState<string | null>(null)
+  const [isWindows, setIsWindows] = useState(false)
+
+  useEffect(() => {
+    void window.app.platform().then((p) => setIsWindows(p === 'win32'))
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -114,6 +119,13 @@ export function AgentPickerView({
                       <> Install it first, or click again to proceed anyway.</>
                     )
                   })()}
+                  {isWindows && (
+                    <div className="mt-1.5 text-yellow-400/80">
+                      <span className="font-medium">Windows tip:</span> Many agents (e.g. Claude Code) run in WSL.
+                      Select <span className="font-medium">WSL</span> as your shell in Settings,
+                      or set the agent command to <span className="font-mono">wsl {agent.command}</span>.
+                    </div>
+                  )}
                 </div>
               )}
             </div>

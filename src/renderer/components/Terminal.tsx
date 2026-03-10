@@ -85,6 +85,11 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
   const containerRef = useRef<HTMLDivElement>(null)
   const [restartKey, setRestartKey] = useState(0)
   const [resumeDismissed, setResumeDismissed] = useState(false)
+  const [isWindows, setIsWindows] = useState(false)
+
+  useEffect(() => {
+    void window.app.platform().then((p) => setIsWindows(p === 'win32'))
+  }, [])
 
   const showResumeBanner = isAgentTerminal && isRestored && !resumeDismissed && !agentNotInstalled
 
@@ -205,6 +210,13 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
               <span> Install it to use this agent.</span>
             )
           })()}
+          {isWindows && (
+            <div className="mt-1.5 text-yellow-400/80">
+              <span className="font-medium">Windows tip:</span> Many agents (e.g. Claude Code) run in WSL.
+              Select <span className="font-medium">WSL</span> as your shell in Settings,
+              or set the agent command to <span className="font-mono">wsl {command}</span>.
+            </div>
+          )}
         </div>
       )}
       {showResumeBanner && (

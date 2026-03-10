@@ -16,12 +16,19 @@ Built with Electron, React, and xterm.js.
 - **Customizable panels** -- Toggle and reorder panels (Explorer, File Viewer, Agent Terminal, User Terminal, Settings)
 - **Keyboard shortcuts** -- `Cmd+1-6` to toggle panels, `Cmd+Shift+C` to copy terminal content
 
+## Platform Support
+
+- **macOS** -- Full support (signed + notarized releases)
+- **Windows** -- Supported (NSIS installer + portable exe)
+- **Linux** -- Supported (AppImage + .deb)
+
 ## Quick Start
 
 ### Prerequisites
 
 - Node.js 18+
 - [pnpm](https://pnpm.io/) (required -- npm/yarn will not work)
+- **Windows:** C++ build tools for node-pty native module (`npm install -g windows-build-tools` or install Visual Studio Build Tools)
 
 ### Installation
 
@@ -37,7 +44,10 @@ The app opens automatically in development mode with hot reload. Dev mode uses a
 ### Building for Distribution
 
 ```bash
-pnpm dist          # Build and package for macOS
+pnpm dist          # Build and package for current platform
+pnpm dist:mac      # Build for macOS
+pnpm dist:win      # Build for Windows (x64)
+pnpm dist:linux    # Build for Linux (x64 + arm64)
 pnpm start         # Run the packaged app
 ```
 
@@ -74,8 +84,8 @@ Each session has independently togglable panels:
 
 ### Keyboard Shortcuts
 
-- `Cmd+1` through `Cmd+6` -- Toggle panels (based on toolbar order)
-- `Cmd+Shift+C` -- Copy terminal content + session summary to clipboard
+- `Cmd+1` through `Cmd+6` (macOS) / `Ctrl+1` through `Ctrl+6` (Windows/Linux) -- Toggle panels (based on toolbar order)
+- `Cmd+Shift+C` (macOS) / `Ctrl+Shift+C` (Windows/Linux) -- Copy terminal content + session summary to clipboard
 
 ## Architecture
 
@@ -202,6 +212,10 @@ Config files are stored at `~/.broomy/`:
 **Blank screen on launch** -- Check the DevTools console for preload script errors. Ensure the preload script is built as CommonJS (`.js`, not `.mjs`).
 
 **pnpm is required** -- This project enforces pnpm via a `preinstall` script. Using npm or yarn will fail.
+
+**Windows: node-pty build fails** -- Install C++ build tools: `npm install -g windows-build-tools` or install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with the "Desktop development with C++" workload.
+
+**Windows: SmartScreen warning** -- Windows builds are unsigned. Click "More info" > "Run anyway" on first launch. The warning diminishes as download reputation builds.
 
 ## License
 

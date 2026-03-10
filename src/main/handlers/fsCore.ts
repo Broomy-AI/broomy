@@ -98,7 +98,7 @@ async function handleAppendFile(ctx: HandlerContext, filePath: string, content: 
 async function handleExists(ctx: HandlerContext, filePath: string) {
   if (ctx.isE2ETest) {
     // Check if scenario has marketing review files in tmp dir
-    if (getScenarioData(ctx.e2eScenario).hasMarketingReviewFiles && /\/tmp\/broomy-review-[^/]+\/(review|comments)\.json$/.exec(filePath)) {
+    if (getScenarioData(ctx.e2eScenario).hasMarketingReviewFiles && /broomy-review-[^/\\]+[/\\](review|comments)\.json$/.exec(filePath)) {
       return true
     }
     // Review/comments files always exist for mock data in any scenario

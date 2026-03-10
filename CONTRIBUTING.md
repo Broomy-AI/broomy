@@ -6,7 +6,8 @@
 
 - Node.js 18+
 - [pnpm](https://pnpm.io/) (enforced -- npm and yarn will not work)
-- macOS (for native PTY support; Linux support is possible but untested)
+- macOS, Windows, or Linux
+- **Windows:** C++ build tools for node-pty (`npm install -g windows-build-tools` or Visual Studio Build Tools)
 
 ### Setup
 
