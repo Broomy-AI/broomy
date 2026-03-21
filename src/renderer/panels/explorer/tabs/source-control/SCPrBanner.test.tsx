@@ -27,9 +27,13 @@ const defaultProps = {
 }
 
 describe('SCPrBanner', () => {
-  it('shows loading state for PR', () => {
-    render(<SCPrBanner {...defaultProps} isPrLoading={true} />)
-    expect(screen.getByText('Loading PR status...')).toBeTruthy()
+  it('shows spinning refresh icon during PR loading', () => {
+    render(<SCPrBanner {...defaultProps} isPrLoading={true} onRefresh={vi.fn()} />)
+    // Should show "No pull request" (current status) instead of "Loading PR status..."
+    expect(screen.getByText('No pull request')).toBeTruthy()
+    // Refresh icon should be spinning
+    const svg = screen.getByTitle('Refresh PR status').querySelector('svg')
+    expect(svg?.getAttribute('class')).toContain('animate-spin')
   })
 
   it('renders PR status with number and title', () => {

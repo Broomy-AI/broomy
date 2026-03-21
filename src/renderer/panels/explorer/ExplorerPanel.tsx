@@ -1,7 +1,7 @@
 /**
  * Explorer panel entry point with tabbed navigation between file tree, source control, search, recent files, and review.
  */
-import { useCallback, useRef } from 'react'
+import { useCallback } from 'react'
 import type { ExplorerProps } from './types'
 import { FileTreeIcon, SourceControlIcon, SearchIcon, RecentIcon, ReviewIcon } from './icons'
 import { FileTree } from './tabs/files/FileTree'
@@ -42,14 +42,6 @@ export default function Explorer({
     if (sessionId && directory) openCmdsEditor(sessionId, directory)
   }, [sessionId, directory, openCmdsEditor])
 
-  // Dispatch PR check event when focus enters the explorer from outside
-  const containerRef = useRef<HTMLDivElement>(null)
-  const handleFocusIn = useCallback((e: React.FocusEvent) => {
-    if (!containerRef.current?.contains(e.relatedTarget as Node)) {
-      document.dispatchEvent(new CustomEvent('broomy:check-pr-status'))
-    }
-  }, [])
-
   if (!directory) {
     return (
       <div className="h-full flex items-center justify-center text-text-secondary text-sm">
@@ -63,7 +55,7 @@ export default function Explorer({
   }`
 
   return (
-    <div ref={containerRef} className="h-full flex flex-col" onFocus={handleFocusIn}>
+    <div className="h-full flex flex-col">
       {/* Tab bar */}
       <div className="px-3 py-2 border-b border-border flex items-center justify-between">
         <span className="text-sm font-medium text-text-primary">Explorer</span>

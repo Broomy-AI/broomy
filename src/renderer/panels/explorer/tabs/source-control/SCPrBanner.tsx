@@ -56,22 +56,13 @@ function RefreshButton({ onRefresh, isRefreshing }: { onRefresh: () => void; isR
 
 function PrStatusContent({
   prStatus, branchStatus, branchBaseName, issueNumber, issueTitle, issueUrl,
-  onFileSelect, onRefresh, isRefreshing, isPrLoading,
+  onFileSelect, onRefresh, isRefreshing,
 }: Pick<SCPrBannerProps,
   'prStatus' | 'branchStatus' | 'branchBaseName' |
   'issueNumber' | 'issueTitle' | 'issueUrl' |
-  'onFileSelect' | 'onRefresh' | 'isRefreshing' | 'isPrLoading'
+  'onFileSelect' | 'onRefresh' | 'isRefreshing'
 >) {
   const refresh = onRefresh ? <RefreshButton onRefresh={onRefresh} isRefreshing={isRefreshing} /> : null
-
-  if (isPrLoading) {
-    return (
-      <div className="flex items-center justify-between">
-        <div className="text-xs text-text-secondary">Loading PR status...</div>
-        {refresh}
-      </div>
-    )
-  }
 
   // Determine whether to show PR info (hide stale MERGED/CLOSED when branch has moved on)
   const showPr = prStatus?.number && prStatus.url && !(
@@ -149,10 +140,10 @@ export function SCPrBanner({
       {/* PR Status banner */}
       <div className="px-3 py-2 border-b border-border bg-bg-secondary">
         <PrStatusContent
-          prStatus={prStatus} isPrLoading={isPrLoading} branchStatus={branchStatus}
+          prStatus={prStatus} branchStatus={branchStatus}
           branchBaseName={branchBaseName}
           issueNumber={issueNumber} issueTitle={issueTitle} issueUrl={issueUrl}
-          onFileSelect={onFileSelect} onRefresh={onRefresh} isRefreshing={isRefreshing}
+          onFileSelect={onFileSelect} onRefresh={onRefresh} isRefreshing={isRefreshing || isPrLoading}
         />
       </div>
 

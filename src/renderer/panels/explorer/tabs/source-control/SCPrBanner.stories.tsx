@@ -15,13 +15,22 @@ const meta: Meta<typeof SCPrBanner> = {
     agentMergeMessage: null,
     onDismissAgentMerge: () => {},
     onFileSelect: () => {},
+    onRefresh: () => {},
   },
 }
 export default meta
 type Story = StoryObj<typeof SCPrBanner>
 
-export const Loading: Story = {
+export const Refreshing: Story = {
   args: {
+    prStatus: {
+      number: 123,
+      title: 'Add authentication flow',
+      state: 'OPEN',
+      url: 'https://github.com/test/my-app/pull/123',
+      headRefName: 'feature/auth',
+      baseRefName: 'main',
+    },
     isPrLoading: true,
   },
 }

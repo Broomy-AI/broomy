@@ -41,10 +41,6 @@ function WebviewViewerComponent({ filePath, onEditorReady }: FileViewerComponent
       })()`)
     }
 
-    const handleBlur = () => {
-      document.dispatchEvent(new CustomEvent('broomy:check-pr-status'))
-    }
-
     const handleFoundInPage = (e: Electron.FoundInPageEvent) => {
       setFindResult({ activeMatch: e.result.activeMatchOrdinal, matches: e.result.matches })
     }
@@ -52,14 +48,12 @@ function WebviewViewerComponent({ filePath, onEditorReady }: FileViewerComponent
     webview.addEventListener('did-navigate', handleNavigation)
     webview.addEventListener('did-navigate-in-page', handleNavigation)
     webview.addEventListener('dom-ready', handleDomReady)
-    webview.addEventListener('blur', handleBlur)
     webview.addEventListener('found-in-page', handleFoundInPage)
 
     return () => {
       webview.removeEventListener('did-navigate', handleNavigation)
       webview.removeEventListener('did-navigate-in-page', handleNavigation)
       webview.removeEventListener('dom-ready', handleDomReady)
-      webview.removeEventListener('blur', handleBlur)
       webview.removeEventListener('found-in-page', handleFoundInPage)
     }
   }, [])

@@ -294,6 +294,10 @@ export const useSessionStore = create<SessionStore>((set, get) => {
         const workingDuration = Date.now() - (s.workingStartTime ?? Date.now())
         if (workingDuration >= 3000) {
           changes.isUnread = true
+          // Notify source control to refresh PR status after agent finishes work
+          if (typeof document !== 'undefined') {
+            document.dispatchEvent(new CustomEvent('broomy:agent-finished'))
+          }
         }
         changes.workingStartTime = null
       }

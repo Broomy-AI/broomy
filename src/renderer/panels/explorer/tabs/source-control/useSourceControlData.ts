@@ -34,17 +34,16 @@ function usePrEffects(config: PrEffectsConfig) {
   const [hasPrLoadedOnce, setHasPrLoadedOnce] = useState(false)
   const [prRefreshKey, setPrRefreshKey] = useState(0)
 
-  // Listen for focus-based PR check events (webview blur, explorer focus-in)
-  // and re-fetch only when the current PR is OPEN (may have been merged externally).
+  // Listen for agent-finished events to re-check PR status
   useEffect(() => {
     const handler = () => {
-      if (directory && prStatus?.state === 'OPEN') {
+      if (directory) {
         setPrRefreshKey(k => k + 1)
       }
     }
-    document.addEventListener('broomy:check-pr-status', handler)
-    return () => document.removeEventListener('broomy:check-pr-status', handler)
-  }, [directory, prStatus?.state])
+    document.addEventListener('broomy:agent-finished', handler)
+    return () => document.removeEventListener('broomy:agent-finished', handler)
+  }, [directory])
 
   // Fetch PR status, write access, and checks when source control is active
   useEffect(() => {
