@@ -444,6 +444,22 @@ export function useTerminalSetup(
       terminal, setShowScrollButton: s.setShowScrollButton, scrollLog, viewportEl,
     })
 
+    // Log xterm's internal scroll events — captures programmatic scrolls
+    // that we don't trigger (e.g. xterm auto-scrolling on new output).
+    terminal.onScroll((newViewportY: number) => {
+      const atBottom = isAtBottom(viewportEl)
+      scrollLog.add({
+        source: 'xterm-scroll',
+        viewportY: newViewportY,
+        baseY: terminal.buffer.active.baseY,
+        scrollTop: viewportEl?.scrollTop,
+        scrollHeight: viewportEl?.scrollHeight,
+        clientHeight: viewportEl?.clientHeight,
+        following: atBottom,
+        detail: atBottom ? undefined : `vY jumped to ${newViewportY}`,
+      })
+    })
+
     // Update scroll button visibility on render
     let onRenderRAF = 0
     terminal.onRender(() => {

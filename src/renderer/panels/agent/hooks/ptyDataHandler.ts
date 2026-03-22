@@ -64,14 +64,19 @@ function setupRepaintDetection(terminal: XTerm, wasRecentlyAtBottom?: () => bool
     },
   )
 
-  // CSI 3 J — clear scrollback. If inside a sync transaction, this is
-  // the start of a repaint (Claude Code pattern).
+  // CSI 3 J — clear scrollback. Track whether it's inside a sync transaction
+  // (repaint) or standalone (which xterm handles by clearing scrollback).
   const clearScrollbackHandler = terminal.parser.registerCsiHandler(
     { final: 'J' },
     (params) => {
-      if (params[0] === 3 && inSyncTransaction) {
-        inRepaintTransaction = true
+      if (params[0] === 3) {
         lastClearScrollbackTs = Date.now()
+        if (inSyncTransaction) {
+          inRepaintTransaction = true
+        }
+        // Log: CSI 3 J always clears scrollback in xterm, which resets
+        // the viewport to the top. If we were scrolled up, this causes
+        // a jump. We handle this in the sync reset handler below.
       }
       return false
     },
