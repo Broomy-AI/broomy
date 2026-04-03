@@ -8,25 +8,8 @@
  */
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { FileViewerPlugin, FileViewerComponentProps } from './types'
-import { matchesExtensions, getFileExtension } from './types'
-
-const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg']
-
-// Map extensions to MIME types
-const getMimeType = (filePath: string): string => {
-  const ext = getFileExtension(filePath)
-  const mimeMap: Record<string, string> = {
-    png: 'image/png',
-    jpg: 'image/jpeg',
-    jpeg: 'image/jpeg',
-    gif: 'image/gif',
-    webp: 'image/webp',
-    bmp: 'image/bmp',
-    ico: 'image/x-icon',
-    svg: 'image/svg+xml',
-  }
-  return mimeMap[ext] || 'image/png'
-}
+import { matchesExtensions } from './types'
+import { IMAGE_EXTENSIONS, getMimeType } from './viewerUtils'
 
 function ImageViewerComponent({ filePath }: FileViewerComponentProps) {
   const [scale, setScale] = useState(1)
