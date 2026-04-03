@@ -412,9 +412,16 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
 
   ipcMain.handle('agentSdk:stop', (_event, id: string) => {
     const session = activeSessions.get(id)
-    if (session?.query) {
-      session.query.close()
-      session.query = null
+    if (session) {
+      // Resolve any pending permission promise to prevent memory leaks
+      if (session.pendingPermission) {
+        session.pendingPermission.resolve({ behavior: 'deny', message: 'Session stopped' })
+        session.pendingPermission = null
+      }
+      if (session.query) {
+        session.query.close()
+        session.query = null
+      }
     }
     activeSessions.delete(id)
   })
