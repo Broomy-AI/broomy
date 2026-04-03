@@ -3,6 +3,7 @@
  */
 import { basename } from 'path-browserify'
 import { PANEL_IDS, DEFAULT_TOOLBAR_PANELS } from '../panels/system/types'
+import { generateId as generatePrefixedId } from './generateId'
 import type { Session, PanelVisibility, TerminalTabsState, PrState } from './sessions'
 import {
   debouncedSave,
@@ -91,7 +92,7 @@ function migrateToolbarPanels(saved: string[] | undefined): string[] {
   return result
 }
 
-const generateId = () => `session-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
+const generateSessionId = () => generatePrefixedId('session')
 
 type StoreGet = () => {
   sessions: Session[]
@@ -140,7 +141,7 @@ export function createInstantSetupActions(get: StoreGet, set: StoreSet) {
   return {
     addInitializingSession: (params: { directory: string; branch: string; agentId: string | null; extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; issueUrl?: string; name?: string } }): string => {
       const { directory, branch, agentId, extra } = params
-      const id = generateId()
+      const id = generateSessionId()
       const name = extra?.name || basename(directory)
       const panelVisibility = { ...DEFAULT_PANEL_VISIBILITY }
 
@@ -334,7 +335,7 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
           // Fall back to basename
         }
       }
-      const id = generateId()
+      const id = generateSessionId()
 
       const isReview = extra?.sessionType === 'review'
       const panelVisibility = isReview ? { ...REVIEW_PANEL_VISIBILITY } : { ...DEFAULT_PANEL_VISIBILITY }
