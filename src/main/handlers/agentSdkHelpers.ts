@@ -6,9 +6,9 @@
 import { app, BrowserWindow } from 'electron'
 import { join, dirname } from 'path'
 import { existsSync } from 'fs'
-import { homedir } from 'os'
 import { spawn } from 'child_process'
 import { resolveCommand } from '../platform'
+import { expandHomePath } from './types'
 import type { AgentSdkMessage } from '../../shared/agentSdkTypes'
 
 /**
@@ -44,11 +44,8 @@ export function resolveAgentSdkCliPath(): string {
   return cliPath
 }
 
-export function expandHome(value: string): string {
-  if (value.startsWith('~/')) return join(homedir(), value.slice(2))
-  if (value === '~') return homedir()
-  return value
-}
+/** @deprecated Use expandHomePath from ./types instead. Re-exported for API compatibility. */
+export const expandHome = expandHomePath
 
 let messageCounter = 0
 export function nextMessageId(): string {

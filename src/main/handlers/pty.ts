@@ -10,7 +10,7 @@ import { homedir } from 'os'
 import * as pty from 'node-pty'
 import type { IPty } from 'node-pty'
 import { isWindows, getDefaultShell, resolveCommand, enhancedPath } from '../platform'
-import { HandlerContext } from './types'
+import { HandlerContext, expandHomePath } from './types'
 import { getScenarioData } from './scenarios'
 import { isDockerAvailable, dockerSetupMessage, ensureAgentInstalled, acquireSetupLock } from '../containerUtils'
 import { isDevcontainerCliAvailable, hasDevcontainerConfig, devcontainerUp, buildDevcontainerExecArgs, devcontainerSetupMessage } from '../devcontainer'
@@ -363,16 +363,10 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     const baseEnv = { ...process.env, PATH: enhancedPath(process.env.PATH) } as Record<string, string>
     delete baseEnv.CLAUDE_CONFIG_DIR
 
-    const expandHome = (value: string) => {
-      if (value.startsWith('~/')) return join(homedir(), value.slice(2))
-      if (value === '~') return homedir()
-      return value
-    }
-
     const agentEnv: Record<string, string> = {}
     if (options.env) {
       for (const [key, value] of Object.entries(options.env)) {
-        const expanded = expandHome(value)
+        const expanded = expandHomePath(value)
         if (key === 'CLAUDE_CONFIG_DIR' && expanded === join(homedir(), '.claude')) continue
         agentEnv[key] = expanded
       }
