@@ -11,6 +11,7 @@ import * as pty from 'node-pty'
 import type { IPty } from 'node-pty'
 import { isWindows, getDefaultShell, resolveCommand, enhancedPath } from '../platform'
 import { HandlerContext, expandHomePath } from './types'
+import { getErrorMessage } from './gitUtils'
 import { getScenarioData } from './scenarios'
 import { isDockerAvailable, dockerSetupMessage, ensureAgentInstalled, acquireSetupLock } from '../containerUtils'
 import { isDevcontainerCliAvailable, hasDevcontainerConfig, devcontainerUp, buildDevcontainerExecArgs, devcontainerSetupMessage } from '../devcontainer'
@@ -257,7 +258,7 @@ function createDevcontainerPty(
         env: process.env as Record<string, string>,
       })
     } catch (err) {
-      displayTerminalError(id, `Failed to spawn Docker process: ${err instanceof Error ? err.message : String(err)}`, senderWindow)
+      displayTerminalError(id, `Failed to spawn Docker process: ${getErrorMessage(err)}`, senderWindow)
       return
     }
     const earlyExitDisposable = ptyProcess.onExit(() => {}) // prevent unhandled-exit crashes
@@ -275,7 +276,7 @@ function createDevcontainerPty(
 
   asyncSetup().catch((err: unknown) => {
     pendingSetups.delete(id)
-    displayTerminalError(id, `Unexpected error: ${err instanceof Error ? err.message : String(err)}`, senderWindow)
+    displayTerminalError(id, `Unexpected error: ${getErrorMessage(err)}`, senderWindow)
   })
 
   return { id }
@@ -384,7 +385,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
         env,
       })
     } catch (err) {
-      displayTerminalError(options.id, `Failed to start terminal: ${err instanceof Error ? err.message : String(err)}`, senderWindow)
+      displayTerminalError(options.id, `Failed to start terminal: ${getErrorMessage(err)}`, senderWindow)
       return { id: options.id }
     }
 

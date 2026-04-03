@@ -4,6 +4,7 @@
  */
 import { BrowserWindow, IpcMain } from 'electron'
 import { HandlerContext } from './types'
+import { getErrorMessage } from './gitUtils'
 import type { AgentSdkPermissionRequest } from '../../shared/agentSdkTypes'
 import {
   expandHome, nextMessageId, sendMsg, resolveAgentSdkCliPath,
@@ -185,7 +186,7 @@ async function runTurn(
       }
     }
   } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : String(err)
+    const errorMessage = getErrorMessage(err)
     if (errorMessage.includes('aborted')) {
       // User cancelled — not an error
     } else {
@@ -329,7 +330,7 @@ async function startTurn(
   try {
     await runTurn(sessionId, session, win)
   } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : String(err)
+    const errorMessage = getErrorMessage(err)
     console.error('[agentSdk] startTurn error:', errorMessage)
     if (err instanceof Error && err.stack) console.error(err.stack)
     win.webContents.send(`agentSdk:error:${sessionId}`, errorMessage)
@@ -451,7 +452,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
       }
       await session.query.streamInput(singleMessage())
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : String(err)
+      const errorMessage = getErrorMessage(err)
       console.error('[agentSdk] inject error:', errorMessage)
       session.ownerWindow.webContents.send(`agentSdk:error:${id}`, errorMessage)
     }
