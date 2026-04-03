@@ -38,15 +38,15 @@ describe('SCPrBanner', () => {
 
   it('renders PR status with number and title', () => {
     const prStatus = { number: 42, title: 'Add feature', state: 'OPEN' as const, url: 'https://github.com/test/pr/42', headRefName: 'feature/test', baseRefName: 'main' }
-    render(<SCPrBanner {...defaultProps} prStatus={prStatus} />)
-    expect(screen.getByText('OPEN')).toBeTruthy()
+    render(<SCPrBanner {...defaultProps} prStatus={prStatus} branchStatus="open" />)
+    expect(screen.getByText('PR OPEN')).toBeTruthy()
     expect(screen.getByText(/#42: Add feature/)).toBeTruthy()
   })
 
   it('opens PR URL in file panel when onFileSelect is provided', () => {
     const onFileSelect = vi.fn()
     const prStatus = { number: 42, title: 'Add feature', state: 'OPEN' as const, url: 'https://github.com/test/pr/42', headRefName: 'feature/test', baseRefName: 'main' }
-    render(<SCPrBanner {...defaultProps} prStatus={prStatus} onFileSelect={onFileSelect} />)
+    render(<SCPrBanner {...defaultProps} prStatus={prStatus} branchStatus="open" onFileSelect={onFileSelect} />)
     fireEvent.click(screen.getByText(/#42: Add feature/))
     expect(onFileSelect).toHaveBeenCalledWith({ filePath: 'https://github.com/test/pr/42', openInDiffMode: false })
     expect(window.shell.openExternal).not.toHaveBeenCalled()
@@ -54,7 +54,7 @@ describe('SCPrBanner', () => {
 
   it('falls back to external browser when onFileSelect is not provided', () => {
     const prStatus = { number: 42, title: 'Add feature', state: 'OPEN' as const, url: 'https://github.com/test/pr/42', headRefName: 'feature/test', baseRefName: 'main' }
-    render(<SCPrBanner {...defaultProps} prStatus={prStatus} />)
+    render(<SCPrBanner {...defaultProps} prStatus={prStatus} branchStatus="open" />)
     fireEvent.click(screen.getByText(/#42: Add feature/))
     expect(window.shell.openExternal).toHaveBeenCalledWith('https://github.com/test/pr/42')
   })

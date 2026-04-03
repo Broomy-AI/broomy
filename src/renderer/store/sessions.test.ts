@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
-import { useSessionStore } from './sessions'
+import { useSessionStore, type StatusChip } from './sessions'
 import { PANEL_IDS, DEFAULT_TOOLBAR_PANELS } from '../panels/system/types'
 import { getLoadedSessionCount } from './sessionPersistence'
 import { setLoadedCounts } from './configPersistence'
@@ -75,6 +75,9 @@ describe('useSessionStore', () => {
         activeTabId: 'tab-1',
       },
       branchStatus: 'in-progress' as const,
+      hasFeedback: false,
+      checksStatus: 'none' as const,
+      statusChip: 'in-progress' as StatusChip,
       isArchived: false,
       isRestored: false,
     }

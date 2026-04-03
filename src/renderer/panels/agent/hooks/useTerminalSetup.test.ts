@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useTerminalSetup, type TerminalConfig } from './useTerminalSetup'
-import { useSessionStore } from '../../../store/sessions'
+import { useSessionStore, type StatusChip } from '../../../store/sessions'
 import { useErrorStore } from '../../../store/errors'
 import { allowConsoleError } from '../../../../test/console-guard'
 import { PANEL_IDS, DEFAULT_TOOLBAR_PANELS } from '../../../panels/system/types'
@@ -429,7 +429,7 @@ describe('useTerminalSetup', () => {
           explorerFilter: 'files' as const, lastMessage: null, lastMessageTime: null,
           isUnread: false, workingStartTime: null, recentFiles: [], searchHistory: [],
           terminalTabs: { tabs: [], activeTabId: '__agent__' },
-          branchStatus: 'in-progress' as const, isArchived: false, isRestored: false,
+          branchStatus: 'in-progress' as const, hasFeedback: false, checksStatus: 'none' as const, statusChip: 'in-progress' as StatusChip, isArchived: false, isRestored: false,
         }],
       })
       const config = makeConfig()
@@ -671,7 +671,7 @@ describe('useTerminalSetup', () => {
           explorerFilter: 'files' as const, lastMessage: null, lastMessageTime: null,
           isUnread: false, workingStartTime: null, recentFiles: [], searchHistory: [],
           terminalTabs: { tabs: [], activeTabId: '__agent__' },
-          branchStatus: 'in-progress' as const, isArchived: false, isRestored: false,
+          branchStatus: 'in-progress' as const, hasFeedback: false, checksStatus: 'none' as const, statusChip: 'in-progress' as StatusChip, isArchived: false, isRestored: false,
         }],
       } as never)
 

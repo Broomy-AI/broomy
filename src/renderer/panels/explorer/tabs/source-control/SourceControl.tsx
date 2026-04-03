@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import type { GitFileStatus, GitStatusResult } from '../../../../../preload/index'
-import type { BranchStatus, PrState } from '../../../../store/sessions'
+import type { BranchStatus, PrState, StatusChip } from '../../../../store/sessions'
 import type { NavigationTarget } from '../../../../shared/utils/fileNavigation'
 import { useSourceControlData } from './useSourceControlData'
 import { useSourceControlActions } from './useSourceControlActions'
@@ -26,10 +26,13 @@ interface SourceControlProps {
   onFileSelect?: (target: NavigationTarget) => void
   onGitStatusRefresh?: () => void
   branchStatus?: BranchStatus
+  statusChip?: StatusChip
   repoId?: string
   agentPtyId?: string
   agentId?: string | null
   onUpdatePrState?: (prState: PrState, prNumber?: number, prUrl?: string) => void
+  onUpdateFeedbackStatus?: (hasFeedback: boolean) => void
+  onUpdateChecksStatus?: (checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
   issueNumber?: number
   issueTitle?: string
   issueUrl?: string
@@ -47,10 +50,13 @@ export function SourceControl({
   onFileSelect,
   onGitStatusRefresh,
   branchStatus,
+  statusChip,
   repoId,
   agentPtyId,
   agentId,
   onUpdatePrState,
+  onUpdateFeedbackStatus,
+  onUpdateChecksStatus,
   issueNumber,
   issueTitle,
   issueUrl,
@@ -76,7 +82,7 @@ export function SourceControl({
 
   const data = useSourceControlData({
     directory, gitStatus, syncStatus, branchStatus, onUpdatePrState,
-    repoId, scView,
+    onUpdateFeedbackStatus, onUpdateChecksStatus, repoId, scView,
   })
 
   // Check if repo has isolation enabled but no devcontainer config
@@ -161,6 +167,7 @@ export function SourceControl({
         prStatus={data.prStatus}
         isPrLoading={data.isPrLoading}
         branchStatus={branchStatus}
+        statusChip={statusChip}
         branchBaseName={data.branchBaseName}
         gitOpError={data.gitOpError}
         onDismissError={() => data.setGitOpError(null)}

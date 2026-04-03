@@ -29,7 +29,10 @@ export default function Explorer({
   sessionId,
   planFilePath,
   branchStatus,
+  statusChip,
   onUpdatePrState,
+  onUpdateFeedbackStatus,
+  onUpdateChecksStatus,
   repoId,
   agentPtyId,
   session,
@@ -136,10 +139,13 @@ export default function Explorer({
               onFileSelect={onFileSelect}
               onGitStatusRefresh={onGitStatusRefresh}
               branchStatus={branchStatus}
+              statusChip={statusChip}
               repoId={repoId}
               agentPtyId={agentPtyId}
               agentId={session?.agentId}
               onUpdatePrState={onUpdatePrState}
+              onUpdateFeedbackStatus={onUpdateFeedbackStatus}
+              onUpdateChecksStatus={onUpdateChecksStatus}
               issueNumber={issueNumber}
               issueTitle={issueTitle}
               issueUrl={issueUrl}

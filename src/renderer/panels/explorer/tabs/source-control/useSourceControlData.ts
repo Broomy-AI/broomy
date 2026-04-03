@@ -12,6 +12,8 @@ export interface SourceControlDataProps {
   syncStatus?: GitStatusResult | null
   branchStatus?: BranchStatus
   onUpdatePrState?: (prState: PrState, prNumber?: number, prUrl?: string) => void
+  onUpdateFeedbackStatus?: (hasFeedback: boolean) => void
+  onUpdateChecksStatus?: (checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
   repoId?: string
   scView: 'working' | 'branch' | 'commits'
 }
@@ -21,11 +23,13 @@ interface PrEffectsConfig {
   syncStatus?: GitStatusResult | null
   branchStatus?: BranchStatus
   onUpdatePrState?: (prState: PrState, prNumber?: number, prUrl?: string) => void
+  onUpdateFeedbackStatus?: (hasFeedback: boolean) => void
+  onUpdateChecksStatus?: (checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
 }
 
 /** PR data-fetching effects, extracted for function size limits. */
 function usePrEffects(config: PrEffectsConfig) {
-  const { directory, syncStatus, branchStatus, onUpdatePrState } = config
+  const { directory, syncStatus, branchStatus, onUpdatePrState, onUpdateFeedbackStatus, onUpdateChecksStatus } = config
   const [prStatus, setPrStatus] = useState<GitHubPrStatus>(null)
   const [isPrLoading, setIsPrLoading] = useState(false)
   const [hasWriteAccess, setHasWriteAccess] = useState(false)
@@ -44,7 +48,7 @@ function usePrEffects(config: PrEffectsConfig) {
     return () => document.removeEventListener('broomy:agent-finished', handler)
   }, [directory])
 
-  // Fetch PR status, write access, and checks when source control is active
+  // Fetch PR status, write access, checks, and feedback when source control is active
   useEffect(() => {
     if (!directory) { setHasPrLoadedOnce(true); return }
     let cancelled = false
@@ -60,18 +64,27 @@ function usePrEffects(config: PrEffectsConfig) {
         setPrStatus(prResult)
         setHasWriteAccess(writeAccess)
 
-        // Fetch checks status only if there's an open PR
+        // Fetch checks + feedback in parallel only if there's an open PR
         if (prResult?.state === 'OPEN') {
-          const checks = await window.gh.prChecksStatus(directory).catch(() => 'none' as const)
+          const [checks, feedback] = await Promise.all([
+            window.gh.prChecksStatus(directory).catch(() => 'none' as const),
+            window.gh.prFeedbackStatus(directory, prResult.number).catch(() => false),
+          ])
           setChecksStatus(checks)
+          onUpdateChecksStatus?.(checks)
+          onUpdateFeedbackStatus?.(feedback)
         } else {
           setChecksStatus('none')
+          onUpdateChecksStatus?.('none')
+          onUpdateFeedbackStatus?.(false)
         }
       } catch {
         if (cancelled) return
         setPrStatus(null)
         setHasWriteAccess(false)
         setChecksStatus('none')
+        onUpdateChecksStatus?.('none')
+        onUpdateFeedbackStatus?.(false)
       } finally {
         if (!cancelled) {
           setIsPrLoading(false)
@@ -130,6 +143,8 @@ export function useSourceControlData({
   syncStatus,
   branchStatus,
   onUpdatePrState,
+  onUpdateFeedbackStatus,
+  onUpdateChecksStatus,
   repoId,
   scView,
 }: SourceControlDataProps) {
@@ -164,7 +179,7 @@ export function useSourceControlData({
   const [askedAgentToResolve, setAskedAgentToResolve] = useState(false)
 
   // PR effects
-  const pr = usePrEffects({ directory, syncStatus, branchStatus, onUpdatePrState })
+  const pr = usePrEffects({ directory, syncStatus, branchStatus, onUpdatePrState, onUpdateFeedbackStatus, onUpdateChecksStatus })
 
   // Repo lookup for allowApproveAndMerge
   const repos = useRepoStore((s) => s.repos)

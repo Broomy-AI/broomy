@@ -11,7 +11,7 @@
  */
 import { create } from 'zustand'
 import { PANEL_IDS, DEFAULT_TOOLBAR_PANELS } from '../panels/system/types'
-import type { BranchStatus, PrState } from '../features/git/branchStatus'
+import type { BranchStatus, PrState, StatusChip } from '../features/git/branchStatus'
 import {
   debouncedSave,
   syncLegacyFields,
@@ -21,7 +21,7 @@ import { createPanelActions } from './sessionPanelActions'
 import { createBranchActions } from './sessionBranchActions'
 import { createCoreActions, DEFAULT_SIDEBAR_WIDTH } from './sessionCoreActions'
 
-export type { BranchStatus, PrState }
+export type { BranchStatus, PrState, StatusChip }
 
 export type SessionStatus = 'working' | 'idle' | 'error' | 'initializing'
 export type FileViewerPosition = 'top' | 'left'
@@ -99,6 +99,11 @@ export interface Session {
   hasHadCommits?: boolean
   // Branch status (runtime, derived)
   branchStatus: BranchStatus
+  // PR metadata (runtime, derived from GitHub API)
+  hasFeedback: boolean
+  checksStatus: 'passed' | 'failed' | 'pending' | 'none'
+  // Unified status chip (runtime, derived) — single source of truth for both sidebar and SCM
+  statusChip: StatusChip
   // PR state tracking (persisted)
   lastKnownPrState?: PrState
   lastKnownPrNumber?: number
@@ -177,6 +182,8 @@ interface SessionStore {
   updateSessionBranch: (sessionId: string, branch: string) => void
   updatePrState: (sessionId: string, prState: PrState, prNumber?: number, prUrl?: string) => void
   updateReviewStatus: (sessionId: string, reviewStatus: 'pending' | 'reviewed') => void
+  updateFeedbackStatus: (sessionId: string, hasFeedback: boolean) => void
+  updateChecksStatus: (sessionId: string, checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
   // Search history actions
   addSearchHistory: (sessionId: string, query: string) => void
   removeSearchHistoryItem: (sessionId: string, query: string) => void

@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useSessionLifecycle } from './useSessionLifecycle'
-import type { Session } from '../../../store/sessions'
+import type { Session, StatusChip } from '../../../store/sessions'
 import type { ProfileData } from '../../../store/profiles'
 
 // Mock terminalBufferRegistry
@@ -52,6 +52,9 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     searchHistory: [],
     terminalTabs: { tabs: [{ id: 'tab-1', name: 'Terminal' }], activeTabId: 'tab-1' },
     branchStatus: 'in-progress' as const,
+    hasFeedback: false,
+    checksStatus: 'none' as const,
+    statusChip: 'in-progress' as StatusChip,
     isArchived: false,
     isRestored: false,
     ...overrides,

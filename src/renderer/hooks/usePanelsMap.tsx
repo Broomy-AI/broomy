@@ -95,6 +95,8 @@ export interface PanelsMapConfig {
   selectFile: (sessionId: string, filePath: string) => void
   setExplorerFilter: (sessionId: string, filter: ExplorerFilter) => void
   updatePrState: (sessionId: string, prState: PrState, prNumber?: number, prUrl?: string) => void
+  updateFeedbackStatus: (sessionId: string, hasFeedback: boolean) => void
+  updateChecksStatus: (sessionId: string, checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
   setPanelVisibility: (sessionId: string, panelId: string, visible: boolean) => void
   setToolbarPanels: (panels: string[]) => void
   closeCommandsEditor: (sessionId: string) => void
@@ -105,7 +107,7 @@ function useExplorerPanel(config: PanelsMapConfig) {
   const {
     activeSessionId, activeSession, activeSessionGitStatus, activeSessionGitStatusResult,
     navigateToFile, fetchGitStatus, setExplorerFilter,
-    updatePrState, repos,
+    updatePrState, updateFeedbackStatus, updateChecksStatus, repos,
   } = config
 
   const { issuePlanExists, suggestGitignore, dismissGitignore } = useOutputDirWatcher(activeSessionId, activeSession?.directory)
@@ -123,6 +125,14 @@ function useExplorerPanel(config: PanelsMapConfig) {
     if (activeSessionId) updatePrState(activeSessionId, prState, prNumber, prUrl)
   }, [activeSessionId, updatePrState])
 
+  const handleUpdateFeedbackStatus = useCallback((hasFeedback: boolean) => {
+    if (activeSessionId) updateFeedbackStatus(activeSessionId, hasFeedback)
+  }, [activeSessionId, updateFeedbackStatus])
+
+  const handleUpdateChecksStatus = useCallback((checksStatus: 'passed' | 'failed' | 'pending' | 'none') => {
+    if (activeSessionId) updateChecksStatus(activeSessionId, checksStatus)
+  }, [activeSessionId, updateChecksStatus])
+
   return useMemo(() => {
     if (!activeSession?.showExplorer || activeSession.status === 'initializing') return null
     return (
@@ -139,7 +149,10 @@ function useExplorerPanel(config: PanelsMapConfig) {
         sessionId={activeSessionId ?? undefined}
         planFilePath={activeSession.planFilePath}
         branchStatus={activeSession.branchStatus}
+        statusChip={activeSession.statusChip}
         onUpdatePrState={handleUpdatePrState}
+        onUpdateFeedbackStatus={handleUpdateFeedbackStatus}
+        onUpdateChecksStatus={handleUpdateChecksStatus}
         repoId={activeSession.repoId}
         agentPtyId={activeSession.agentPtyId}
         session={activeSession}
@@ -152,7 +165,7 @@ function useExplorerPanel(config: PanelsMapConfig) {
         onDismissGitignore={dismissGitignore}
       />
     )
-  }, [activeSessionId, activeSession, activeSessionGitStatus, activeSessionGitStatusResult, navigateToFile, fetchGitStatus, activeRepo, issuePlanExists, suggestGitignore, dismissGitignore, handleFilterChange, handleUpdatePrState])
+  }, [activeSessionId, activeSession, activeSessionGitStatus, activeSessionGitStatusResult, navigateToFile, fetchGitStatus, activeRepo, issuePlanExists, suggestGitignore, dismissGitignore, handleFilterChange, handleUpdatePrState, handleUpdateFeedbackStatus, handleUpdateChecksStatus])
 }
 
 function useFileViewerPanel(config: PanelsMapConfig) {

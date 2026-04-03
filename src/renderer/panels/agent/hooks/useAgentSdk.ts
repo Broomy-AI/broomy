@@ -1,9 +1,10 @@
 /**
  * Hook that connects the AgentChat UI to the Agent SDK IPC bridge.
  *
- * The main process manages a persistent V2 SDK session.  First message
- * triggers agentSdk:start; follow-ups use agentSdk:send which calls
- * session.send() on the same session — no restarts, no replayed history.
+ * The main process uses the V1 query() API with `resume` for multi-turn
+ * conversations.  First message triggers agentSdk:start; follow-ups use
+ * agentSdk:send which creates a new query with resume — token-efficient,
+ * no replayed history.
  */
 import { useEffect, useCallback, useRef, useState } from 'react'
 import { useAgentChatStore } from '../../../store/agentChat'
@@ -53,10 +54,10 @@ export function useAgentSdk(options: UseAgentSdkOptions): UseAgentSdkReturn {
   const [availableCommands, setAvailableCommands] = useState<CommandInfo[]>([])
   const [historyMeta, setHistoryMeta] = useState<HistoryMeta | null>(null)
 
-  // Fetch available slash commands on mount
+  // Fetch available slash commands on mount and when cwd changes
   useEffect(() => {
-    void window.agentSdk.commands(env).then(setAvailableCommands)
-  }, [env])
+    void window.agentSdk.commands(cwd, env).then(setAvailableCommands)
+  }, [cwd, env])
 
   // Load message history from the SDK transcript on mount.
   const historyLoadedRef = useRef<string | null>(null)
@@ -183,13 +184,13 @@ export function useAgentSdk(options: UseAgentSdkOptions): UseAgentSdkReturn {
     })
 
     if (hasStartedRef.current) {
-      // V2 session is alive in main process — send directly.
+      // Session exists in main process — send creates a new query with resume.
       // Pass cwd/env/permissionMode so if the main process lost the session
       // (e.g. after hot reload), it can start a new one with correct params.
       void window.agentSdk.send(sessionId, prompt, { cwd, permissionMode, env, model, effort,
         sdkSessionId: useSessionStore.getState().sessions.find(s => s.id === sessionId)?.sdkSessionId })
     } else {
-      // First message — create the V2 session
+      // First message — create a new query (with resume if we have a stored session)
       const storedId = useSessionStore.getState().sessions.find(s => s.id === sessionId)?.sdkSessionId
       const resumeId = storedId && storedId.length > 0 ? storedId : (sdkSessionId && sdkSessionId.length > 0 ? sdkSessionId : undefined)
       hasStartedRef.current = true

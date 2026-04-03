@@ -111,26 +111,23 @@ interface ResetOptions {
    *   agentToolUses: [{ match: 'edit', tools: [{ toolName: 'Edit', toolInput: { file_path: '/foo.ts', old_string: 'a', new_string: 'b' } }] }]
    */
   agentToolUses?: { match: string; tools: { toolName: string; toolInput: Record<string, unknown>; decisionReason?: string }[] }[]
+  /**
+   * When true, use a fake SDK implementation that goes through the real
+   * buildQueryOptions and runTurn code paths, validating that critical
+   * options (settingSources, tools, cwd) are correctly set.
+   * Slash commands will return a response confirming the options.
+   */
+  fakeSdk?: boolean
 }
 
 /** Converts an optional number to a string for env var transport; returns '' for undefined. */
 const optNum = (n: number | undefined) => n !== undefined ? String(n) : ''
 
-/**
- * Reload the renderer to get fresh app state for a new feature.
- * Optionally configure mock data scenario before reloading.
- */
-let isFirstCall = true
-
-export async function resetApp(opts?: ResetOptions): Promise<{ electronApp: ElectronApplication; page: Page }> {
-  const { electronApp, page } = await getOrLaunchApp()
-
-  // Set env vars on the main process before reload so IPC handlers pick them up
-  const scenario = opts?.scenario ?? 'default'
-  const mockMerge = opts?.mockMerge ?? ''
-  const envOverrides = {
-    sc: scenario,
-    mm: mockMerge,
+/** Build the env overrides object from ResetOptions. */
+function buildEnvOverrides(opts?: ResetOptions) {
+  return {
+    sc: opts?.scenario ?? 'default',
+    mm: opts?.mockMerge ?? '',
     prState: opts?.mockPrState ?? '',
     isMerged: opts?.mockIsMerged ? 'true' : '',
     hasBranchCommits: opts?.mockHasBranchCommits ? 'true' : '',
@@ -140,7 +137,12 @@ export async function resetApp(opts?: ResetOptions): Promise<{ electronApp: Elec
     agentResponses: opts?.agentResponses ? JSON.stringify(opts.agentResponses) : '',
     agentResponseDelayMs: optNum(opts?.agentResponseDelayMs),
     agentToolUses: opts?.agentToolUses ? JSON.stringify(opts.agentToolUses) : '',
+    fakeSdk: opts?.fakeSdk ? 'true' : '',
   }
+}
+
+/** Apply env overrides to the main process. */
+async function applyEnvOverrides(electronApp: ElectronApplication, envOverrides: ReturnType<typeof buildEnvOverrides>) {
   await electronApp.evaluate((_electron, env) => {
     process.env.E2E_SCENARIO = env.sc
     const setOrDelete = (key: string, val: string) => { process.env[key] = val || '' }
@@ -154,7 +156,21 @@ export async function resetApp(opts?: ResetOptions): Promise<{ electronApp: Elec
     setOrDelete('E2E_AGENT_RESPONSES', env.agentResponses)
     setOrDelete('E2E_AGENT_RESPONSE_DELAY_MS', env.agentResponseDelayMs)
     setOrDelete('E2E_AGENT_TOOL_USES', env.agentToolUses)
+    setOrDelete('E2E_FAKE_SDK', env.fakeSdk)
   }, envOverrides)
+}
+
+/**
+ * Reload the renderer to get fresh app state for a new feature.
+ * Optionally configure mock data scenario before reloading.
+ */
+let isFirstCall = true
+
+export async function resetApp(opts?: ResetOptions): Promise<{ electronApp: ElectronApplication; page: Page }> {
+  const { electronApp, page } = await getOrLaunchApp()
+
+  // Set env vars on the main process before reload so IPC handlers pick them up
+  await applyEnvOverrides(electronApp, buildEnvOverrides(opts))
 
   if (isFirstCall) {
     // First call — app is already fresh from launch

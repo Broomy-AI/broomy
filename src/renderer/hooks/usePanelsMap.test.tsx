@@ -4,7 +4,7 @@ import { renderHook } from '@testing-library/react'
 import { render } from '@testing-library/react'
 import { usePanelsMap, type PanelsMapConfig } from './usePanelsMap'
 import { PANEL_IDS } from '../panels'
-import { type Session } from '../store/sessions'
+import { type Session, type StatusChip } from '../store/sessions'
 
 // Mock all component imports — capture props for callback testing
 let lastExplorerProps: Record<string, unknown> = {}
@@ -54,6 +54,9 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     searchHistory: [],
     terminalTabs: { tabs: [{ id: 'tab-1', name: 'Terminal' }], activeTabId: 'tab-1' },
     branchStatus: 'in-progress' as const,
+    hasFeedback: false,
+    checksStatus: 'none' as const,
+    statusChip: 'in-progress' as StatusChip,
     isArchived: false,
     isRestored: false,
     ...overrides,
@@ -103,6 +106,8 @@ function makeConfig(overrides: Partial<PanelsMapConfig> = {}): PanelsMapConfig {
     selectFile: vi.fn(),
     setExplorerFilter: vi.fn(),
     updatePrState: vi.fn(),
+    updateFeedbackStatus: vi.fn(),
+    updateChecksStatus: vi.fn(),
     setPanelVisibility: vi.fn(),
     setToolbarPanels: vi.fn(),
     closeCommandsEditor: vi.fn(),

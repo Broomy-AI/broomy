@@ -4,7 +4,7 @@ import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import '../../../test/react-setup'
 import SessionList from './SessionList'
 import { useSessionStore } from '../../store/sessions'
-import type { Session } from '../../store/sessions'
+import type { Session, StatusChip } from '../../store/sessions'
 
 function makeSession(overrides: Partial<Session> = {}): Session {
   return {
@@ -37,6 +37,9 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     searchHistory: [],
     terminalTabs: { tabs: [{ id: 'tab-1', name: 'Terminal' }], activeTabId: 'tab-1' },
     branchStatus: 'in-progress',
+    hasFeedback: false,
+    checksStatus: 'none' as const,
+    statusChip: 'in-progress' as StatusChip,
     isArchived: false,
     isRestored: false,
     ...overrides,
@@ -124,10 +127,10 @@ describe('SessionList', () => {
 
   it('shows branch status chips', () => {
     setSessions([
-      makeSession({ id: 's1', branch: 'b1', branchStatus: 'pushed' }),
-      makeSession({ id: 's2', branch: 'b2', branchStatus: 'open' }),
-      makeSession({ id: 's3', branch: 'b3', branchStatus: 'merged' }),
-      makeSession({ id: 's4', branch: 'b4', branchStatus: 'closed' }),
+      makeSession({ id: 's1', branch: 'b1', branchStatus: 'pushed', statusChip: 'pushed' }),
+      makeSession({ id: 's2', branch: 'b2', branchStatus: 'open', statusChip: 'open' }),
+      makeSession({ id: 's3', branch: 'b3', branchStatus: 'merged', statusChip: 'merged' }),
+      makeSession({ id: 's4', branch: 'b4', branchStatus: 'closed', statusChip: 'closed' }),
     ])
     render(<SessionList {...makeProps()} />)
     expect(screen.getByText('PUSHED')).toBeTruthy()
@@ -393,7 +396,7 @@ describe('SessionList', () => {
     })
 
     it('shows EMPTY branch status chip', () => {
-      setSessions([makeSession({ id: 's1', branch: 'b1', branchStatus: 'empty' })])
+      setSessions([makeSession({ id: 's1', branch: 'b1', branchStatus: 'empty', statusChip: 'empty' })])
       render(<SessionList {...makeProps()} />)
       expect(screen.getByText('EMPTY')).toBeTruthy()
     })

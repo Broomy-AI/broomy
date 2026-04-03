@@ -2,7 +2,7 @@
  * Shared type definitions for the explorer panel and its sub-components.
  */
 import type { FileEntry, GitFileStatus, GitStatusResult, SearchResult, ManagedRepo } from '../../../preload/index'
-import type { ExplorerFilter, BranchStatus, PrState, Session } from '../../store/sessions'
+import type { ExplorerFilter, BranchStatus, PrState, StatusChip, Session } from '../../store/sessions'
 import type { NavigationTarget } from '../../shared/utils/fileNavigation'
 
 export interface ExplorerProps {
@@ -20,7 +20,10 @@ export interface ExplorerProps {
   planFilePath?: string | null
   // Branch status
   branchStatus?: BranchStatus
+  statusChip?: StatusChip
   onUpdatePrState?: (prState: PrState, prNumber?: number, prUrl?: string) => void
+  onUpdateFeedbackStatus?: (hasFeedback: boolean) => void
+  onUpdateChecksStatus?: (checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
   repoId?: string
   agentPtyId?: string
   // Review tab data

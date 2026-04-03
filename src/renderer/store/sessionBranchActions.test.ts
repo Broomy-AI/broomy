@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
-import { useSessionStore } from './sessions'
+import { useSessionStore, type StatusChip } from './sessions'
 import { PANEL_IDS, DEFAULT_TOOLBAR_PANELS } from '../panels/system/types'
 import { setLoadedCounts } from './configPersistence'
 
@@ -52,6 +52,9 @@ describe('sessionBranchActions', () => {
       searchHistory: [],
       terminalTabs: { tabs: [{ id: 'tab-1', name: 'Terminal' }], activeTabId: 'tab-1' },
       branchStatus: 'in-progress' as const,
+      hasFeedback: false,
+      checksStatus: 'none' as const,
+      statusChip: 'in-progress' as StatusChip,
       isArchived: false,
       isRestored: false,
     }

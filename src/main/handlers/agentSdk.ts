@@ -1,21 +1,15 @@
 /**
  * IPC handlers for the Claude Agent SDK integration.
- *
- * Uses the V2 Session API for multi-turn conversations.
- * A single persistent session handles all turns — no restarts, no replayed
- * history, token-efficient by design.
- *
- * Pattern:
- *   createSession() or resumeSession() → session.send() → session.stream()
- *   Follow-up turns reuse the same session object via send()/stream().
+ * Uses the V1 query() API with `resume` for token-efficient multi-turn conversations.
  */
 import { BrowserWindow, IpcMain } from 'electron'
 import { HandlerContext } from './types'
-import type { AgentSdkMessage, AgentSdkPermissionRequest } from '../../shared/agentSdkTypes'
+import type { AgentSdkPermissionRequest } from '../../shared/agentSdkTypes'
 import {
   expandHome, nextMessageId, sendMsg, resolveAgentSdkCliPath,
   handleLoadHistory, handleStatus, handleFetchCommands, handleFetchModels, handleLogin,
-  type SdkModelInfo,
+  createFakeQuery,
+  type SdkModelInfo, type SdkQuery,
 } from './agentSdkHelpers'
 
 // ── .claude/settings.local.json helpers ──
@@ -98,21 +92,8 @@ interface PendingPermission {
   resolve: (result: { behavior: 'allow' } | { behavior: 'deny'; message: string }) => void
 }
 
-interface InjectPayload {
-  type: 'user'
-  message: { role: 'user'; content: { type: 'text'; text: string }[] }
-  parent_tool_use_id: null
-  priority: 'next'
-  session_id: string
-}
-
 interface ActiveSession {
-  sdkSession: {
-    send(message: string | InjectPayload): Promise<void>
-    stream(): AsyncGenerator<unknown, void>
-    close(): void
-    readonly sessionId: string
-  }
+  query: SdkQuery | null
   sdkSessionId?: string
   ownerWindow: BrowserWindow
   pendingPermission: PendingPermission | null
@@ -122,18 +103,15 @@ interface ActiveSession {
   cwd: string
 }
 
-// Module-local state
 const activeSessions = new Map<string, ActiveSession>()
-
 
 function processSystemMessage(sessionId: string, sdkMessage: Record<string, unknown>, win: BrowserWindow): void {
   const session = activeSessions.get(sessionId)
   if (session && typeof sdkMessage.session_id === 'string') {
     session.sdkSessionId = sdkMessage.session_id
   }
-  // The SDK emits a system init on every stream() call (each turn).
-  // Only forward the first one to the renderer to avoid "Session initialized"
-  // appearing before every response.
+  // Only forward the first system init to the renderer to avoid
+  // "Session initialized" appearing before every response.
   if (session?.initSent) return
   if (session) session.initSent = true
 
@@ -211,12 +189,28 @@ function processUserMessage(sessionId: string, sdkMessage: Record<string, unknow
 }
 
 function processResultMessage(sessionId: string, sdkMessage: Record<string, unknown>, win: BrowserWindow): void {
+  // V1 uses cost_usd; V2 used total_cost_usd — handle both for safety
+  const costUsd = (sdkMessage.cost_usd ?? sdkMessage.total_cost_usd) as number | undefined
+
+  // Handle error results (subtype: error_during_execution, error_max_turns, etc.)
+  const subtype = sdkMessage.subtype as string | undefined
+  if (subtype?.startsWith('error')) {
+    const errors = sdkMessage.errors as { message?: string }[] | undefined
+    const errorText = errors?.map((e) => e.message ?? 'unknown error').join('\n') ?? `Agent error: ${subtype}`
+    sendMsg(win, sessionId, {
+      id: nextMessageId(),
+      type: 'error',
+      timestamp: Date.now(),
+      text: errorText,
+    })
+  }
+
   sendMsg(win, sessionId, {
     id: nextMessageId(),
     type: 'result',
     timestamp: Date.now(),
     result: typeof sdkMessage.result === 'string' ? sdkMessage.result : undefined,
-    costUsd: sdkMessage.total_cost_usd as number | undefined,
+    costUsd,
     durationMs: sdkMessage.duration_ms as number | undefined,
     numTurns: sdkMessage.num_turns as number | undefined,
   })
@@ -241,22 +235,29 @@ function processAndSendMessage(
 }
 
 /**
- * Run a single turn: stream all messages until the turn completes.
- * In V2, each send()/stream() pair is one turn. The stream iterator
- * finishes when the turn is done.
+ * Iterate a running query, forwarding messages to the renderer.
+ * When the generator completes the turn is done.
  */
-async function streamTurn(
+async function runTurn(
   sessionId: string,
   session: ActiveSession,
   win: BrowserWindow,
 ): Promise<void> {
+  const q = session.query
+  if (!q) return
+  let resultSent = false
   try {
-    for await (const message of session.sdkSession.stream()) {
+    for await (const message of q) {
       if (!activeSessions.has(sessionId)) break
-      const msg = message as Record<string, unknown>
+      const msg = message
       processAndSendMessage(sessionId, msg, win)
 
       if (msg.type === 'result') {
+        resultSent = true
+        // Capture session_id from result as well
+        if (typeof msg.session_id === 'string') {
+          session.sdkSessionId = msg.session_id
+        }
         const sdkSessionId = session.sdkSessionId ?? ''
         win.webContents.send(`agentSdk:done:${sessionId}`, sdkSessionId)
       }
@@ -269,20 +270,26 @@ async function streamTurn(
       console.error('[agentSdk] Stream error:', errorMessage)
       if (err instanceof Error && err.stack) console.error(err.stack)
       win.webContents.send(`agentSdk:error:${sessionId}`, errorMessage)
-      // On error, clean up so next message starts a fresh session
       activeSessions.delete(sessionId)
+    }
+  } finally {
+    // Turn is done — clear the query reference so subsequent sends create a new query
+    if (activeSessions.has(sessionId)) {
+      activeSessions.get(sessionId)!.query = null
+    }
+    // If no result message was emitted (e.g. interrupted), still notify the renderer
+    if (!resultSent && activeSessions.has(sessionId)) {
+      const sdkSessionId = session.sdkSessionId ?? ''
+      win.webContents.send(`agentSdk:done:${sessionId}`, sdkSessionId)
     }
   }
 }
 
 /**
- * Create a V2 SDK session and start the stream loop.
+ * Build the options object for a V1 query() call.
  */
-async function startSession(
-  sessionId: string,
-  firstPrompt: string,
+async function buildQueryOptions(
   cwd: string,
-  win: BrowserWindow,
   options: {
     sdkSessionId?: string
     permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk'
@@ -290,15 +297,11 @@ async function startSession(
     model?: string
     effort?: 'low' | 'medium' | 'high' | 'max'
   },
-): Promise<void> {
+  sessionId: string,
+  win: BrowserWindow,
+): Promise<Record<string, unknown>> {
   const cliPath = resolveAgentSdkCliPath()
-  console.log('[agentSdk] startSession (V2)', sessionId, 'cwd:', cwd, 'permissionMode:', options.permissionMode ?? 'default')
-  const {
-    unstable_v2_createSession,
-    unstable_v2_resumeSession,
-  } = await import('@anthropic-ai/claude-agent-sdk')
 
-  // Build env: process.env as base, agent-specific env vars merged on top
   const agentEnv: Record<string, string> = {}
   if (options.env) {
     for (const [key, value] of Object.entries(options.env)) {
@@ -307,17 +310,22 @@ async function startSession(
   }
   const env = { ...process.env, ...agentEnv }
 
-  // Build session options — cwd is passed as an extra property.
-  // The V2 types don't declare it yet (unstable), but the underlying
-  // engine respects it (same as V1 Options.cwd).
-  const sessionOptions: Record<string, unknown> = {
-    model: options.model ?? 'default',
+  const queryOptions: Record<string, unknown> = {
     pathToClaudeCodeExecutable: cliPath,
+    model: options.model ?? 'default',
     cwd,
     env,
+    tools: { type: 'preset', preset: 'claude_code' },
+    settingSources: ['user', 'project'],
   }
+
   if (options.effort) {
-    sessionOptions.effort = options.effort
+    queryOptions.effort = options.effort
+  }
+
+  // Resume from existing session — token-efficient, no history replay
+  if (options.sdkSessionId && options.sdkSessionId.length > 0) {
+    queryOptions.resume = options.sdkSessionId
   }
 
   const mode = options.permissionMode ?? 'default'
@@ -364,7 +372,7 @@ async function startSession(
 
   // Register canUseTool for ALL modes so the SDK always has a handler.
   // Without this, the SDK silently denies tools that need permission.
-  sessionOptions.canUseTool = async (
+  queryOptions.canUseTool = async (
     toolName: string,
     input: Record<string, unknown>,
     canUseToolOptions: { signal: AbortSignal; decisionReason?: string },
@@ -406,59 +414,60 @@ async function startSession(
     }
   }
 
-  // WORKAROUND: The V2 SDKSessionOptions type doesn't include `cwd`, and the
-  // SDK's SDKSession class doesn't forward it to the ProcessTransport. The
-  // subprocess inherits process.cwd() from the parent. Since createSession()
-  // and resumeSession() are synchronous (spawn the subprocess immediately in
-  // the constructor), we temporarily chdir so the subprocess picks up the
-  // correct directory.
-  const originalCwd = process.cwd()
-  try {
-    process.chdir(cwd)
-  } catch (err) {
-    console.warn('[agentSdk] Failed to chdir to', cwd, err)
-  }
+  return queryOptions
+}
 
-  let sdkSession
-  if (options.sdkSessionId && options.sdkSessionId.length > 0) {
-    // Resume existing session — restores conversation context across app restarts
-    console.log('[agentSdk] Resuming session:', options.sdkSessionId)
-    sdkSession = unstable_v2_resumeSession(
-      options.sdkSessionId,
-      sessionOptions as Parameters<typeof unstable_v2_resumeSession>[1],
-    )
+/**
+ * Start a turn: create a V1 query() and iterate its messages.
+ * In fake-SDK mode (E2E_FAKE_SDK=true), uses createFakeQuery to validate
+ * options without spawning a real subprocess.
+ */
+async function startTurn(
+  sessionId: string,
+  prompt: string,
+  cwd: string,
+  win: BrowserWindow,
+  options: {
+    sdkSessionId?: string
+    permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk'
+    env?: Record<string, string>
+    model?: string
+    effort?: 'low' | 'medium' | 'high' | 'max'
+  },
+): Promise<void> {
+  const queryOptions = await buildQueryOptions(cwd, options, sessionId, win)
+  console.log('[agentSdk] startTurn', sessionId, 'cwd:', cwd, 'resume:', options.sdkSessionId ?? 'none')
+
+  let q: SdkQuery
+  if (process.env.E2E_FAKE_SDK === 'true') {
+    q = createFakeQuery({ prompt, options: queryOptions })
   } else {
-    sdkSession = unstable_v2_createSession(
-      sessionOptions as Parameters<typeof unstable_v2_createSession>[0],
-    )
+    const { query: sdkQuery } = await import('@anthropic-ai/claude-agent-sdk')
+    q = sdkQuery({ prompt, options: queryOptions }) as unknown as SdkQuery
+  }
+
+  // Reuse existing session entry (preserves sdkSessionId & initSent) or create new
+  let session = activeSessions.get(sessionId)
+  if (session) {
+    session.query = q
+    session.ownerWindow = win
+  } else {
+    session = {
+      query: q,
+      sdkSessionId: options.sdkSessionId,
+      ownerWindow: win,
+      pendingPermission: null,
+      initSent: false,
+      cwd,
+    }
+    activeSessions.set(sessionId, session)
   }
 
   try {
-    process.chdir(originalCwd)
-  } catch {
-    // Best-effort restore
-  }
-
-  const session: ActiveSession = {
-    sdkSession: sdkSession as ActiveSession['sdkSession'],
-    sdkSessionId: options.sdkSessionId,
-    ownerWindow: win,
-    pendingPermission: null,
-    initSent: false,
-    cwd,
-  }
-  activeSessions.set(sessionId, session)
-
-  // V2 pattern: send() then stream() for each turn
-  try {
-    console.log('[agentSdk] Sending first prompt...')
-    await sdkSession.send(firstPrompt)
-    console.log('[agentSdk] First prompt sent, starting stream...')
-    await streamTurn(sessionId, session, win)
-    console.log('[agentSdk] First turn stream completed')
+    await runTurn(sessionId, session, win)
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : String(err)
-    console.error('[agentSdk] startSession error:', errorMessage)
+    console.error('[agentSdk] startTurn error:', errorMessage)
     if (err instanceof Error && err.stack) console.error(err.stack)
     win.webContents.send(`agentSdk:error:${sessionId}`, errorMessage)
     activeSessions.delete(sessionId)
@@ -571,7 +580,7 @@ function sendMockAgentResponse(win: BrowserWindow, sessionId: string, prompt: st
         if (!session) {
           // Create a lightweight mock session entry
           session = {
-            sdkSession: { send: async () => {}, stream: async function* () {}, close: () => {}, sessionId: 'mock-session-id' },
+            query: null,
             ownerWindow: win,
             pendingPermission: null,
             initSent: true,
@@ -654,7 +663,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     model?: string
     effort?: 'low' | 'medium' | 'high' | 'max'
   }) => {
-    if (ctx.isE2ETest) {
+    if (ctx.isE2ETest && process.env.E2E_FAKE_SDK !== 'true') {
       const senderWindow = BrowserWindow.fromWebContents(_event.sender)
       if (!senderWindow) return { id: options.id }
       sendMockAgentResponse(senderWindow, options.id, options.prompt)
@@ -664,14 +673,14 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     const senderWindow = BrowserWindow.fromWebContents(_event.sender)
     if (!senderWindow) return { id: options.id }
 
-    // Kill any existing session with the same ID
+    // Kill any existing query for this session
     const existing = activeSessions.get(options.id)
-    if (existing) {
-      existing.sdkSession.close()
-      activeSessions.delete(options.id)
+    if (existing?.query) {
+      existing.query.close()
+      existing.query = null
     }
 
-    void startSession(options.id, options.prompt, options.cwd, senderWindow, {
+    void startTurn(options.id, options.prompt, options.cwd, senderWindow, {
       sdkSessionId: options.sdkSessionId,
       permissionMode: options.permissionMode,
       env: options.env,
@@ -683,40 +692,32 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   })
 
   // Send a follow-up message to an existing session.
-  // If no session exists, starts a new one.
-  ipcMain.handle('agentSdk:send', async (_event, id: string, prompt: string, options?: {
+  // Creates a new query() with resume to continue token-efficiently.
+  ipcMain.handle('agentSdk:send', (_event, id: string, prompt: string, options?: {
     sdkSessionId?: string; cwd?: string; permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk'; env?: Record<string, string>; model?: string; effort?: 'low' | 'medium' | 'high' | 'max'
   }) => {
-    if (ctx.isE2ETest) {
+    if (ctx.isE2ETest && process.env.E2E_FAKE_SDK !== 'true') {
       const senderWindow = BrowserWindow.fromWebContents(_event.sender)
       if (senderWindow) sendMockAgentResponse(senderWindow, id, prompt)
       return
     }
 
     const existing = activeSessions.get(id)
-    if (existing) {
-      // Session is alive — send then stream this turn (token-efficient, no restart)
-      console.log('[agentSdk] send: using existing V2 session for', id)
-      try {
-        await existing.sdkSession.send(prompt)
-        await streamTurn(id, existing, existing.ownerWindow)
-      } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : String(err)
-        console.error('[agentSdk] send error:', errorMessage)
-        existing.ownerWindow.webContents.send(`agentSdk:error:${id}`, errorMessage)
-        activeSessions.delete(id)
-      }
-      return
-    }
-
-    // No active session — start a new one
-    const senderWindow = BrowserWindow.fromWebContents(_event.sender)
+    const senderWindow = existing?.ownerWindow ?? BrowserWindow.fromWebContents(_event.sender)
     if (!senderWindow) return
 
+    // Determine the SDK session ID to resume from
+    const sdkSessionId = existing?.sdkSessionId ?? options?.sdkSessionId
     const cwd = options?.cwd ?? process.cwd()
-    console.log('[agentSdk] send: no active session, starting new. cwd:', cwd)
-    void startSession(id, prompt, cwd, senderWindow, {
-      sdkSessionId: options?.sdkSessionId,
+
+    if (sdkSessionId && sdkSessionId.length > 0) {
+      console.log('[agentSdk] send: resuming session', sdkSessionId, 'for', id)
+    } else {
+      console.log('[agentSdk] send: no sdkSessionId, starting fresh. cwd:', cwd)
+    }
+
+    void startTurn(id, prompt, cwd, senderWindow, {
+      sdkSessionId,
       permissionMode: options?.permissionMode,
       env: options?.env,
       model: options?.model,
@@ -726,18 +727,18 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
 
   ipcMain.handle('agentSdk:stop', (_event, id: string) => {
     const session = activeSessions.get(id)
-    if (session) {
-      session.sdkSession.close()
-      activeSessions.delete(id)
+    if (session?.query) {
+      session.query.close()
+      session.query = null
     }
+    activeSessions.delete(id)
   })
 
-  // Inject a message mid-turn with priority 'next'. The stream for the current
-  // turn is already running — we just enqueue the message; no new stream needed.
+  // Inject a message mid-turn using streamInput on the running query.
   ipcMain.handle('agentSdk:inject', async (_event, id: string, prompt: string) => {
     const session = activeSessions.get(id)
-    if (!session) {
-      console.warn('[agentSdk] inject: no active session for', id)
+    if (!session?.query) {
+      console.warn('[agentSdk] inject: no active query for', id)
       return
     }
     if (!session.sdkSessionId) {
@@ -746,13 +747,17 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     }
     console.log('[agentSdk] inject: queuing mid-turn message for', id)
     try {
-      await session.sdkSession.send({
+      const injectMsg = {
         type: 'user',
         message: { role: 'user', content: [{ type: 'text', text: prompt }] },
         parent_tool_use_id: null,
         priority: 'next',
         session_id: session.sdkSessionId,
-      })
+      }
+      function* singleMessage(): Generator {
+        yield injectMsg
+      }
+      await session.query.streamInput(singleMessage())
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : String(err)
       console.error('[agentSdk] inject error:', errorMessage)
@@ -806,8 +811,8 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     await handleStatus(senderWindow, sessionId, session?.sdkSessionId, agentEnv)
   })
 
-  ipcMain.handle('agentSdk:commands', async (_event, agentEnv?: Record<string, string>) => {
-    return handleFetchCommands(agentEnv)
+  ipcMain.handle('agentSdk:commands', async (_event, cwd?: string, agentEnv?: Record<string, string>) => {
+    return handleFetchCommands(cwd, agentEnv)
   })
 
   ipcMain.handle('agentSdk:models', async (_event, agentEnv?: Record<string, string>): Promise<SdkModelInfo[]> => {

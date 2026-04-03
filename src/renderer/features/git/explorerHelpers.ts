@@ -91,3 +91,18 @@ export function prStateBadgeClass(state: string): string {
     default: return 'bg-red-500/20 text-red-400'
   }
 }
+
+/**
+ * Canonical label and CSS classes for a BranchStatus value.
+ * Used by both the sidebar chip and the source control banner so they
+ * always display the same text and color for a given status.
+ */
+export const branchStatusBadge: Record<string, { label: string; classes: string }> = {
+  pushed: { label: 'PUSHED', classes: 'bg-blue-500/20 text-blue-400' },
+  empty: { label: 'EMPTY', classes: 'bg-gray-500/20 text-gray-400' },
+  open: { label: 'PR OPEN', classes: 'bg-green-500/20 text-green-400' },
+  feedback: { label: 'FEEDBACK', classes: 'bg-orange-500/20 text-orange-400' },
+  failed: { label: 'FAILED', classes: 'bg-red-500/20 text-red-400' },
+  merged: { label: 'MERGED', classes: 'bg-purple-500/20 text-purple-400' },
+  closed: { label: 'CLOSED', classes: 'bg-red-500/20 text-red-400' },
+}

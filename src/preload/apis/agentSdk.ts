@@ -19,7 +19,7 @@ export type AgentSdkApi = {
   loadHistory: (sdkSessionId: string, sessionId: string, agentEnv?: Record<string, string>, limit?: number) => Promise<void>
   login: (sessionId: string) => Promise<void>
   status: (sessionId: string, agentEnv?: Record<string, string>) => Promise<void>
-  commands: (agentEnv?: Record<string, string>) => Promise<{ name: string; description: string }[]>
+  commands: (cwd?: string, agentEnv?: Record<string, string>) => Promise<{ name: string; description: string }[]>
   models: (agentEnv?: Record<string, string>) => Promise<SdkModelInfo[]>
 }
 
@@ -57,6 +57,6 @@ export const agentSdkApi: AgentSdkApi = {
   },
   login: (sessionId) => ipcRenderer.invoke('agentSdk:login', sessionId),
   status: (sessionId, agentEnv) => ipcRenderer.invoke('agentSdk:status', sessionId, agentEnv),
-  commands: (agentEnv) => ipcRenderer.invoke('agentSdk:commands', agentEnv),
+  commands: (cwd, agentEnv) => ipcRenderer.invoke('agentSdk:commands', cwd, agentEnv),
   models: (agentEnv) => ipcRenderer.invoke('agentSdk:models', agentEnv),
 }

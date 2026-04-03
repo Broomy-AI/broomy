@@ -4,7 +4,7 @@ import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/re
 import '../../../../test/react-setup'
 import { useAgentStore } from '../../../store/agents'
 import { useRepoStore } from '../../../store/repos'
-import { useSessionStore } from '../../../store/sessions'
+import { useSessionStore, type StatusChip } from '../../../store/sessions'
 import { NewBranchView } from './NewBranchView'
 import type { ManagedRepo } from '../../../../preload/index'
 
@@ -281,6 +281,9 @@ describe('NewBranchView', () => {
           searchHistory: [],
           terminalTabs: { tabs: [{ id: 'tab-1', name: 'Terminal' }], activeTabId: 'tab-1' },
           branchStatus: 'in-progress' as const,
+          hasFeedback: false,
+          checksStatus: 'none' as const,
+          statusChip: 'in-progress' as StatusChip,
           isArchived: false,
           isRestored: false,
         }],
@@ -452,6 +455,9 @@ describe('NewBranchView', () => {
         searchHistory: [],
         terminalTabs: { tabs: [{ id: 'tab-1', name: 'Terminal' }], activeTabId: 'tab-1' },
         branchStatus: 'in-progress' as const,
+        hasFeedback: false,
+        checksStatus: 'none' as const,
+        statusChip: 'in-progress' as StatusChip,
         isArchived: false,
         isRestored: false,
       }],

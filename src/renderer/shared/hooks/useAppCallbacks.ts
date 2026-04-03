@@ -27,6 +27,8 @@ interface AppCallbacksDeps {
   updateLayoutSize: (id: string, key: keyof LayoutSizes, value: number) => void
   setFileViewerPosition: (id: string, position: 'top' | 'left') => void
   updatePrState: (sessionId: string, prState: PrState, prNumber?: number, prUrl?: string) => void
+  updateFeedbackStatus: (sessionId: string, hasFeedback: boolean) => void
+  updateChecksStatus: (sessionId: string, checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
   updateReviewStatus: (sessionId: string, reviewStatus: 'pending' | 'reviewed') => void
   setShowNewSessionDialog: (show: boolean) => void
   onSessionAlreadyExists?: (info: { name: string; wasArchived: boolean }) => void
@@ -48,6 +50,8 @@ export function useAppCallbacks({
   updateLayoutSize,
   setFileViewerPosition,
   updatePrState,
+  updateFeedbackStatus,
+  updateChecksStatus,
   updateReviewStatus,
   setShowNewSessionDialog,
   onSessionAlreadyExists,
@@ -83,12 +87,26 @@ export function useAppCallbacks({
       const prResult = await window.gh.prStatus(session.directory)
       if (prResult) {
         updatePrState(session.id, prResult.state, prResult.number, prResult.url)
+        // Fetch feedback and checks in parallel for open PRs
+        if (prResult.state === 'OPEN') {
+          const [checks, feedback] = await Promise.all([
+            window.gh.prChecksStatus(session.directory).catch(() => 'none' as const),
+            window.gh.prFeedbackStatus(session.directory, prResult.number).catch(() => false),
+          ])
+          updateChecksStatus(session.id, checks)
+          updateFeedbackStatus(session.id, feedback)
+        } else {
+          updateChecksStatus(session.id, 'none')
+          updateFeedbackStatus(session.id, false)
+        }
       } else {
         updatePrState(session.id, null)
+        updateChecksStatus(session.id, 'none')
+        updateFeedbackStatus(session.id, false)
       }
       await fetchReviewStatus(session, updateReviewStatus)
     }))
-  }, [sessions, updatePrState, updateReviewStatus])
+  }, [sessions, updatePrState, updateFeedbackStatus, updateChecksStatus, updateReviewStatus])
 
   const getAgentCommand = useCallback((session: Session) => {
     if (!session.agentId) return undefined

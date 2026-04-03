@@ -1,5 +1,5 @@
 import type { Session, TerminalTabsState, LayoutSizes, ExplorerFilter, SessionStatus, FileViewerPosition } from '../src/renderer/store/sessions'
-import type { BranchStatus, PrState } from '../src/renderer/features/git/branchStatus'
+import type { BranchStatus, PrState, StatusChip } from '../src/renderer/features/git/branchStatus'
 
 let counter = 0
 function nextId(prefix: string) {
@@ -44,6 +44,9 @@ export function makeSession(overrides: Partial<Session> = {}): Session {
     searchHistory: [],
     terminalTabs: { ...DEFAULT_TERMINAL_TABS },
     branchStatus: 'in-progress' as BranchStatus,
+    hasFeedback: false,
+    checksStatus: 'none' as const,
+    statusChip: 'in-progress' as StatusChip,
     isArchived: false,
     isRestored: false,
     ...overrides,

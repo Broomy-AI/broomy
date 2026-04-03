@@ -1,6 +1,7 @@
 /**
  * Helper functions for the Agent SDK IPC handlers.
- * Extracted to keep agentSdk.ts under the line limit.
+ * Uses the V1 query() API for one-off queries (status, commands, models)
+ * and getSessionMessages() for history loading.
  */
 import { app, BrowserWindow } from 'electron'
 import { join, dirname } from 'path'
@@ -84,12 +85,42 @@ export async function handleLoadHistory(
     const { getSessionMessages } = await import('@anthropic-ai/claude-agent-sdk')
     const allMessages = await getSessionMessages(sdkSessionId)
 
-    const maxMessages = limit ?? 10
-    const history = allMessages.length > maxMessages
-      ? allMessages.slice(allMessages.length - maxMessages)
-      : allMessages
+    const maxVisibleItems = limit ?? 50
 
-    if (allMessages.length > maxMessages) {
+    // Count "visible items" rather than raw messages.  Tool-use blocks from
+    // the same assistant turn all collapse into a single rendered line, so
+    // they should count as one item toward the limit.
+    let visibleCount = 0
+    let cutIndex = 0 // index in allMessages where the visible portion starts
+    let prevWasToolUse = false
+    for (let i = allMessages.length - 1; i >= 0; i--) {
+      const entry = allMessages[i] as Record<string, unknown>
+      const entryType = entry.type as string
+      const message = entry.message as Record<string, unknown> | undefined
+      const content = message?.content as Record<string, unknown>[] | string | undefined
+
+      // Determine if this entry is purely tool_use blocks
+      const isToolUse = entryType === 'assistant'
+        && Array.isArray(content)
+        && content.length > 0
+        && content.every((b) => b.type === 'tool_use')
+
+      if (isToolUse && prevWasToolUse) {
+        // Consecutive tool_use entries collapse together — don't increment
+      } else {
+        visibleCount++
+      }
+      prevWasToolUse = isToolUse
+
+      if (visibleCount > maxVisibleItems) {
+        cutIndex = i + 1
+        break
+      }
+    }
+
+    const history = cutIndex > 0 ? allMessages.slice(cutIndex) : allMessages
+
+    if (cutIndex > 0) {
       senderWindow.webContents.send(`agentSdk:historyMeta:${sessionId}`, {
         total: allMessages.length,
         loaded: history.length,
@@ -191,7 +222,7 @@ export async function handleFetchModels(agentEnv?: Record<string, string>): Prom
   })
 }
 
-export async function handleFetchCommands(agentEnv?: Record<string, string>): Promise<{ name: string; description: string }[]> {
+export async function handleFetchCommands(cwd?: string, agentEnv?: Record<string, string>): Promise<{ name: string; description: string }[]> {
   return withConfigDir(agentEnv, async () => {
     try {
       const { query: sdkQuery } = await import('@anthropic-ai/claude-agent-sdk')
@@ -199,6 +230,7 @@ export async function handleFetchCommands(agentEnv?: Record<string, string>): Pr
         prompt: '/cost',
         options: {
           pathToClaudeCodeExecutable: resolveAgentSdkCliPath(),
+          cwd: cwd || process.cwd(),
           env: process.env,
           tools: { type: 'preset', preset: 'claude_code' },
           settingSources: ['user', 'project'],
@@ -215,6 +247,164 @@ export async function handleFetchCommands(agentEnv?: Record<string, string>): Pr
       return []
     }
   })
+}
+
+/** Minimal shape of the V1 Query object (dynamically imported). */
+export interface SdkQuery {
+  close(): void
+  interrupt(): Promise<void>
+  streamInput(stream: Iterable<unknown> | AsyncIterable<unknown>): Promise<void>
+  [Symbol.asyncIterator](): AsyncIterator<Record<string, unknown>>
+}
+
+/**
+ * Resolve the mock response text for a given prompt.
+ *
+ * Reads E2E_AGENT_RESPONSES (JSON array of {match, response} objects) and
+ * returns the text of the first entry whose `match` string appears in the
+ * prompt. Falls back to a generic placeholder when nothing matches.
+ */
+export function resolveMockResponseText(prompt: string): string {
+  try {
+    const raw = process.env.E2E_AGENT_RESPONSES
+    if (raw) {
+      const entries = JSON.parse(raw) as { match: string; response: string }[]
+      for (const entry of entries) {
+        if (prompt.includes(entry.match)) return entry.response
+      }
+    }
+  } catch {
+    // Malformed JSON — fall through to default
+  }
+  return "I'll help you with that. Let me look at the codebase."
+}
+
+/**
+ * Create a fake query that validates options and yields mock messages.
+ * Used in E2E tests (E2E_FAKE_SDK=true) to exercise the real buildQueryOptions
+ * and runTurn code paths without spawning a subprocess.
+ */
+export function createFakeQuery(params: { prompt: string; options: Record<string, unknown> }): SdkQuery {
+  const opts = params.options
+  const errors: string[] = []
+
+  // Validate that critical options are set
+  const sources = opts.settingSources as string[] | undefined
+  if (!sources?.includes('project')) {
+    errors.push('settingSources must include "project" for skills to work')
+  }
+  if (!opts.tools) {
+    errors.push('tools must be configured for skills to work')
+  }
+  if (!opts.cwd) {
+    errors.push('cwd must be set')
+  }
+
+  const fakeSessionId = `fake-session-${String(Date.now())}`
+
+  const messages: Record<string, unknown>[] = [
+    { type: 'system', subtype: 'init', model: 'fake-sdk-model', session_id: fakeSessionId },
+  ]
+
+  if (errors.length > 0) {
+    messages.push({
+      type: 'result',
+      subtype: 'error_during_execution',
+      errors: errors.map((e) => ({ message: e })),
+      cost_usd: 0,
+      duration_ms: 0,
+      num_turns: 0,
+      session_id: fakeSessionId,
+    })
+  } else {
+    const isSlashCommand = params.prompt.startsWith('/')
+    const responseText = isSlashCommand
+      ? `Fake SDK: skill "${params.prompt}" executed. settingSources=${JSON.stringify(sources)}, tools=${JSON.stringify(opts.tools)}, cwd=${String(opts.cwd)}`
+      : resolveMockResponseText(params.prompt)
+
+    messages.push({
+      type: 'assistant',
+      message: { content: [{ type: 'text', text: responseText }] },
+      parent_tool_use_id: null,
+    })
+    messages.push({
+      type: 'result',
+      subtype: 'success',
+      result: 'completed',
+      cost_usd: 0.001,
+      duration_ms: 100,
+      num_turns: 1,
+      session_id: fakeSessionId,
+    })
+  }
+
+  let closed = false
+  return {
+    close() { closed = true },
+    interrupt() { closed = true; return Promise.resolve() },
+    streamInput() { return Promise.resolve() },
+    [Symbol.asyncIterator]() {
+      let i = 0
+      return {
+        next() {
+          if (closed || i >= messages.length) return Promise.resolve({ done: true as const, value: undefined })
+          return Promise.resolve({ done: false as const, value: messages[i++] })
+        },
+      }
+    },
+  }
+}
+
+/** Tracks which mock sessions have already received their system init message. */
+const mockInitSent = new Set<string>()
+
+/**
+ * Send a canned mock agent response sequence for E2E tests.
+ * Fires system init (first turn only), a text reply, and a result/done.
+ * When E2E_AGENT_RESPONSE_DELAY_MS is set, the text+result+done are
+ * deferred by that many milliseconds so tests can inject mid-turn messages.
+ */
+export function sendMockAgentResponse(win: BrowserWindow, sessionId: string, prompt: string): void {
+  if (!mockInitSent.has(sessionId)) {
+    mockInitSent.add(sessionId)
+    const initMsg: AgentSdkMessage = {
+      id: nextMessageId(),
+      type: 'system',
+      timestamp: Date.now(),
+      text: 'Session initialized (model: claude-sonnet-4-20250514)',
+    }
+    win.webContents.send(`agentSdk:message:${sessionId}`, initMsg)
+  }
+
+  const delayMs = parseInt(process.env.E2E_AGENT_RESPONSE_DELAY_MS ?? '0', 10)
+
+  const sendResponse = () => {
+    const textMsg: AgentSdkMessage = {
+      id: nextMessageId(),
+      type: 'text',
+      timestamp: Date.now(),
+      text: resolveMockResponseText(prompt),
+    }
+    win.webContents.send(`agentSdk:message:${sessionId}`, textMsg)
+
+    const resultMsg: AgentSdkMessage = {
+      id: nextMessageId(),
+      type: 'result',
+      timestamp: Date.now(),
+      result: 'Task completed successfully.',
+      costUsd: 0.01,
+      durationMs: 2000,
+      numTurns: 1,
+    }
+    win.webContents.send(`agentSdk:message:${sessionId}`, resultMsg)
+    win.webContents.send(`agentSdk:done:${sessionId}`, 'mock-session-id')
+  }
+
+  if (delayMs > 0) {
+    setTimeout(sendResponse, delayMs)
+  } else {
+    sendResponse()
+  }
 }
 
 export function handleLogin(senderWindow: BrowserWindow, sessionId: string): void {

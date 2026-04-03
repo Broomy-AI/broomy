@@ -151,6 +151,36 @@ describe('computeBranchStatus', () => {
     }))).toBe('in-progress')
   })
 
+  it('returns merged (not empty) when PR is merged but hasHadCommits was missed', () => {
+    // Bug fix: when a session was inactive during the commit-and-merge cycle,
+    // hasHadCommits is never set. The persisted PR state should take priority
+    // over the empty-branch heuristic.
+    expect(computeBranchStatus(makeInput({
+      isMergedToMain: true,
+      hasTrackingBranch: true,
+      hasHadCommits: false,
+      lastKnownPrState: 'MERGED',
+    }))).toBe('merged')
+  })
+
+  it('returns closed (not empty) when PR is closed but hasHadCommits was missed', () => {
+    expect(computeBranchStatus(makeInput({
+      isMergedToMain: true,
+      hasTrackingBranch: true,
+      hasHadCommits: false,
+      lastKnownPrState: 'CLOSED',
+    }))).toBe('closed')
+  })
+
+  it('returns open (not empty) when PR is open but hasHadCommits was missed', () => {
+    expect(computeBranchStatus(makeInput({
+      isMergedToMain: true,
+      hasTrackingBranch: true,
+      hasHadCommits: false,
+      lastKnownPrState: 'OPEN',
+    }))).toBe('open')
+  })
+
   it('returns pushed when isMergedToMain and hasHadCommits but no tracking branch', () => {
     // Edge case: even if branch diverged before, without tracking it falls through
     expect(computeBranchStatus(makeInput({
