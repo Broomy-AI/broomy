@@ -9,7 +9,7 @@ import type { PrState } from '../../features/git/branchStatus'
 import type { DuplicateSessionResult } from '../../store/sessionCoreActions'
 import { restoreSessionFocus } from '../utils/focusHelpers'
 import { fetchReviewStatus } from '../utils/reviewStatus'
-import { useBackgroundInit } from '../../panels/settings/useBackgroundInit'
+import { useBackgroundInit } from '../../features/sessions/hooks/useBackgroundInit'
 
 
 interface AppCallbacksDeps {
