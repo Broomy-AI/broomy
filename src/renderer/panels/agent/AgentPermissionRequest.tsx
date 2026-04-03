@@ -17,6 +17,7 @@ const markdownComponents = createMarkdownComponents('compact')
 interface PermissionRequestProps {
   permission: AgentSdkPermissionRequest
   onRespond: (toolUseId: string, allowed: boolean, updatedInput?: Record<string, unknown>) => void
+  onAlwaysAllow?: (toolUseId: string) => void
 }
 
 interface QuestionOption {
@@ -129,7 +130,21 @@ function QuestionUI({ permission, onRespond }: PermissionRequestProps) {
   )
 }
 
-function GenericPermission({ permission, onRespond }: PermissionRequestProps) {
+/**
+ * Build a user-friendly label for the "Always Allow" button.
+ * Mirrors Claude Code CLI conventions: Bash shows the command prefix,
+ * other tools just show the tool name.
+ */
+function alwaysAllowLabel(toolName: string, input: Record<string, unknown>): string {
+  if (toolName === 'Bash') {
+    const command = typeof input.command === 'string' ? input.command : ''
+    const prefix = command.split(/\s+/)[0] ?? ''
+    return prefix ? `Always allow ${prefix}` : 'Always allow Bash'
+  }
+  return `Always allow ${toolName}`
+}
+
+function GenericPermission({ permission, onRespond, onAlwaysAllow }: PermissionRequestProps) {
   const input = permission.toolInput
   // Check if the input has markdown-like content worth rendering
   const contentFields = ['content', 'text', 'description', 'message']
@@ -165,6 +180,14 @@ function GenericPermission({ permission, onRespond }: PermissionRequestProps) {
         >
           Allow
         </button>
+        {onAlwaysAllow && (
+          <button
+            onClick={() => onAlwaysAllow(permission.toolUseId)}
+            className="rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-500"
+          >
+            {alwaysAllowLabel(permission.toolName, input)}
+          </button>
+        )}
         <button
           onClick={() => onRespond(permission.toolUseId, false)}
           className="rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-500"
@@ -176,13 +199,13 @@ function GenericPermission({ permission, onRespond }: PermissionRequestProps) {
   )
 }
 
-export function PermissionRequest({ permission, onRespond }: PermissionRequestProps) {
+export function PermissionRequest({ permission, onRespond, onAlwaysAllow }: PermissionRequestProps) {
   switch (permission.toolName) {
     case 'ExitPlanMode':
       return <PlanApproval permission={permission} onRespond={onRespond} />
     case 'AskUserQuestion':
       return <QuestionUI permission={permission} onRespond={onRespond} />
     default:
-      return <GenericPermission permission={permission} onRespond={onRespond} />
+      return <GenericPermission permission={permission} onRespond={onRespond} onAlwaysAllow={onAlwaysAllow} />
   }
 }

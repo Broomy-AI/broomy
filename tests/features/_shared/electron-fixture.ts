@@ -102,6 +102,15 @@ interface ResetOptions {
    * and queue a message while the agent appears to be working.
    */
   agentResponseDelayMs?: number
+  /**
+   * Mock tool uses that trigger permission prompts. Each entry maps a prompt
+   * substring to a list of tools the mock agent will attempt to use (requiring
+   * permission approval before proceeding).
+   *
+   * @example
+   *   agentToolUses: [{ match: 'edit', tools: [{ toolName: 'Edit', toolInput: { file_path: '/foo.ts', old_string: 'a', new_string: 'b' } }] }]
+   */
+  agentToolUses?: { match: string; tools: { toolName: string; toolInput: Record<string, unknown>; decisionReason?: string }[] }[]
 }
 
 /** Converts an optional number to a string for env var transport; returns '' for undefined. */
@@ -130,6 +139,7 @@ export async function resetApp(opts?: ResetOptions): Promise<{ electronApp: Elec
     gitTracking: opts?.mockGitTracking ?? '',
     agentResponses: opts?.agentResponses ? JSON.stringify(opts.agentResponses) : '',
     agentResponseDelayMs: optNum(opts?.agentResponseDelayMs),
+    agentToolUses: opts?.agentToolUses ? JSON.stringify(opts.agentToolUses) : '',
   }
   await electronApp.evaluate((_electron, env) => {
     process.env.E2E_SCENARIO = env.sc
@@ -143,6 +153,7 @@ export async function resetApp(opts?: ResetOptions): Promise<{ electronApp: Elec
     setOrDelete('E2E_MOCK_GIT_TRACKING', env.gitTracking)
     setOrDelete('E2E_AGENT_RESPONSES', env.agentResponses)
     setOrDelete('E2E_AGENT_RESPONSE_DELAY_MS', env.agentResponseDelayMs)
+    setOrDelete('E2E_AGENT_TOOL_USES', env.agentToolUses)
   }, envOverrides)
 
   if (isFirstCall) {

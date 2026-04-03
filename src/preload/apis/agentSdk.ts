@@ -10,7 +10,7 @@ export type AgentSdkApi = {
   send: (id: string, prompt: string, options?: { sdkSessionId?: string; cwd?: string; permissionMode?: PermissionMode; env?: Record<string, string>; model?: string; effort?: 'low' | 'medium' | 'high' | 'max' }) => Promise<void>
   inject: (id: string, prompt: string) => Promise<void>
   stop: (id: string) => Promise<void>
-  respondToPermission: (id: string, toolUseId: string, allowed: boolean, updatedInput?: Record<string, unknown>) => Promise<void>
+  respondToPermission: (id: string, toolUseId: string, allowed: boolean, updatedInput?: Record<string, unknown>, alwaysAllow?: { toolName: string; toolInput: Record<string, unknown> }) => Promise<void>
   onMessage: (id: string, cb: (msg: AgentSdkMessage) => void) => () => void
   onDone: (id: string, cb: (sdkSessionId: string) => void) => () => void
   onError: (id: string, cb: (error: string) => void) => () => void
@@ -28,7 +28,7 @@ export const agentSdkApi: AgentSdkApi = {
   send: (id, prompt, options) => ipcRenderer.invoke('agentSdk:send', id, prompt, options),
   inject: (id, prompt) => ipcRenderer.invoke('agentSdk:inject', id, prompt),
   stop: (id) => ipcRenderer.invoke('agentSdk:stop', id),
-  respondToPermission: (id, toolUseId, allowed, updatedInput) => ipcRenderer.invoke('agentSdk:respond', id, toolUseId, allowed, updatedInput),
+  respondToPermission: (id, toolUseId, allowed, updatedInput, alwaysAllow) => ipcRenderer.invoke('agentSdk:respond', id, toolUseId, allowed, updatedInput, alwaysAllow),
   onMessage: (id, cb) => {
     const handler = (_event: Electron.IpcRendererEvent, msg: AgentSdkMessage) => cb(msg)
     ipcRenderer.on(`agentSdk:message:${id}`, handler)

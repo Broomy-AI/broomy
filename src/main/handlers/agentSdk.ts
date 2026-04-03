@@ -18,6 +18,82 @@ import {
   type SdkModelInfo,
 } from './agentSdkHelpers'
 
+// ── .claude/settings.local.json helpers ──
+// Mirrors the Claude Code CLI's permission format:
+//   Bash(command_prefix)  — allows bash commands starting with that prefix
+//   Edit                  — allows all file edits
+//   Read                  — allows all file reads
+//   ToolName              — allows a specific tool unconditionally
+
+import { readFile, writeFile, mkdir } from 'fs/promises'
+import { join } from 'path'
+
+const SETTINGS_FILE = '.claude/settings.local.json'
+
+interface ClaudeSettings {
+  permissions?: { allow?: string[] }
+  [key: string]: unknown
+}
+
+async function readClaudeSettings(cwd: string): Promise<ClaudeSettings> {
+  try {
+    const raw = await readFile(join(cwd, SETTINGS_FILE), 'utf-8')
+    return JSON.parse(raw) as ClaudeSettings
+  } catch {
+    return {}
+  }
+}
+
+async function writeClaudeSettings(cwd: string, settings: ClaudeSettings): Promise<void> {
+  const dir = join(cwd, '.claude')
+  await mkdir(dir, { recursive: true })
+  await writeFile(join(cwd, SETTINGS_FILE), JSON.stringify(settings, null, 2) + '\n', 'utf-8')
+}
+
+async function addAllowedTool(cwd: string, entry: string): Promise<void> {
+  const settings = await readClaudeSettings(cwd)
+  if (!settings.permissions) settings.permissions = {}
+  if (!settings.permissions.allow) settings.permissions.allow = []
+  if (!settings.permissions.allow.includes(entry)) {
+    settings.permissions.allow.push(entry)
+    await writeClaudeSettings(cwd, settings)
+  }
+}
+
+/**
+ * Build the "always allow" entry string for a given tool + input.
+ * Follows Claude Code CLI conventions.
+ */
+function buildAllowEntry(toolName: string, toolInput: Record<string, unknown>): string {
+  if (toolName === 'Bash') {
+    // Extract the command prefix (first word/executable)
+    const command = typeof toolInput.command === 'string' ? toolInput.command : ''
+    const prefix = command.split(/\s+/)[0] ?? ''
+    return prefix ? `Bash(${prefix})` : 'Bash'
+  }
+  // For Edit, Write, Read, and other tools — just the tool name
+  return toolName
+}
+
+/**
+ * Check whether a tool + input is covered by the allowed tools list.
+ */
+function isToolAllowed(allowedTools: string[], toolName: string, toolInput: Record<string, unknown>): boolean {
+  for (const entry of allowedTools) {
+    // Exact tool name match (e.g. "Edit", "Read")
+    if (entry === toolName) return true
+
+    // Bash(prefix) match
+    const bashMatch = entry.match(/^Bash\((.+)\)$/)
+    if (bashMatch && toolName === 'Bash') {
+      const prefix = bashMatch[1]
+      const command = typeof toolInput.command === 'string' ? toolInput.command : ''
+      if (command === prefix || command.startsWith(prefix + ' ')) return true
+    }
+  }
+  return false
+}
+
 interface PendingPermission {
   resolve: (result: { behavior: 'allow' } | { behavior: 'deny'; message: string }) => void
 }
@@ -42,6 +118,8 @@ interface ActiveSession {
   pendingPermission: PendingPermission | null
   /** True after the first system init message has been forwarded to the renderer */
   initSent: boolean
+  /** Working directory for this session — used to locate .claude/settings.local.json */
+  cwd: string
 }
 
 // Module-local state
@@ -243,30 +321,88 @@ async function startSession(
   }
 
   const mode = options.permissionMode ?? 'default'
-  sessionOptions.permissionMode = mode
-  if (mode === 'bypassPermissions') {
-    sessionOptions.allowDangerouslySkipPermissions = true
-  } else if (mode === 'default') {
-    sessionOptions.canUseTool = async (
-      toolName: string,
-      input: Record<string, unknown>,
-      canUseToolOptions: { signal: AbortSignal; decisionReason?: string },
-    ) => {
-      const permReq: AgentSdkPermissionRequest = {
-        id: `perm-${String(Date.now())}`,
-        toolName,
-        toolInput: input,
-        toolUseId: `tooluse-${String(Date.now())}`,
-        decisionReason: canUseToolOptions.decisionReason,
-      }
-      win.webContents.send(`agentSdk:permission:${sessionId}`, permReq)
+  // Do NOT pass permissionMode or allowDangerouslySkipPermissions to the SDK.
+  // Those configure the CLI subprocess's internal permission system, which
+  // handles permissions itself and never routes protected-path rejections
+  // (e.g. .claude/ edits) through canUseTool. Instead, we omit them so the
+  // CLI always defers to our canUseTool callback via --permission-prompt-tool stdio.
 
-      return new Promise<{ behavior: 'allow' } | { behavior: 'deny'; message: string }>((resolve) => {
-        const activeSession = activeSessions.get(sessionId)
-        if (activeSession) {
-          activeSession.pendingPermission = { resolve }
+  // Edit-like tool names that acceptEdits mode auto-allows
+  const EDIT_TOOLS = new Set(['Edit', 'FileEdit', 'Write', 'FileWrite', 'NotebookEdit'])
+
+  // Helper: send a permission request to the renderer and wait for user response
+  const promptUser = (
+    toolName: string,
+    input: Record<string, unknown>,
+    decisionReason?: string,
+  ): Promise<{ behavior: 'allow' } | { behavior: 'deny'; message: string }> => {
+    const permReq: AgentSdkPermissionRequest = {
+      id: `perm-${String(Date.now())}`,
+      toolName,
+      toolInput: input,
+      toolUseId: `tooluse-${String(Date.now())}`,
+      decisionReason,
+    }
+    win.webContents.send(`agentSdk:permission:${sessionId}`, permReq)
+
+    return new Promise<{ behavior: 'allow' } | { behavior: 'deny'; message: string }>((resolve) => {
+      const activeSession = activeSessions.get(sessionId)
+      if (activeSession) {
+        activeSession.pendingPermission = { resolve }
+      }
+    })
+  }
+
+  // Load the project's allowed tools list (from .claude/settings.local.json)
+  let allowedTools: string[] = []
+  try {
+    const settings = await readClaudeSettings(cwd)
+    allowedTools = settings.permissions?.allow ?? []
+  } catch {
+    // No settings file — everything needs permission
+  }
+
+  // Register canUseTool for ALL modes so the SDK always has a handler.
+  // Without this, the SDK silently denies tools that need permission.
+  sessionOptions.canUseTool = async (
+    toolName: string,
+    input: Record<string, unknown>,
+    canUseToolOptions: { signal: AbortSignal; decisionReason?: string },
+  ) => {
+    // Check the project's allowed tools list before prompting
+    if (isToolAllowed(allowedTools, toolName, input)) {
+      return { behavior: 'allow' as const }
+    }
+
+    switch (mode) {
+      case 'bypassPermissions':
+        // Auto-allow everything — the SDK flag handles most cases, but
+        // some protected operations (e.g. editing .claude/) still call
+        // canUseTool even with allowDangerouslySkipPermissions.
+        return { behavior: 'allow' as const }
+
+      case 'acceptEdits':
+        // Auto-allow edit tools; prompt for everything else
+        if (EDIT_TOOLS.has(toolName)) {
+          return { behavior: 'allow' as const }
         }
-      })
+        return promptUser(toolName, input, canUseToolOptions.decisionReason)
+
+      case 'plan':
+        // Only allow ExitPlanMode; prompt for that, deny others
+        if (toolName === 'ExitPlanMode') {
+          return promptUser(toolName, input, canUseToolOptions.decisionReason)
+        }
+        return { behavior: 'deny' as const, message: 'Only plan tools are allowed in plan mode' }
+
+      case 'dontAsk':
+        // Auto-deny everything that needs permission
+        return { behavior: 'deny' as const, message: 'Permission not granted (dontAsk mode)' }
+
+      case 'default':
+      default:
+        // Prompt the user for every tool
+        return promptUser(toolName, input, canUseToolOptions.decisionReason)
     }
   }
 
@@ -309,6 +445,7 @@ async function startSession(
     ownerWindow: win,
     pendingPermission: null,
     initSent: false,
+    cwd,
   }
   activeSessions.set(sessionId, session)
 
@@ -353,11 +490,40 @@ function resolveMockResponseText(prompt: string): string {
 /** Tracks which mock sessions have already received their system init message. */
 const mockInitSent = new Set<string>()
 
+interface MockToolUse {
+  toolName: string
+  toolInput: Record<string, unknown>
+  decisionReason?: string
+}
+
+/**
+ * Resolve mock tool uses for a given prompt.
+ *
+ * Reads E2E_AGENT_TOOL_USES (JSON array of {match, tools} objects) and
+ * returns the tool list of the first entry whose `match` string appears in
+ * the prompt. Returns an empty array when nothing matches.
+ */
+function resolveMockToolUses(prompt: string): MockToolUse[] {
+  try {
+    const raw = process.env.E2E_AGENT_TOOL_USES
+    if (raw) {
+      const entries = JSON.parse(raw) as { match: string; tools: MockToolUse[] }[]
+      for (const entry of entries) {
+        if (prompt.includes(entry.match)) return entry.tools
+      }
+    }
+  } catch {
+    // Malformed JSON — fall through to empty
+  }
+  return []
+}
+
 /**
  * Send a canned mock agent response sequence for E2E tests.
- * Fires system init (first turn only), a text reply, and a result/done.
- * When E2E_AGENT_RESPONSE_DELAY_MS is set, the text+result+done are
- * deferred by that many milliseconds so tests can inject mid-turn messages.
+ * Fires system init (first turn only), optional tool_use messages that
+ * trigger permission prompts, a text reply, and a result/done.
+ * When E2E_AGENT_RESPONSE_DELAY_MS is set, the response is deferred by
+ * that many milliseconds so tests can inject mid-turn messages.
  */
 function sendMockAgentResponse(win: BrowserWindow, sessionId: string, prompt: string): void {
   if (!mockInitSent.has(sessionId)) {
@@ -372,8 +538,83 @@ function sendMockAgentResponse(win: BrowserWindow, sessionId: string, prompt: st
   }
 
   const delayMs = parseInt(process.env.E2E_AGENT_RESPONSE_DELAY_MS ?? '0', 10)
+  const mockTools = resolveMockToolUses(prompt)
 
-  const sendResponse = () => {
+  const sendResponse = async () => {
+    // Emit mock tool_use messages that require permission approval
+    for (const tool of mockTools) {
+      const toolUseId = `mock-tooluse-${String(Date.now())}-${String(Math.random()).slice(2, 8)}`
+      const toolMsg: AgentSdkMessage = {
+        id: nextMessageId(),
+        type: 'tool_use',
+        timestamp: Date.now(),
+        toolName: tool.toolName,
+        toolInput: tool.toolInput,
+        toolUseId,
+      }
+      win.webContents.send(`agentSdk:message:${sessionId}`, toolMsg)
+
+      // Send permission request and wait for user response
+      const permReq: AgentSdkPermissionRequest = {
+        id: `perm-${String(Date.now())}`,
+        toolName: tool.toolName,
+        toolInput: tool.toolInput,
+        toolUseId,
+        decisionReason: tool.decisionReason,
+      }
+      win.webContents.send(`agentSdk:permission:${sessionId}`, permReq)
+
+      // Wait for the user to respond to the permission request
+      const allowed = await new Promise<boolean>((resolve) => {
+        // Store in activeSessions so the agentSdk:respond handler can resolve it
+        let session = activeSessions.get(sessionId)
+        if (!session) {
+          // Create a lightweight mock session entry
+          session = {
+            sdkSession: { send: async () => {}, stream: async function* () {}, close: () => {}, sessionId: 'mock-session-id' },
+            ownerWindow: win,
+            pendingPermission: null,
+            initSent: true,
+            cwd: process.cwd(),
+          }
+          activeSessions.set(sessionId, session)
+        }
+        session.pendingPermission = {
+          resolve: (result) => resolve(result.behavior === 'allow'),
+        }
+      })
+
+      // Send tool_result based on permission response
+      const resultContent = allowed
+        ? `Tool ${tool.toolName} executed successfully.`
+        : `Tool ${tool.toolName} was denied by user.`
+      const toolResultMsg: AgentSdkMessage = {
+        id: nextMessageId(),
+        type: 'tool_result',
+        timestamp: Date.now(),
+        toolUseId,
+        toolResult: resultContent,
+        isError: !allowed,
+      }
+      win.webContents.send(`agentSdk:message:${sessionId}`, toolResultMsg)
+
+      if (!allowed) {
+        // If denied, skip remaining tools and finish with an error result
+        const resultMsg: AgentSdkMessage = {
+          id: nextMessageId(),
+          type: 'result',
+          timestamp: Date.now(),
+          result: 'Task stopped — permission denied.',
+          costUsd: 0.005,
+          durationMs: 1000,
+          numTurns: 1,
+        }
+        win.webContents.send(`agentSdk:message:${sessionId}`, resultMsg)
+        win.webContents.send(`agentSdk:done:${sessionId}`, 'mock-session-id')
+        return
+      }
+    }
+
     const textMsg: AgentSdkMessage = {
       id: nextMessageId(),
       type: 'text',
@@ -396,9 +637,9 @@ function sendMockAgentResponse(win: BrowserWindow, sessionId: string, prompt: st
   }
 
   if (delayMs > 0) {
-    setTimeout(sendResponse, delayMs)
+    setTimeout(() => void sendResponse(), delayMs)
   } else {
-    sendResponse()
+    void sendResponse()
   }
 }
 
@@ -519,7 +760,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     }
   })
 
-  ipcMain.handle('agentSdk:respond', (_event, id: string, _toolUseId: string, allowed: boolean, updatedInput?: Record<string, unknown>) => {
+  ipcMain.handle('agentSdk:respond', (_event, id: string, _toolUseId: string, allowed: boolean, updatedInput?: Record<string, unknown>, alwaysAllow?: { toolName: string; toolInput: Record<string, unknown> }) => {
     const session = activeSessions.get(id)
     if (session?.pendingPermission) {
       if (allowed) {
@@ -527,6 +768,13 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
           behavior: 'allow',
           ...(updatedInput ? { updatedInput } : {}),
         })
+        // Persist "Always Allow" to .claude/settings.local.json
+        if (alwaysAllow && session.cwd) {
+          const entry = buildAllowEntry(alwaysAllow.toolName, alwaysAllow.toolInput)
+          void addAllowedTool(session.cwd, entry).catch((err) => {
+            console.warn('[agentSdk] Failed to save always-allow entry:', err)
+          })
+        }
       } else {
         session.pendingPermission.resolve({ behavior: 'deny', message: 'User denied permission' })
       }

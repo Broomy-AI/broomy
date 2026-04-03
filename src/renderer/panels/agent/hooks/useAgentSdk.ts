@@ -40,6 +40,7 @@ interface UseAgentSdkReturn {
   queuePrompt: (prompt: string) => void
   stopAgent: () => void
   respondToPermission: (toolUseId: string, allowed: boolean, updatedInput?: Record<string, unknown>) => void
+  alwaysAllowPermission: (toolUseId: string) => void
   availableCommands: CommandInfo[]
   historyMeta: HistoryMeta | null
   loadFullHistory: () => void
@@ -221,6 +222,15 @@ export function useAgentSdk(options: UseAgentSdkOptions): UseAgentSdkReturn {
     }
   }, [sessionId])
 
+  const alwaysAllowPermission = useCallback((toolUseId: string) => {
+    const pending = useAgentChatStore.getState().getSession(sessionId).pendingPermission
+    if (!pending) return
+    const alwaysAllow = { toolName: pending.toolName, toolInput: pending.toolInput }
+    void window.agentSdk.respondToPermission(sessionId, toolUseId, true, undefined, alwaysAllow)
+    useAgentChatStore.getState().setPendingPermission(sessionId, null)
+    useAgentChatStore.getState().setState(sessionId, 'running')
+  }, [sessionId])
+
   const loadFullHistory = useCallback(() => {
     const stored = useSessionStore.getState().sessions.find(s => s.id === sessionId)
     const sdkId = stored?.sdkSessionId
@@ -231,5 +241,5 @@ export function useAgentSdk(options: UseAgentSdkOptions): UseAgentSdkReturn {
     }
   }, [sessionId, env])
 
-  return { sendPrompt, queuePrompt, stopAgent, respondToPermission, availableCommands, historyMeta, loadFullHistory }
+  return { sendPrompt, queuePrompt, stopAgent, respondToPermission, alwaysAllowPermission, availableCommands, historyMeta, loadFullHistory }
 }
