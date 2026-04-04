@@ -124,6 +124,24 @@ export function useGitPolling({
     }
   }, [gitStatusBySession, isMergedBySession, sessions, updateBranchStatus])
 
+  // Fetch PR status when any agent finishes work.
+  // This runs at the app level (always mounted) so it catches the event even when
+  // the source control tab isn't open. Without this, lastKnownPrState wouldn't be
+  // updated until the user manually navigates to the source control tab.
+  useEffect(() => {
+    const handler = () => {
+      if (!activeSession?.directory) return
+      const sessionId = activeSession.id
+      void window.gh.prStatus(activeSession.directory).then(pr => {
+        if (pr) {
+          updatePrState(sessionId, pr.state, pr.number, pr.url)
+        }
+      }).catch(() => { /* gh not available or no PR */ })
+    }
+    document.addEventListener('broomy:agent-finished', handler)
+    return () => document.removeEventListener('broomy:agent-finished', handler)
+  }, [activeSession?.id, activeSession?.directory, updatePrState])
+
   // Get git status for the selected file
   const selectedFileStatus = useMemo(() => {
     if (!activeSession?.selectedFilePath || !activeSession.directory) return null

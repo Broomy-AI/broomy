@@ -342,6 +342,8 @@ export const useSessionStore = create<SessionStore>((set, get) => {
 
   setSdkSessionId: (sessionId: string, sdkSessionId: string) => {
     const { sessions } = get()
+    const existing = sessions.find((s) => s.id === sessionId)
+    if (existing?.sdkSessionId === sdkSessionId) return
     const updatedSessions = sessions.map((s) =>
       s.id === sessionId ? { ...s, sdkSessionId } : s
     )

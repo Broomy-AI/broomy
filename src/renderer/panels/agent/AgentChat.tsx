@@ -77,7 +77,7 @@ function AgentChatInner({ sessionId, cwd, sdkSessionId, skipApproval, env, model
     selectFile(sessionId, filePath)
   }, [sessionId, selectFile])
 
-  const { sendPrompt, queuePrompt, stopAgent, respondToPermission, availableCommands, historyMeta, loadFullHistory } = useAgentSdk({
+  const { sendPrompt, stopAgent, respondToPermission, availableCommands, historyMeta, loadFullHistory } = useAgentSdk({
     sessionId,
     cwd,
     sdkSessionId,
@@ -115,6 +115,10 @@ function AgentChatInner({ sessionId, cwd, sdkSessionId, skipApproval, env, model
   const handleContainerClick = useCallback((e: React.MouseEvent) => {
     // Focus the composer when clicking in the chat area, unless the user
     // is clicking on an interactive element (button, link, select, etc.)
+    // or has selected text (e.g. copying from the message stream).
+    const selection = window.getSelection()
+    if (selection && selection.toString().length > 0) return
+
     const tag = (e.target as HTMLElement).closest('button, a, select, textarea, input')
     if (!tag) {
       composerRef.current?.focus()
@@ -264,10 +268,8 @@ function AgentChatInner({ sessionId, cwd, sdkSessionId, skipApproval, env, model
       {/* Input area */}
       <AgentChatInput
         onSubmit={sendPrompt}
-        onQueue={queuePrompt}
         onStop={stopAgent}
         isRunning={state === 'running' || state === 'awaiting_permission'}
-        disabled={state === 'awaiting_permission'}
         sessionId={sessionId}
         availableCommands={availableCommands}
         model={model}

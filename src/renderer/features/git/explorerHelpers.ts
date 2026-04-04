@@ -106,3 +106,15 @@ export const branchStatusBadge: Record<string, { label: string; classes: string 
   merged: { label: 'MERGED', classes: 'bg-purple-500/20 text-purple-400' },
   closed: { label: 'CLOSED', classes: 'bg-red-500/20 text-red-400' },
 }
+
+/**
+ * Badge derived directly from the GitHub PR state (OPEN/MERGED/CLOSED).
+ * Used as a fallback when branchStatus hasn't caught up with the live PR data
+ * (e.g. branch is still 'pushed' or 'in-progress' while gh pr view already
+ * reports the PR).
+ */
+export const prStateBadge: Record<'OPEN' | 'MERGED' | 'CLOSED', { label: string; classes: string }> = {
+  OPEN: { label: 'PR OPEN', classes: 'bg-green-500/20 text-green-400' },
+  MERGED: { label: 'MERGED', classes: 'bg-purple-500/20 text-purple-400' },
+  CLOSED: { label: 'CLOSED', classes: 'bg-red-500/20 text-red-400' },
+}

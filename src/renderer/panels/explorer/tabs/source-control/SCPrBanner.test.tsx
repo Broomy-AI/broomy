@@ -59,6 +59,32 @@ describe('SCPrBanner', () => {
     expect(window.shell.openExternal).toHaveBeenCalledWith('https://github.com/test/pr/42')
   })
 
+  it('shows PR link when branchStatus is pushed (gh detected PR before polling caught up)', () => {
+    const prStatus = { number: 99, title: 'New feature', state: 'OPEN' as const, url: 'https://github.com/test/pr/99', headRefName: 'feature/new', baseRefName: 'main' }
+    render(<SCPrBanner {...defaultProps} prStatus={prStatus} branchStatus="pushed" />)
+    expect(screen.getByText(/#99: New feature/)).toBeTruthy()
+    expect(screen.getByText('PR OPEN')).toBeTruthy()
+  })
+
+  it('shows PR link when branchStatus is in-progress (branch has commits ahead with open PR)', () => {
+    const prStatus = { number: 99, title: 'New feature', state: 'OPEN' as const, url: 'https://github.com/test/pr/99', headRefName: 'feature/new', baseRefName: 'main' }
+    render(<SCPrBanner {...defaultProps} prStatus={prStatus} branchStatus="in-progress" />)
+    expect(screen.getByText(/#99: New feature/)).toBeTruthy()
+    expect(screen.getByText('PR OPEN')).toBeTruthy()
+  })
+
+  it('hides stale merged PR link when branch has moved on', () => {
+    const prStatus = { number: 99, title: 'Old PR', state: 'MERGED' as const, url: 'https://github.com/test/pr/99', headRefName: 'feature/old', baseRefName: 'main' }
+    render(<SCPrBanner {...defaultProps} prStatus={prStatus} branchStatus="in-progress" />)
+    expect(screen.queryByText(/#99/)).toBeNull()
+  })
+
+  it('hides stale closed PR link when branch has new work', () => {
+    const prStatus = { number: 99, title: 'Old PR', state: 'CLOSED' as const, url: 'https://github.com/test/pr/99', headRefName: 'feature/old', baseRefName: 'main' }
+    render(<SCPrBanner {...defaultProps} prStatus={prStatus} branchStatus="pushed" />)
+    expect(screen.queryByText(/#99/)).toBeNull()
+  })
+
   it('shows merged status banner', () => {
     render(<SCPrBanner {...defaultProps} branchStatus="merged" />)
     expect(screen.getByText('MERGED')).toBeTruthy()

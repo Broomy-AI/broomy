@@ -14,7 +14,6 @@ const noop = () => {}
 export const Idle: Story = {
   args: {
     onSubmit: noop,
-    onQueue: noop,
     onStop: noop,
     isRunning: false,
     sessionId: 'session-1',
@@ -24,20 +23,8 @@ export const Idle: Story = {
 export const Running: Story = {
   args: {
     onSubmit: noop,
-    onQueue: noop,
     onStop: noop,
     isRunning: true,
-    sessionId: 'session-1',
-  },
-}
-
-export const Disabled: Story = {
-  args: {
-    onSubmit: noop,
-    onQueue: noop,
-    onStop: noop,
-    isRunning: false,
-    disabled: true,
     sessionId: 'session-1',
   },
 }

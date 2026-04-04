@@ -37,16 +37,8 @@ function usePrEffects(config: PrEffectsConfig) {
   const [hasPrLoadedOnce, setHasPrLoadedOnce] = useState(false)
   const [prRefreshKey, setPrRefreshKey] = useState(0)
 
-  // Listen for agent-finished events to re-check PR status
-  useEffect(() => {
-    const handler = () => {
-      if (directory) {
-        setPrRefreshKey(k => k + 1)
-      }
-    }
-    document.addEventListener('broomy:agent-finished', handler)
-    return () => document.removeEventListener('broomy:agent-finished', handler)
-  }, [directory])
+  // Agent-finished PR detection is handled by useGitPolling (always mounted)
+  // so it works even when the source control tab isn't open.
 
   // Fetch PR status, write access, checks, and feedback when source control is active
   useEffect(() => {
@@ -101,9 +93,11 @@ function usePrEffects(config: PrEffectsConfig) {
   // Don't re-persist MERGED/CLOSED state if the branch has moved on (new work after merge).
   // The git polling hook clears stale PR state when it detects new commits, and we avoid
   // re-setting it here so the branch can transition to a fresh PR lifecycle.
+  // Wait until hasPrLoadedOnce so we don't clear persisted state on initial mount
+  // before the gh fetch has had a chance to run.
   useEffect(() => {
     if (!onUpdatePrState) return
-    if (isPrLoading) return
+    if (!hasPrLoadedOnce) return
     if (prStatus) {
       const isTerminalState = prStatus.state === 'MERGED' || prStatus.state === 'CLOSED'
       const branchMovedOn = branchStatus === 'in-progress' || branchStatus === 'pushed'
@@ -115,7 +109,7 @@ function usePrEffects(config: PrEffectsConfig) {
     } else {
       onUpdatePrState(null)
     }
-  }, [prStatus, isPrLoading, branchStatus])
+  }, [prStatus, hasPrLoadedOnce, branchStatus])
 
   // Reset on directory change
   const resetPr = () => {
