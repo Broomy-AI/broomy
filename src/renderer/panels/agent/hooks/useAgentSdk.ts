@@ -93,6 +93,7 @@ interface HistoryMeta {
 
 interface UseAgentSdkReturn {
   sendPrompt: (prompt: string) => void
+  queuePrompt: (prompt: string) => void
   stopAgent: () => void
   respondToPermission: (toolUseId: string, allowed: boolean, updatedInput?: Record<string, unknown>) => void
   alwaysAllowPermission: (toolUseId: string) => void

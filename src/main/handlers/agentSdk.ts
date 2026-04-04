@@ -6,7 +6,7 @@ import { BrowserWindow, IpcMain } from 'electron'
 import { HandlerContext } from './types'
 import type { AgentSdkPermissionRequest } from '../../shared/agentSdkTypes'
 import {
-  expandHome, resolveAgentSdkCliPath,
+  expandHome, nextMessageId, sendMsg, resolveAgentSdkCliPath,
   handleLoadHistory, handleStatus, handleFetchCommands, handleFetchModels, handleLogin,
   createFakeQuery, sendMockAgentResponse, isSessionNotFoundError,
   readClaudeSettings, addAllowedTool, buildAllowEntry, isToolAllowed,
@@ -451,26 +451,23 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   // eslint-disable-next-line max-params -- IPC positional args; can't restructure without breaking the preload API
   ipcMain.handle('agentSdk:respond', (_event, id: string, _toolUseId: string, allowed: boolean, updatedInput?: Record<string, unknown>, alwaysAllow?: { toolName: string; toolInput: Record<string, unknown> }) => {
     const session = activeSessions.get(id)
-    if (!session) return
-    if (!session.pendingPermission) return
-    if (session.pendingPermission) {
-      if (allowed) {
-        session.pendingPermission.resolve({
-          behavior: 'allow',
-          updatedInput: updatedInput ?? session.pendingPermission.originalInput,
+    if (!session?.pendingPermission) return
+    if (allowed) {
+      session.pendingPermission.resolve({
+        behavior: 'allow',
+        updatedInput: updatedInput ?? session.pendingPermission.originalInput,
+      })
+      // Persist "Always Allow" to .claude/settings.local.json
+      if (alwaysAllow && session.cwd) {
+        const entry = buildAllowEntry(alwaysAllow.toolName, alwaysAllow.toolInput)
+        void addAllowedTool(session.cwd, entry).catch((err: unknown) => {
+          console.warn('[agentSdk] Failed to save always-allow entry:', err)
         })
-        // Persist "Always Allow" to .claude/settings.local.json
-        if (alwaysAllow && session.cwd) {
-          const entry = buildAllowEntry(alwaysAllow.toolName, alwaysAllow.toolInput)
-          void addAllowedTool(session.cwd, entry).catch((err: unknown) => {
-            console.warn('[agentSdk] Failed to save always-allow entry:', err)
-          })
-        }
-      } else {
-        session.pendingPermission.resolve({ behavior: 'deny', message: 'User denied permission' })
       }
-      session.pendingPermission = null
+    } else {
+      session.pendingPermission.resolve({ behavior: 'deny', message: 'User denied permission' })
     }
+    session.pendingPermission = null
   })
 
   ipcMain.handle('agentSdk:loadHistory', async (_event, sdkSessionId: string, sessionId: string, agentEnv?: Record<string, string>, limit?: number) => {

@@ -77,7 +77,7 @@ function AgentChatInner({ sessionId, cwd, sdkSessionId, skipApproval, env, model
     selectFile(sessionId, filePath)
   }, [sessionId, selectFile])
 
-  const { sendPrompt, queuePrompt, stopAgent, respondToPermission, alwaysAllowPermission, availableCommands, historyMeta, loadFullHistory } = useAgentSdk({
+  const { sendPrompt, stopAgent, respondToPermission, alwaysAllowPermission, availableCommands, historyMeta, loadFullHistory } = useAgentSdk({
     sessionId,
     cwd,
     sdkSessionId,

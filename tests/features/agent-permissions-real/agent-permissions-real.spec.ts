@@ -120,7 +120,8 @@ test.describe.serial('Feature: Real SDK Permission Flow', () => {
       }
 
       await allowButton.click()
-      await page.waitForTimeout(500)
+      // Wait for the permission prompt to dismiss before looping
+      await expect(allowButton).not.toBeVisible({ timeout: 5000 }).catch(() => { /* may reappear quickly */ })
     }
 
     // Screenshot the completed turn
