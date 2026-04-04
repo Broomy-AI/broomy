@@ -15,7 +15,9 @@ import {
 import { processAndSendMessage } from './agentSdkMessages'
 
 interface PendingPermission {
-  resolve: (result: { behavior: 'allow' } | { behavior: 'deny'; message: string }) => void
+  resolve: (result: { behavior: 'allow'; updatedInput: Record<string, unknown> } | { behavior: 'deny'; message: string }) => void
+  /** The original tool input — needed to pass back as updatedInput when allowing without modifications */
+  originalInput: Record<string, unknown>
 }
 
 interface ActiveSession {
@@ -145,10 +147,14 @@ async function buildQueryOptions(
     }
     win.webContents.send(`agentSdk:permission:${sessionId}`, permReq)
 
-    return new Promise<{ behavior: 'allow' } | { behavior: 'deny'; message: string }>((resolve) => {
+    return new Promise<{ behavior: 'allow'; updatedInput: Record<string, unknown> } | { behavior: 'deny'; message: string }>((resolve) => {
       const activeSession = activeSessions.get(sessionId)
       if (activeSession) {
-        activeSession.pendingPermission = { resolve }
+        activeSession.pendingPermission = { resolve, originalInput: input }
+      } else {
+        console.error(`[agentSdk] BUG: canUseTool called but session "${sessionId}" not in activeSessions! Keys: [${[...activeSessions.keys()].join(', ')}]`)
+        // Don't leave the promise hanging — deny so the turn can finish
+        resolve({ behavior: 'deny', message: 'Internal error: session not found for permission check' })
       }
     })
   }
@@ -162,14 +168,12 @@ async function buildQueryOptions(
     // No settings file — everything needs permission
   }
 
-  // Pass permissionMode to the SDK so the CLI subprocess knows how to
-  // categorize tools. Our canUseTool callback handles the actual approval
-  // flow, but the CLI needs permissionMode to decide WHICH tools require
-  // permission in the first place.
-  queryOptions.permissionMode = mode
-  if (mode === 'bypassPermissions') {
-    queryOptions.allowDangerouslySkipPermissions = true
-  }
+  // Do NOT pass permissionMode or allowDangerouslySkipPermissions to the SDK.
+  // The CLI subprocess has its own internal permission system that runs IN
+  // ADDITION to canUseTool. Passing permissionMode creates a double gate:
+  // canUseTool approves but the CLI's internal rules still deny. By omitting
+  // permissionMode, the CLI defers entirely to our canUseTool callback via
+  // --permission-prompt-tool stdio.
 
   // Register canUseTool for ALL modes so the SDK always has a handler.
   // Without this, the SDK silently denies tools that need permission.
@@ -180,7 +184,7 @@ async function buildQueryOptions(
   ) => {
     // Check the project's allowed tools list before prompting
     if (isToolAllowed(allowedTools, toolName, input)) {
-      return { behavior: 'allow' as const }
+      return { behavior: 'allow' as const, updatedInput: input }
     }
 
     switch (mode) {
@@ -188,12 +192,12 @@ async function buildQueryOptions(
         // Auto-allow everything — the SDK flag handles most cases, but
         // some protected operations (e.g. editing .claude/) still call
         // canUseTool even with allowDangerouslySkipPermissions.
-        return { behavior: 'allow' as const }
+        return { behavior: 'allow' as const, updatedInput: input }
 
       case 'acceptEdits':
         // Auto-allow edit tools; prompt for everything else
         if (EDIT_TOOLS.has(toolName)) {
-          return { behavior: 'allow' as const }
+          return { behavior: 'allow' as const, updatedInput: input }
         }
         return promptUser(toolName, input, canUseToolOptions.decisionReason)
 
@@ -396,11 +400,13 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   // eslint-disable-next-line max-params -- IPC positional args; can't restructure without breaking the preload API
   ipcMain.handle('agentSdk:respond', (_event, id: string, _toolUseId: string, allowed: boolean, updatedInput?: Record<string, unknown>, alwaysAllow?: { toolName: string; toolInput: Record<string, unknown> }) => {
     const session = activeSessions.get(id)
-    if (session?.pendingPermission) {
+    if (!session) return
+    if (!session.pendingPermission) return
+    if (session.pendingPermission) {
       if (allowed) {
         session.pendingPermission.resolve({
           behavior: 'allow',
-          ...(updatedInput ? { updatedInput } : {}),
+          updatedInput: updatedInput ?? session.pendingPermission.originalInput,
         })
         // Persist "Always Allow" to .claude/settings.local.json
         if (alwaysAllow && session.cwd) {
