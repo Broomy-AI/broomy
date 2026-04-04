@@ -6,10 +6,85 @@
 import { app, BrowserWindow } from 'electron'
 import { join, dirname } from 'path'
 import { existsSync } from 'fs'
+import { readFile, writeFile, mkdir } from 'fs/promises'
 import { homedir } from 'os'
 import { spawn } from 'child_process'
 import { resolveCommand } from '../platform'
 import type { AgentSdkMessage } from '../../shared/agentSdkTypes'
+
+// ── .claude/settings.local.json helpers ──
+// Mirrors the Claude Code CLI's permission format:
+//   Bash(command_prefix)  — allows bash commands starting with that prefix
+//   Edit                  — allows all file edits
+//   ToolName              — allows a specific tool unconditionally
+
+const SETTINGS_FILE = '.claude/settings.local.json'
+
+interface ClaudeSettings {
+  permissions?: { allow?: string[] }
+  [key: string]: unknown
+}
+
+export async function readClaudeSettings(cwd: string): Promise<ClaudeSettings> {
+  try {
+    const raw = await readFile(join(cwd, SETTINGS_FILE), 'utf-8')
+    return JSON.parse(raw) as ClaudeSettings
+  } catch {
+    return {}
+  }
+}
+
+async function writeClaudeSettings(cwd: string, settings: ClaudeSettings): Promise<void> {
+  const dir = join(cwd, '.claude')
+  await mkdir(dir, { recursive: true })
+  await writeFile(join(cwd, SETTINGS_FILE), `${JSON.stringify(settings, null, 2)}\n`, 'utf-8')
+}
+
+export async function addAllowedTool(cwd: string, entry: string): Promise<void> {
+  const settings = await readClaudeSettings(cwd)
+  if (!settings.permissions) settings.permissions = {}
+  if (!settings.permissions.allow) settings.permissions.allow = []
+  if (!settings.permissions.allow.includes(entry)) {
+    settings.permissions.allow.push(entry)
+    await writeClaudeSettings(cwd, settings)
+  }
+}
+
+/**
+ * Build the "always allow" entry string for a given tool + input.
+ * Follows Claude Code CLI conventions.
+ */
+export function buildAllowEntry(toolName: string, toolInput: Record<string, unknown>): string {
+  if (toolName === 'Bash') {
+    const command = typeof toolInput.command === 'string' ? toolInput.command : ''
+    const prefix = command.split(/\s+/)[0] ?? ''
+    return prefix ? `Bash(${prefix})` : 'Bash'
+  }
+  return toolName
+}
+
+/**
+ * Check whether a tool + input is covered by the allowed tools list.
+ */
+export function isToolAllowed(
+  allowedTools: string[],
+  toolName: string,
+  toolInput: Record<string, unknown>,
+): boolean {
+  for (const entry of allowedTools) {
+    if (entry === toolName) return true
+    const bashMatch = /^Bash\((.+)\)$/.exec(entry)
+    if (bashMatch && toolName === 'Bash') {
+      const prefix = bashMatch[1]
+      const command = typeof toolInput.command === 'string' ? toolInput.command : ''
+      if (command === prefix || command.startsWith(`${prefix} `)) return true
+    }
+  }
+  return false
+}
+
+// MockToolUse is re-exported from agentSdkMocks
+export type { MockToolUse } from './agentSdkMocks'
 
 /**
  * Resolve the path to the Agent SDK's cli.js for use as pathToClaudeCodeExecutable.
@@ -249,163 +324,8 @@ export async function handleFetchCommands(cwd?: string, agentEnv?: Record<string
   })
 }
 
-/** Minimal shape of the V1 Query object (dynamically imported). */
-export interface SdkQuery {
-  close(): void
-  interrupt(): Promise<void>
-  streamInput(stream: Iterable<unknown> | AsyncIterable<unknown>): Promise<void>
-  [Symbol.asyncIterator](): AsyncIterator<Record<string, unknown>>
-}
-
-/**
- * Resolve the mock response text for a given prompt.
- *
- * Reads E2E_AGENT_RESPONSES (JSON array of {match, response} objects) and
- * returns the text of the first entry whose `match` string appears in the
- * prompt. Falls back to a generic placeholder when nothing matches.
- */
-export function resolveMockResponseText(prompt: string): string {
-  try {
-    const raw = process.env.E2E_AGENT_RESPONSES
-    if (raw) {
-      const entries = JSON.parse(raw) as { match: string; response: string }[]
-      for (const entry of entries) {
-        if (prompt.includes(entry.match)) return entry.response
-      }
-    }
-  } catch {
-    // Malformed JSON — fall through to default
-  }
-  return "I'll help you with that. Let me look at the codebase."
-}
-
-/**
- * Create a fake query that validates options and yields mock messages.
- * Used in E2E tests (E2E_FAKE_SDK=true) to exercise the real buildQueryOptions
- * and runTurn code paths without spawning a subprocess.
- */
-export function createFakeQuery(params: { prompt: string; options: Record<string, unknown> }): SdkQuery {
-  const opts = params.options
-  const errors: string[] = []
-
-  // Validate that critical options are set
-  const sources = opts.settingSources as string[] | undefined
-  if (!sources?.includes('project')) {
-    errors.push('settingSources must include "project" for skills to work')
-  }
-  if (!opts.tools) {
-    errors.push('tools must be configured for skills to work')
-  }
-  if (!opts.cwd) {
-    errors.push('cwd must be set')
-  }
-
-  const fakeSessionId = `fake-session-${String(Date.now())}`
-
-  const messages: Record<string, unknown>[] = [
-    { type: 'system', subtype: 'init', model: 'fake-sdk-model', session_id: fakeSessionId },
-  ]
-
-  if (errors.length > 0) {
-    messages.push({
-      type: 'result',
-      subtype: 'error_during_execution',
-      errors: errors.map((e) => ({ message: e })),
-      cost_usd: 0,
-      duration_ms: 0,
-      num_turns: 0,
-      session_id: fakeSessionId,
-    })
-  } else {
-    const isSlashCommand = params.prompt.startsWith('/')
-    const responseText = isSlashCommand
-      ? `Fake SDK: skill "${params.prompt}" executed. settingSources=${JSON.stringify(sources)}, tools=${JSON.stringify(opts.tools)}, cwd=${String(opts.cwd)}`
-      : resolveMockResponseText(params.prompt)
-
-    messages.push({
-      type: 'assistant',
-      message: { content: [{ type: 'text', text: responseText }] },
-      parent_tool_use_id: null,
-    })
-    messages.push({
-      type: 'result',
-      subtype: 'success',
-      result: 'completed',
-      cost_usd: 0.001,
-      duration_ms: 100,
-      num_turns: 1,
-      session_id: fakeSessionId,
-    })
-  }
-
-  let closed = false
-  return {
-    close() { closed = true },
-    interrupt() { closed = true; return Promise.resolve() },
-    streamInput() { return Promise.resolve() },
-    [Symbol.asyncIterator]() {
-      let i = 0
-      return {
-        next() {
-          if (closed || i >= messages.length) return Promise.resolve({ done: true as const, value: undefined })
-          return Promise.resolve({ done: false as const, value: messages[i++] })
-        },
-      }
-    },
-  }
-}
-
-/** Tracks which mock sessions have already received their system init message. */
-const mockInitSent = new Set<string>()
-
-/**
- * Send a canned mock agent response sequence for E2E tests.
- * Fires system init (first turn only), a text reply, and a result/done.
- * When E2E_AGENT_RESPONSE_DELAY_MS is set, the text+result+done are
- * deferred by that many milliseconds so tests can inject mid-turn messages.
- */
-export function sendMockAgentResponse(win: BrowserWindow, sessionId: string, prompt: string): void {
-  if (!mockInitSent.has(sessionId)) {
-    mockInitSent.add(sessionId)
-    const initMsg: AgentSdkMessage = {
-      id: nextMessageId(),
-      type: 'system',
-      timestamp: Date.now(),
-      text: 'Session initialized (model: claude-sonnet-4-20250514)',
-    }
-    win.webContents.send(`agentSdk:message:${sessionId}`, initMsg)
-  }
-
-  const delayMs = parseInt(process.env.E2E_AGENT_RESPONSE_DELAY_MS ?? '0', 10)
-
-  const sendResponse = () => {
-    const textMsg: AgentSdkMessage = {
-      id: nextMessageId(),
-      type: 'text',
-      timestamp: Date.now(),
-      text: resolveMockResponseText(prompt),
-    }
-    win.webContents.send(`agentSdk:message:${sessionId}`, textMsg)
-
-    const resultMsg: AgentSdkMessage = {
-      id: nextMessageId(),
-      type: 'result',
-      timestamp: Date.now(),
-      result: 'Task completed successfully.',
-      costUsd: 0.01,
-      durationMs: 2000,
-      numTurns: 1,
-    }
-    win.webContents.send(`agentSdk:message:${sessionId}`, resultMsg)
-    win.webContents.send(`agentSdk:done:${sessionId}`, 'mock-session-id')
-  }
-
-  if (delayMs > 0) {
-    setTimeout(sendResponse, delayMs)
-  } else {
-    sendResponse()
-  }
-}
+// Re-export mock/test helpers and types from dedicated module
+export { createFakeQuery, sendMockAgentResponse, type SdkQuery } from './agentSdkMocks'
 
 export function handleLogin(senderWindow: BrowserWindow, sessionId: string): void {
   const claudePath = resolveCommand('claude') ?? 'claude'

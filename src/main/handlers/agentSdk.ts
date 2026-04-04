@@ -6,87 +6,13 @@ import { BrowserWindow, IpcMain } from 'electron'
 import { HandlerContext } from './types'
 import type { AgentSdkPermissionRequest } from '../../shared/agentSdkTypes'
 import {
-  expandHome, nextMessageId, sendMsg, resolveAgentSdkCliPath,
+  expandHome, resolveAgentSdkCliPath,
   handleLoadHistory, handleStatus, handleFetchCommands, handleFetchModels, handleLogin,
-  createFakeQuery,
+  createFakeQuery, sendMockAgentResponse,
+  readClaudeSettings, addAllowedTool, buildAllowEntry, isToolAllowed,
   type SdkModelInfo, type SdkQuery,
 } from './agentSdkHelpers'
-
-// ── .claude/settings.local.json helpers ──
-// Mirrors the Claude Code CLI's permission format:
-//   Bash(command_prefix)  — allows bash commands starting with that prefix
-//   Edit                  — allows all file edits
-//   Read                  — allows all file reads
-//   ToolName              — allows a specific tool unconditionally
-
-import { readFile, writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
-
-const SETTINGS_FILE = '.claude/settings.local.json'
-
-interface ClaudeSettings {
-  permissions?: { allow?: string[] }
-  [key: string]: unknown
-}
-
-async function readClaudeSettings(cwd: string): Promise<ClaudeSettings> {
-  try {
-    const raw = await readFile(join(cwd, SETTINGS_FILE), 'utf-8')
-    return JSON.parse(raw) as ClaudeSettings
-  } catch {
-    return {}
-  }
-}
-
-async function writeClaudeSettings(cwd: string, settings: ClaudeSettings): Promise<void> {
-  const dir = join(cwd, '.claude')
-  await mkdir(dir, { recursive: true })
-  await writeFile(join(cwd, SETTINGS_FILE), JSON.stringify(settings, null, 2) + '\n', 'utf-8')
-}
-
-async function addAllowedTool(cwd: string, entry: string): Promise<void> {
-  const settings = await readClaudeSettings(cwd)
-  if (!settings.permissions) settings.permissions = {}
-  if (!settings.permissions.allow) settings.permissions.allow = []
-  if (!settings.permissions.allow.includes(entry)) {
-    settings.permissions.allow.push(entry)
-    await writeClaudeSettings(cwd, settings)
-  }
-}
-
-/**
- * Build the "always allow" entry string for a given tool + input.
- * Follows Claude Code CLI conventions.
- */
-function buildAllowEntry(toolName: string, toolInput: Record<string, unknown>): string {
-  if (toolName === 'Bash') {
-    // Extract the command prefix (first word/executable)
-    const command = typeof toolInput.command === 'string' ? toolInput.command : ''
-    const prefix = command.split(/\s+/)[0] ?? ''
-    return prefix ? `Bash(${prefix})` : 'Bash'
-  }
-  // For Edit, Write, Read, and other tools — just the tool name
-  return toolName
-}
-
-/**
- * Check whether a tool + input is covered by the allowed tools list.
- */
-function isToolAllowed(allowedTools: string[], toolName: string, toolInput: Record<string, unknown>): boolean {
-  for (const entry of allowedTools) {
-    // Exact tool name match (e.g. "Edit", "Read")
-    if (entry === toolName) return true
-
-    // Bash(prefix) match
-    const bashMatch = entry.match(/^Bash\((.+)\)$/)
-    if (bashMatch && toolName === 'Bash') {
-      const prefix = bashMatch[1]
-      const command = typeof toolInput.command === 'string' ? toolInput.command : ''
-      if (command === prefix || command.startsWith(prefix + ' ')) return true
-    }
-  }
-  return false
-}
+import { processAndSendMessage } from './agentSdkMessages'
 
 interface PendingPermission {
   resolve: (result: { behavior: 'allow' } | { behavior: 'deny'; message: string }) => void
@@ -105,135 +31,6 @@ interface ActiveSession {
 
 const activeSessions = new Map<string, ActiveSession>()
 
-function processSystemMessage(sessionId: string, sdkMessage: Record<string, unknown>, win: BrowserWindow): void {
-  const session = activeSessions.get(sessionId)
-  if (session && typeof sdkMessage.session_id === 'string') {
-    session.sdkSessionId = sdkMessage.session_id
-  }
-  // Only forward the first system init to the renderer to avoid
-  // "Session initialized" appearing before every response.
-  if (session?.initSent) return
-  if (session) session.initSent = true
-
-  const model = typeof sdkMessage.model === 'string' ? sdkMessage.model : 'unknown'
-  sendMsg(win, sessionId, {
-    id: nextMessageId(),
-    type: 'system',
-    timestamp: Date.now(),
-    text: `Session initialized (model: ${model})`,
-  })
-}
-
-function processAssistantMessage(sessionId: string, sdkMessage: Record<string, unknown>, win: BrowserWindow): void {
-  const message = sdkMessage.message as Record<string, unknown> | undefined
-  if (!message) return
-  const content = message.content as Record<string, unknown>[] | undefined
-  if (!content) return
-  const parentId = (sdkMessage.parent_tool_use_id as string | null) ?? null
-
-  for (const block of content) {
-    if (block.type === 'text' && typeof block.text === 'string') {
-      sendMsg(win, sessionId, {
-        id: nextMessageId(),
-        type: 'text',
-        timestamp: Date.now(),
-        text: block.text,
-        parentToolUseId: parentId,
-      })
-    } else if (block.type === 'tool_use') {
-      sendMsg(win, sessionId, {
-        id: nextMessageId(),
-        type: 'tool_use',
-        timestamp: Date.now(),
-        toolName: block.name as string,
-        toolInput: block.input as Record<string, unknown>,
-        toolUseId: block.id as string,
-        parentToolUseId: parentId,
-      })
-    }
-  }
-}
-
-function processUserMessage(sessionId: string, sdkMessage: Record<string, unknown>, win: BrowserWindow): void {
-  const message = sdkMessage.message as Record<string, unknown> | undefined
-  if (!message) return
-  const content = message.content as Record<string, unknown>[] | undefined
-  if (!content) return
-  const parentId = (sdkMessage.parent_tool_use_id as string | null) ?? null
-
-  for (const block of content) {
-    if (block.type !== 'tool_result') continue
-    const resultContent = block.content as string | Record<string, unknown>[] | undefined
-    let resultText = ''
-    if (typeof resultContent === 'string') {
-      resultText = resultContent
-    } else if (Array.isArray(resultContent)) {
-      resultText = resultContent
-        .filter((c) => c.type === 'text')
-        .map((c) => c.text as string)
-        .join('\n')
-    }
-    if (resultText.length > 5000) {
-      resultText = `${resultText.slice(0, 5000)}\n... (truncated)`
-    }
-    sendMsg(win, sessionId, {
-      id: nextMessageId(),
-      type: 'tool_result',
-      timestamp: Date.now(),
-      toolUseId: block.tool_use_id as string,
-      toolResult: resultText,
-      isError: (block.is_error as boolean | undefined) === true,
-      parentToolUseId: parentId,
-    })
-  }
-}
-
-function processResultMessage(sessionId: string, sdkMessage: Record<string, unknown>, win: BrowserWindow): void {
-  // V1 uses cost_usd; V2 used total_cost_usd — handle both for safety
-  const costUsd = (sdkMessage.cost_usd ?? sdkMessage.total_cost_usd) as number | undefined
-
-  // Handle error results (subtype: error_during_execution, error_max_turns, etc.)
-  const subtype = sdkMessage.subtype as string | undefined
-  if (subtype?.startsWith('error')) {
-    const errors = sdkMessage.errors as { message?: string }[] | undefined
-    const errorText = errors?.map((e) => e.message ?? 'unknown error').join('\n') ?? `Agent error: ${subtype}`
-    sendMsg(win, sessionId, {
-      id: nextMessageId(),
-      type: 'error',
-      timestamp: Date.now(),
-      text: errorText,
-    })
-  }
-
-  sendMsg(win, sessionId, {
-    id: nextMessageId(),
-    type: 'result',
-    timestamp: Date.now(),
-    result: typeof sdkMessage.result === 'string' ? sdkMessage.result : undefined,
-    costUsd,
-    durationMs: sdkMessage.duration_ms as number | undefined,
-    numTurns: sdkMessage.num_turns as number | undefined,
-  })
-}
-
-function processAndSendMessage(
-  sessionId: string,
-  sdkMessage: Record<string, unknown>,
-  win: BrowserWindow,
-): void {
-  const type = sdkMessage.type as string
-
-  if (type === 'system' && sdkMessage.subtype === 'init') {
-    processSystemMessage(sessionId, sdkMessage, win)
-  } else if (type === 'assistant') {
-    processAssistantMessage(sessionId, sdkMessage, win)
-  } else if (type === 'user') {
-    processUserMessage(sessionId, sdkMessage, win)
-  } else if (type === 'result') {
-    processResultMessage(sessionId, sdkMessage, win)
-  }
-}
-
 /**
  * Iterate a running query, forwarding messages to the renderer.
  * When the generator completes the turn is done.
@@ -250,7 +47,7 @@ async function runTurn(
     for await (const message of q) {
       if (!activeSessions.has(sessionId)) break
       const msg = message
-      processAndSendMessage(sessionId, msg, win)
+      processAndSendMessage(sessionId, msg, win, activeSessions.get(sessionId))
 
       if (msg.type === 'result') {
         resultSent = true
@@ -329,11 +126,6 @@ async function buildQueryOptions(
   }
 
   const mode = options.permissionMode ?? 'default'
-  // Do NOT pass permissionMode or allowDangerouslySkipPermissions to the SDK.
-  // Those configure the CLI subprocess's internal permission system, which
-  // handles permissions itself and never routes protected-path rejections
-  // (e.g. .claude/ edits) through canUseTool. Instead, we omit them so the
-  // CLI always defers to our canUseTool callback via --permission-prompt-tool stdio.
 
   // Edit-like tool names that acceptEdits mode auto-allows
   const EDIT_TOOLS = new Set(['Edit', 'FileEdit', 'Write', 'FileWrite', 'NotebookEdit'])
@@ -368,6 +160,15 @@ async function buildQueryOptions(
     allowedTools = settings.permissions?.allow ?? []
   } catch {
     // No settings file — everything needs permission
+  }
+
+  // Pass permissionMode to the SDK so the CLI subprocess knows how to
+  // categorize tools. Our canUseTool callback handles the actual approval
+  // flow, but the CLI needs permissionMode to decide WHICH tools require
+  // permission in the first place.
+  queryOptions.permissionMode = mode
+  if (mode === 'bypassPermissions') {
+    queryOptions.allowDangerouslySkipPermissions = true
   }
 
   // Register canUseTool for ALL modes so the SDK always has a handler.
@@ -438,6 +239,25 @@ async function startTurn(
   const queryOptions = await buildQueryOptions(cwd, options, sessionId, win)
   console.log('[agentSdk] startTurn', sessionId, 'cwd:', cwd, 'resume:', options.sdkSessionId ?? 'none')
 
+  // Ensure the session exists in activeSessions BEFORE creating the query.
+  // The SDK starts processing messages (including canUseTool permission
+  // requests) immediately in the Query constructor, so the session must be
+  // in the map before sdkQuery() is called.
+  let session = activeSessions.get(sessionId)
+  if (!session) {
+    session = {
+      query: null,
+      sdkSessionId: options.sdkSessionId,
+      ownerWindow: win,
+      pendingPermission: null,
+      initSent: false,
+      cwd,
+    }
+    activeSessions.set(sessionId, session)
+  } else {
+    session.ownerWindow = win
+  }
+
   let q: SdkQuery
   if (process.env.E2E_FAKE_SDK === 'true') {
     q = createFakeQuery({ prompt, options: queryOptions })
@@ -446,22 +266,7 @@ async function startTurn(
     q = sdkQuery({ prompt, options: queryOptions }) as unknown as SdkQuery
   }
 
-  // Reuse existing session entry (preserves sdkSessionId & initSent) or create new
-  let session = activeSessions.get(sessionId)
-  if (session) {
-    session.query = q
-    session.ownerWindow = win
-  } else {
-    session = {
-      query: q,
-      sdkSessionId: options.sdkSessionId,
-      ownerWindow: win,
-      pendingPermission: null,
-      initSent: false,
-      cwd,
-    }
-    activeSessions.set(sessionId, session)
-  }
+  session.query = q
 
   try {
     await runTurn(sessionId, session, win)
@@ -471,184 +276,6 @@ async function startTurn(
     if (err instanceof Error && err.stack) console.error(err.stack)
     win.webContents.send(`agentSdk:error:${sessionId}`, errorMessage)
     activeSessions.delete(sessionId)
-  }
-}
-
-/**
- * Resolve the mock response text for a given prompt.
- *
- * Reads E2E_AGENT_RESPONSES (JSON array of {match, response} objects) and
- * returns the text of the first entry whose `match` string appears in the
- * prompt. Falls back to a generic placeholder when nothing matches.
- */
-function resolveMockResponseText(prompt: string): string {
-  try {
-    const raw = process.env.E2E_AGENT_RESPONSES
-    if (raw) {
-      const entries = JSON.parse(raw) as { match: string; response: string }[]
-      for (const entry of entries) {
-        if (prompt.includes(entry.match)) return entry.response
-      }
-    }
-  } catch {
-    // Malformed JSON — fall through to default
-  }
-  return "I'll help you with that. Let me look at the codebase."
-}
-
-/** Tracks which mock sessions have already received their system init message. */
-const mockInitSent = new Set<string>()
-
-interface MockToolUse {
-  toolName: string
-  toolInput: Record<string, unknown>
-  decisionReason?: string
-}
-
-/**
- * Resolve mock tool uses for a given prompt.
- *
- * Reads E2E_AGENT_TOOL_USES (JSON array of {match, tools} objects) and
- * returns the tool list of the first entry whose `match` string appears in
- * the prompt. Returns an empty array when nothing matches.
- */
-function resolveMockToolUses(prompt: string): MockToolUse[] {
-  try {
-    const raw = process.env.E2E_AGENT_TOOL_USES
-    if (raw) {
-      const entries = JSON.parse(raw) as { match: string; tools: MockToolUse[] }[]
-      for (const entry of entries) {
-        if (prompt.includes(entry.match)) return entry.tools
-      }
-    }
-  } catch {
-    // Malformed JSON — fall through to empty
-  }
-  return []
-}
-
-/**
- * Send a canned mock agent response sequence for E2E tests.
- * Fires system init (first turn only), optional tool_use messages that
- * trigger permission prompts, a text reply, and a result/done.
- * When E2E_AGENT_RESPONSE_DELAY_MS is set, the response is deferred by
- * that many milliseconds so tests can inject mid-turn messages.
- */
-function sendMockAgentResponse(win: BrowserWindow, sessionId: string, prompt: string): void {
-  if (!mockInitSent.has(sessionId)) {
-    mockInitSent.add(sessionId)
-    const initMsg: AgentSdkMessage = {
-      id: nextMessageId(),
-      type: 'system',
-      timestamp: Date.now(),
-      text: 'Session initialized (model: claude-sonnet-4-20250514)',
-    }
-    win.webContents.send(`agentSdk:message:${sessionId}`, initMsg)
-  }
-
-  const delayMs = parseInt(process.env.E2E_AGENT_RESPONSE_DELAY_MS ?? '0', 10)
-  const mockTools = resolveMockToolUses(prompt)
-
-  const sendResponse = async () => {
-    // Emit mock tool_use messages that require permission approval
-    for (const tool of mockTools) {
-      const toolUseId = `mock-tooluse-${String(Date.now())}-${String(Math.random()).slice(2, 8)}`
-      const toolMsg: AgentSdkMessage = {
-        id: nextMessageId(),
-        type: 'tool_use',
-        timestamp: Date.now(),
-        toolName: tool.toolName,
-        toolInput: tool.toolInput,
-        toolUseId,
-      }
-      win.webContents.send(`agentSdk:message:${sessionId}`, toolMsg)
-
-      // Send permission request and wait for user response
-      const permReq: AgentSdkPermissionRequest = {
-        id: `perm-${String(Date.now())}`,
-        toolName: tool.toolName,
-        toolInput: tool.toolInput,
-        toolUseId,
-        decisionReason: tool.decisionReason,
-      }
-      win.webContents.send(`agentSdk:permission:${sessionId}`, permReq)
-
-      // Wait for the user to respond to the permission request
-      const allowed = await new Promise<boolean>((resolve) => {
-        // Store in activeSessions so the agentSdk:respond handler can resolve it
-        let session = activeSessions.get(sessionId)
-        if (!session) {
-          // Create a lightweight mock session entry
-          session = {
-            query: null,
-            ownerWindow: win,
-            pendingPermission: null,
-            initSent: true,
-            cwd: process.cwd(),
-          }
-          activeSessions.set(sessionId, session)
-        }
-        session.pendingPermission = {
-          resolve: (result) => resolve(result.behavior === 'allow'),
-        }
-      })
-
-      // Send tool_result based on permission response
-      const resultContent = allowed
-        ? `Tool ${tool.toolName} executed successfully.`
-        : `Tool ${tool.toolName} was denied by user.`
-      const toolResultMsg: AgentSdkMessage = {
-        id: nextMessageId(),
-        type: 'tool_result',
-        timestamp: Date.now(),
-        toolUseId,
-        toolResult: resultContent,
-        isError: !allowed,
-      }
-      win.webContents.send(`agentSdk:message:${sessionId}`, toolResultMsg)
-
-      if (!allowed) {
-        // If denied, skip remaining tools and finish with an error result
-        const resultMsg: AgentSdkMessage = {
-          id: nextMessageId(),
-          type: 'result',
-          timestamp: Date.now(),
-          result: 'Task stopped — permission denied.',
-          costUsd: 0.005,
-          durationMs: 1000,
-          numTurns: 1,
-        }
-        win.webContents.send(`agentSdk:message:${sessionId}`, resultMsg)
-        win.webContents.send(`agentSdk:done:${sessionId}`, 'mock-session-id')
-        return
-      }
-    }
-
-    const textMsg: AgentSdkMessage = {
-      id: nextMessageId(),
-      type: 'text',
-      timestamp: Date.now(),
-      text: resolveMockResponseText(prompt),
-    }
-    win.webContents.send(`agentSdk:message:${sessionId}`, textMsg)
-
-    const resultMsg: AgentSdkMessage = {
-      id: nextMessageId(),
-      type: 'result',
-      timestamp: Date.now(),
-      result: 'Task completed successfully.',
-      costUsd: 0.01,
-      durationMs: 2000,
-      numTurns: 1,
-    }
-    win.webContents.send(`agentSdk:message:${sessionId}`, resultMsg)
-    win.webContents.send(`agentSdk:done:${sessionId}`, 'mock-session-id')
-  }
-
-  if (delayMs > 0) {
-    setTimeout(() => void sendResponse(), delayMs)
-  } else {
-    void sendResponse()
   }
 }
 
@@ -663,10 +290,11 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     model?: string
     effort?: 'low' | 'medium' | 'high' | 'max'
   }) => {
-    if (ctx.isE2ETest && process.env.E2E_FAKE_SDK !== 'true') {
+    // E2E_REAL_SDK=true bypasses the mock so we can test the real SDK in E2E
+    if (ctx.isE2ETest && process.env.E2E_FAKE_SDK !== 'true' && process.env.E2E_REAL_SDK !== 'true') {
       const senderWindow = BrowserWindow.fromWebContents(_event.sender)
       if (!senderWindow) return { id: options.id }
-      sendMockAgentResponse(senderWindow, options.id, options.prompt)
+      sendMockAgentResponse(senderWindow, options.id, options.prompt, activeSessions)
       return { id: options.id }
     }
 
@@ -696,9 +324,9 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   ipcMain.handle('agentSdk:send', (_event, id: string, prompt: string, options?: {
     sdkSessionId?: string; cwd?: string; permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk'; env?: Record<string, string>; model?: string; effort?: 'low' | 'medium' | 'high' | 'max'
   }) => {
-    if (ctx.isE2ETest && process.env.E2E_FAKE_SDK !== 'true') {
+    if (ctx.isE2ETest && process.env.E2E_FAKE_SDK !== 'true' && process.env.E2E_REAL_SDK !== 'true') {
       const senderWindow = BrowserWindow.fromWebContents(_event.sender)
-      if (senderWindow) sendMockAgentResponse(senderWindow, id, prompt)
+      if (senderWindow) sendMockAgentResponse(senderWindow, id, prompt, activeSessions)
       return
     }
 
@@ -765,6 +393,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     }
   })
 
+  // eslint-disable-next-line max-params -- IPC positional args; can't restructure without breaking the preload API
   ipcMain.handle('agentSdk:respond', (_event, id: string, _toolUseId: string, allowed: boolean, updatedInput?: Record<string, unknown>, alwaysAllow?: { toolName: string; toolInput: Record<string, unknown> }) => {
     const session = activeSessions.get(id)
     if (session?.pendingPermission) {
@@ -776,7 +405,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
         // Persist "Always Allow" to .claude/settings.local.json
         if (alwaysAllow && session.cwd) {
           const entry = buildAllowEntry(alwaysAllow.toolName, alwaysAllow.toolInput)
-          void addAllowedTool(session.cwd, entry).catch((err) => {
+          void addAllowedTool(session.cwd, entry).catch((err: unknown) => {
             console.warn('[agentSdk] Failed to save always-allow entry:', err)
           })
         }

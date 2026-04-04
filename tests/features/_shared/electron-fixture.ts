@@ -118,6 +118,12 @@ interface ResetOptions {
    * Slash commands will return a response confirming the options.
    */
   fakeSdk?: boolean
+  /**
+   * When true, use the REAL Claude Agent SDK instead of mocks.
+   * Requires Claude CLI to be installed and authenticated.
+   * Use for integration tests that exercise the actual permission flow.
+   */
+  realSdk?: boolean
 }
 
 /** Converts an optional number to a string for env var transport; returns '' for undefined. */
@@ -138,6 +144,7 @@ function buildEnvOverrides(opts?: ResetOptions) {
     agentResponseDelayMs: optNum(opts?.agentResponseDelayMs),
     agentToolUses: opts?.agentToolUses ? JSON.stringify(opts.agentToolUses) : '',
     fakeSdk: opts?.fakeSdk ? 'true' : '',
+    realSdk: opts?.realSdk ? 'true' : '',
   }
 }
 
@@ -157,6 +164,7 @@ async function applyEnvOverrides(electronApp: ElectronApplication, envOverrides:
     setOrDelete('E2E_AGENT_RESPONSE_DELAY_MS', env.agentResponseDelayMs)
     setOrDelete('E2E_AGENT_TOOL_USES', env.agentToolUses)
     setOrDelete('E2E_FAKE_SDK', env.fakeSdk)
+    setOrDelete('E2E_REAL_SDK', env.realSdk)
   }, envOverrides)
 }
 
