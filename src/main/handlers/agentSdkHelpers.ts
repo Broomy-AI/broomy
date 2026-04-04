@@ -324,6 +324,12 @@ export async function handleFetchCommands(cwd?: string, agentEnv?: Record<string
   })
 }
 
+/** Check if an error message indicates the SDK session no longer exists. */
+export function isSessionNotFoundError(message: string): boolean {
+  const lower = message.toLowerCase()
+  return lower.includes('no conversation found') || lower.includes('session not found')
+}
+
 // Re-export mock/test helpers and types from dedicated module
 export { createFakeQuery, sendMockAgentResponse, type SdkQuery } from './agentSdkMocks'
 

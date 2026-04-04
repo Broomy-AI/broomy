@@ -269,10 +269,8 @@ function AgentChatInner({ sessionId, cwd, sdkSessionId, skipApproval, env, model
       {/* Input area */}
       <AgentChatInput
         onSubmit={sendPrompt}
-        onQueue={queuePrompt}
         onStop={stopAgent}
         isRunning={state === 'running' || state === 'awaiting_permission'}
-        disabled={state === 'awaiting_permission'}
         sessionId={sessionId}
         availableCommands={availableCommands}
         model={model}

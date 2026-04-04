@@ -470,6 +470,68 @@ describe('useGitPolling', () => {
     })
   })
 
+  describe('agent-finished PR fetch', () => {
+    it('fetches PR status when agent finishes work', async () => {
+      vi.mocked(window.git.status).mockResolvedValue(makeGitStatus())
+      vi.mocked(normalizeGitStatus).mockReturnValue(makeGitStatus())
+      vi.mocked(window.gh.prStatus).mockResolvedValue({
+        number: 42, title: 'Test PR', state: 'OPEN',
+        url: 'https://github.com/test/pr/42',
+        headRefName: 'feature/test', baseRefName: 'main',
+      })
+
+      renderHook(() => useGitPolling(defaultProps))
+
+      await act(async () => {
+        document.dispatchEvent(new CustomEvent('broomy:agent-finished'))
+        await vi.advanceTimersByTimeAsync(0)
+      })
+
+      expect(window.gh.prStatus).toHaveBeenCalledWith('/test/project')
+      expect(updatePrState).toHaveBeenCalledWith('session-1', 'OPEN', 42, 'https://github.com/test/pr/42')
+    })
+
+    it('does not call updatePrState when no PR exists', async () => {
+      vi.mocked(window.git.status).mockResolvedValue(makeGitStatus())
+      vi.mocked(normalizeGitStatus).mockReturnValue(makeGitStatus())
+      vi.mocked(window.gh.prStatus).mockResolvedValue(null)
+
+      renderHook(() => useGitPolling(defaultProps))
+
+      await act(async () => {
+        document.dispatchEvent(new CustomEvent('broomy:agent-finished'))
+        await vi.advanceTimersByTimeAsync(0)
+      })
+
+      expect(window.gh.prStatus).toHaveBeenCalledWith('/test/project')
+      // updatePrState may be called by branch status computation, but not from the PR fetch
+      const prStateCalls = vi.mocked(updatePrState).mock.calls.filter(
+        ([, state]) => state === 'OPEN' || state === 'MERGED' || state === 'CLOSED'
+      )
+      expect(prStateCalls).toHaveLength(0)
+    })
+
+    it('handles gh.prStatus errors gracefully', async () => {
+      vi.mocked(window.git.status).mockResolvedValue(makeGitStatus())
+      vi.mocked(normalizeGitStatus).mockReturnValue(makeGitStatus())
+      vi.mocked(window.gh.prStatus).mockRejectedValue(new Error('gh not found'))
+
+      renderHook(() => useGitPolling(defaultProps))
+
+      // Should not throw
+      await act(async () => {
+        document.dispatchEvent(new CustomEvent('broomy:agent-finished'))
+        await vi.advanceTimersByTimeAsync(0)
+      })
+
+      // updatePrState should not be called with PR data on error
+      const prStateCalls = vi.mocked(updatePrState).mock.calls.filter(
+        ([, state]) => state === 'OPEN' || state === 'MERGED' || state === 'CLOSED'
+      )
+      expect(prStateCalls).toHaveLength(0)
+    })
+  })
+
   describe('activeSessionGitStatus', () => {
     it('returns files from active session git status', async () => {
       const files = [{ path: 'file.ts', status: 'modified' as const, staged: false, indexStatus: ' ', workingDirStatus: 'M' }]

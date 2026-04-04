@@ -27,10 +27,8 @@ const PERMISSION_MODE_LABELS: Record<PermissionMode, string> = {
 
 interface AgentChatInputProps {
   onSubmit: (prompt: string) => void
-  onQueue: (prompt: string) => void
   onStop: () => void
   isRunning: boolean
-  disabled?: boolean
   sessionId: string
   availableCommands?: CommandInfo[]
   model?: string
@@ -43,7 +41,7 @@ interface AgentChatInputProps {
   textareaRef?: RefObject<HTMLTextAreaElement>
 }
 
-export function AgentChatInput({ onSubmit, onQueue, onStop, isRunning, disabled, sessionId, availableCommands, model, effort, availableModels, onModelChange, onEffortChange, permissionMode, onPermissionModeChange, textareaRef: externalRef }: AgentChatInputProps) {
+export function AgentChatInput({ onSubmit, onStop, isRunning, sessionId, availableCommands, model, effort, availableModels, onModelChange, onEffortChange, permissionMode, onPermissionModeChange, textareaRef: externalRef }: AgentChatInputProps) {
   const [value, setValue] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const internalRef = useRef<HTMLTextAreaElement>(null)
@@ -51,10 +49,10 @@ export function AgentChatInput({ onSubmit, onQueue, onStop, isRunning, disabled,
 
   // Auto-focus on mount and session changes
   useEffect(() => {
-    if (!isRunning && !disabled) {
+    if (!isRunning) {
       textareaRef.current?.focus()
     }
-  }, [sessionId, isRunning, disabled])
+  }, [sessionId, isRunning])
 
   // Merge local + SDK commands, deduplicate by name
   const allCommands = useMemo(() => {
@@ -83,19 +81,13 @@ export function AgentChatInput({ onSubmit, onQueue, onStop, isRunning, disabled,
 
   const handleSubmit = useCallback(() => {
     const trimmed = value.trim()
-    if (!trimmed || disabled) return
-    if (isRunning) {
-      onQueue(trimmed)
-      setValue('')
-      if (textareaRef.current) textareaRef.current.style.height = 'auto'
-      return
-    }
+    if (!trimmed) return
     onSubmit(trimmed)
     setValue('')
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
-  }, [value, isRunning, disabled, onSubmit, onQueue])
+  }, [value, onSubmit])
 
   const selectCommand = useCallback((name: string) => {
     const cmd = `/${name}`
@@ -173,9 +165,8 @@ export function AgentChatInput({ onSubmit, onQueue, onStop, isRunning, disabled,
           onChange={handleInput}
           onKeyDown={handleKeyDown}
           placeholder={isRunning ? 'Agent is working... (type your next message)' : 'Message or /command'}
-          disabled={disabled}
           rows={1}
-          className="flex-1 resize-none rounded border border-neutral-600 bg-neutral-800 px-3 py-2 text-sm text-neutral-200 placeholder-neutral-500 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+          className="flex-1 resize-none rounded border border-neutral-600 bg-neutral-800 px-3 py-2 text-sm text-neutral-200 placeholder-neutral-500 focus:border-blue-500 focus:outline-none"
         />
         {isRunning ? (
           <>
@@ -196,7 +187,7 @@ export function AgentChatInput({ onSubmit, onQueue, onStop, isRunning, disabled,
         ) : (
           <button
             onClick={handleSubmit}
-            disabled={!value.trim() || disabled}
+            disabled={!value.trim()}
             className="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 disabled:hover:bg-blue-600"
           >
             Send

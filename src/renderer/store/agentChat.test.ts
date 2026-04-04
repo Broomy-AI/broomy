@@ -114,4 +114,39 @@ describe('useAgentChatStore', () => {
       expect(useAgentChatStore.getState().getSession('s2').messages).toHaveLength(1)
     })
   })
+
+  describe('replaceMessages', () => {
+    it('replaces messages in an existing session', () => {
+      useAgentChatStore.getState().addMessage('s1', makeMsg({ id: 'msg-1', text: 'old' }))
+      useAgentChatStore.getState().addMessage('s1', makeMsg({ id: 'msg-2', text: 'old2' }))
+      const newMsgs = [makeMsg({ id: 'new-1', text: 'new' })]
+      useAgentChatStore.getState().replaceMessages('s1', newMsgs)
+      const session = useAgentChatStore.getState().getSession('s1')
+      expect(session.messages).toHaveLength(1)
+      expect(session.messages[0].text).toBe('new')
+    })
+
+    it('creates a session if it does not exist', () => {
+      const msgs = [makeMsg({ id: 'a' }), makeMsg({ id: 'b' })]
+      useAgentChatStore.getState().replaceMessages('s1', msgs)
+      expect(useAgentChatStore.getState().getSession('s1').messages).toHaveLength(2)
+    })
+
+    it('preserves other session state', () => {
+      useAgentChatStore.getState().setState('s1', 'running')
+      useAgentChatStore.getState().setError('s1', 'some error')
+      useAgentChatStore.getState().replaceMessages('s1', [makeMsg({ id: 'x' })])
+      const session = useAgentChatStore.getState().getSession('s1')
+      expect(session.messages).toHaveLength(1)
+      // replaceMessages preserves state/error — it only touches messages
+      expect(session.error).toBe('some error')
+    })
+
+    it('does not affect other sessions', () => {
+      useAgentChatStore.getState().addMessage('s1', makeMsg({ id: 'msg-1' }))
+      useAgentChatStore.getState().addMessage('s2', makeMsg({ id: 'msg-2' }))
+      useAgentChatStore.getState().replaceMessages('s1', [])
+      expect(useAgentChatStore.getState().getSession('s2').messages).toHaveLength(1)
+    })
+  })
 })
