@@ -112,6 +112,7 @@ function useExplorerPanel(config: PanelsMapConfig) {
     if (!activeSession?.showExplorer || activeSession.status === 'initializing') return null
     return (
       <Explorer
+        key={activeSessionId}
         directory={activeSession.directory}
         onFileSelect={navigateToFile}
         selectedFilePath={activeSession.selectedFilePath}

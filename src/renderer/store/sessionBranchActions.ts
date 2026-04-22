@@ -39,6 +39,8 @@ export function createBranchActions(get: StoreGet, set: StoreSet) {
 
     updateBranchStatus: (sessionId: string, status: BranchStatus) => {
       const { sessions } = get()
+      const session = sessions.find((s) => s.id === sessionId)
+      if (!session || session.branchStatus === status) return
       const updatedSessions = sessions.map((s) =>
         s.id === sessionId ? { ...s, branchStatus: status } : s
       )

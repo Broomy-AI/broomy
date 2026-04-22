@@ -357,7 +357,7 @@ describe('useGitPolling', () => {
       expect(updateBranchStatus).toHaveBeenCalledWith('session-1', 'pushed')
     })
 
-    it('does not update branch status when unchanged', async () => {
+    it('calls updateBranchStatus inline even when status unchanged (store handles no-op)', async () => {
       const gitStatus = makeGitStatus({ current: 'feature/test' })
       vi.mocked(window.git.status).mockResolvedValue(gitStatus)
       vi.mocked(normalizeGitStatus).mockReturnValue(gitStatus)
@@ -377,7 +377,9 @@ describe('useGitPolling', () => {
         await vi.advanceTimersByTimeAsync(0)
       })
 
-      expect(updateBranchStatus).not.toHaveBeenCalled()
+      // updateBranchStatus is always called inline in fetchGitStatus;
+      // the store action itself is responsible for the no-op guard.
+      expect(updateBranchStatus).toHaveBeenCalledWith(session.id, 'in-progress')
     })
   })
 

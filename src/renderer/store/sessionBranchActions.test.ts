@@ -109,6 +109,21 @@ describe('sessionBranchActions', () => {
       useSessionStore.getState().updateBranchStatus('test-session', 'merged')
       expect(useSessionStore.getState().sessions[0].branchStatus).toBe('merged')
     })
+
+    it('is a no-op when status is unchanged', () => {
+      addTestSession()
+      const sessionsBefore = useSessionStore.getState().sessions
+      useSessionStore.getState().updateBranchStatus('test-session', 'in-progress')
+      // sessions array reference should be the same (no set() call)
+      expect(useSessionStore.getState().sessions).toBe(sessionsBefore)
+    })
+
+    it('is a no-op for nonexistent session', () => {
+      addTestSession()
+      const sessionsBefore = useSessionStore.getState().sessions
+      useSessionStore.getState().updateBranchStatus('nonexistent', 'merged')
+      expect(useSessionStore.getState().sessions).toBe(sessionsBefore)
+    })
   })
 
   describe('updatePrState', () => {

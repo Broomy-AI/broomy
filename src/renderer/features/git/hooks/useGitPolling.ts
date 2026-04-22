@@ -54,10 +54,21 @@ export function useGitPolling({
       }
 
       // Update all state in the same synchronous block so React batches
-      // them into one render. markHasHadCommits must happen AFTER the
-      // await and alongside setGitStatusBySession/setIsMergedBySession —
-      // otherwise the Zustand update triggers a render with stale
-      // isMergedBySession data, briefly computing 'merged' for new sessions.
+      // them into one render. Branch status is computed inline here rather
+      // than in a separate useEffect to eliminate a render gap where stale
+      // branchStatus is briefly visible (e.g. showing 'merged' from a
+      // previous session lifecycle when switching sessions).
+      const effectiveHasHadCommits = shouldMarkHasHadCommits || (activeSession.hasHadCommits ?? false)
+      const computedStatus = computeBranchStatus({
+        uncommittedFiles: normalized.files.length,
+        ahead: normalized.ahead,
+        hasTrackingBranch: !!normalized.tracking,
+        isOnMainBranch: isOnMain,
+        isMergedToMain: merged,
+        hasHadCommits: effectiveHasHadCommits,
+        lastKnownPrState: activeSession.lastKnownPrState,
+      })
+
       setGitStatusBySession(prev => ({
         ...prev,
         [activeSession.id]: normalized
@@ -69,10 +80,11 @@ export function useGitPolling({
       if (shouldMarkHasHadCommits) {
         markHasHadCommits(activeSession.id)
       }
+      updateBranchStatus(activeSession.id, computedStatus)
     } catch {
       // Ignore errors
     }
-  }, [activeSession?.id, activeSession?.directory, activeSession?.repoId, repos, markHasHadCommits])
+  }, [activeSession?.id, activeSession?.directory, activeSession?.repoId, activeSession?.hasHadCommits, activeSession?.lastKnownPrState, repos, markHasHadCommits, updateBranchStatus])
 
   // Poll git status every 2 seconds
   useEffect(() => {
