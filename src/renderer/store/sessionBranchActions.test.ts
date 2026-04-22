@@ -62,94 +62,6 @@ describe('sessionBranchActions', () => {
     return session
   }
 
-  describe('markHasHadCommits', () => {
-    it('marks session as having had commits', () => {
-      addTestSession()
-      useSessionStore.getState().markHasHadCommits('test-session')
-      expect(useSessionStore.getState().sessions[0].hasHadCommits).toBe(true)
-    })
-
-    it('is a no-op if already marked', () => {
-      addTestSession()
-      useSessionStore.getState().markHasHadCommits('test-session')
-      useSessionStore.getState().markHasHadCommits('test-session')
-      expect(useSessionStore.getState().sessions[0].hasHadCommits).toBe(true)
-    })
-
-    it('is a no-op for non-existent session', () => {
-      addTestSession()
-      useSessionStore.getState().markHasHadCommits('nonexistent')
-      expect(useSessionStore.getState().sessions[0].hasHadCommits).toBeUndefined()
-    })
-  })
-
-  describe('clearHasHadCommits', () => {
-    it('clears hasHadCommits flag', () => {
-      addTestSession()
-      useSessionStore.getState().markHasHadCommits('test-session')
-      expect(useSessionStore.getState().sessions[0].hasHadCommits).toBe(true)
-      useSessionStore.getState().clearHasHadCommits('test-session')
-      expect(useSessionStore.getState().sessions[0].hasHadCommits).toBe(false)
-    })
-
-    it('is a no-op if not marked', () => {
-      addTestSession()
-      useSessionStore.getState().clearHasHadCommits('test-session')
-      expect(useSessionStore.getState().sessions[0].hasHadCommits).toBeUndefined()
-    })
-
-    it('is a no-op for non-existent session', () => {
-      addTestSession()
-      useSessionStore.getState().markHasHadCommits('test-session')
-      useSessionStore.getState().clearHasHadCommits('nonexistent')
-      expect(useSessionStore.getState().sessions[0].hasHadCommits).toBe(true)
-    })
-  })
-
-  describe('updateBranchStatus', () => {
-    it('updates branch status for session', () => {
-      addTestSession()
-      useSessionStore.getState().updateBranchStatus('test-session', 'merged')
-      expect(useSessionStore.getState().sessions[0].branchStatus).toBe('merged')
-    })
-
-    it('is a no-op when status is unchanged', () => {
-      addTestSession()
-      const sessionsBefore = useSessionStore.getState().sessions
-      useSessionStore.getState().updateBranchStatus('test-session', 'in-progress')
-      // sessions array reference should be the same (no set() call)
-      expect(useSessionStore.getState().sessions).toBe(sessionsBefore)
-    })
-
-    it('is a no-op for nonexistent session', () => {
-      addTestSession()
-      const sessionsBefore = useSessionStore.getState().sessions
-      useSessionStore.getState().updateBranchStatus('nonexistent', 'merged')
-      expect(useSessionStore.getState().sessions).toBe(sessionsBefore)
-    })
-  })
-
-  describe('updatePrState', () => {
-    it('updates PR state with number and URL', () => {
-      addTestSession()
-      useSessionStore.getState().updatePrState('test-session', 'OPEN', 42, 'https://github.com/pr/42')
-      const session = useSessionStore.getState().sessions[0]
-      expect(session.lastKnownPrState).toBe('OPEN')
-      expect(session.lastKnownPrNumber).toBe(42)
-      expect(session.lastKnownPrUrl).toBe('https://github.com/pr/42')
-    })
-
-    it('keeps existing prNumber/prUrl when not provided', () => {
-      addTestSession()
-      useSessionStore.getState().updatePrState('test-session', 'OPEN', 42, 'https://pr')
-      useSessionStore.getState().updatePrState('test-session', 'MERGED')
-      const session = useSessionStore.getState().sessions[0]
-      expect(session.lastKnownPrState).toBe('MERGED')
-      expect(session.lastKnownPrNumber).toBe(42)
-      expect(session.lastKnownPrUrl).toBe('https://pr')
-    })
-  })
-
   describe('archiveSession', () => {
     it('archives a session', () => {
       addTestSession()
@@ -197,7 +109,6 @@ describe('sessionBranchActions', () => {
       useSessionStore.getState().updateReviewStatus('test-session', 'reviewed')
       vi.clearAllMocks()
       useSessionStore.getState().updateReviewStatus('test-session', 'reviewed')
-      // Should not trigger another save since status did not change
       expect(useSessionStore.getState().sessions[0].reviewStatus).toBe('reviewed')
     })
 

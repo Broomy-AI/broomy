@@ -489,15 +489,6 @@ describe('useSessionStore', () => {
     })
   })
 
-  describe('markHasHadCommits', () => {
-    it('sets hasHadCommits to true', () => {
-      const s1 = createTestSession({ id: 's1' })
-      useSessionStore.setState({ sessions: [s1], isLoading: false })
-
-      useSessionStore.getState().markHasHadCommits('s1')
-      expect(useSessionStore.getState().sessions[0].hasHadCommits).toBe(true)
-    })
-  })
 
   describe('agent monitoring', () => {
     it('updateAgentMonitor updates status', () => {
@@ -749,61 +740,6 @@ describe('useSessionStore', () => {
   })
 
   describe('branch status', () => {
-    it('updateBranchStatus updates the branchStatus field', () => {
-      const s1 = createTestSession({ id: 's1' })
-      useSessionStore.setState({ sessions: [s1], isLoading: false })
-
-      useSessionStore.getState().updateBranchStatus('s1', 'open')
-      expect(useSessionStore.getState().sessions[0].branchStatus).toBe('open')
-    })
-
-    it('updateBranchStatus does not affect other sessions', () => {
-      const s1 = createTestSession({ id: 's1' })
-      const s2 = createTestSession({ id: 's2' })
-      useSessionStore.setState({ sessions: [s1, s2], isLoading: false })
-
-      useSessionStore.getState().updateBranchStatus('s1', 'merged')
-      expect(useSessionStore.getState().sessions[0].branchStatus).toBe('merged')
-      expect(useSessionStore.getState().sessions[1].branchStatus).toBe('in-progress')
-    })
-
-    it('updatePrState sets PR state fields', () => {
-      const s1 = createTestSession({ id: 's1' })
-      useSessionStore.setState({ sessions: [s1], isLoading: false })
-
-      useSessionStore.getState().updatePrState('s1', 'OPEN', 42, 'https://github.com/pr/42')
-      const session = useSessionStore.getState().sessions[0]
-      expect(session.lastKnownPrState).toBe('OPEN')
-      expect(session.lastKnownPrNumber).toBe(42)
-      expect(session.lastKnownPrUrl).toBe('https://github.com/pr/42')
-    })
-
-    it('updatePrState preserves existing prNumber/prUrl when not provided', () => {
-      const s1 = {
-        ...createTestSession({ id: 's1' }),
-        lastKnownPrNumber: 42,
-        lastKnownPrUrl: 'https://github.com/pr/42',
-      }
-      useSessionStore.setState({ sessions: [s1], isLoading: false })
-
-      useSessionStore.getState().updatePrState('s1', 'MERGED')
-      const session = useSessionStore.getState().sessions[0]
-      expect(session.lastKnownPrState).toBe('MERGED')
-      expect(session.lastKnownPrNumber).toBe(42)
-      expect(session.lastKnownPrUrl).toBe('https://github.com/pr/42')
-    })
-
-    it('updatePrState sets null to clear PR state', () => {
-      const s1 = {
-        ...createTestSession({ id: 's1' }),
-        lastKnownPrState: 'OPEN' as const,
-      }
-      useSessionStore.setState({ sessions: [s1], isLoading: false })
-
-      useSessionStore.getState().updatePrState('s1', null)
-      expect(useSessionStore.getState().sessions[0].lastKnownPrState).toBeNull()
-    })
-
     it('loadSessions restores lastKnownPrState from config', async () => {
       vi.mocked(window.config.load).mockResolvedValue({
         agents: [],

@@ -12,6 +12,7 @@
 import { create } from 'zustand'
 import { PANEL_IDS, DEFAULT_TOOLBAR_PANELS } from '../panels/system/types'
 import type { BranchStatus, PrState, StatusChip } from '../features/git/branchStatus'
+import type { GitStatusResult } from '../../preload/index'
 import {
   debouncedSave,
   syncLegacyFields,
@@ -20,6 +21,7 @@ import { createTerminalTabActions } from './sessionTerminalTabs'
 import { createPanelActions } from './sessionPanelActions'
 import { createBranchActions } from './sessionBranchActions'
 import { createCoreActions, DEFAULT_SIDEBAR_WIDTH } from './sessionCoreActions'
+import { createRefreshAction } from './sessionRefresh'
 
 export type { BranchStatus, PrState, StatusChip }
 
@@ -97,6 +99,8 @@ export interface Session {
   terminalTabs: TerminalTabsState
   // Track whether this session has ever had commits ahead of remote (persisted)
   hasHadCommits?: boolean
+  // Raw git status result from last poll (runtime only)
+  gitStatus?: GitStatusResult | null
   // Branch status (runtime, derived)
   branchStatus: BranchStatus
   // PR metadata (runtime, derived from GitHub API)
@@ -175,15 +179,10 @@ interface SessionStore {
   setAgentPtyId: (sessionId: string, ptyId: string) => void
   // Agent SDK session ID (persisted for resume)
   setSdkSessionId: (sessionId: string, sdkSessionId: string) => void
-  // Branch status actions
-  markHasHadCommits: (sessionId: string) => void
-  clearHasHadCommits: (sessionId: string) => void
-  updateBranchStatus: (sessionId: string, status: BranchStatus) => void
-  updateSessionBranch: (sessionId: string, branch: string) => void
-  updatePrState: (sessionId: string, prState: PrState, prNumber?: number, prUrl?: string) => void
+  // Session status refresh — the single entry point for recomputing branchStatus,
+  // statusChip, hasFeedback, checksStatus, hasHadCommits, and lastKnownPr* for a session.
+  refreshSession: (sessionId: string, opts?: { includePr?: boolean }) => Promise<void>
   updateReviewStatus: (sessionId: string, reviewStatus: 'pending' | 'reviewed') => void
-  updateFeedbackStatus: (sessionId: string, hasFeedback: boolean) => void
-  updateChecksStatus: (sessionId: string, checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
   // Search history actions
   addSearchHistory: (sessionId: string, query: string) => void
   removeSearchHistoryItem: (sessionId: string, query: string) => void
@@ -200,6 +199,7 @@ export const useSessionStore = create<SessionStore>((set, get) => {
   const terminalTabActions = createTerminalTabActions(get, set)
   const panelActions = createPanelActions(get, set)
   const branchActions = createBranchActions(get, set)
+  const refreshAction = createRefreshAction(get, set)
   const coreActions = createCoreActions(get, set)
 
   return {
@@ -375,4 +375,5 @@ export const useSessionStore = create<SessionStore>((set, get) => {
 
   // Branch & lifecycle actions (delegated)
   ...branchActions,
+  ...refreshAction,
 }})

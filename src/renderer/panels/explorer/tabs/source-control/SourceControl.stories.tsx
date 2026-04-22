@@ -11,7 +11,7 @@ const meta: Meta<typeof SourceControl> = {
     onFileSelect: () => {},
     onGitStatusRefresh: () => {},
     branchStatus: 'in-progress',
-    onUpdatePrState: () => {},
+    onRefreshPr: () => {},
   },
 }
 export default meta

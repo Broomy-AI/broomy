@@ -3,7 +3,7 @@
  */
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import type { GitFileStatus, GitStatusResult, GitHubPrStatus, GitCommitInfo } from '../../../../../preload/index'
-import type { BranchStatus, PrState } from '../../../../store/sessions'
+import type { BranchStatus } from '../../../../store/sessions'
 import { useRepoStore } from '../../../../store/repos'
 
 export interface SourceControlDataProps {
@@ -11,9 +11,12 @@ export interface SourceControlDataProps {
   gitStatus: GitFileStatus[]
   syncStatus?: GitStatusResult | null
   branchStatus?: BranchStatus
-  onUpdatePrState?: (prState: PrState, prNumber?: number, prUrl?: string) => void
-  onUpdateFeedbackStatus?: (hasFeedback: boolean) => void
-  onUpdateChecksStatus?: (checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
+  /**
+   * Trigger a full PR-inclusive refresh of the session's persisted status.
+   * This hook additionally fetches display-only PR details (title, refs, write
+   * access) locally, since those aren't stored on the session.
+   */
+  onRefreshPr?: () => void
   repoId?: string
   scView: 'working' | 'branch' | 'commits'
 }
@@ -21,15 +24,12 @@ export interface SourceControlDataProps {
 interface PrEffectsConfig {
   directory?: string
   syncStatus?: GitStatusResult | null
-  branchStatus?: BranchStatus
-  onUpdatePrState?: (prState: PrState, prNumber?: number, prUrl?: string) => void
-  onUpdateFeedbackStatus?: (hasFeedback: boolean) => void
-  onUpdateChecksStatus?: (checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
+  onRefreshPr?: () => void
 }
 
 /** PR data-fetching effects, extracted for function size limits. */
 function usePrEffects(config: PrEffectsConfig) {
-  const { directory, syncStatus, branchStatus, onUpdatePrState, onUpdateFeedbackStatus, onUpdateChecksStatus } = config
+  const { directory, syncStatus, onRefreshPr } = config
   const [prStatus, setPrStatus] = useState<GitHubPrStatus>(null)
   const [isPrLoading, setIsPrLoading] = useState(false)
   const [hasWriteAccess, setHasWriteAccess] = useState(false)
@@ -37,16 +37,16 @@ function usePrEffects(config: PrEffectsConfig) {
   const [hasPrLoadedOnce, setHasPrLoadedOnce] = useState(false)
   const [prRefreshKey, setPrRefreshKey] = useState(0)
 
-  // Agent-finished PR detection is handled by useGitPolling (always mounted)
-  // so it works even when the source control tab isn't open.
-
-  // Fetch PR status, write access, checks, and feedback when source control is active
+  // Fetch PR display data (title, refs, write access, checks) when source control is active.
+  // Persistent session state is updated via onRefreshPr, which funnels through refreshSession.
   useEffect(() => {
     if (!directory) { setHasPrLoadedOnce(true); return }
     let cancelled = false
     setIsPrLoading(true)
 
-    const fetchPrInfo = async () => {
+    onRefreshPr?.()
+
+    const fetchDisplayInfo = async () => {
       try {
         const [prResult, writeAccess] = await Promise.all([
           window.gh.prStatus(directory),
@@ -55,28 +55,19 @@ function usePrEffects(config: PrEffectsConfig) {
         if (cancelled) return
         setPrStatus(prResult)
         setHasWriteAccess(writeAccess)
-
-        // Fetch checks + feedback in parallel only if there's an open PR
         if (prResult?.state === 'OPEN') {
-          const [checks, feedback] = await Promise.all([
-            window.gh.prChecksStatus(directory).catch(() => 'none' as const),
-            window.gh.prFeedbackStatus(directory, prResult.number).catch(() => false),
-          ])
+          const checks = await window.gh.prChecksStatus(directory).catch(() => 'none' as const)
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- cancelled flips via cleanup closure; TS narrowing can't see this
+          if (cancelled) return
           setChecksStatus(checks)
-          onUpdateChecksStatus?.(checks)
-          onUpdateFeedbackStatus?.(feedback)
         } else {
           setChecksStatus('none')
-          onUpdateChecksStatus?.('none')
-          onUpdateFeedbackStatus?.(false)
         }
       } catch {
         if (cancelled) return
         setPrStatus(null)
         setHasWriteAccess(false)
         setChecksStatus('none')
-        onUpdateChecksStatus?.('none')
-        onUpdateFeedbackStatus?.(false)
       } finally {
         if (!cancelled) {
           setIsPrLoading(false)
@@ -85,31 +76,9 @@ function usePrEffects(config: PrEffectsConfig) {
       }
     }
 
-    void fetchPrInfo()
+    void fetchDisplayInfo()
     return () => { cancelled = true }
-  }, [directory, syncStatus?.ahead, syncStatus?.behind, prRefreshKey])
-
-  // Update session PR state when Explorer fetches PR status.
-  // Don't re-persist MERGED/CLOSED state if the branch has moved on (new work after merge).
-  // The git polling hook clears stale PR state when it detects new commits, and we avoid
-  // re-setting it here so the branch can transition to a fresh PR lifecycle.
-  // Wait until hasPrLoadedOnce so we don't clear persisted state on initial mount
-  // before the gh fetch has had a chance to run.
-  useEffect(() => {
-    if (!onUpdatePrState) return
-    if (!hasPrLoadedOnce) return
-    if (prStatus) {
-      const isTerminalState = prStatus.state === 'MERGED' || prStatus.state === 'CLOSED'
-      const branchMovedOn = branchStatus === 'in-progress' || branchStatus === 'pushed'
-      if (isTerminalState && branchMovedOn) {
-        // Branch has new work — don't re-persist the stale merged/closed state
-        return
-      }
-      onUpdatePrState(prStatus.state, prStatus.number, prStatus.url)
-    } else {
-      onUpdatePrState(null)
-    }
-  }, [prStatus, hasPrLoadedOnce, branchStatus])
+  }, [directory, syncStatus?.ahead, syncStatus?.behind, prRefreshKey, onRefreshPr])
 
   // Reset on directory change
   const resetPr = () => {
@@ -136,9 +105,7 @@ export function useSourceControlData({
   gitStatus,
   syncStatus,
   branchStatus,
-  onUpdatePrState,
-  onUpdateFeedbackStatus,
-  onUpdateChecksStatus,
+  onRefreshPr,
   repoId,
   scView,
 }: SourceControlDataProps) {
@@ -173,7 +140,7 @@ export function useSourceControlData({
   const [askedAgentToResolve, setAskedAgentToResolve] = useState(false)
 
   // PR effects
-  const pr = usePrEffects({ directory, syncStatus, branchStatus, onUpdatePrState, onUpdateFeedbackStatus, onUpdateChecksStatus })
+  const pr = usePrEffects({ directory, syncStatus, onRefreshPr })
 
   // Repo lookup for allowApproveAndMerge
   const repos = useRepoStore((s) => s.repos)
