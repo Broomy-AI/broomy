@@ -375,4 +375,98 @@ describe('ghComments handlers', () => {
       expect(result).toBeNull()
     })
   })
+
+  describe('gh:prFeedbackStatus', () => {
+    // The handler runs two setup calls in parallel (repo slug + user login),
+    // then five more calls in parallel (reviews, requested_reviewers, last push,
+    // pr comments, issue comments). Because execFile is mocked, the stdout we
+    // return is treated as already-jq-filtered output.
+    function mockFeedbackCalls(opts: {
+      slug?: string
+      login?: string
+      reviews?: unknown[]
+      requestedReviewers?: string[]
+      lastPushTime?: string
+      prComments?: string[]
+      issueComments?: string[]
+    }) {
+      const slug = opts.slug ?? 'user/repo'
+      const login = opts.login ?? 'octocat'
+      vi.mocked(execFile)
+        .mockReturnValueOnce({ stdout: `${slug}\n`, stderr: '' } as never)
+        .mockReturnValueOnce({ stdout: `${login}\n`, stderr: '' } as never)
+        .mockReturnValueOnce({ stdout: JSON.stringify(opts.reviews ?? []), stderr: '' } as never)
+        .mockReturnValueOnce({ stdout: JSON.stringify(opts.requestedReviewers ?? []), stderr: '' } as never)
+        .mockReturnValueOnce({ stdout: `${opts.lastPushTime ?? '2024-01-01T00:00:00Z'}\n`, stderr: '' } as never)
+        .mockReturnValueOnce({ stdout: JSON.stringify(opts.prComments ?? []), stderr: '' } as never)
+        .mockReturnValueOnce({ stdout: JSON.stringify(opts.issueComments ?? []), stderr: '' } as never)
+    }
+
+    it('returns false in E2E mode', async () => {
+      const handlers = setupHandlers(createMockCtx({ isE2ETest: true }))
+      expect(await handlers['gh:prFeedbackStatus'](null, '/repo', 42)).toBe(false)
+    })
+
+    it('returns true when a reviewer requested changes and has not been re-requested', async () => {
+      mockFeedbackCalls({
+        reviews: [{ author: 'reviewer1', state: 'CHANGES_REQUESTED' }],
+        requestedReviewers: [],
+      })
+      const handlers = setupHandlers()
+      expect(await handlers['gh:prFeedbackStatus'](null, '/repo', 42)).toBe(true)
+    })
+
+    it('returns false when changes-requested reviewer has been re-requested', async () => {
+      mockFeedbackCalls({
+        reviews: [{ author: 'reviewer1', state: 'CHANGES_REQUESTED' }],
+        requestedReviewers: ['reviewer1'],
+      })
+      const handlers = setupHandlers()
+      expect(await handlers['gh:prFeedbackStatus'](null, '/repo', 42)).toBe(false)
+    })
+
+    it('returns true when a human comment was posted after the last push', async () => {
+      mockFeedbackCalls({
+        lastPushTime: '2024-01-01T00:00:00Z',
+        issueComments: ['2024-01-02T00:00:00Z'],
+      })
+      const handlers = setupHandlers()
+      expect(await handlers['gh:prFeedbackStatus'](null, '/repo', 42)).toBe(true)
+    })
+
+    it('returns false when all comments predate the last push', async () => {
+      mockFeedbackCalls({
+        lastPushTime: '2024-02-01T00:00:00Z',
+        issueComments: ['2024-01-02T00:00:00Z'],
+        prComments: ['2024-01-15T00:00:00Z'],
+      })
+      const handlers = setupHandlers()
+      expect(await handlers['gh:prFeedbackStatus'](null, '/repo', 42)).toBe(false)
+    })
+
+    it('excludes bot accounts in the jq filters', async () => {
+      mockFeedbackCalls({})
+      const handlers = setupHandlers()
+      await handlers['gh:prFeedbackStatus'](null, '/repo', 42)
+
+      const calls = vi.mocked(execFile).mock.calls
+      const jqArgs = calls.flatMap(call => (call[1] as string[]) ?? [])
+      const jqFilters = jqArgs.filter(arg => arg.includes('.user'))
+
+      // Reviews query excludes bots
+      expect(jqFilters.some(f => f.includes('.user.type != "Bot"') && f.includes('.state'))).toBe(true)
+      // Both comment queries (review + issue) include the bot exclusion
+      const commentFilters = jqFilters.filter(f => f.includes('.created_at'))
+      expect(commentFilters).toHaveLength(2)
+      expect(commentFilters.every(f => f.includes('.user.type != "Bot"'))).toBe(true)
+    })
+
+    it('returns false on error', async () => {
+      vi.mocked(execFile).mockImplementation(() => {
+        throw new Error('network error')
+      })
+      const handlers = setupHandlers()
+      expect(await handlers['gh:prFeedbackStatus'](null, '/repo', 42)).toBe(false)
+    })
+  })
 })

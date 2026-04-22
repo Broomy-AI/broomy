@@ -6,6 +6,7 @@ import type { AgentConfig } from '../../store/agents'
 import type { SdkModelInfo } from '../../../preload/apis/types'
 import { EnvVarEditor, type EnvVarEditorRef } from './EnvVarEditor'
 import { useSdkModels, DEFAULT_MODEL } from '../../shared/hooks/useSdkModels'
+import { ENABLE_AGENT_SDK } from '../../../shared/featureFlags'
 
 interface AgentSettingsAgentTabProps {
   agents: AgentConfig[]
@@ -146,29 +147,33 @@ export function AgentSettingsAgentTab({
             placeholder="Color (optional, e.g., #4a9eff)"
             className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent"
           />
-          <div className="space-y-1">
-            <label className="text-xs text-text-secondary">Connection mode</label>
-            <select
-              value={connectionMode}
-              onChange={(e) => onConnectionModeChange(e.target.value as 'terminal' | 'api')}
-              className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary focus:outline-none focus:border-accent"
-            >
-              <option value="terminal">Terminal (PTY)</option>
-              <option value="api">API (Agent SDK)</option>
-            </select>
-            <p className="text-xs text-text-tertiary">
-              API mode uses the Claude Agent SDK for structured output instead of terminal.
-            </p>
-          </div>
-          {connectionMode === 'api' && (
-            <ApiModeOptions
-              model={model}
-              effort={effort}
-              models={models}
-              modelsLoading={loading}
-              onModelChange={onModelChange}
-              onEffortChange={onEffortChange}
-            />
+          {ENABLE_AGENT_SDK && (
+            <>
+              <div className="space-y-1">
+                <label className="text-xs text-text-secondary">Connection mode</label>
+                <select
+                  value={connectionMode}
+                  onChange={(e) => onConnectionModeChange(e.target.value as 'terminal' | 'api')}
+                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary focus:outline-none focus:border-accent"
+                >
+                  <option value="terminal">Terminal (PTY)</option>
+                  <option value="api">API (Agent SDK)</option>
+                </select>
+                <p className="text-xs text-text-tertiary">
+                  API mode uses the Claude Agent SDK for structured output instead of terminal.
+                </p>
+              </div>
+              {connectionMode === 'api' && (
+                <ApiModeOptions
+                  model={model}
+                  effort={effort}
+                  models={models}
+                  modelsLoading={loading}
+                  onModelChange={onModelChange}
+                  onEffortChange={onEffortChange}
+                />
+              )}
+            </>
           )}
           <EnvVarEditor ref={envEditorRef} env={env} onChange={onEnvChange} command={command} />
           <div className="space-y-1">
@@ -285,26 +290,30 @@ function AgentEditForm({
         placeholder="Color (optional, e.g., #4a9eff)"
         className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent"
       />
-      <div className="space-y-1">
-        <label className="text-xs text-text-secondary">Connection mode</label>
-        <select
-          value={connectionMode}
-          onChange={(e) => onConnectionModeChange(e.target.value as 'terminal' | 'api')}
-          className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary focus:outline-none focus:border-accent"
-        >
-          <option value="terminal">Terminal (PTY)</option>
-          <option value="api">API (Agent SDK)</option>
-        </select>
-      </div>
-      {connectionMode === 'api' && (
-        <ApiModeOptions
-          model={model}
-          effort={effort}
-          models={models}
-          modelsLoading={modelsLoading}
-          onModelChange={onModelChange}
-          onEffortChange={onEffortChange}
-        />
+      {ENABLE_AGENT_SDK && (
+        <>
+          <div className="space-y-1">
+            <label className="text-xs text-text-secondary">Connection mode</label>
+            <select
+              value={connectionMode}
+              onChange={(e) => onConnectionModeChange(e.target.value as 'terminal' | 'api')}
+              className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary focus:outline-none focus:border-accent"
+            >
+              <option value="terminal">Terminal (PTY)</option>
+              <option value="api">API (Agent SDK)</option>
+            </select>
+          </div>
+          {connectionMode === 'api' && (
+            <ApiModeOptions
+              model={model}
+              effort={effort}
+              models={models}
+              modelsLoading={modelsLoading}
+              onModelChange={onModelChange}
+              onEffortChange={onEffortChange}
+            />
+          )}
+        </>
       )}
       <EnvVarEditor ref={envEditorRef} env={env} onChange={onEnvChange} command={command} />
       <div className="space-y-1">
@@ -413,11 +422,11 @@ function AgentRow({
   onEdit: (agent: AgentConfig) => void
   onDelete: (id: string) => void
 }) {
-  const modelInfo = agent.connectionMode === 'api' && agent.model
+  const modelInfo = ENABLE_AGENT_SDK && agent.connectionMode === 'api' && agent.model
     ? models.find((m) => m.value === agent.model)
     : null
-  const modelLabel = modelInfo?.displayName ?? (agent.connectionMode === 'api' && agent.model ? agent.model : null)
-  const effortLabel = agent.connectionMode === 'api' && agent.effort ? agent.effort : null
+  const modelLabel = modelInfo?.displayName ?? (ENABLE_AGENT_SDK && agent.connectionMode === 'api' && agent.model ? agent.model : null)
+  const effortLabel = ENABLE_AGENT_SDK && agent.connectionMode === 'api' && agent.effort ? agent.effort : null
 
   return (
     <div className="flex items-center justify-between">
@@ -431,7 +440,7 @@ function AgentRow({
         <div>
           <div className="font-medium text-sm text-text-primary flex items-center gap-2">
             {agent.name}
-            {agent.connectionMode === 'api' && (
+            {ENABLE_AGENT_SDK && agent.connectionMode === 'api' && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-normal">API</span>
             )}
             {agent.skipApprovalFlag && (

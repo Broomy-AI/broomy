@@ -11,6 +11,7 @@ import { useAgentStore, type AgentConfig } from '../../store/agents'
 import { useAgentChatStore } from '../../store/agentChat'
 import { useSessionStore } from '../../store/sessions'
 import { useRepoStore } from '../../store/repos'
+import { ENABLE_AGENT_SDK } from '../../../shared/featureFlags'
 
 export interface ActionExecutionContext {
   directory: string
@@ -63,6 +64,7 @@ async function executeShellAction(
  */
 /** Check if the active session is using API mode (Agent SDK) instead of terminal. */
 function getApiModeSessionId(agentId?: string | null): string | null {
+  if (!ENABLE_AGENT_SDK) return null
   if (!agentId) return null
   const agent = useAgentStore.getState().agents.find((a: AgentConfig) => a.id === agentId)
   if (agent?.connectionMode !== 'api') return null

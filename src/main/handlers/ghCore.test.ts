@@ -353,6 +353,48 @@ describe('ghCore handlers', () => {
       expect(result).toBe('failed')
     })
 
+    it('returns passed when a check is skipped', async () => {
+      vi.mocked(execFile).mockResolvedValue({ stdout: 'SUCCESS\nSKIPPED\n', stderr: '' } as never)
+      const handlers = setupHandlers()
+      const result = await handlers['gh:prChecksStatus'](null, '/repo')
+      expect(result).toBe('passed')
+    })
+
+    it('returns passed when a check is neutral', async () => {
+      vi.mocked(execFile).mockResolvedValue({ stdout: 'SUCCESS\nNEUTRAL\n', stderr: '' } as never)
+      const handlers = setupHandlers()
+      const result = await handlers['gh:prChecksStatus'](null, '/repo')
+      expect(result).toBe('passed')
+    })
+
+    it('returns passed when a check is stale (superseded by newer push)', async () => {
+      vi.mocked(execFile).mockResolvedValue({ stdout: 'SUCCESS\nSTALE\n', stderr: '' } as never)
+      const handlers = setupHandlers()
+      const result = await handlers['gh:prChecksStatus'](null, '/repo')
+      expect(result).toBe('passed')
+    })
+
+    it('returns passed when a check is cancelled', async () => {
+      vi.mocked(execFile).mockResolvedValue({ stdout: 'SUCCESS\nCANCELLED\n', stderr: '' } as never)
+      const handlers = setupHandlers()
+      const result = await handlers['gh:prChecksStatus'](null, '/repo')
+      expect(result).toBe('passed')
+    })
+
+    it('returns failed for ERROR state', async () => {
+      vi.mocked(execFile).mockResolvedValue({ stdout: 'SUCCESS\nERROR\n', stderr: '' } as never)
+      const handlers = setupHandlers()
+      const result = await handlers['gh:prChecksStatus'](null, '/repo')
+      expect(result).toBe('failed')
+    })
+
+    it('returns failed for TIMED_OUT conclusion', async () => {
+      vi.mocked(execFile).mockResolvedValue({ stdout: 'SUCCESS\nTIMED_OUT\n', stderr: '' } as never)
+      const handlers = setupHandlers()
+      const result = await handlers['gh:prChecksStatus'](null, '/repo')
+      expect(result).toBe('failed')
+    })
+
     it('returns none when no checks exist', async () => {
       vi.mocked(execFile).mockResolvedValue({ stdout: '', stderr: '' } as never)
       const handlers = setupHandlers()

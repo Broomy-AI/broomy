@@ -13,6 +13,7 @@ import TerminalTabBar from './TerminalTabBar'
 import { AgentChat } from './AgentChat'
 import ContainerInfoPanel from '../../shared/components/ContainerInfoPanel'
 import PanelErrorBoundary from '../../shared/components/PanelErrorBoundary'
+import { ENABLE_AGENT_SDK } from '../../../shared/featureFlags'
 import { useSessionStore } from '../../store/sessions'
 import type { TerminalTab } from '../../store/sessions'
 
@@ -199,7 +200,7 @@ const TerminalPanels = React.memo(function TerminalPanels({ sessionId, cwd, acti
   sdkSessionId?: string
 }) {
   // API mode runs on the host — incompatible with devcontainers (which need docker exec)
-  const useApiMode = connectionMode === 'api' && !!agentCommand && !isolated
+  const useApiMode = ENABLE_AGENT_SDK && connectionMode === 'api' && !!agentCommand && !isolated
 
   return (
     <div className="flex-1 relative min-h-0">

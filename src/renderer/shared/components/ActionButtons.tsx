@@ -7,6 +7,7 @@ import type { ActionDefinition, ConditionState, TemplateVars } from '../../featu
 import { evaluateShowWhen, resolveTemplateVars, getDefaultCommandsConfig, matchesSurface } from '../../features/commands/commandsConfig'
 import { executeAction, type ActionExecutionContext } from '../../features/commands/actionExecutor'
 import { useAgentStore } from '../../store/agents'
+import { ENABLE_AGENT_SDK } from '../../../shared/featureFlags'
 import { DialogErrorBanner } from './ErrorBanner'
 
 interface ActionButtonsProps {
@@ -95,7 +96,7 @@ export function ActionButtons({
         const error = actionErrors[action.id]
         const style = STYLE_CLASSES[action.style ?? 'secondary']
         const label = resolveTemplateVars(action.label, templateVars)
-        const isApiMode = agentId ? useAgentStore.getState().agents.find(a => a.id === agentId)?.connectionMode === 'api' : false
+        const isApiMode = ENABLE_AGENT_SDK && agentId ? useAgentStore.getState().agents.find(a => a.id === agentId)?.connectionMode === 'api' : false
         const isDisabled = isLoading || (action.type === 'agent' && !agentPtyId && !isApiMode)
 
         return (

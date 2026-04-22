@@ -29,12 +29,18 @@ async function fetchPrFeedbackStatus(repoDir: string, prNumber: number): Promise
     const login = userResult.stdout.trim()
     if (!slug || !login) return false
 
+    // Exclude the PR author and bot accounts. Bots (GitHub Apps like
+    // github-actions[bot], dependabot[bot], deployment bots announcing a
+    // staging URL) have .user.type == "Bot" and are not actionable reviewer
+    // feedback.
+    const humanReviewerFilter = `select(.user.login != "${login}" and .user.type != "Bot")`
+
     // Fetch in parallel: reviews, requested reviewers, last push time, comments
     const [reviewsResult, requestedResult, lastPushResult, prCommentsResult, issueCommentsResult] = await Promise.all([
-      // All reviews on this PR
+      // All reviews on this PR (exclude bot reviews)
       execFileAsync('gh', [
         'api', `repos/${slug}/pulls/${prNumber}/reviews`, '--jq',
-        '[.[] | {author: .user.login, state: .state}]',
+        '[.[] | select(.user.type != "Bot") | {author: .user.login, state: .state}]',
       ], { cwd: dir, encoding: 'utf-8', timeout: 15000 }),
       // Currently requested reviewers
       execFileAsync('gh', [
@@ -49,12 +55,12 @@ async function fetchPrFeedbackStatus(repoDir: string, prNumber: number): Promise
       // Review comments (inline code comments)
       execFileAsync('gh', [
         'api', `repos/${slug}/pulls/${prNumber}/comments`, '--jq',
-        `[.[] | select(.user.login != "${login}") | .created_at]`,
+        `[.[] | ${humanReviewerFilter} | .created_at]`,
       ], { cwd: dir, encoding: 'utf-8', timeout: 15000 }),
       // Issue comments (top-level PR comments)
       execFileAsync('gh', [
         'api', `repos/${slug}/issues/${prNumber}/comments`, '--jq',
-        `[.[] | select(.user.login != "${login}") | .created_at]`,
+        `[.[] | ${humanReviewerFilter} | .created_at]`,
       ], { cwd: dir, encoding: 'utf-8', timeout: 15000 }),
     ])
 

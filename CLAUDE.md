@@ -97,6 +97,8 @@ Session store debounces saves with 500ms delay. Runtime-only state (`status`, `i
 
 ## Testing
 
+**Always run `pnpm install` before running any tests or checks.** Dependencies may have changed since the last install, and missing packages will cause failures.
+
 Unit tests are co-located with source files (`src/**/*.test.ts`). Vitest with 90% line coverage threshold. E2E tests use Playwright with `E2E_TEST=true` for deterministic mock data. Storybook visual regression tests screenshot every component and diff against reference images. See `docs/testing-guide.md` for patterns and conventions.
 
 ### Storybook Visual Regression

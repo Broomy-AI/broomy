@@ -234,18 +234,22 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
         timeout: 15000,
       })
 
-      const lines = result.trim().split('\n').filter(Boolean)
+      const lines = result.trim().split('\n').filter(Boolean).map(l => l.trim().toUpperCase())
 
       // No checks configured
       if (lines.length === 0) return 'none'
 
       // Any check still running
-      if (lines.some(l => ['PENDING', 'QUEUED', 'IN_PROGRESS', ''].includes(l.trim().toUpperCase()))) return 'pending'
+      const PENDING_STATES = new Set(['PENDING', 'QUEUED', 'IN_PROGRESS', 'WAITING', 'REQUESTED', ''])
+      if (lines.some(l => PENDING_STATES.has(l))) return 'pending'
 
-      // All checks must have succeeded
-      if (lines.every(l => l.trim().toUpperCase() === 'SUCCESS')) return 'passed'
+      // Only real failures count. SKIPPED, NEUTRAL, STALE, and CANCELLED are not
+      // genuine failures — skipped/neutral checks intentionally don't fail the
+      // build, and stale/cancelled runs have been superseded by newer pushes.
+      const FAILURE_STATES = new Set(['FAILURE', 'ERROR', 'TIMED_OUT', 'STARTUP_FAILURE', 'ACTION_REQUIRED'])
+      if (lines.some(l => FAILURE_STATES.has(l))) return 'failed'
 
-      return 'failed'
+      return 'passed'
     } catch {
       // No PR or gh error — treat as no checks
       return 'none'
