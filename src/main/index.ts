@@ -22,6 +22,8 @@ import { registerAllHandlers, HandlerContext, PROFILES_FILE } from './handlers'
 import { resolveShellEnv } from './shellEnv'
 import { writeCrashLog, appendErrorLog } from './crashLog'
 import { disposePtyListenersForWindow, disposeAllPtyListeners } from './handlers/pty'
+import { treeKill } from './treeKill'
+import { sweepOrphanedPtys, clearOwnMarkers } from './ptyMarkers'
 
 // Ensure app name is correct (in dev mode Electron defaults to "Electron")
 app.name = 'Broomy'
@@ -214,28 +216,9 @@ function createWindow(profileId?: string): BrowserWindow {
     // Only clean up on same-origin navigation (reload), not initial load
     const currentUrl = window.webContents.getURL()
     if (currentUrl && currentUrl !== url) return
-    // Dispose native event listeners before killing PTY processes
     disposePtyListenersForWindow(ptyOwnerWindows, window)
-    for (const [id, owner] of ptyOwnerWindows) {
-      if (owner === window) {
-        const proc = ptyProcesses.get(id)
-        if (proc) {
-          proc.kill()
-          ptyProcesses.delete(id)
-        }
-        ptyOwnerWindows.delete(id)
-      }
-    }
-    for (const [id, owner] of watcherOwnerWindows) {
-      if (owner === window) {
-        const watcher = fileWatchers.get(id)
-        if (watcher) {
-          watcher.close()
-          fileWatchers.delete(id)
-        }
-        watcherOwnerWindows.delete(id)
-      }
-    }
+    void killPtysForWindow(window)
+    closeWatchersForWindow(window)
   })
 
   // Prevent navigation to external URLs — open them in the default browser instead
@@ -254,34 +237,12 @@ function createWindow(profileId?: string): BrowserWindow {
 
   // Cleanup when window is closing
   window.on('close', () => {
-    // Remove from profileWindows tracking
     if (profileId) {
       profileWindows.delete(profileId)
     }
-    // Dispose native event listeners before killing PTY processes
     disposePtyListenersForWindow(ptyOwnerWindows, window)
-    // Kill PTY processes belonging to this window only
-    for (const [id, owner] of ptyOwnerWindows) {
-      if (owner === window) {
-        const ptyProcess = ptyProcesses.get(id)
-        if (ptyProcess) {
-          ptyProcess.kill()
-          ptyProcesses.delete(id)
-        }
-        ptyOwnerWindows.delete(id)
-      }
-    }
-    // Close file watchers belonging to this window only
-    for (const [id, owner] of watcherOwnerWindows) {
-      if (owner === window) {
-        const watcher = fileWatchers.get(id)
-        if (watcher) {
-          watcher.close()
-          fileWatchers.delete(id)
-        }
-        watcherOwnerWindows.delete(id)
-      }
-    }
+    void killPtysForWindow(window)
+    closeWatchersForWindow(window)
     if (window === mainWindow) {
       mainWindow = null
     }
@@ -479,6 +440,17 @@ function buildAppMenu() {
   void app.whenReady().then(async () => {
     await resolveShellEnv()
 
+    // Reap PTY trees left behind by previous Broomy main-process crashes
+    // before any new PTYs are spawned. Best-effort — never blocks startup.
+    if (!isE2ETest) {
+      try {
+        const swept = await sweepOrphanedPtys()
+        if (swept > 0) console.log(`[broomy] swept ${swept} orphaned PTY tree(s) from prior crash`)
+      } catch (err) {
+        console.warn('[broomy] orphan sweep failed:', err)
+      }
+    }
+
     // Build the application menu
     buildAppMenu()
   // Determine the initial profile to open
@@ -506,28 +478,86 @@ function buildAppMenu() {
 })
 
 
-app.on('window-all-closed', () => {
-  // Dispose all native PTY event listeners before killing processes
+/**
+ * Tree-kill every PTY owned by the given window. Tree-kill catches detached
+ * descendants (firebase, expo, jest workers) that ignore SIGHUP. Returns a
+ * promise so quit-time callers can await full cleanup before exit; per-window
+ * callers can void the result.
+ */
+function killPtysForWindow(window: BrowserWindow): Promise<unknown> {
+  const pids: number[] = []
+  for (const [id, owner] of ptyOwnerWindows) {
+    if (owner !== window) continue
+    const proc = ptyProcesses.get(id)
+    if (proc) {
+      pids.push(proc.pid)
+      ptyProcesses.delete(id)
+    }
+    ptyOwnerWindows.delete(id)
+  }
+  return Promise.all(pids.map((pid) => treeKill(pid)))
+}
+
+/** Close every file watcher owned by the given window. */
+function closeWatchersForWindow(window: BrowserWindow): void {
+  for (const [id, owner] of watcherOwnerWindows) {
+    if (owner !== window) continue
+    const watcher = fileWatchers.get(id)
+    if (watcher) {
+      watcher.close()
+      fileWatchers.delete(id)
+    }
+    watcherOwnerWindows.delete(id)
+  }
+}
+
+/** Tree-kill every tracked PTY across all windows. Awaits SIGKILL fallbacks. */
+async function killAllPtys(): Promise<void> {
   disposeAllPtyListeners()
-  // Kill all PTY processes
+  const pids: number[] = []
   for (const [id, ptyProcess] of ptyProcesses) {
-    ptyProcess.kill()
+    pids.push(ptyProcess.pid)
     ptyProcesses.delete(id)
   }
-  // Close all file watchers
+  await Promise.all(pids.map((pid) => treeKill(pid)))
+}
+
+/** Close every tracked file watcher across all windows. */
+function closeAllWatchers(): void {
   for (const [id, watcher] of fileWatchers) {
     watcher.close()
     fileWatchers.delete(id)
   }
-  stopDockerContainers()
+}
+
+app.on('window-all-closed', () => {
+  // Fire-and-forget on macOS where the app stays in the dock. On other
+  // platforms, before-quit will await cleanup before the process exits.
+  closeAllWatchers()
+  void killAllPtys().then(() => stopDockerContainers())
   if (process.platform !== 'darwin') {
     app.quit()
   }
 })
 
-// Also stop containers on Cmd+Q / Quit (macOS doesn't always fire window-all-closed)
-app.on('will-quit', () => {
-  stopDockerContainers()
+// Delay quit until PTY descendants have been SIGKILLed. Without this the
+// Electron process exits right after sending SIGTERM and the OS never
+// delivers our follow-up SIGKILL to stragglers.
+let quitCleanupDone = false
+app.on('before-quit', (event) => {
+  if (quitCleanupDone) return
+  event.preventDefault()
+  void (async () => {
+    try {
+      closeAllWatchers()
+      await killAllPtys()
+      stopDockerContainers()
+      clearOwnMarkers()
+    } finally {
+      quitCleanupDone = true
+      app.quit()
+    }
+  })()
 })
 
 function stopDockerContainers() {

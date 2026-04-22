@@ -4,7 +4,6 @@ import { E2EScenario, type HandlerContext } from './types'
 // Mock node-pty
 const mockPtyWrite = vi.fn()
 const mockPtyResize = vi.fn()
-const mockPtyKill = vi.fn()
 const mockPtyOnData = vi.fn()
 const mockPtyOnExit = vi.fn()
 const mockPtySpawn = vi.fn()
@@ -55,11 +54,24 @@ vi.mock('../platform', () => ({
   enhancedPath: (p: string) => p || '',
 }))
 
+// Mock treeKill — every PTY teardown path goes through it now
+const mockTreeKill = vi.fn(async (_pid: number) => {})
+vi.mock('../treeKill', () => ({
+  treeKill: (pid: number) => mockTreeKill(pid),
+}))
+
+// Mock marker file I/O so tests don't touch ~/.broomy/pids
+vi.mock('../ptyMarkers', () => ({
+  recordPtyMarker: vi.fn(),
+  removePtyMarker: vi.fn(),
+}))
+
+let nextMockPid = 1000
 function createMockPtyProcess() {
   return {
+    pid: ++nextMockPid,
     write: mockPtyWrite,
     resize: mockPtyResize,
-    kill: mockPtyKill,
     onData: mockPtyOnData,
     onExit: mockPtyOnExit,
   }
@@ -517,7 +529,7 @@ describe('pty handlers', () => {
         cwd: '/tmp',
       })
 
-      expect(existingProcess.kill).toHaveBeenCalled()
+      expect(mockTreeKill).toHaveBeenCalledWith(existingProcess.pid)
       expect(ctx.ptyProcesses.get('dup-id')).toBe(newProcess)
     })
   })
@@ -783,7 +795,7 @@ describe('pty handlers', () => {
   })
 
   describe('pty:kill', () => {
-    it('kills the pty process and removes from context', async () => {
+    it('tree-kills the pty process and removes from context', async () => {
       const { register } = await import('./pty')
       const ctx = createCtx()
       register(mockIpcMain as never, ctx)
@@ -792,7 +804,7 @@ describe('pty handlers', () => {
       ctx.ptyProcesses.set('kill-1', mockProcess as never)
 
       await handlers['pty:kill'](mockEvent, 'kill-1')
-      expect(mockPtyKill).toHaveBeenCalled()
+      expect(mockTreeKill).toHaveBeenCalledWith(mockProcess.pid)
       expect(ctx.ptyProcesses.has('kill-1')).toBe(false)
     })
 
@@ -802,7 +814,7 @@ describe('pty handlers', () => {
       register(mockIpcMain as never, ctx)
 
       await handlers['pty:kill'](mockEvent, 'nonexistent')
-      expect(mockPtyKill).not.toHaveBeenCalled()
+      expect(mockTreeKill).not.toHaveBeenCalled()
     })
 
     it('disposes event listeners when killing a PTY', async () => {
