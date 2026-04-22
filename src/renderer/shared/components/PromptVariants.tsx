@@ -204,13 +204,14 @@ function VariantCard({
   testId,
   children,
 }: {
+  key?: string | number | bigint | null
   label: string
   badge: 'base' | 'override'
   isExpanded: boolean
   onToggle: () => void
   onRemove?: () => void
   testId: string
-  children: React.ReactNode
+  children?: React.ReactNode
 }) {
   return (
     <div className="rounded border border-border bg-bg-primary overflow-hidden">

@@ -1,7 +1,15 @@
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
+import { execSync } from 'child_process'
 import type { Plugin } from 'vite'
+
+// Capture git info at build time so dev builds can identify their exact commit
+const gitCommit = (() => {
+  try { return execSync('git rev-parse --short HEAD').toString().trim() }
+  catch { return 'unknown' }
+})()
+const buildTime = new Date().toISOString()
 
 /**
  * Vite plugin that injects a minimal `process` shim into the renderer bundle.
@@ -31,6 +39,10 @@ if (typeof globalThis.process === 'undefined') {
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
+    define: {
+      __BUILD_COMMIT__: JSON.stringify(gitCommit),
+      __BUILD_TIME__: JSON.stringify(buildTime),
+    },
     build: {
       rollupOptions: {
         input: {
@@ -59,6 +71,10 @@ export default defineConfig({
         '@': resolve('src/renderer')
       }
     },
-    plugins: [processShimPlugin(), react()]
+    plugins: [processShimPlugin(), react()],
+    define: {
+      __BUILD_COMMIT__: JSON.stringify(gitCommit),
+      __BUILD_TIME__: JSON.stringify(buildTime),
+    },
   }
 })

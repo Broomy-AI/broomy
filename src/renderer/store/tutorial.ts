@@ -43,6 +43,11 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
     description: 'The Agent terminal is where your AI coding agent runs — this is the core of Broomy. Open it with Cmd/Ctrl+4 and type a message or instruction. The agent reads your codebase, makes changes, and reports back, all inside the session\'s worktree.',
   },
   {
+    id: 'checked-agent-active-time',
+    title: 'Check how long the agent has been running',
+    description: 'While an agent is working, a live timer appears next to "Working..." at the bottom of the chat — for example "Working... 1m 23s". This helps you spot agents that may have stalled. The same timer is visible in the sidebar card so you can monitor background sessions without switching to them.',
+  },
+  {
     id: 'used-terminal',
     title: 'Use terminal',
     description: 'Sometimes you need to run commands yourself — tests, builds, or inspecting output. The User Terminal gives you a shell already scoped to the session\'s worktree. Toggle it with the toolbar button or Cmd/Ctrl+5.',

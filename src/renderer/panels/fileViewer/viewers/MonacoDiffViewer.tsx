@@ -210,15 +210,15 @@ export default function MonacoDiffViewer({
       {/* Diff Editor */}
       <div className="flex-1 min-h-0">
         <DiffEditor
-          key={sideBySide ? 'side-by-side' : 'inline'}
+          key={`${filePath}:${sideBySide ? 'sbs' : 'inline'}`}
           height="100%"
           language={detectedLanguage}
           original={originalContent}
           modified={modifiedContent}
           theme="vs-dark"
           onMount={handleDiffEditorMount}
-          keepCurrentOriginalModel={true}
-          keepCurrentModifiedModel={true}
+          keepCurrentOriginalModel={false}
+          keepCurrentModifiedModel={false}
           options={{
             readOnly: true,
             wordWrap: 'on',

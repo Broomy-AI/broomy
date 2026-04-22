@@ -169,6 +169,9 @@ export function createInstantSetupActions(get: StoreGet, set: StoreSet) {
         searchHistory: [],
         terminalTabs: createDefaultTerminalTabs(),
         branchStatus: 'in-progress',
+        hasFeedback: false,
+        checksStatus: 'none',
+        statusChip: 'in-progress',
         isArchived: false,
         isRestored: false,
       }
@@ -266,10 +269,14 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
             terminalTabs: (sessionData.terminalTabs as TerminalTabsState | undefined) ?? createDefaultTerminalTabs(),
             hasHadCommits: sessionData.hasHadCommits,
             branchStatus: 'in-progress',
+            hasFeedback: false,
+            checksStatus: 'none',
+            statusChip: 'in-progress',
             lastKnownPrState: sessionData.lastKnownPrState,
             lastKnownPrNumber: sessionData.lastKnownPrNumber,
             lastKnownPrUrl: sessionData.lastKnownPrUrl,
             isArchived: sessionData.isArchived ?? false,
+            sdkSessionId: sessionData.sdkSessionId,
             isRestored: true,
           }
           sessions.push(session)
@@ -357,6 +364,9 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
         searchHistory: [],
         terminalTabs: createDefaultTerminalTabs(),
         branchStatus: extra?.lastKnownPrState === 'OPEN' ? 'open' : 'in-progress',
+        hasFeedback: false,
+        checksStatus: 'none',
+        statusChip: extra?.lastKnownPrState === 'OPEN' ? 'open' : 'in-progress',
         isArchived: false,
         isRestored: false,
       }

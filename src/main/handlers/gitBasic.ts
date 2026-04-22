@@ -11,6 +11,7 @@ import { statusFromChar } from '../gitStatusParser'
 import { getGitAuthHint } from '../cloneErrorHint'
 import { HandlerContext } from './types'
 import { getScenarioData } from './scenarios'
+import { getDefaultBranch } from './gitUtils'
 
 const execFileAsync = promisify(execFile)
 /** Set env vars to prevent SSH/HTTPS prompts that would hang in Electron.
@@ -45,6 +46,29 @@ async function handleIsGitRepo(ctx: HandlerContext, dirPath: string) {
     return await git.checkIsRepo()
   } catch {
     return false
+  }
+}
+
+/**
+ * Count commits on HEAD that haven't been pushed to the remote branch.
+ * Compares against origin/${branch} so the count matches the "Local"
+ * group in the commits tab, rather than using @{upstream} which may
+ * point at origin/main and inflate the number.
+ */
+async function countUnpushedCommits(git: ReturnType<typeof simpleGit>, branch: string): Promise<number> {
+  try {
+    await git.raw(['rev-parse', '--verify', `origin/${branch}`])
+    const countStr = await git.raw(['rev-list', '--count', `origin/${branch}..HEAD`])
+    return parseInt(countStr.trim(), 10) || 0
+  } catch {
+    // No remote branch — all commits since the default branch are unpushed
+    try {
+      const defaultBranch = await getDefaultBranch(git)
+      const countStr = await git.raw(['rev-list', '--count', `origin/${defaultBranch}..HEAD`])
+      return parseInt(countStr.trim(), 10) || 0
+    } catch {
+      return 0
+    }
   }
 }
 
@@ -114,9 +138,11 @@ async function handleStatus(ctx: HandlerContext, repoPath: string) {
       }
     }
 
+    const ahead = status.current ? await countUnpushedCommits(git, status.current) : 0
+
     return {
       files,
-      ahead: status.ahead,
+      ahead,
       behind: status.behind,
       tracking: status.tracking,
       current: status.current,

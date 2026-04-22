@@ -15,6 +15,7 @@ export function useGitPolling({
   markHasHadCommits,
   clearHasHadCommits,
   updateBranchStatus,
+  updateSessionBranch,
   updatePrState,
 }: {
   sessions: Session[]
@@ -23,6 +24,7 @@ export function useGitPolling({
   markHasHadCommits: (sessionId: string) => void
   clearHasHadCommits: (sessionId: string) => void
   updateBranchStatus: (sessionId: string, status: BranchStatus) => void
+  updateSessionBranch: (sessionId: string, branch: string) => void
   updatePrState: (sessionId: string, prState: import('../../../store/sessions').PrState, prNumber?: number, prUrl?: string) => void
 }) {
   const [gitStatusBySession, setGitStatusBySession] = useState<Record<string, GitStatusResult | undefined>>({})
@@ -34,6 +36,11 @@ export function useGitPolling({
     try {
       const status = await window.git.status(activeSession.directory)
       const normalized = normalizeGitStatus(status)
+
+      // Detect if the agent switched branches on this worktree
+      if (normalized.current && normalized.current !== activeSession.branch) {
+        updateSessionBranch(activeSession.id, normalized.current)
+      }
 
       // Check if branch is merged into the default branch
       let merged = false
@@ -84,7 +91,7 @@ export function useGitPolling({
     } catch {
       // Ignore errors
     }
-  }, [activeSession?.id, activeSession?.directory, activeSession?.repoId, activeSession?.hasHadCommits, activeSession?.lastKnownPrState, repos, markHasHadCommits, updateBranchStatus])
+  }, [activeSession?.id, activeSession?.status, activeSession?.directory, activeSession?.branch, activeSession?.repoId, activeSession?.hasHadCommits, activeSession?.lastKnownPrState, repos, markHasHadCommits, updateBranchStatus, updateSessionBranch])
 
   // Poll git status every 2 seconds
   useEffect(() => {
@@ -128,6 +135,24 @@ export function useGitPolling({
       }
     }
   }, [gitStatusBySession, isMergedBySession, sessions, updateBranchStatus])
+
+  // Fetch PR status when any agent finishes work.
+  // This runs at the app level (always mounted) so it catches the event even when
+  // the source control tab isn't open. Without this, lastKnownPrState wouldn't be
+  // updated until the user manually navigates to the source control tab.
+  useEffect(() => {
+    const handler = () => {
+      if (!activeSession?.directory) return
+      const sessionId = activeSession.id
+      void window.gh.prStatus(activeSession.directory).then(pr => {
+        if (pr) {
+          updatePrState(sessionId, pr.state, pr.number, pr.url)
+        }
+      }).catch(() => { /* gh not available or no PR */ })
+    }
+    document.addEventListener('broomy:agent-finished', handler)
+    return () => document.removeEventListener('broomy:agent-finished', handler)
+  }, [activeSession?.id, activeSession?.directory, updatePrState])
 
   // Get git status for the selected file
   const selectedFileStatus = useMemo(() => {

@@ -88,9 +88,18 @@ describe('app handler register', () => {
     expect(handler()).toBe('0.6.1')
   })
 
-  it('registers exactly 8 handlers', () => {
+  it('registers exactly 9 handlers', () => {
     register(mockIpcMain as unknown as IpcMain, mockCtx)
-    expect(mockIpcMain.handle).toHaveBeenCalledTimes(8)
+    expect(mockIpcMain.handle).toHaveBeenCalledTimes(9)
+  })
+
+  it('app:getBuildInfo handler returns commit and buildTime', () => {
+    register(mockIpcMain as unknown as IpcMain, mockCtx)
+    const call = mockIpcMain.handle.mock.calls.find((c: unknown[]) => c[0] === 'app:getBuildInfo')
+    const handler = call![1] as () => { commit: string; buildTime: string }
+    const info = handler()
+    expect(info).toHaveProperty('commit')
+    expect(info).toHaveProperty('buildTime')
   })
 
   it('app:isDev handler returns ctx.isDev', () => {

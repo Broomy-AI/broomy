@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useSessionLifecycle } from './useSessionLifecycle'
-import type { Session } from '../../../store/sessions'
+import type { Session, StatusChip } from '../../../store/sessions'
 import type { ProfileData } from '../../../store/profiles'
 
 // Mock terminalBufferRegistry
@@ -52,6 +52,9 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     searchHistory: [],
     terminalTabs: { tabs: [{ id: 'tab-1', name: 'Terminal' }], activeTabId: 'tab-1' },
     branchStatus: 'in-progress' as const,
+    hasFeedback: false,
+    checksStatus: 'none' as const,
+    statusChip: 'in-progress' as StatusChip,
     isArchived: false,
     isRestored: false,
     ...overrides,
@@ -168,14 +171,12 @@ describe('useSessionLifecycle', () => {
       expect(result.current.activeDirectoryExists).toBe(true)
     })
 
-    it('does not check directories when sessions list is empty', async () => {
-      const params = makeHookParams({ sessions: [] })
+    it('does not check directories when there is no active session', async () => {
+      const params = makeHookParams({ activeSession: undefined, activeSessionId: null, sessions: [] })
       renderLifecycleHook(params)
 
       await act(async () => { await vi.advanceTimersByTimeAsync(0) })
 
-      // fs.exists should not be called for directory checks (may be called for other reasons)
-      // but specifically not with session directories since there are none
       expect(window.fs.exists).not.toHaveBeenCalledWith('/test/dir')
     })
   })

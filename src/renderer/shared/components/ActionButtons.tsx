@@ -6,6 +6,7 @@ import { useState, useCallback } from 'react'
 import type { ActionDefinition, ConditionState, TemplateVars } from '../../features/commands/commandsConfig'
 import { evaluateShowWhen, resolveTemplateVars, getDefaultCommandsConfig, matchesSurface } from '../../features/commands/commandsConfig'
 import { executeAction, type ActionExecutionContext } from '../../features/commands/actionExecutor'
+import { useAgentStore } from '../../store/agents'
 import { DialogErrorBanner } from './ErrorBanner'
 
 interface ActionButtonsProps {
@@ -94,7 +95,8 @@ export function ActionButtons({
         const error = actionErrors[action.id]
         const style = STYLE_CLASSES[action.style ?? 'secondary']
         const label = resolveTemplateVars(action.label, templateVars)
-        const isDisabled = isLoading || (action.type === 'agent' && !agentPtyId)
+        const isApiMode = agentId ? useAgentStore.getState().agents.find(a => a.id === agentId)?.connectionMode === 'api' : false
+        const isDisabled = isLoading || (action.type === 'agent' && !agentPtyId && !isApiMode)
 
         return (
           <div key={action.id}>
@@ -102,7 +104,7 @@ export function ActionButtons({
               onClick={() => void handleClick(action)}
               disabled={isDisabled}
               className={`w-full px-3 py-1.5 text-xs rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${style}`}
-              title={action.type === 'agent' && !agentPtyId ? 'No agent terminal available' : undefined}
+              title={isDisabled && action.type === 'agent' ? 'No agent available' : undefined}
             >
               {isLoading ? `${label}...` : label}
             </button>

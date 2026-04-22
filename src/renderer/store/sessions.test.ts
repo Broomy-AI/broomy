@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
-import { useSessionStore } from './sessions'
+import { useSessionStore, type StatusChip } from './sessions'
 import { PANEL_IDS, DEFAULT_TOOLBAR_PANELS } from '../panels/system/types'
 import { getLoadedSessionCount } from './sessionPersistence'
 import { setLoadedCounts } from './configPersistence'
@@ -75,6 +75,9 @@ describe('useSessionStore', () => {
         activeTabId: 'tab-1',
       },
       branchStatus: 'in-progress' as const,
+      hasFeedback: false,
+      checksStatus: 'none' as const,
+      statusChip: 'in-progress' as StatusChip,
       isArchived: false,
       isRestored: false,
     }
@@ -529,6 +532,41 @@ describe('useSessionStore', () => {
       // Transition to idle - should mark as unread
       useSessionStore.getState().updateAgentMonitor('s1', { status: 'idle' })
       expect(useSessionStore.getState().sessions[0].isUnread).toBe(true)
+    })
+
+    it('dispatches broomy:agent-finished event when agent finishes work', () => {
+      const s1 = createTestSession({ id: 's1' })
+      useSessionStore.setState({ sessions: [s1], isLoading: false })
+
+      const dispatchEvent = vi.fn()
+      vi.stubGlobal('document', { dispatchEvent })
+
+      // Start working
+      useSessionStore.getState().updateAgentMonitor('s1', { status: 'working' })
+      vi.advanceTimersByTime(4000)
+
+      // Transition to idle - should dispatch event
+      useSessionStore.getState().updateAgentMonitor('s1', { status: 'idle' })
+      expect(dispatchEvent).toHaveBeenCalledTimes(1)
+      expect(dispatchEvent.mock.calls[0][0].type).toBe('broomy:agent-finished')
+
+      vi.unstubAllGlobals()
+    })
+
+    it('does not dispatch broomy:agent-finished for brief activity', () => {
+      const s1 = createTestSession({ id: 's1' })
+      useSessionStore.setState({ sessions: [s1], isLoading: false })
+
+      const dispatchEvent = vi.fn()
+      vi.stubGlobal('document', { dispatchEvent })
+
+      // Start working then idle quickly
+      useSessionStore.getState().updateAgentMonitor('s1', { status: 'working' })
+      vi.advanceTimersByTime(1500)
+      useSessionStore.getState().updateAgentMonitor('s1', { status: 'idle' })
+      expect(dispatchEvent).not.toHaveBeenCalled()
+
+      vi.unstubAllGlobals()
     })
 
     it('does not mark as unread for brief activity (e.g. notifications)', () => {

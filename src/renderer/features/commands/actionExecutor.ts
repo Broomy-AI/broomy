@@ -8,6 +8,9 @@ import type { ActionDefinition, TemplateVars } from './commandsConfig'
 import { resolveTemplateVars, detectAgentType } from './commandsConfig'
 import { sendAgentPrompt } from '../../shared/utils/focusHelpers'
 import { useAgentStore, type AgentConfig } from '../../store/agents'
+import { useAgentChatStore } from '../../store/agentChat'
+import { useSessionStore } from '../../store/sessions'
+import { useRepoStore } from '../../store/repos'
 
 export interface ActionExecutionContext {
   directory: string
@@ -58,11 +61,22 @@ async function executeShellAction(
 /**
  * Execute an agent action by sending a prompt to the agent terminal.
  */
+/** Check if the active session is using API mode (Agent SDK) instead of terminal. */
+function getApiModeSessionId(agentId?: string | null): string | null {
+  if (!agentId) return null
+  const agent = useAgentStore.getState().agents.find((a: AgentConfig) => a.id === agentId)
+  if (agent?.connectionMode !== 'api') return null
+  const activeSessionId = useSessionStore.getState().activeSessionId
+  return activeSessionId
+}
+
 async function executeAgentAction(
   action: ActionDefinition,
   ctx: ActionExecutionContext,
 ): Promise<ActionResult> {
-  if (!ctx.agentPtyId) {
+  const apiSessionId = getApiModeSessionId(ctx.agentId)
+
+  if (!apiSessionId && !ctx.agentPtyId) {
     return { success: false, error: 'No agent terminal available' }
   }
 
@@ -73,9 +87,33 @@ async function executeAgentAction(
     await window.fs.mkdir(outputDir)
     await window.fs.writeFile(`${outputDir}/context.json`, JSON.stringify(ctx.templateVars, null, 2))
 
-    // Determine what to send: agent-specific override or default
     const prompt = resolveAgentPrompt(action, ctx)
-    await sendAgentPrompt(ctx.agentPtyId, prompt)
+
+    if (apiSessionId) {
+      // Send through the Agent SDK chat
+      useAgentChatStore.getState().addMessage(apiSessionId, {
+        id: `user-${String(Date.now())}`,
+        type: 'text',
+        timestamp: Date.now(),
+        text: prompt,
+      })
+      useAgentChatStore.getState().setState(apiSessionId, 'running')
+      useSessionStore.getState().updateAgentMonitor(apiSessionId, { status: 'working' })
+      const session = useSessionStore.getState().sessions.find(s => s.id === apiSessionId)
+      const repoList = useRepoStore.getState().repos
+      const repo = session?.repoId
+        ? repoList.find(r => r.id === session.repoId)
+        : repoList.find(r => ctx.directory.startsWith(`${r.rootDir}/`) || ctx.directory === r.rootDir)
+      const agent = ctx.agentId ? useAgentStore.getState().agents.find((a: AgentConfig) => a.id === ctx.agentId) : undefined
+      void window.agentSdk.send(apiSessionId, prompt, {
+        cwd: ctx.directory,
+        permissionMode: (repo?.skipApproval ? 'bypassPermissions' : 'default'),
+        env: agent?.env,
+        sdkSessionId: session?.sdkSessionId,
+      })
+    } else if (ctx.agentPtyId) {
+      await sendAgentPrompt(ctx.agentPtyId, prompt)
+    }
 
     return { success: true }
   } catch (err) {

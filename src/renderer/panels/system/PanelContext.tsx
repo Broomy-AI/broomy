@@ -26,7 +26,7 @@ interface PanelContextValue {
 const PanelContext = createContext<PanelContextValue | null>(null)
 
 interface PanelProviderProps {
-  children: ReactNode
+  children?: ReactNode
   toolbarPanels: string[]
   onToolbarPanelsChange: (panels: string[]) => void
 }

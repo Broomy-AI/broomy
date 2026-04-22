@@ -18,6 +18,10 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   ipcMain.handle('app:platform', () => process.platform)
   ipcMain.handle('app:tmpdir', () => normalizePath(tmpdir()))
   ipcMain.handle('app:getVersion', () => app.getVersion())
+  ipcMain.handle('app:getBuildInfo', () => ({
+    commit: typeof __BUILD_COMMIT__ !== 'undefined' ? __BUILD_COMMIT__ : 'unknown',
+    buildTime: typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'unknown',
+  }))
 
   ipcMain.handle('app:getCrashLog', () => {
     if (ctx.isE2ETest) return null

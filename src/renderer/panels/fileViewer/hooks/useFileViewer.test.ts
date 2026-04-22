@@ -402,7 +402,7 @@ describe('useFileViewer', () => {
   describe('state setters', () => {
     it('exposes setViewMode', () => {
       const { result } = renderHook(() =>
-        useFileViewer({ filePath: '/test/file.ts' })
+        useFileViewer({ filePath: '/test/file.ts', fileStatus: 'modified' })
       )
 
       act(() => {
@@ -410,6 +410,19 @@ describe('useFileViewer', () => {
       })
 
       expect(result.current.viewMode).toBe('diff')
+    })
+
+    it('setViewMode to diff is guarded to latest when canShowDiff is false', () => {
+      const { result } = renderHook(() =>
+        useFileViewer({ filePath: '/test/file.ts' })
+      )
+
+      act(() => {
+        result.current.setViewMode('diff')
+      })
+
+      // canShowDiff is false (no fileStatus or refs), so effectiveViewMode is 'latest'
+      expect(result.current.viewMode).toBe('latest')
     })
 
     it('exposes setDiffSideBySide', () => {
@@ -428,7 +441,7 @@ describe('useFileViewer', () => {
   describe('requestViewMode (guarded switching)', () => {
     it('switches immediately when not dirty', () => {
       const { result } = renderHook(() =>
-        useFileViewer({ filePath: '/test/file.ts' })
+        useFileViewer({ filePath: '/test/file.ts', fileStatus: 'modified' })
       )
 
       act(() => {
@@ -441,7 +454,7 @@ describe('useFileViewer', () => {
 
     it('sets pendingViewMode when dirty and switching away from latest', () => {
       const { result } = renderHook(() =>
-        useFileViewer({ filePath: '/test/file.ts' })
+        useFileViewer({ filePath: '/test/file.ts', fileStatus: 'modified' })
       )
 
       act(() => {
@@ -458,7 +471,7 @@ describe('useFileViewer', () => {
 
     it('switches immediately when dirty but switching to latest', () => {
       const { result } = renderHook(() =>
-        useFileViewer({ filePath: '/test/file.ts' })
+        useFileViewer({ filePath: '/test/file.ts', fileStatus: 'modified' })
       )
 
       // First switch to diff mode while clean
@@ -483,7 +496,7 @@ describe('useFileViewer', () => {
       vi.mocked(window.fs.writeFile).mockResolvedValue({ success: true })
 
       const { result } = renderHook(() =>
-        useFileViewer({ filePath: '/test/file.ts' })
+        useFileViewer({ filePath: '/test/file.ts', fileStatus: 'modified' })
       )
 
       act(() => {
@@ -510,7 +523,7 @@ describe('useFileViewer', () => {
       const onDirtyStateChange = vi.fn()
 
       const { result } = renderHook(() =>
-        useFileViewer({ filePath: '/test/file.ts', onDirtyStateChange })
+        useFileViewer({ filePath: '/test/file.ts', fileStatus: 'modified', onDirtyStateChange })
       )
 
       act(() => {
@@ -533,7 +546,7 @@ describe('useFileViewer', () => {
 
     it('handleViewModeCancel clears pending without switching', () => {
       const { result } = renderHook(() =>
-        useFileViewer({ filePath: '/test/file.ts' })
+        useFileViewer({ filePath: '/test/file.ts', fileStatus: 'modified' })
       )
 
       act(() => {

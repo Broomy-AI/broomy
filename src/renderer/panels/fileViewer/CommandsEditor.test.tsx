@@ -152,6 +152,46 @@ describe('CommandsEditor', () => {
       expect(screen.getByText('Delete this action?')).toBeTruthy()
     })
 
+    it('deletes action on confirm click', async () => {
+      mockExistingConfig()
+      render(<CommandsEditor directory="/test/repo" onClose={vi.fn()} />)
+      await waitFor(() => {
+        expect(screen.getByTestId('action-header-action-1')).toBeTruthy()
+      })
+      fireEvent.click(screen.getByTestId('action-header-action-1'))
+      // First click shows confirmation
+      fireEvent.click(screen.getByTestId('action-delete-action-1'))
+      expect(screen.getByTestId('action-confirm-delete-action-1')).toBeTruthy()
+      // Second click (confirm) removes the action
+      fireEvent.click(screen.getByTestId('action-confirm-delete-action-1'))
+      expect(screen.queryByTestId('action-header-action-1')).toBeNull()
+      expect(screen.getByTestId('save-commands')).not.toBeDisabled()
+    })
+
+    it('collapses expanded action when header is clicked again', async () => {
+      mockExistingConfig()
+      render(<CommandsEditor directory="/test/repo" onClose={vi.fn()} />)
+      await waitFor(() => {
+        expect(screen.getByTestId('action-header-action-1')).toBeTruthy()
+      })
+      fireEvent.click(screen.getByTestId('action-header-action-1'))
+      expect(screen.getByTestId('action-label-action-1')).toBeTruthy()
+      // Click again to collapse
+      fireEvent.click(screen.getByTestId('action-header-action-1'))
+      expect(screen.queryByTestId('action-label-action-1')).toBeNull()
+    })
+
+    it('shows unsaved changes text when dirty', async () => {
+      mockExistingConfig()
+      render(<CommandsEditor directory="/test/repo" onClose={vi.fn()} />)
+      await waitFor(() => {
+        expect(screen.getByTestId('action-header-action-1')).toBeTruthy()
+      })
+      fireEvent.click(screen.getByTestId('action-header-action-1'))
+      fireEvent.change(screen.getByTestId('action-label-action-1'), { target: { value: 'Changed' } })
+      expect(screen.getByText('Unsaved changes')).toBeTruthy()
+    })
+
     it('saves config when save button is clicked', async () => {
       mockExistingConfig()
       render(<CommandsEditor directory="/test/repo" onClose={vi.fn()} />)
@@ -192,6 +232,21 @@ describe('CommandsEditor', () => {
       })
     })
 
+    it('reloads config when reload button is clicked', async () => {
+      vi.mocked(window.fs.exists).mockResolvedValue(true)
+      vi.mocked(window.fs.readFile).mockResolvedValue('bad json')
+      render(<CommandsEditor directory="/test/repo" onClose={vi.fn()} />)
+      await waitFor(() => {
+        expect(screen.getByTestId('reload-commands')).toBeTruthy()
+      })
+      // Fix the config and click reload
+      vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify(defaultConfig))
+      fireEvent.click(screen.getByTestId('reload-commands'))
+      await waitFor(() => {
+        expect(screen.getByText('Commit')).toBeTruthy()
+      })
+    })
+
     it('shows reload button on error', async () => {
       vi.mocked(window.fs.exists).mockResolvedValue(true)
       vi.mocked(window.fs.readFile).mockResolvedValue('bad json')
@@ -225,6 +280,29 @@ describe('CommandsEditor', () => {
       const review = screen.getByTestId<HTMLInputElement>('action-surface-review-action-1')
       expect(sc.checked).toBe(true)
       expect(review.checked).toBe(false)
+    })
+
+    it('unchecks a surface checkbox', async () => {
+      // Config with both surfaces checked
+      const configWithBothSurfaces = {
+        version: 1,
+        actions: [
+          { id: 'action-1', label: 'Commit', type: 'agent', prompt: 'commit', showWhen: [], style: 'primary', surface: ['source-control', 'review'] },
+        ],
+      }
+      vi.mocked(window.fs.exists).mockResolvedValue(true)
+      vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify(configWithBothSurfaces))
+      render(<CommandsEditor directory="/test/repo" onClose={vi.fn()} />)
+      await waitFor(() => {
+        expect(screen.getByTestId('action-header-action-1')).toBeTruthy()
+      })
+      fireEvent.click(screen.getByTestId('action-header-action-1'))
+      const review = screen.getByTestId<HTMLInputElement>('action-surface-review-action-1')
+      expect(review.checked).toBe(true)
+      // Uncheck review
+      fireEvent.click(review)
+      // Save should be enabled after the change
+      expect(screen.getByTestId('save-commands')).not.toBeDisabled()
     })
 
     it('enables save when surface is changed', async () => {
@@ -395,6 +473,22 @@ describe('CommandsEditor', () => {
       fireEvent.click(screen.getByTestId('action-header-action-2'))
       const hints = screen.getAllByTestId('template-vars-hint')
       expect(hints.length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  describe('style field', () => {
+    it('updates style when changed', async () => {
+      mockExistingConfig()
+      render(<CommandsEditor directory="/test/repo" onClose={vi.fn()} />)
+      await waitFor(() => {
+        expect(screen.getByTestId('action-header-action-1')).toBeTruthy()
+      })
+      fireEvent.click(screen.getByTestId('action-header-action-1'))
+      const select = screen.getByTestId<HTMLSelectElement>('action-style-action-1')
+      expect(select.value).toBe('primary')
+      fireEvent.change(select, { target: { value: 'danger' } })
+      expect(select.value).toBe('danger')
+      expect(screen.getByTestId('save-commands')).not.toBeDisabled()
     })
   })
 

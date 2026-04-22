@@ -50,9 +50,7 @@ const mockData = {
   setCommitErrorExpanded: vi.fn(),
   setCommitError: vi.fn(),
   isSyncing: false,
-  isSyncingWithMain: false,
   setIsSyncing: vi.fn(),
-  setIsSyncingWithMain: vi.fn(),
   setGitOpError: vi.fn(),
   setIsCommitting: vi.fn(),
   setExpandedCommits: vi.fn(),
@@ -68,7 +66,6 @@ const mockData = {
 
 const mockActions = {
   handleSync: vi.fn(),
-  handleSyncWithMain: vi.fn(),
   handleCreatePr: vi.fn(),
   handlePushNewBranch: vi.fn(),
   handleRevertFile: vi.fn(),

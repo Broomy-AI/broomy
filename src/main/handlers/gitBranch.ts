@@ -5,6 +5,7 @@ import { IpcMain } from 'electron'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import simpleGit from 'simple-git'
+import { existsSync } from 'fs'
 import { getCloneErrorHint, getGitAuthHint } from '../cloneErrorHint'
 import { normalizePath } from '../platform'
 import { HandlerContext, expandHomePath } from './types'
@@ -57,7 +58,14 @@ async function handleWorktreeAdd(ctx: HandlerContext, repoPath: string, worktree
   }
 
   try {
-    const git = simpleGit(expandHomePath(repoPath))
+    const expandedRepoPath = expandHomePath(repoPath)
+    if (!existsSync(expandedRepoPath)) {
+      return {
+        success: false,
+        error: `The main worktree directory was not found at "${repoPath}". This can happen if the repo's default branch name (e.g. "master") doesn't match the worktree folder name ("main"). Try removing the repo in Settings and re-adding it.`,
+      }
+    }
+    const git = simpleGit(expandedRepoPath)
     const expandedPath = expandHomePath(worktreePath)
 
     // Try checking out the branch directly first (works for existing local
@@ -250,11 +258,12 @@ async function handleListBranches(ctx: HandlerContext, repoPath: string) {
 
       const isRemote = name.startsWith('remotes/')
       const cleanName = isRemote ? name.replace('remotes/', '') : name
+      const branchData = data as { current: boolean }
 
       branches.push({
         name: cleanName,
         isRemote,
-        current: data.current,
+        current: branchData.current,
       })
     }
 

@@ -64,7 +64,7 @@ async function createReviewWorktree(repo: ManagedRepo, pr: GitHubPrForReview): P
   return { worktreePath }
 }
 
-function PrRow({ pr, hasSession, isFocused, onSelect, onMouseEnter }: { pr: GitHubPrForReview; hasSession: boolean; isFocused: boolean; onSelect: () => void; onMouseEnter: () => void }) {
+function PrRow({ pr, hasSession, isFocused, onSelect, onMouseEnter }: { key?: string | number | bigint | null; pr: GitHubPrForReview; hasSession: boolean; isFocused: boolean; onSelect: () => void; onMouseEnter: () => void }) {
   return (
     <button
       onClick={onSelect}

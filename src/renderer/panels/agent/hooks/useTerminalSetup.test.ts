@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useTerminalSetup, type TerminalConfig } from './useTerminalSetup'
-import { useSessionStore } from '../../../store/sessions'
+import { useSessionStore, type StatusChip } from '../../../store/sessions'
 import { useErrorStore } from '../../../store/errors'
 import { allowConsoleError } from '../../../../test/console-guard'
 import { PANEL_IDS, DEFAULT_TOOLBAR_PANELS } from '../../../panels/system/types'
@@ -14,11 +14,15 @@ const mockTerminalOpen = vi.fn()
 const mockTerminalDispose = vi.fn()
 const mockTerminalFocus = vi.fn()
 const mockTerminalScrollToBottom = vi.fn()
+const mockTerminalScrollToLine = vi.fn()
 const mockTerminalLoadAddon = vi.fn()
 const mockTerminalOnData = vi.fn().mockReturnValue({ dispose: vi.fn() })
 const mockTerminalOnRender = vi.fn().mockReturnValue({ dispose: vi.fn() })
+const mockTerminalOnScroll = vi.fn().mockReturnValue({ dispose: vi.fn() })
 const mockTerminalAttachCustomKeyEventHandler = vi.fn()
 const mockTerminalResize = vi.fn()
+
+const mockRegisterCsiHandler = vi.fn().mockReturnValue({ dispose: vi.fn() })
 
 vi.mock('@xterm/xterm', () => {
   return {
@@ -28,14 +32,17 @@ vi.mock('@xterm/xterm', () => {
       dispose = mockTerminalDispose
       focus = mockTerminalFocus
       scrollToBottom = mockTerminalScrollToBottom
+      scrollToLine = mockTerminalScrollToLine
       loadAddon = mockTerminalLoadAddon
       onData = mockTerminalOnData
       onRender = mockTerminalOnRender
+      onScroll = mockTerminalOnScroll
       attachCustomKeyEventHandler = mockTerminalAttachCustomKeyEventHandler
       resize = mockTerminalResize
       cols = 80
       rows = 24
       buffer = { active: { viewportY: 0, baseY: 0 } }
+      parser = { registerCsiHandler: mockRegisterCsiHandler }
     },
   }
 })
@@ -113,10 +120,6 @@ function makeConfig(overrides: Partial<TerminalConfig> = {}): TerminalConfig {
 
 function makeContainerRef(): React.RefObject<HTMLDivElement | null> {
   const div = document.createElement('div')
-  // Provide a mock viewport element
-  const viewportEl = document.createElement('div')
-  viewportEl.className = 'xterm-viewport'
-  div.appendChild(viewportEl)
   // Give it non-zero dimensions
   Object.defineProperty(div, 'offsetWidth', { value: 800, configurable: true })
   Object.defineProperty(div, 'offsetHeight', { value: 600, configurable: true })
@@ -213,6 +216,69 @@ describe('useTerminalSetup', () => {
         env: { TERM: 'xterm' },
       }),
     )
+  })
+
+  it('recreates PTY when command changes (e.g. auto-approve flag appended after repos load)', async () => {
+    const containerRef = makeContainerRef()
+    // Initial render: agent command without the skip-approval flag (repos not loaded yet)
+    const initialConfig = makeConfig({
+      sessionId: 'my-session',
+      cwd: '/my/cwd',
+      command: 'claude',
+      isAgentTerminal: true,
+    })
+
+    const { rerender } = renderHook(
+      ({ config }) => useTerminalSetup(config, containerRef),
+      { initialProps: { config: initialConfig } },
+    )
+
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+    expect(window.pty.create).toHaveBeenCalledTimes(1)
+    expect(window.pty.create).toHaveBeenCalledWith(
+      expect.objectContaining({ command: 'claude' }),
+    )
+
+    // Repos finish loading — command now includes the auto-approve flag
+    const updatedConfig = makeConfig({
+      sessionId: 'my-session',
+      cwd: '/my/cwd',
+      command: 'claude --dangerously-skip-permissions',
+      isAgentTerminal: true,
+    })
+
+    rerender({ config: updatedConfig })
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+
+    // The old PTY should be killed and a new one created with the updated command
+    expect(window.pty.kill).toHaveBeenCalled()
+    expect(window.pty.create).toHaveBeenCalledTimes(2)
+    expect(window.pty.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ command: 'claude --dangerously-skip-permissions' }),
+    )
+  })
+
+  it('does not recreate PTY when command stays the same', async () => {
+    const containerRef = makeContainerRef()
+    const config = makeConfig({
+      sessionId: 'my-session',
+      cwd: '/my/cwd',
+      command: 'claude',
+      isAgentTerminal: true,
+    })
+
+    const { rerender } = renderHook(
+      ({ config: c }) => useTerminalSetup(c, containerRef),
+      { initialProps: { config } },
+    )
+
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+    expect(window.pty.create).toHaveBeenCalledTimes(1)
+
+    // Re-render with same command — should NOT recreate
+    rerender({ config: { ...config } })
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+    expect(window.pty.create).toHaveBeenCalledTimes(1)
   })
 
   it('opens terminal in the container element', () => {
@@ -363,7 +429,7 @@ describe('useTerminalSetup', () => {
           explorerFilter: 'files' as const, lastMessage: null, lastMessageTime: null,
           isUnread: false, workingStartTime: null, recentFiles: [], searchHistory: [],
           terminalTabs: { tabs: [], activeTabId: '__agent__' },
-          branchStatus: 'in-progress' as const, isArchived: false, isRestored: false,
+          branchStatus: 'in-progress' as const, hasFeedback: false, checksStatus: 'none' as const, statusChip: 'in-progress' as StatusChip, isArchived: false, isRestored: false,
         }],
       })
       const config = makeConfig()
@@ -378,7 +444,7 @@ describe('useTerminalSetup', () => {
       act(() => { useSessionStore.setState({ activeSessionId: 'session-1' }) })
 
       // requestAnimationFrame is mocked to call immediately
-      expect(mockFitAddonFit).toHaveBeenCalled()
+      // fit() is no longer called on activation — invisible preserves layout dimensions
       expect(mockTerminalFocus).toHaveBeenCalled()
     })
   })
@@ -605,7 +671,7 @@ describe('useTerminalSetup', () => {
           explorerFilter: 'files' as const, lastMessage: null, lastMessageTime: null,
           isUnread: false, workingStartTime: null, recentFiles: [], searchHistory: [],
           terminalTabs: { tabs: [], activeTabId: '__agent__' },
-          branchStatus: 'in-progress' as const, isArchived: false, isRestored: false,
+          branchStatus: 'in-progress' as const, hasFeedback: false, checksStatus: 'none' as const, statusChip: 'in-progress' as StatusChip, isArchived: false, isRestored: false,
         }],
       } as never)
 
@@ -775,9 +841,9 @@ describe('useTerminalSetup', () => {
 
       renderHook(() => useTerminalSetup(config, containerRef))
 
-      expect(addEventSpy).toHaveBeenCalledWith('wheel', expect.any(Function), { passive: true })
-      expect(addEventSpy).toHaveBeenCalledWith('touchmove', expect.any(Function), { passive: true })
-      expect(addEventSpy).toHaveBeenCalledWith('keydown', expect.any(Function))
+      expect(addEventSpy).toHaveBeenCalledWith('wheel', expect.any(Function), { capture: true, passive: true })
+      expect(addEventSpy).toHaveBeenCalledWith('touchmove', expect.any(Function), { capture: true, passive: true })
+      expect(addEventSpy).toHaveBeenCalledWith('keydown', expect.any(Function), { capture: true })
       addEventSpy.mockRestore()
     })
 
@@ -789,9 +855,9 @@ describe('useTerminalSetup', () => {
       const { unmount } = renderHook(() => useTerminalSetup(config, containerRef))
       unmount()
 
-      expect(removeEventSpy).toHaveBeenCalledWith('wheel', expect.any(Function))
-      expect(removeEventSpy).toHaveBeenCalledWith('touchmove', expect.any(Function))
-      expect(removeEventSpy).toHaveBeenCalledWith('keydown', expect.any(Function))
+      expect(removeEventSpy).toHaveBeenCalledWith('wheel', expect.any(Function), { capture: true })
+      expect(removeEventSpy).toHaveBeenCalledWith('touchmove', expect.any(Function), { capture: true })
+      expect(removeEventSpy).toHaveBeenCalledWith('keydown', expect.any(Function), { capture: true })
       removeEventSpy.mockRestore()
     })
   })

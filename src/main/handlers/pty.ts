@@ -14,6 +14,8 @@ import { HandlerContext } from './types'
 import { getScenarioData } from './scenarios'
 import { isDockerAvailable, dockerSetupMessage, ensureAgentInstalled, acquireSetupLock } from '../containerUtils'
 import { isDevcontainerCliAvailable, hasDevcontainerConfig, devcontainerUp, buildDevcontainerExecArgs, devcontainerSetupMessage } from '../devcontainer'
+import { treeKill } from '../treeKill'
+import { recordPtyMarker, removePtyMarker } from '../ptyMarkers'
 
 /**
  * Resolve the base command to its full path so agents installed outside
@@ -63,6 +65,8 @@ function disposePtyListeners(id: string) {
 function wirePtyEvents(ctx: HandlerContext, ptyProcess: IPty, id: string, senderWindow: BrowserWindow | null) {
   ctx.ptyProcesses.set(id, ptyProcess)
   if (senderWindow) ctx.ptyOwnerWindows.set(id, senderWindow)
+  // Drop a marker so a future Broomy startup can sweep this shell if we crash
+  recordPtyMarker(id, ptyProcess.pid)
 
   const dataDisposable = ptyProcess.onData((data) => {
     try {
@@ -75,7 +79,7 @@ function wirePtyEvents(ctx: HandlerContext, ptyProcess: IPty, id: string, sender
     }
   })
 
-  const exitDisposable = ptyProcess.onExit(({ exitCode }) => {
+  const exitDisposable = ptyProcess.onExit(({ exitCode }: { exitCode: number }) => {
     try {
       const ownerWindow = ctx.ptyOwnerWindows.get(id) || ctx.mainWindow
       if (ownerWindow && !ownerWindow.isDestroyed()) {
@@ -87,6 +91,7 @@ function wirePtyEvents(ctx: HandlerContext, ptyProcess: IPty, id: string, sender
     disposePtyListeners(id)
     ctx.ptyProcesses.delete(id)
     ctx.ptyOwnerWindows.delete(id)
+    removePtyMarker(id)
   })
 
   ptyDisposables.set(id, [dataDisposable, exitDisposable])
@@ -262,10 +267,12 @@ function createDevcontainerPty(
     }
     const earlyExitDisposable = ptyProcess.onExit(() => {}) // prevent unhandled-exit crashes
 
-    // Final check: session may have been killed between spawn and wire
+    // Final check: session may have been killed between spawn and wire.
+    // wirePtyEvents hasn't run yet so no marker exists — just kill the docker
+    // exec process tree.
     if (!pendingSetups.has(id)) {
       earlyExitDisposable.dispose()
-      ptyProcess.kill()
+      void treeKill(ptyProcess.pid)
       return
     }
     pendingSetups.delete(id)
@@ -285,7 +292,7 @@ function createDevcontainerPty(
 function resolveShellConfig(
   ctx: HandlerContext,
   options: { command?: string; sessionId?: string; shell?: string },
-): { shell: string; shellArgs: string[]; initialCommand: string | undefined } {
+): { shell: string; shellArgs: string[]; initialCommand: string | undefined; extraEnv?: Record<string, string> } {
   let initialCommand: string | undefined = options.command
 
   if (ctx.isE2ETest) {
@@ -297,7 +304,7 @@ function resolveShellConfig(
       } else {
         initialCommand = 'echo E2E_TEST_SHELL_READY'
       }
-      return { shell, shellArgs: [], initialCommand }
+      return { shell, shellArgs: [], initialCommand, extraEnv: options.command ? { BROOMY_ORIGINAL_COMMAND: options.command } : undefined }
     }
     const shell = '/bin/bash'
     if (options.command) {
@@ -309,7 +316,7 @@ function resolveShellConfig(
     } else {
       initialCommand = 'echo "E2E_TEST_SHELL_READY"; PS1="test-shell$ "'
     }
-    return { shell, shellArgs: [], initialCommand }
+    return { shell, shellArgs: [], initialCommand, extraEnv: options.command ? { BROOMY_ORIGINAL_COMMAND: options.command } : undefined }
   }
 
   if (ctx.E2E_MOCK_SHELL) {
@@ -331,14 +338,15 @@ function resolveShellConfig(
 const pendingSetups = new Set<string>()
 
 export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
-  ipcMain.handle('pty:create', (_event, options: { id: string; cwd: string; command?: string; sessionId?: string; env?: Record<string, string>; shell?: string; isolated?: boolean; repoRootDir?: string }) => {
+  ipcMain.handle('pty:create', async (_event, options: { id: string; cwd: string; command?: string; sessionId?: string; env?: Record<string, string>; shell?: string; isolated?: boolean; repoRootDir?: string }) => {
     // Kill any existing PTY with the same ID (e.g. React strict mode double-mount)
     const existing = ctx.ptyProcesses.get(options.id)
     if (existing) {
       disposePtyListeners(options.id)
-      existing.kill()
       ctx.ptyProcesses.delete(options.id)
       ctx.ptyOwnerWindows.delete(options.id)
+      await treeKill(existing.pid)
+      removePtyMarker(options.id)
     }
 
     const senderWindow = BrowserWindow.fromWebContents(_event.sender)
@@ -354,7 +362,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     }
 
     // Standard (non-isolated) path
-    const { shell, shellArgs, initialCommand: resolvedCommand } = resolveShellConfig(ctx, options)
+    const { shell, shellArgs, initialCommand: resolvedCommand, extraEnv } = resolveShellConfig(ctx, options)
     let initialCommand = resolvedCommand
 
     // Build environment — extend PATH with common bin dirs so agents in
@@ -378,7 +386,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
       }
     }
 
-    const env = { ...baseEnv, ...agentEnv } as Record<string, string>
+    const env = { ...baseEnv, ...agentEnv, ...extraEnv } as Record<string, string>
 
     let ptyProcess: IPty
     try {
@@ -423,15 +431,16 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     }
   })
 
-  ipcMain.handle('pty:kill', (_event, id: string) => {
+  ipcMain.handle('pty:kill', async (_event, id: string) => {
     // Cancel any in-flight async container setup for this ID
     pendingSetups.delete(id)
     const ptyProcess = ctx.ptyProcesses.get(id)
     if (ptyProcess) {
       disposePtyListeners(id)
-      ptyProcess.kill()
       ctx.ptyProcesses.delete(id)
       ctx.ptyOwnerWindows.delete(id)
+      await treeKill(ptyProcess.pid)
+      removePtyMarker(id)
     }
   })
 }

@@ -4,7 +4,7 @@ import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import '../../../test/react-setup'
 import SessionList from './SessionList'
 import { useSessionStore } from '../../store/sessions'
-import type { Session } from '../../store/sessions'
+import type { Session, StatusChip } from '../../store/sessions'
 
 function makeSession(overrides: Partial<Session> = {}): Session {
   return {
@@ -37,6 +37,9 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     searchHistory: [],
     terminalTabs: { tabs: [{ id: 'tab-1', name: 'Terminal' }], activeTabId: 'tab-1' },
     branchStatus: 'in-progress',
+    hasFeedback: false,
+    checksStatus: 'none' as const,
+    statusChip: 'in-progress' as StatusChip,
     isArchived: false,
     isRestored: false,
     ...overrides,
@@ -124,10 +127,10 @@ describe('SessionList', () => {
 
   it('shows branch status chips', () => {
     setSessions([
-      makeSession({ id: 's1', branch: 'b1', branchStatus: 'pushed' }),
-      makeSession({ id: 's2', branch: 'b2', branchStatus: 'open' }),
-      makeSession({ id: 's3', branch: 'b3', branchStatus: 'merged' }),
-      makeSession({ id: 's4', branch: 'b4', branchStatus: 'closed' }),
+      makeSession({ id: 's1', branch: 'b1', branchStatus: 'pushed', statusChip: 'pushed' }),
+      makeSession({ id: 's2', branch: 'b2', branchStatus: 'open', statusChip: 'open' }),
+      makeSession({ id: 's3', branch: 'b3', branchStatus: 'merged', statusChip: 'merged' }),
+      makeSession({ id: 's4', branch: 'b4', branchStatus: 'closed', statusChip: 'closed' }),
     ])
     render(<SessionList {...makeProps()} />)
     expect(screen.getByText('PUSHED')).toBeTruthy()
@@ -393,7 +396,7 @@ describe('SessionList', () => {
     })
 
     it('shows EMPTY branch status chip', () => {
-      setSessions([makeSession({ id: 's1', branch: 'b1', branchStatus: 'empty' })])
+      setSessions([makeSession({ id: 's1', branch: 'b1', branchStatus: 'empty', statusChip: 'empty' })])
       render(<SessionList {...makeProps()} />)
       expect(screen.getByText('EMPTY')).toBeTruthy()
     })
@@ -482,6 +485,84 @@ describe('SessionList', () => {
       const input = screen.getByPlaceholderText('Search sessions...')
       fireEvent.change(input, { target: { value: 'feature' } })
       expect(screen.getByText('Feature/Auth')).toBeTruthy()
+    })
+
+    it('filters sessions by PR title', () => {
+      setSessions([
+        makeSession({ id: 's1', branch: 'b1', prTitle: 'Add OAuth login' }),
+        makeSession({ id: 's2', branch: 'b2', prTitle: 'Fix memory leak' }),
+      ])
+      render(<SessionList {...makeProps()} />)
+      const input = screen.getByPlaceholderText('Search sessions...')
+      fireEvent.change(input, { target: { value: 'oauth' } })
+      expect(screen.getByText('b1')).toBeTruthy()
+      expect(screen.queryByText('b2')).toBeNull()
+    })
+
+    it('filters sessions by issue title', () => {
+      setSessions([
+        makeSession({ id: 's1', branch: 'b1', issueTitle: 'Button not clickable' }),
+        makeSession({ id: 's2', branch: 'b2', issueTitle: 'Slow load time' }),
+      ])
+      render(<SessionList {...makeProps()} />)
+      const input = screen.getByPlaceholderText('Search sessions...')
+      fireEvent.change(input, { target: { value: 'clickable' } })
+      expect(screen.getByText('b1')).toBeTruthy()
+      expect(screen.queryByText('b2')).toBeNull()
+    })
+
+    it('filters sessions by PR number', () => {
+      setSessions([
+        makeSession({ id: 's1', branch: 'b1', prNumber: 42 }),
+        makeSession({ id: 's2', branch: 'b2', prNumber: 99 }),
+      ])
+      render(<SessionList {...makeProps()} />)
+      const input = screen.getByPlaceholderText('Search sessions...')
+      fireEvent.change(input, { target: { value: '42' } })
+      expect(screen.getByText('b1')).toBeTruthy()
+      expect(screen.queryByText('b2')).toBeNull()
+    })
+
+    it('filters sessions by PR number with # prefix', () => {
+      setSessions([
+        makeSession({ id: 's1', branch: 'b1', prNumber: 42 }),
+        makeSession({ id: 's2', branch: 'b2', prNumber: 99 }),
+      ])
+      render(<SessionList {...makeProps()} />)
+      const input = screen.getByPlaceholderText('Search sessions...')
+      fireEvent.change(input, { target: { value: '#42' } })
+      expect(screen.getByText('b1')).toBeTruthy()
+      expect(screen.queryByText('b2')).toBeNull()
+    })
+
+    it('filters sessions by issue number', () => {
+      setSessions([
+        makeSession({ id: 's1', branch: 'b1', issueNumber: 7 }),
+        makeSession({ id: 's2', branch: 'b2', issueNumber: 13 }),
+      ])
+      render(<SessionList {...makeProps()} />)
+      const input = screen.getByPlaceholderText('Search sessions...')
+      fireEvent.change(input, { target: { value: '#7' } })
+      expect(screen.getByText('b1')).toBeTruthy()
+      expect(screen.queryByText('b2')).toBeNull()
+    })
+
+    it('shows clear button when search has a value', () => {
+      setSessions([makeSession({ id: 's1', branch: 'b1' })])
+      render(<SessionList {...makeProps()} />)
+      const input = screen.getByPlaceholderText('Search sessions...')
+      expect(screen.queryByLabelText('Clear search')).toBeNull()
+      fireEvent.change(input, { target: { value: 'foo' } })
+      expect(screen.getByLabelText('Clear search')).toBeTruthy()
+    })
+
+    it('clear button resets the search query', () => {
+      setSessions([makeSession({ id: 's1', branch: 'b1' })])
+      render(<SessionList {...makeProps()} />)
+      const input = screen.getByPlaceholderText('Search sessions...')
+      fireEvent.change(input, { target: { value: 'foo' } })
+      fireEvent.click(screen.getByLabelText('Clear search'))
+      expect((input as HTMLInputElement).value).toBe('')
     })
 
     it('also filters archived sessions', () => {

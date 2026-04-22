@@ -267,6 +267,52 @@ describe('useFileNavigation', () => {
     expect(paramsA.selectFile).toHaveBeenCalledWith('sess-B', '/project/file.ts')
   })
 
+  // --- Session switch resets diff state ---
+  it('resets diff mode and refs when activeSessionId changes', () => {
+    // Navigate to a file with diff mode in session A
+    const diffState: NavigationState = {
+      openFileInDiffMode: true,
+      scrollToLine: undefined,
+      searchHighlight: undefined,
+      diffBaseRef: 'abc123',
+      diffCurrentRef: 'def456',
+      diffLabel: 'main vs feature',
+    }
+    vi.mocked(resolveNavigation).mockReturnValue({
+      action: 'navigate',
+      state: diffState,
+      filePath: '/project/file.ts',
+    })
+    const params = makeParams({ activeSessionId: 'sess-A' })
+    const { result, rerender } = renderHook(
+      (props) => useFileNavigation(props),
+      { initialProps: params },
+    )
+
+    act(() => result.current.navigateToFile({
+      filePath: '/project/file.ts',
+      openInDiffMode: true,
+      diffBaseRef: 'abc123',
+      diffCurrentRef: 'def456',
+      diffLabel: 'main vs feature',
+    }))
+
+    // Confirm diff state is set for session A
+    expect(result.current.openFileInDiffMode).toBe(true)
+    expect(result.current.diffBaseRef).toBe('abc123')
+    expect(result.current.diffCurrentRef).toBe('def456')
+    expect(result.current.diffLabel).toBe('main vs feature')
+
+    // Switch to session B
+    rerender({ ...params, activeSessionId: 'sess-B' })
+
+    // Diff state should be reset
+    expect(result.current.openFileInDiffMode).toBe(false)
+    expect(result.current.diffBaseRef).toBeUndefined()
+    expect(result.current.diffCurrentRef).toBeUndefined()
+    expect(result.current.diffLabel).toBeUndefined()
+  })
+
   // --- registerSaveFunction / unregisterSaveFunction ---
   it('registerSaveFunction and unregisterSaveFunction manage per-session save functions', async () => {
     const pending: NavigationTarget = { filePath: '/project/file.ts', openInDiffMode: false }

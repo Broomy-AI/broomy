@@ -40,31 +40,25 @@ export default function SessionList({
   const [showArchived, setShowArchived] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
 
-  const activeSessions = useMemo(() => {
-    const matchesSearch = (session: Session) => {
-      if (!searchQuery) return true
-      const q = searchQuery.toLowerCase()
-      return (
-        session.branch.toLowerCase().includes(q) ||
-        session.name.toLowerCase().includes(q) ||
-        (session.lastMessage?.toLowerCase().includes(q) ?? false)
-      )
-    }
-    return sessions.filter((s) => !s.isArchived && matchesSearch(s))
-  }, [sessions, searchQuery])
+  const matchesSearch = useCallback((session: Session) => {
+    if (!searchQuery) return true
+    const q = searchQuery.toLowerCase()
+    // Match PR/issue numbers with or without '#' prefix
+    const numericQ = q.startsWith('#') ? q.slice(1) : q
+    const numMatch = (n: number | undefined) => n !== undefined && `${n}`.includes(numericQ)
+    return (
+      session.branch.toLowerCase().includes(q) ||
+      session.name.toLowerCase().includes(q) ||
+      (session.prTitle?.toLowerCase().includes(q) ?? false) ||
+      (session.issueTitle?.toLowerCase().includes(q) ?? false) ||
+      numMatch(session.prNumber) ||
+      numMatch(session.issueNumber) ||
+      (session.lastMessage?.toLowerCase().includes(q) ?? false)
+    )
+  }, [searchQuery])
 
-  const archivedSessions = useMemo(() => {
-    const matchesSearch = (session: Session) => {
-      if (!searchQuery) return true
-      const q = searchQuery.toLowerCase()
-      return (
-        session.branch.toLowerCase().includes(q) ||
-        session.name.toLowerCase().includes(q) ||
-        (session.lastMessage?.toLowerCase().includes(q) ?? false)
-      )
-    }
-    return sessions.filter((s) => s.isArchived && matchesSearch(s))
-  }, [sessions, searchQuery])
+  const activeSessions = useMemo(() => sessions.filter((s) => !s.isArchived && matchesSearch(s)), [sessions, matchesSearch])
+  const archivedSessions = useMemo(() => sessions.filter((s) => s.isArchived && matchesSearch(s)), [sessions, matchesSearch])
 
   const handleRefresh = async () => {
     if (!onRefreshPrStatus || isRefreshing) return
@@ -77,10 +71,7 @@ export default function SessionList({
   }
 
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
-  const pendingDeleteSession = useMemo(() =>
-    pendingDeleteId ? sessions.find(s => s.id === pendingDeleteId) ?? null : null,
-    [sessions, pendingDeleteId]
-  )
+  const pendingDeleteSession = useMemo(() => pendingDeleteId ? sessions.find(s => s.id === pendingDeleteId) ?? null : null, [sessions, pendingDeleteId])
   const [deleteWorktree, setDeleteWorktree] = useState(true)
 
   // Stable callbacks that accept session ID — prevents defeating SessionCard's memo
@@ -141,7 +132,7 @@ export default function SessionList({
       </div>
 
       {/* Search */}
-      <div className="px-2 pt-2">
+      <div className="px-2 pt-2 relative">
         <input
           data-session-search
           type="text"
@@ -154,8 +145,18 @@ export default function SessionList({
             }
           }}
           placeholder="Search sessions..."
-          className="w-full px-2 py-1.5 text-xs rounded bg-bg-primary border border-border text-text-primary placeholder-text-secondary/50 outline-none focus:border-accent/50"
+          className="w-full px-2 py-1.5 text-xs rounded bg-bg-primary border border-border text-text-primary placeholder-text-secondary/50 outline-none focus:border-accent/50 pr-6"
         />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary leading-none"
+            tabIndex={-1}
+            aria-label="Clear search"
+          >
+            ×
+          </button>
+        )}
       </div>
 
       <UpdateBanner />

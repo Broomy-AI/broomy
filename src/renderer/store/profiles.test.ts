@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { useProfileStore } from './profiles'
+import { useProfileStore, _resetLoadedProfileCount, _getLoadedProfileCount } from './profiles'
 
 describe('useProfileStore', () => {
   beforeEach(() => {
@@ -8,6 +8,7 @@ describe('useProfileStore', () => {
       currentProfileId: 'default',
       isLoading: true,
     })
+    _resetLoadedProfileCount()
     vi.mocked(window.profiles.list).mockResolvedValue({
       profiles: [{ id: 'default', name: 'Default', color: '#3b82f6' }],
       lastProfileId: 'default',
@@ -152,6 +153,47 @@ describe('useProfileStore', () => {
     it('calls openWindow', async () => {
       await useProfileStore.getState().openProfileInNewWindow('p1')
       expect(window.profiles.openWindow).toHaveBeenCalledWith('p1')
+    })
+  })
+
+  describe('loaded profile count tracking', () => {
+    it('tracks loaded count after loadProfiles', async () => {
+      vi.mocked(window.profiles.list).mockResolvedValue({
+        profiles: [
+          { id: 'p1', name: 'P1', color: '#000' },
+          { id: 'p2', name: 'P2', color: '#fff' },
+        ],
+        lastProfileId: 'p1',
+      })
+
+      await useProfileStore.getState().loadProfiles()
+      expect(_getLoadedProfileCount()).toBe(2)
+    })
+
+    it('increases loaded count after addProfile', async () => {
+      useProfileStore.setState({
+        profiles: [{ id: 'default', name: 'Default', color: '#3b82f6' }],
+        currentProfileId: 'default',
+        isLoading: false,
+      })
+
+      await useProfileStore.getState().addProfile('Work', '#ff0000')
+      expect(_getLoadedProfileCount()).toBe(2)
+    })
+
+    it('decreases loaded count after deleteProfile', async () => {
+      _resetLoadedProfileCount()
+      useProfileStore.setState({
+        profiles: [
+          { id: 'default', name: 'Default', color: '#3b82f6' },
+          { id: 'p2', name: 'Work', color: '#ff0000' },
+        ],
+        currentProfileId: 'default',
+        isLoading: false,
+      })
+
+      await useProfileStore.getState().deleteProfile('p2')
+      expect(_getLoadedProfileCount()).toBe(1)
     })
   })
 })

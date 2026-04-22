@@ -2,9 +2,8 @@
  * Feature Documentation: PR Create Update
  *
  * Demonstrates that the source control tab updates reactively after the agent
- * creates a PR. Previously, PR status only refreshed when ahead/behind counts
- * changed. Now a file watcher on `.broomy/pr-result.json` triggers an immediate
- * update when the agent writes the PR result.
+ * creates a PR. PR status is refreshed by calling `gh pr view` when the agent
+ * finishes or when the user clicks the refresh button.
  *
  * Run with: pnpm test:feature-docs pr-create-update
  */
@@ -60,10 +59,9 @@ test.afterAll(async () => {
       title: 'PR Create Update',
       description:
         'When the user clicks "Create PR", the app sends a prompt to the agent which runs ' +
-        '`gh pr create` and writes the result to `.broomy/pr-result.json`. A new file watcher ' +
-        'detects this file creation and immediately updates the source control panel with PR info — ' +
-        'no manual refresh needed. This follows the existing `fs.watch` pattern used for file trees ' +
-        'and issue plan detection.',
+        '`gh pr create`. When the agent finishes, the app calls `gh pr view` to detect the new PR ' +
+        'and updates the source control panel with PR info. The user can also click refresh to ' +
+        'trigger detection manually.',
       steps,
     },
     FEATURE_DIR,
@@ -105,7 +103,7 @@ test.describe.serial('Feature: PR Create Update', () => {
       description:
         'The sidebar shows the selected session. The source control panel displays PR status ' +
         'that was loaded reactively. Before this fix, PR status would only update when the ' +
-        'ahead/behind counts changed — now it also updates when the agent writes pr-result.json.',
+        'ahead/behind counts changed — now it also updates when the agent finishes working.',
     })
   })
 
@@ -126,8 +124,8 @@ test.describe.serial('Feature: PR Create Update', () => {
       caption: 'Source control on main branch — no PR to display',
       description:
         'When the session is on the main branch, there is no PR. The source control panel ' +
-        'shows the working tree state without PR info. The file watcher is still active but ' +
-        'will not trigger until a pr-result.json appears in this session\'s .broomy directory.',
+        'shows the working tree state without PR info. PR detection will trigger when the ' +
+        'agent finishes or the user clicks refresh.',
     })
   })
 })

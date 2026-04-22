@@ -36,6 +36,7 @@ function ToolbarPanelRow({
   onMoveDown,
   onRemove,
 }: {
+  key?: string | number | bigint | null
   panel: PanelDefinition
   index: number
   totalCount: number

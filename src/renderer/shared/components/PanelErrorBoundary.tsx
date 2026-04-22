@@ -24,11 +24,13 @@ export default class PanelErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error) {
-    console.error(`[PanelErrorBoundary] ${this.props.name} crashed:`, error)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    console.error(`[PanelErrorBoundary] ${(this as any).props.name} crashed:`, error)
   }
 
   private handleRetry = () => {
-    this.setState({ error: null })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(this as any).setState({ error: null })
   }
 
   render() {
@@ -37,7 +39,8 @@ export default class PanelErrorBoundary extends Component<Props, State> {
         <div className="flex flex-col h-full">
           <div className="flex-shrink-0 px-3 py-2 bg-red-600/20 border-b border-red-600/40 flex items-center justify-between gap-2">
             <span className="text-xs text-red-300 truncate">
-              {this.props.name} crashed: {this.state.error.message}
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+              {(this as any).props.name} crashed: {this.state.error.message}
             </span>
             <button
               onClick={this.handleRetry}
@@ -50,6 +53,7 @@ export default class PanelErrorBoundary extends Component<Props, State> {
       )
     }
 
-    return this.props.children
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (this as any).props.children
   }
 }

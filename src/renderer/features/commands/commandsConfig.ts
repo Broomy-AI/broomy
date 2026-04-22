@@ -346,6 +346,36 @@ export async function removeLegacyBroomyGitignore(directory: string): Promise<vo
   }
 }
 
+// --- Output gitignore helpers ---
+
+/** Check whether .broomy/output is already covered by a gitignore rule. */
+export async function isOutputGitignored(directory: string): Promise<boolean> {
+  // Check .broomy/.gitignore for /output/ entry
+  const broomyGitignore = `${directory}/.broomy/.gitignore`
+  try {
+    if (await window.fs.exists(broomyGitignore)) {
+      const content = await window.fs.readFile(broomyGitignore)
+      const lines = content.split(/\r?\n/).map((l: string) => l.trim())
+      if (lines.some((l: string) => l === 'output' || l === 'output/' || l === '/output' || l === '/output/')) {
+        return true
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  // Check repo .gitignore for .broomy/ entry (legacy pattern)
+  try {
+    if (await checkLegacyBroomyGitignore(directory)) {
+      return true
+    }
+  } catch {
+    // ignore
+  }
+
+  return false
+}
+
 // --- Ensure .broomy/.gitignore exists ---
 
 export async function ensureOutputGitignore(directory: string): Promise<void> {
@@ -355,16 +385,7 @@ export async function ensureOutputGitignore(directory: string): Promise<void> {
   await window.fs.mkdir(broomyDir)
 
   try {
-    // If .broomy/ itself is in the repo's .gitignore, output is already ignored
-    const repoGitignorePath = `${directory}/.gitignore`
-    const repoGitignoreExists = await window.fs.exists(repoGitignorePath)
-    if (repoGitignoreExists) {
-      const repoContent = await window.fs.readFile(repoGitignorePath)
-      const repoLines = repoContent.split(/\r?\n/).map((l: string) => l.trim())
-      if (repoLines.some((l: string) => l === '.broomy' || l === '.broomy/' || l === '/.broomy' || l === '/.broomy/')) {
-        return
-      }
-    }
+    if (await isOutputGitignored(directory)) return
 
     const exists = await window.fs.exists(gitignorePath)
     if (exists) {

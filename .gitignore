@@ -7,6 +7,7 @@ yarn.lock
 # Build output
 dist/
 out/
+.original-version
 
 # IDE
 .idea/

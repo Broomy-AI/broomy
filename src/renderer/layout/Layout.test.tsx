@@ -154,7 +154,7 @@ describe('Layout', () => {
     expect(screen.getByTestId('tutorial-content')).toBeTruthy()
   })
 
-  it('hides explorer and tutorial when error message present', () => {
+  it('hides explorer and tutorial when error message is present', () => {
     renderLayout({
       panels: {
         [PANEL_IDS.SIDEBAR]: <div data-testid="sidebar-content">Sidebar</div>,
@@ -173,8 +173,8 @@ describe('Layout', () => {
       },
       errorMessage: 'Something went wrong',
     })
+    expect(screen.getByText('Something went wrong')).toBeTruthy()
     expect(screen.queryByTestId('explorer-content')).toBeNull()
     expect(screen.queryByTestId('tutorial-content')).toBeNull()
-    expect(screen.getByText('Something went wrong')).toBeTruthy()
   })
 })

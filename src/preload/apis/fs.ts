@@ -16,7 +16,7 @@ export type FsApi = {
   rename: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>
   createFile: (path: string) => Promise<{ success: boolean; error?: string }>
   search: (directory: string, query: string) => Promise<SearchResult[]>
-  watch: (id: string, path: string) => Promise<{ success: boolean; error?: string }>
+  watch: (id: string, path: string, options?: { recursive?: boolean }) => Promise<{ success: boolean; error?: string }>
   unwatch: (id: string) => Promise<{ success: boolean }>
   onChange: (id: string, callback: (event: { eventType: string; filename: string | null }) => void) => () => void
 }
@@ -33,7 +33,7 @@ export const fsApi: FsApi = {
   rename: (oldPath, newPath) => ipcRenderer.invoke('fs:rename', oldPath, newPath),
   createFile: (path) => ipcRenderer.invoke('fs:createFile', path),
   search: (directory, query) => ipcRenderer.invoke('fs:search', directory, query),
-  watch: (id, path) => ipcRenderer.invoke('fs:watch', id, path),
+  watch: (id, path, options) => ipcRenderer.invoke('fs:watch', id, path, options),
   unwatch: (id) => ipcRenderer.invoke('fs:unwatch', id),
   onChange: (id, callback) => {
     const handler = (_event: Electron.IpcRendererEvent, data: { eventType: string; filename: string | null }) => callback(data)

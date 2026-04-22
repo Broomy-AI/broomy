@@ -1,7 +1,7 @@
 /**
  * Explorer panel entry point with tabbed navigation between file tree, source control, search, recent files, and review.
  */
-import { useCallback, useRef } from 'react'
+import { useCallback } from 'react'
 import type { ExplorerProps } from './types'
 import { FileTreeIcon, SourceControlIcon, SearchIcon, RecentIcon, ReviewIcon } from './icons'
 import { FileTree } from './tabs/files/FileTree'
@@ -10,9 +10,11 @@ import { SearchPanel } from './tabs/search/SearchPanel'
 import { RecentFiles } from './tabs/recent/RecentFiles'
 import ReviewPanel from './tabs/review/ReviewPanel'
 import { IssuePlanChip } from './IssuePlanChip'
+import { GitignoreChip } from './GitignoreChip'
 import { focusSearchInput } from '../../shared/utils/focusHelpers'
 import PanelErrorBoundary from '../../shared/components/PanelErrorBoundary'
 import { useSessionStore } from '../../store/sessions'
+import { fetchReviewStatus } from '../../shared/utils/reviewStatus'
 
 export default function Explorer({
   directory,
@@ -27,7 +29,10 @@ export default function Explorer({
   sessionId,
   planFilePath,
   branchStatus,
+  statusChip,
   onUpdatePrState,
+  onUpdateFeedbackStatus,
+  onUpdateChecksStatus,
   repoId,
   agentPtyId,
   session,
@@ -36,19 +41,19 @@ export default function Explorer({
   issueTitle,
   issueUrl,
   issuePlanExists,
+  suggestGitignore,
+  onDismissGitignore,
 }: ExplorerProps) {
   const openCmdsEditor = useSessionStore(s => s.openCommandsEditor)
+  const updateReviewStatus = useSessionStore(s => s.updateReviewStatus)
   const handleOpenCommandsEditor = useCallback(() => {
     if (sessionId && directory) openCmdsEditor(sessionId, directory)
   }, [sessionId, directory, openCmdsEditor])
 
-  // Dispatch PR check event when focus enters the explorer from outside
-  const containerRef = useRef<HTMLDivElement>(null)
-  const handleFocusIn = useCallback((e: React.FocusEvent) => {
-    if (!containerRef.current?.contains(e.relatedTarget as Node)) {
-      document.dispatchEvent(new CustomEvent('broomy:check-pr-status'))
-    }
-  }, [])
+  const handleRefreshReviewStatus = useCallback(() => {
+    if (!session) return
+    void fetchReviewStatus(session, updateReviewStatus)
+  }, [session?.sessionType, session?.prNumber, session?.directory, session?.id, updateReviewStatus])
 
   if (!directory) {
     return (
@@ -63,7 +68,7 @@ export default function Explorer({
   }`
 
   return (
-    <div ref={containerRef} className="h-full flex flex-col" onFocus={handleFocusIn}>
+    <div className="h-full flex flex-col">
       {/* Tab bar */}
       <div className="px-3 py-2 border-b border-border flex items-center justify-between">
         <span className="text-sm font-medium text-text-primary">Explorer</span>
@@ -105,6 +110,13 @@ export default function Explorer({
         onFileSelect={onFileSelect}
       />
 
+      {/* Gitignore suggestion chip */}
+      <GitignoreChip
+        directory={directory}
+        showSuggestion={suggestGitignore}
+        onDismiss={onDismissGitignore}
+      />
+
       {/* Tab content - scrollable area below pinned toolbar */}
       <div className="flex-1 min-h-0 overflow-y-auto">
         {filter === 'files' && (
@@ -127,16 +139,21 @@ export default function Explorer({
               onFileSelect={onFileSelect}
               onGitStatusRefresh={onGitStatusRefresh}
               branchStatus={branchStatus}
+              statusChip={statusChip}
               repoId={repoId}
               agentPtyId={agentPtyId}
               agentId={session?.agentId}
               onUpdatePrState={onUpdatePrState}
+              onUpdateFeedbackStatus={onUpdateFeedbackStatus}
+              onUpdateChecksStatus={onUpdateChecksStatus}
               issueNumber={issueNumber}
               issueTitle={issueTitle}
               issueUrl={issueUrl}
               onSwitchTab={(tab) => onFilterChange(tab as Parameters<typeof onFilterChange>[0])}
               onOpenCommandsEditor={handleOpenCommandsEditor}
               isReview={session?.sessionType === 'review'}
+              reviewStatus={session?.reviewStatus}
+              onRefreshReviewStatus={handleRefreshReviewStatus}
             />
           </PanelErrorBoundary>
         )}

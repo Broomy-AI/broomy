@@ -2,8 +2,8 @@
  * xterm.js terminal wrapper that manages a PTY connection and detects agent activity.
  *
  * Creates an xterm.js instance, connects it to a backend PTY via IPC, and handles
- * auto-fit on resize, scroll-following with manual disengage, and viewport desync
- * repair. For agent terminals, it runs time-based activity detection: output within
+ * auto-fit on resize and scroll-following with manual disengage.
+ * For agent terminals, it runs time-based activity detection: output within
  * a suppression window after user input is ignored, otherwise new data sets status
  * to "working" and 1 second of silence sets it to "idle". Transitions from working
  * to idle (after at least 3 seconds) mark the session as unread. Also detects plan
@@ -16,6 +16,7 @@ import { useErrorStore } from '../../store/errors'
 import { getAgentInstallUrl } from '../../shared/utils/agentInstallUrls'
 import { sendAgentPrompt } from '../../shared/utils/focusHelpers'
 import '@xterm/xterm/css/xterm.css'
+import './terminal-scroll.css'
 
 interface TerminalProps {
   sessionId?: string

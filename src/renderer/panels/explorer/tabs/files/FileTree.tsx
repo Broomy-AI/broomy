@@ -8,6 +8,7 @@ import type { NavigationTarget } from '../../../../shared/utils/fileNavigation'
 import { StatusBadge } from '../../icons'
 import { statusLabel, getStatusColor } from '../../../../features/git/explorerHelpers'
 import { useFileTree, navigateTreeItem } from '../../hooks/useFileTree'
+import { useExplorerWatcher } from '../../hooks/useExplorerWatcher'
 import { DialogErrorBanner } from '../../../../shared/components/ErrorBanner'
 
 function handleTreeKeyDown(
@@ -116,6 +117,7 @@ function InlineCreateInput({
 }
 
 interface TreeNodeItemProps {
+  key?: string | number | bigint | null
   node: TreeNode
   depth: number
   isExpanded: boolean
@@ -307,6 +309,7 @@ export function FileTree({
     draggedPath,
     dropTargetPath,
     loadDirectory,
+    refreshTree,
     toggleExpand,
     handleFileClick,
     getFileStatus,
@@ -323,6 +326,9 @@ export function FileTree({
 
   const inlineInputRef = useRef<HTMLInputElement>(null)
   const renameInputRef = useRef<HTMLInputElement>(null)
+
+  // Watch repo directory recursively for external file changes
+  useExplorerWatcher(directory, refreshTree)
 
   // Load root directory
   useEffect(() => {

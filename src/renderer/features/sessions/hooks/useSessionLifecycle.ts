@@ -1,15 +1,16 @@
 /**
  * Manages session lifecycle including initial data loading, profile switching, session read marking, and window focus behavior.
  */
-import { useEffect, useCallback, useState, useMemo, useRef } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import type { Session } from '../../../store/sessions'
 import type { ProfileData } from '../../../store/profiles'
 import { terminalBufferRegistry } from '../../../shared/utils/terminalBufferRegistry'
+import { scrollLogRegistry } from '../../../panels/agent/utils/scrollLog'
 import { loadMonacoProjectContext } from '../../../shared/utils/monacoProjectContext'
 import { restoreSessionFocus } from '../../../shared/utils/focusHelpers'
+import { fetchReviewStatus } from '../../../shared/utils/reviewStatus'
 
 export function useSessionLifecycle({
-  sessions,
   activeSession,
   activeSessionId,
   currentProfileId,
@@ -41,32 +42,21 @@ export function useSessionLifecycle({
   markSessionRead: (sessionId: string) => void
   updateReviewStatus: (sessionId: string, status: 'pending' | 'reviewed') => void
 }) {
-  const [directoryExists, setDirectoryExists] = useState<Record<string, boolean>>({})
+  const [activeDirectoryExists, setActiveDirectoryExists] = useState(true)
 
-  // Stable key that only changes when session IDs/directories change (not on status updates)
-  const sessionDirKey = useMemo(
-    () => sessions.filter(s => !s.isArchived).map(s => `${s.id}:${s.directory}`).join(','),
-    [sessions],
-  )
-  const sessionsRef = useRef(sessions)
-  sessionsRef.current = sessions
-
-  // Check if session directories exist
+  // Check if the active session's directory exists (only the active one, to avoid
+  // triggering macOS file-access permission prompts for every session on startup)
   useEffect(() => {
-    const activeSessions = sessionsRef.current.filter(s => !s.isArchived)
-    const checkDirectories = async () => {
-      const results: Record<string, boolean> = {}
-      for (const session of activeSessions) {
-        if (session.status === 'initializing') continue
-        results[session.id] = await window.fs.exists(session.directory)
-      }
-      setDirectoryExists(results)
+    if (!activeSession || activeSession.status === 'initializing') {
+      setActiveDirectoryExists(true)
+      return
     }
-
-    if (activeSessions.length > 0) {
-      void checkDirectories()
-    }
-  }, [sessionDirKey])
+    let cancelled = false
+    void window.fs.exists(activeSession.directory).then((exists) => {
+      if (!cancelled) setActiveDirectoryExists(exists)
+    })
+    return () => { cancelled = true }
+  }, [activeSession?.id, activeSession?.directory, activeSession?.status])
 
   // Load profiles, then sessions/agents/repos for the current profile
   useEffect(() => {
@@ -111,14 +101,10 @@ export function useSessionLifecycle({
 
   // Check review status when switching to a review session
   useEffect(() => {
-    if (activeSession?.sessionType !== 'review' || !activeSession.prNumber) return
-
+    if (!activeSession) return
     let cancelled = false
-    void window.gh.myReviewStatus(activeSession.directory, activeSession.prNumber).then((status) => {
-      if (cancelled || !status) return
-      updateReviewStatus(activeSession.id, status)
-    }).catch(() => {
-      // Ignore errors
+    void fetchReviewStatus(activeSession, (id, status) => {
+      if (!cancelled) updateReviewStatus(id, status)
     })
     return () => { cancelled = true }
   }, [activeSessionId])
@@ -140,7 +126,11 @@ export function useSessionLifecycle({
         content += `Directory: ${activeSession.directory}\n`
         content += `Status: ${activeSession.status}\n`
         content += `Last Message: ${activeSession.lastMessage || '(none)'}\n`
-        content += '\n=== Terminal Output (last 200 lines) ===\n\n'
+        // Scroll event log for debugging viewport jump issues
+        const scrollLogContent = scrollLogRegistry.format(activeSession.id)
+        content += '\n=== Scroll Event Log ===\n\n'
+        content += scrollLogContent
+        content += '\n\n=== Terminal Output (last 200 lines) ===\n\n'
         content += buffer || '(no content)'
 
         void navigator.clipboard.writeText(content).catch((err: unknown) => {
@@ -153,12 +143,7 @@ export function useSessionLifecycle({
     return () => window.removeEventListener('keydown', handleCopyTerminal)
   }, [activeSession])
 
-  const activeDirectoryExists = activeSession
-    ? (activeSession.status === 'initializing' || (directoryExists[activeSession.id] ?? true))
-    : true
-
   return {
-    directoryExists,
     activeDirectoryExists,
     handleSwitchProfile,
   }

@@ -126,6 +126,8 @@ async function doSave(): Promise<void> {
       searchHistory: s.searchHistory.length > 0 ? s.searchHistory : undefined,
       // Archive state
       isArchived: s.isArchived || undefined,
+      // Agent SDK session ID for resume
+      sdkSessionId: s.sdkSessionId,
     })),
     repos,
     defaultCloneDir: repoState.defaultCloneDir || undefined,

@@ -20,8 +20,8 @@ import { getFileExtension } from './types'
 import { useMonacoComments } from '../hooks/useMonacoComments'
 
 // Configure Monaco workers for Vite
-window.MonacoEnvironment = {
-  getWorker(_, label) {
+;(window as unknown as { MonacoEnvironment: unknown }).MonacoEnvironment = {
+  getWorker(_: unknown, label: string) {
     if (label === 'json') {
       return new jsonWorker()
     }

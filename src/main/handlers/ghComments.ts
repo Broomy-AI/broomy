@@ -14,6 +14,93 @@ function parseJsonLines(stdout: string): unknown[] {
   }).filter(c => c !== null)
 }
 
+/**
+ * Checks whether a PR has actionable feedback: either someone requested changes
+ * (and hasn't been re-requested for review), or there are comments since the last push.
+ */
+async function fetchPrFeedbackStatus(repoDir: string, prNumber: number): Promise<boolean> {
+  try {
+    const dir = expandHomePath(repoDir)
+    const [slugResult, userResult] = await Promise.all([
+      execFileAsync('gh', ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'], { cwd: dir, encoding: 'utf-8', timeout: 10000 }),
+      execFileAsync('gh', ['api', 'user', '--jq', '.login'], { encoding: 'utf-8', timeout: 10000 }),
+    ])
+    const slug = slugResult.stdout.trim()
+    const login = userResult.stdout.trim()
+    if (!slug || !login) return false
+
+    // Fetch in parallel: reviews, requested reviewers, last push time, comments
+    const [reviewsResult, requestedResult, lastPushResult, prCommentsResult, issueCommentsResult] = await Promise.all([
+      // All reviews on this PR
+      execFileAsync('gh', [
+        'api', `repos/${slug}/pulls/${prNumber}/reviews`, '--jq',
+        '[.[] | {author: .user.login, state: .state}]',
+      ], { cwd: dir, encoding: 'utf-8', timeout: 15000 }),
+      // Currently requested reviewers
+      execFileAsync('gh', [
+        'api', `repos/${slug}/pulls/${prNumber}/requested_reviewers`, '--jq',
+        '[.users[].login]',
+      ], { cwd: dir, encoding: 'utf-8', timeout: 10000 }),
+      // Timestamp of the latest event on the head branch (last push)
+      execFileAsync('gh', [
+        'api', `repos/${slug}/pulls/${prNumber}`, '--jq',
+        '.head.repo.pushed_at',
+      ], { cwd: dir, encoding: 'utf-8', timeout: 10000 }),
+      // Review comments (inline code comments)
+      execFileAsync('gh', [
+        'api', `repos/${slug}/pulls/${prNumber}/comments`, '--jq',
+        `[.[] | select(.user.login != "${login}") | .created_at]`,
+      ], { cwd: dir, encoding: 'utf-8', timeout: 15000 }),
+      // Issue comments (top-level PR comments)
+      execFileAsync('gh', [
+        'api', `repos/${slug}/issues/${prNumber}/comments`, '--jq',
+        `[.[] | select(.user.login != "${login}") | .created_at]`,
+      ], { cwd: dir, encoding: 'utf-8', timeout: 15000 }),
+    ])
+
+    // 1. Check for unresolved "changes requested" reviews
+    // A reviewer's changes_requested is unresolved if they are NOT in the requested_reviewers
+    // list (re-requesting review clears the old review state on GitHub's side, but the reviewer
+    // appears in requested_reviewers until they submit a new review).
+    const reviews: { author: string; state: string }[] = JSON.parse(reviewsResult.stdout.trim() || '[]')
+    const requestedReviewers: string[] = JSON.parse(requestedResult.stdout.trim() || '[]')
+
+    // Group reviews by author, keeping only the latest state per author
+    const latestReviewByAuthor = new Map<string, string>()
+    for (const review of reviews) {
+      if (review.state === 'PENDING') continue
+      latestReviewByAuthor.set(review.author, review.state)
+    }
+
+    // Check if any reviewer's latest review is CHANGES_REQUESTED and they haven't been re-requested
+    for (const [author, state] of latestReviewByAuthor) {
+      if (state === 'CHANGES_REQUESTED' && !requestedReviewers.includes(author)) {
+        return true
+      }
+    }
+
+    // 2. Check for comments since last push
+    const lastPushTime = lastPushResult.stdout.trim()
+    if (lastPushTime) {
+      const pushDate = new Date(lastPushTime)
+      const allCommentDates: string[] = [
+        ...JSON.parse(prCommentsResult.stdout.trim() || '[]'),
+        ...JSON.parse(issueCommentsResult.stdout.trim() || '[]'),
+      ]
+
+      for (const dateStr of allCommentDates) {
+        if (new Date(dateStr) > pushDate) {
+          return true
+        }
+      }
+    }
+
+    return false
+  } catch {
+    return false
+  }
+}
+
 async function fetchMyReviewStatus(repoDir: string, prNumber: number): Promise<'pending' | 'reviewed' | null> {
   try {
     const dir = expandHomePath(repoDir)
@@ -232,6 +319,11 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   ipcMain.handle('gh:myReviewStatus', async (_event, repoDir: string, prNumber: number) => {
     if (ctx.isE2ETest) return 'pending'
     return fetchMyReviewStatus(repoDir, prNumber)
+  })
+
+  ipcMain.handle('gh:prFeedbackStatus', async (_event, repoDir: string, prNumber: number) => {
+    if (ctx.isE2ETest) return false
+    return fetchPrFeedbackStatus(repoDir, prNumber)
   })
 
   ipcMain.handle('gh:submitDraftReview', async (_event, repoDir: string, prNumber: number, _comments: { path: string; line: number; body: string }[]) => {

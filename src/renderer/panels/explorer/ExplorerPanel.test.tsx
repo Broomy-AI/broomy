@@ -34,6 +34,8 @@ const defaultProps = {
   filter: 'files' as const,
   onFilterChange: vi.fn(),
   gitStatus: [],
+  suggestGitignore: false,
+  onDismissGitignore: vi.fn(),
 }
 
 describe('Explorer', () => {

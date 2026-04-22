@@ -47,6 +47,7 @@ interface ScenarioSession {
   name: string
   directory: string
   agentId: string | null
+  repoId?: string
   issueNumber?: number
   issueTitle?: string
   issueUrl?: string
@@ -395,7 +396,7 @@ const MARKETING: ScenarioData = {
 
 const DEFAULT: ScenarioData = {
   sessions: [
-    { id: '1', name: 'broomy', directory: normalizePath(join(tmpdir(), 'broomy-e2e-broomy')), agentId: 'claude', issueNumber: 42, issueTitle: 'Add user authentication', issueUrl: 'https://github.com/user/broomy/issues/42' },
+    { id: '1', name: 'broomy', directory: normalizePath(join(tmpdir(), 'broomy-e2e-broomy')), agentId: 'codex', repoId: 'repo-1', issueNumber: 42, issueTitle: 'Add user authentication', issueUrl: 'https://github.com/user/broomy/issues/42' },
     { id: '2', name: 'backend-api', directory: normalizePath(join(tmpdir(), 'broomy-e2e-backend-api')), agentId: 'aider', issueNumber: 15, issueTitle: 'Fix API rate limiting', issueUrl: 'https://github.com/user/backend-api/issues/15' },
     { id: '3', name: 'docs-site', directory: normalizePath(join(tmpdir(), 'broomy-e2e-docs-site')), agentId: null },
   ],

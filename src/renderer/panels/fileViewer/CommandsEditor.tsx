@@ -300,6 +300,7 @@ function ActionCard({
   deleteConfirm,
   onCancelDelete,
 }: {
+  key?: string | number | bigint | null
   action: ActionDefinition
   isExpanded: boolean
   onToggle: () => void
@@ -478,7 +479,7 @@ function ActionCard({
   )
 }
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function Field({ label, hint, children }: { label: string; hint?: string; children?: React.ReactNode }) {
   return (
     <div className="space-y-1">
       <label className="text-xs text-text-secondary">{label}</label>

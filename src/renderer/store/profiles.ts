@@ -32,6 +32,17 @@ function getProfileIdFromUrl(): string {
   return params.get('profile') || 'default'
 }
 
+// Track how many profiles were loaded from disk for save guard
+let loadedProfileCount = 0
+
+// Exported for testing
+export function _getLoadedProfileCount(): number {
+  return loadedProfileCount
+}
+export function _resetLoadedProfileCount(): void {
+  loadedProfileCount = 0
+}
+
 export const useProfileStore = create<ProfileStore>((set, get) => ({
   profiles: [],
   currentProfileId: getProfileIdFromUrl(),
@@ -46,6 +57,7 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
         currentProfileId: urlProfileId,
         isLoading: false,
       })
+      loadedProfileCount = Math.max(loadedProfileCount, data.profiles.length)
       // Update lastProfileId to the current window's profile
       if (urlProfileId !== data.lastProfileId) {
         await window.profiles.save({
@@ -76,6 +88,7 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
     const updatedProfiles = [...profiles, profile]
     set({ profiles: updatedProfiles })
     await window.profiles.save({ profiles: updatedProfiles, lastProfileId: currentProfileId })
+    loadedProfileCount = Math.max(loadedProfileCount, updatedProfiles.length)
     return profile
   },
 
@@ -86,6 +99,7 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
     const updatedProfiles = profiles.filter((p) => p.id !== profileId)
     set({ profiles: updatedProfiles })
     await window.profiles.save({ profiles: updatedProfiles, lastProfileId: currentProfileId })
+    loadedProfileCount = updatedProfiles.length
   },
 
   updateProfile: async (profileId: string, updates: Partial<Omit<ProfileData, 'id'>>) => {

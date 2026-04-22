@@ -13,6 +13,7 @@ import * as appHandlers from './app'
 import * as typescriptHandlers from './typescript'
 import * as updaterHandlers from './updater'
 import * as devcontainerHandlers from './devcontainer'
+import * as agentSdkHandlers from './agentSdk'
 
 export function registerAllHandlers(ipcMain: IpcMain, ctx: HandlerContext): void {
   ptyHandlers.register(ipcMain, ctx)
@@ -25,6 +26,7 @@ export function registerAllHandlers(ipcMain: IpcMain, ctx: HandlerContext): void
   typescriptHandlers.register(ipcMain, ctx)
   updaterHandlers.register(ipcMain, ctx)
   devcontainerHandlers.register(ipcMain, ctx)
+  agentSdkHandlers.register(ipcMain, ctx)
 }
 
 export type { HandlerContext } from './types'

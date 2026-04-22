@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import '../../../test/react-setup'
 import TabbedTerminal from './TabbedTerminal'
-import { useSessionStore } from '../../store/sessions'
+import { useSessionStore, type StatusChip } from '../../store/sessions'
 
 // Mock DockerInfoPanel
 vi.mock('./DockerInfoPanel', () => ({ default: () => <div data-testid="docker-info">DockerInfo</div> }))
@@ -94,6 +94,9 @@ beforeEach(() => {
           activeTabId: tab1Id,
         },
         branchStatus: 'in-progress',
+        hasFeedback: false,
+        checksStatus: 'none' as const,
+        statusChip: 'in-progress' as StatusChip,
         isArchived: false,
         isRestored: false,
       },
@@ -324,6 +327,9 @@ describe('TabbedTerminal', () => {
             activeTabId: null,
           },
           branchStatus: 'in-progress',
+          hasFeedback: false,
+          checksStatus: 'none' as const,
+          statusChip: 'in-progress' as StatusChip,
           isArchived: false,
           isRestored: false,
         },

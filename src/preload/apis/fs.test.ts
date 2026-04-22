@@ -78,7 +78,12 @@ describe('preload fs API', () => {
 
   it('watch invokes fs:watch', async () => {
     await fsApi.watch('watch-1', '/test')
-    expect(mockInvoke).toHaveBeenCalledWith('fs:watch', 'watch-1', '/test')
+    expect(mockInvoke).toHaveBeenCalledWith('fs:watch', 'watch-1', '/test', undefined)
+  })
+
+  it('watch passes recursive option', async () => {
+    await fsApi.watch('watch-1', '/test', { recursive: true })
+    expect(mockInvoke).toHaveBeenCalledWith('fs:watch', 'watch-1', '/test', { recursive: true })
   })
 
   it('unwatch invokes fs:unwatch', async () => {

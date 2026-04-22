@@ -212,6 +212,16 @@ describe('gitBasic handlers', () => {
         tracking: 'origin/main',
         current: 'feature',
       })
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
+      mockGitInstance.raw.mockImplementation((args: string[]): Promise<string> => {
+        if (args[0] === 'rev-parse' && args[1] === '--verify' && args[2] === 'origin/feature') {
+          return Promise.resolve('abc123')
+        }
+        if (args[0] === 'rev-list' && args[1] === '--count' && args[2] === 'origin/feature..HEAD') {
+          return Promise.resolve('1')
+        }
+        return Promise.resolve('')
+      })
 
       const handlers = setupHandlers()
       const result = await handlers['git:status'](null, '/repo')

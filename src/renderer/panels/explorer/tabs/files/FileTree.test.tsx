@@ -43,6 +43,10 @@ vi.mock('../../hooks/useFileTree', () => ({
   navigateTreeItem: (...args: unknown[]) => mockNavigateTreeItem(...args),
 }))
 
+vi.mock('../../hooks/useExplorerWatcher', () => ({
+  useExplorerWatcher: vi.fn(),
+}))
+
 import type { TreeNode } from '../../types'
 import { FileTree } from './FileTree'
 

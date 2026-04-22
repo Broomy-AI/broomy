@@ -21,6 +21,7 @@ import type { ConfigApi, ProfilesApi, AgentsApi, ReposApi } from '../preload/api
 import type { ShellApi, DialogApi, AppApi, UpdateApi, WindowControlsApi } from '../preload/apis/shell'
 import type { MenuApi, TsApi } from '../preload/apis/menu'
 import type { DevcontainerApi } from '../preload/apis/devcontainer'
+import type { AgentSdkApi } from '../preload/apis/agentSdk'
 
 /** Maps every key of an API type to a Vitest Mock — catches missing/extra keys and non-function values. */
 type Mocked<T> = { [K in keyof T]: Mock }
@@ -80,6 +81,7 @@ const mockApp: Mocked<AppApi> = {
   platform: vi.fn().mockResolvedValue('darwin'),
   tmpdir: vi.fn().mockResolvedValue('/tmp'),
   getVersion: vi.fn().mockResolvedValue('0.6.1'),
+  getBuildInfo: vi.fn().mockResolvedValue({ commit: 'abc1234', buildTime: '2024-01-01T00:00:00.000Z' }),
   getCrashLog: vi.fn().mockResolvedValue(null),
   dismissCrashLog: vi.fn().mockResolvedValue(undefined),
   getCrashReportUrl: vi.fn().mockResolvedValue(null),
@@ -112,6 +114,7 @@ const mockGh: Mocked<GhApi> = {
   prStatus: vi.fn().mockResolvedValue(null),
   hasWriteAccess: vi.fn().mockResolvedValue(false),
   prChecksStatus: vi.fn().mockResolvedValue('none'),
+  prFeedbackStatus: vi.fn().mockResolvedValue(false),
   getPrCreateUrl: vi.fn().mockResolvedValue(null),
   prComments: vi.fn().mockResolvedValue([]),
   prDescription: vi.fn().mockResolvedValue(null),
@@ -204,6 +207,25 @@ const mockDialog: Mocked<DialogApi> = {
   openFolder: vi.fn().mockResolvedValue(null),
 }
 
+// Mock window.agentSdk
+const mockAgentSdk: Mocked<AgentSdkApi> = {
+  start: vi.fn().mockResolvedValue({ id: '' }),
+  send: vi.fn().mockResolvedValue(undefined),
+  inject: vi.fn().mockResolvedValue(undefined),
+  stop: vi.fn().mockResolvedValue(undefined),
+  respondToPermission: vi.fn().mockResolvedValue(undefined),
+  onMessage: vi.fn().mockReturnValue(() => undefined),
+  onDone: vi.fn().mockReturnValue(() => undefined),
+  onError: vi.fn().mockReturnValue(() => undefined),
+  onPermissionRequest: vi.fn().mockReturnValue(() => undefined),
+  onHistoryMeta: vi.fn().mockReturnValue(() => undefined),
+  loadHistory: vi.fn().mockResolvedValue(undefined),
+  login: vi.fn().mockResolvedValue(undefined),
+  status: vi.fn().mockResolvedValue(undefined),
+  commands: vi.fn().mockResolvedValue([]),
+  models: vi.fn().mockResolvedValue([]),
+}
+
 // Mock window.devcontainer
 const mockDevcontainer: Mocked<DevcontainerApi> = {
   status: vi.fn().mockResolvedValue({ available: true, version: '0.71.0' }),
@@ -232,6 +254,7 @@ const broomyMocks = {
   dialog: mockDialog,
   devcontainer: mockDevcontainer,
   windowControls: mockWindowControls,
+  agentSdk: mockAgentSdk,
 }
 
 // If running in a DOM environment (jsdom/happy-dom), extend the existing window.

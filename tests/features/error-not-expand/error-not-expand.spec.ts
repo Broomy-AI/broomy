@@ -49,7 +49,7 @@ test.beforeAll(async () => {
 })
 
 test.afterAll(async () => {
-  await restoreIpcHandler('git:pullOriginMain')
+  await restoreIpcHandler('git:commitMerge')
   await restoreIpcHandler('git:status')
 
   await generateFeaturePage(
@@ -74,14 +74,16 @@ async function openSourceControl() {
   await backendSession.click()
   await expect(backendSession).toHaveClass(/bg-accent\/15/)
 
-  // Override git:status to return clean working tree so "Sync with main" button appears
+  // Override git:status to return a merging state so the "Commit merge" button appears
   await overrideIpcHandler('git:status', {
-    files: [],
+    files: [
+      { path: 'src/index.ts', status: 'modified', staged: true, indexStatus: 'M', workingDirStatus: ' ' },
+    ],
     current: 'feature/auth',
     tracking: 'origin/feature/auth',
     ahead: 1,
     behind: 0,
-    isMerging: false,
+    isMerging: true,
     hasConflicts: false,
   })
 
@@ -96,33 +98,33 @@ async function openSourceControl() {
 }
 
 test.describe.serial('Feature: Error Banner Expansion', () => {
-  test('Step 1: Source control panel in normal state', async () => {
+  test('Step 1: Source control panel in merge state', async () => {
     const explorer = await openSourceControl()
 
     // Wait for PR status to load (the OPEN badge appears inside a span)
     await expect(explorer.locator('span:has-text("OPEN")')).toBeVisible({ timeout: 10000 })
-    await expect(explorer.locator('text=Sync with main')).toBeVisible({ timeout: 5000 })
+    await expect(explorer.locator('text=Commit merge')).toBeVisible({ timeout: 5000 })
 
     await screenshotElement(page, explorer, path.join(SCREENSHOTS, '01-source-control-normal.png'), { maxHeight: 350 })
     steps.push({
       screenshotPath: 'screenshots/01-source-control-normal.png',
-      caption: 'Source control panel with open PR and Sync with main button',
+      caption: 'Source control panel with open PR and Commit merge button',
       description:
-        'The source control panel shows the PR status and a "Sync with main" button. ' +
+        'The source control panel shows the PR status and a "Commit merge" button. ' +
         'This is the normal state before any error occurs.',
     })
   })
 
   test('Step 2: Trigger a multi-line git error', async () => {
-    // Override pullOriginMain to return a multi-line error like the user encountered
-    await overrideIpcHandler('git:pullOriginMain', {
+    // Override commitMerge to return a multi-line error
+    await overrideIpcHandler('git:commitMerge', {
       success: false,
-      error: 'From github.com:Broomy-AI/broomy\n * branch            main       -> FETCH_HEAD\nfatal: Not possible to fast-forward, aborting.',
+      error: 'error: Committing is not possible because you have unmerged files.\nhint: Fix them up in the work tree, and then use \'git add/rm <file>\'\nhint: as appropriate to mark resolution and make a commit.\nfatal: Exiting because of an unresolved conflict.',
     })
 
-    // Click "Sync with main" to trigger the error
-    const syncBtn = page.locator('button:has-text("Sync with main")')
-    await syncBtn.click()
+    // Click "Commit merge" to trigger the error
+    const mergeBtn = page.locator('button:has-text("Commit merge")')
+    await mergeBtn.click()
 
     // Wait for the error banner to appear
     const errorBanner = page.locator('button[title="Click to view full error"]')
@@ -135,7 +137,7 @@ test.describe.serial('Feature: Error Banner Expansion', () => {
       screenshotPath: 'screenshots/02-error-banner-wrapped.png',
       caption: 'Error banner wraps the full error message instead of truncating',
       description:
-        'After the sync fails, the error banner shows the operation label ("Sync with main failed") ' +
+        'After the merge commit fails, the error banner shows the operation label ("Merge commit failed") ' +
         'followed by the humanized error message. The text wraps naturally instead of being cut off ' +
         'at 80 characters, so multi-line git output is fully readable.',
     })
@@ -180,7 +182,7 @@ test.describe.serial('Feature: Error Banner Expansion', () => {
     await expect(errorBanner).not.toBeVisible()
 
     // Restore the handler
-    await restoreIpcHandler('git:pullOriginMain')
+    await restoreIpcHandler('git:commitMerge')
 
     const explorer = page.locator('[data-panel-id="explorer"]')
     await screenshotElement(page, explorer, path.join(SCREENSHOTS, '04-error-dismissed.png'), { maxHeight: 350 })

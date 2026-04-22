@@ -17,6 +17,7 @@ vi.mock('fs/promises', () => ({
   copyFile: vi.fn(),
   mkdir: vi.fn(),
   access: vi.fn(),
+  readdir: vi.fn(),
 }))
 
 vi.mock('../platform', () => ({
@@ -26,7 +27,7 @@ vi.mock('../platform', () => ({
 }))
 
 import { existsSync, mkdirSync, writeFileSync, readdirSync } from 'fs'
-import { readFile, writeFile, rename, copyFile, mkdir, access } from 'fs/promises'
+import { readFile, writeFile, rename, copyFile, mkdir, access, readdir } from 'fs/promises'
 import { register } from './config'
 import { DEFAULT_AGENTS, DEFAULT_PROFILES, E2EScenario, HandlerContext } from './types'
 
@@ -84,6 +85,11 @@ describe('config handlers', () => {
   })
 
   describe('profiles:list', () => {
+    beforeEach(() => {
+      // Default: no extra profile directories to discover
+      vi.mocked(readdir).mockResolvedValue([])
+    })
+
     it('returns DEFAULT_PROFILES in E2E mode', async () => {
       const handlers = setupHandlers(createMockCtx({ isE2ETest: true }))
       const result = await handlers['profiles:list']()
@@ -107,16 +113,64 @@ describe('config handlers', () => {
       expect(result).toEqual(DEFAULT_PROFILES)
     })
 
-    it('returns DEFAULT_PROFILES on parse error', async () => {
+    it('falls back to backup on parse error', async () => {
+      allowConsoleWarn()
+      const backupProfiles = { profiles: [{ id: 'backup', name: 'Backup', color: '#f00' }], lastProfileId: 'backup' }
+      vi.mocked(readFile).mockImplementation(async (path: unknown) => {
+        if (String(path).endsWith('.backup')) return JSON.stringify(backupProfiles)
+        return 'not json'
+      })
+
+      const handlers = setupHandlers()
+      const result = await handlers['profiles:list']()
+      expect(result).toEqual(backupProfiles)
+    })
+
+    it('returns DEFAULT_PROFILES when both primary and backup fail', async () => {
+      allowConsoleWarn()
       vi.mocked(readFile).mockResolvedValue('not json')
+      // backup also corrupt — access succeeds but readFile returns bad data
+      // Since readFile is mocked globally, both primary and backup get 'not json'
 
       const handlers = setupHandlers()
       const result = await handlers['profiles:list']()
       expect(result).toEqual(DEFAULT_PROFILES)
     })
+
+    it('reconciles orphan profile directories', async () => {
+      allowConsoleWarn()
+      const mockProfiles = { profiles: [{ id: 'default', name: 'Default', color: '#3b82f6' }], lastProfileId: 'default' }
+      vi.mocked(readFile).mockImplementation(async (path: unknown) => {
+        const p = String(path)
+        if (p.endsWith('profiles.json')) return JSON.stringify(mockProfiles)
+        if (p.includes('orphan-profile') && p.endsWith('config.json')) {
+          return JSON.stringify({ agents: [{ name: 'Claude Work' }] })
+        }
+        throw new Error('not found')
+      })
+      vi.mocked(readdir).mockResolvedValue([
+        { name: 'default', isDirectory: () => true },
+        { name: 'orphan-profile', isDirectory: () => true },
+      ] as never)
+      vi.mocked(writeFile).mockResolvedValue(undefined)
+      vi.mocked(rename).mockResolvedValue(undefined)
+      vi.mocked(mkdir).mockResolvedValue(undefined)
+      vi.mocked(copyFile).mockResolvedValue(undefined)
+
+      const handlers = setupHandlers()
+      const result = await handlers['profiles:list']()
+      expect(result.profiles).toHaveLength(2)
+      expect(result.profiles[1].id).toBe('orphan-profile')
+      expect(result.profiles[1].name).toBe('Work')
+    })
   })
 
   describe('profiles:save', () => {
+    beforeEach(() => {
+      // Default: no extra profile directories to discover
+      vi.mocked(readdir).mockResolvedValue([])
+    })
+
     it('returns success in E2E mode without writing', async () => {
       const handlers = setupHandlers(createMockCtx({ isE2ETest: true }))
       const result = await handlers['profiles:save'](null, { profiles: [], lastProfileId: 'x' })
@@ -124,15 +178,21 @@ describe('config handlers', () => {
       expect(writeFile).not.toHaveBeenCalled()
     })
 
-    it('writes profiles to file in normal mode', async () => {
+    it('writes profiles with atomic write pattern', async () => {
       vi.mocked(mkdir).mockResolvedValue(undefined)
       vi.mocked(writeFile).mockResolvedValue(undefined)
+      vi.mocked(copyFile).mockResolvedValue(undefined)
+      vi.mocked(rename).mockResolvedValue(undefined)
 
       const handlers = setupHandlers()
       const data = { profiles: [{ id: 'p1', name: 'Profile 1', color: '#f00' }], lastProfileId: 'p1' }
       const result = await handlers['profiles:save'](null, data)
       expect(result).toEqual({ success: true })
-      expect(writeFile).toHaveBeenCalledWith(expect.any(String), JSON.stringify(data, null, 2))
+      // Should write to .tmp file first
+      expect(writeFile).toHaveBeenCalledWith(expect.stringContaining('.tmp'), JSON.stringify(data, null, 2))
+      // Should backup then rename
+      expect(copyFile).toHaveBeenCalled()
+      expect(rename).toHaveBeenCalled()
     })
 
     it('returns error when write fails', async () => {
@@ -142,6 +202,37 @@ describe('config handlers', () => {
       const handlers = setupHandlers()
       const result = await handlers['profiles:save'](null, { profiles: [], lastProfileId: 'x' })
       expect(result).toEqual({ success: false, error: expect.stringContaining('disk full') })
+    })
+
+    it('save guard prevents writing fewer profiles than loaded', async () => {
+      allowConsoleWarn()
+      vi.mocked(mkdir).mockResolvedValue(undefined)
+      vi.mocked(writeFile).mockResolvedValue(undefined)
+      vi.mocked(copyFile).mockResolvedValue(undefined)
+      vi.mocked(rename).mockResolvedValue(undefined)
+
+      const threeProfiles = {
+        profiles: [
+          { id: 'p1', name: 'P1', color: '#f00' },
+          { id: 'p2', name: 'P2', color: '#0f0' },
+          { id: 'p3', name: 'P3', color: '#00f' },
+        ],
+        lastProfileId: 'p1',
+      }
+      vi.mocked(readFile).mockResolvedValue(JSON.stringify(threeProfiles))
+
+      const handlers = setupHandlers()
+      // Load profiles first to set loadedProfileCount
+      await handlers['profiles:list']()
+
+      // Now try to save with only 1 profile — should be blocked
+      vi.mocked(writeFile).mockClear()
+      const result = await handlers['profiles:save'](null, {
+        profiles: [{ id: 'p1', name: 'P1', color: '#f00' }],
+        lastProfileId: 'p1',
+      })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Save guard')
     })
   })
 
@@ -224,6 +315,19 @@ describe('config handlers', () => {
       const ids = result.agents.map((a: { id: string }) => a.id)
       expect(ids).toContain('codex')
       expect(ids).toContain('gemini')
+    })
+
+    it('backfills skipApprovalFlag when saved as empty string', async () => {
+      const mockConfig = {
+        agents: [{ id: 'claude', name: 'Claude', command: 'claude', color: '#D97757', skipApprovalFlag: '' }],
+        sessions: [],
+      }
+      vi.mocked(readFile).mockResolvedValue(JSON.stringify(mockConfig))
+
+      const handlers = setupHandlers()
+      const result = await handlers['config:load'](null, 'default')
+      const claude = result.agents.find((a: { id: string }) => a.id === 'claude')
+      expect(claude.skipApprovalFlag).toBe('--dangerously-skip-permissions')
     })
 
     it('falls back to backup on corrupt primary config', async () => {

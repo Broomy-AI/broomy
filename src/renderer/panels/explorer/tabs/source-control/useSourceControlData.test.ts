@@ -31,7 +31,6 @@ describe('useSourceControlData', () => {
     expect(result.current.isCommitting).toBe(false)
     expect(result.current.commitError).toBeNull()
     expect(result.current.isSyncing).toBe(false)
-    expect(result.current.isSyncingWithMain).toBe(false)
     expect(result.current.gitOpError).toBeNull()
     expect(result.current.branchChanges).toEqual([])
     expect(result.current.branchBaseName).toBe('main')

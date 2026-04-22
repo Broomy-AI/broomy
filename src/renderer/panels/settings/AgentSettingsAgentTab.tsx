@@ -3,7 +3,9 @@
  */
 import { type RefObject } from 'react'
 import type { AgentConfig } from '../../store/agents'
+import type { SdkModelInfo } from '../../../preload/apis/types'
 import { EnvVarEditor, type EnvVarEditorRef } from './EnvVarEditor'
+import { useSdkModels, DEFAULT_MODEL } from '../../shared/hooks/useSdkModels'
 
 interface AgentSettingsAgentTabProps {
   agents: AgentConfig[]
@@ -14,12 +16,18 @@ interface AgentSettingsAgentTabProps {
   color: string
   env: Record<string, string>
   skipApprovalFlag: string
+  connectionMode: 'terminal' | 'api'
+  model?: string
+  effort?: string
   envEditorRef: RefObject<EnvVarEditorRef>
   onNameChange: (v: string) => void
   onCommandChange: (v: string) => void
   onColorChange: (v: string) => void
   onEnvChange: (v: Record<string, string>) => void
   onSkipApprovalFlagChange: (v: string) => void
+  onConnectionModeChange: (v: 'terminal' | 'api') => void
+  onModelChange?: (v: string) => void
+  onEffortChange?: (v: string) => void
   onEdit: (agent: AgentConfig) => void
   onUpdate: () => void
   onDelete: (id: string) => void
@@ -37,12 +45,18 @@ export function AgentSettingsAgentTab({
   color,
   env,
   skipApprovalFlag,
+  connectionMode,
+  model,
+  effort,
   envEditorRef,
   onNameChange,
   onCommandChange,
   onColorChange,
   onEnvChange,
   onSkipApprovalFlagChange,
+  onConnectionModeChange,
+  onModelChange,
+  onEffortChange,
   onEdit,
   onUpdate,
   onDelete,
@@ -50,6 +64,8 @@ export function AgentSettingsAgentTab({
   onShowAddForm,
   onCancel,
 }: AgentSettingsAgentTabProps) {
+  const { models, loading } = useSdkModels()
+
   return (
     <>
       {/* Agents section */}
@@ -73,17 +89,25 @@ export function AgentSettingsAgentTab({
                 color={color}
                 env={env}
                 skipApprovalFlag={skipApprovalFlag}
+                connectionMode={connectionMode}
+                model={model}
+                effort={effort}
+                models={models}
+                modelsLoading={loading}
                 envEditorRef={envEditorRef}
                 onNameChange={onNameChange}
                 onCommandChange={onCommandChange}
                 onColorChange={onColorChange}
                 onEnvChange={onEnvChange}
                 onSkipApprovalFlagChange={onSkipApprovalFlagChange}
+                onConnectionModeChange={onConnectionModeChange}
+                onModelChange={onModelChange}
+                onEffortChange={onEffortChange}
                 onSave={onUpdate}
                 onCancel={onCancel}
               />
             ) : (
-              <AgentRow agent={agent} onEdit={onEdit} onDelete={onDelete} />
+              <AgentRow agent={agent} models={models} onEdit={onEdit} onDelete={onDelete} />
             )}
           </div>
         ))}
@@ -122,6 +146,30 @@ export function AgentSettingsAgentTab({
             placeholder="Color (optional, e.g., #4a9eff)"
             className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent"
           />
+          <div className="space-y-1">
+            <label className="text-xs text-text-secondary">Connection mode</label>
+            <select
+              value={connectionMode}
+              onChange={(e) => onConnectionModeChange(e.target.value as 'terminal' | 'api')}
+              className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary focus:outline-none focus:border-accent"
+            >
+              <option value="terminal">Terminal (PTY)</option>
+              <option value="api">API (Agent SDK)</option>
+            </select>
+            <p className="text-xs text-text-tertiary">
+              API mode uses the Claude Agent SDK for structured output instead of terminal.
+            </p>
+          </div>
+          {connectionMode === 'api' && (
+            <ApiModeOptions
+              model={model}
+              effort={effort}
+              models={models}
+              modelsLoading={loading}
+              onModelChange={onModelChange}
+              onEffortChange={onEffortChange}
+            />
+          )}
           <EnvVarEditor ref={envEditorRef} env={env} onChange={onEnvChange} command={command} />
           <div className="space-y-1">
             <label className="text-xs text-text-secondary">Auto-approve flag</label>
@@ -175,12 +223,20 @@ function AgentEditForm({
   color,
   env,
   skipApprovalFlag,
+  connectionMode,
+  model,
+  effort,
+  models,
+  modelsLoading,
   envEditorRef,
   onNameChange,
   onCommandChange,
   onColorChange,
   onEnvChange,
   onSkipApprovalFlagChange,
+  onConnectionModeChange,
+  onModelChange,
+  onEffortChange,
   onSave,
   onCancel,
 }: {
@@ -189,12 +245,20 @@ function AgentEditForm({
   color: string
   env: Record<string, string>
   skipApprovalFlag: string
+  connectionMode: 'terminal' | 'api'
+  model?: string
+  effort?: string
+  models: SdkModelInfo[]
+  modelsLoading: boolean
   envEditorRef: RefObject<EnvVarEditorRef>
   onNameChange: (v: string) => void
   onCommandChange: (v: string) => void
   onColorChange: (v: string) => void
   onEnvChange: (v: Record<string, string>) => void
   onSkipApprovalFlagChange: (v: string) => void
+  onConnectionModeChange: (v: 'terminal' | 'api') => void
+  onModelChange?: (v: string) => void
+  onEffortChange?: (v: string) => void
   onSave: () => void
   onCancel: () => void
 }) {
@@ -221,6 +285,27 @@ function AgentEditForm({
         placeholder="Color (optional, e.g., #4a9eff)"
         className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent"
       />
+      <div className="space-y-1">
+        <label className="text-xs text-text-secondary">Connection mode</label>
+        <select
+          value={connectionMode}
+          onChange={(e) => onConnectionModeChange(e.target.value as 'terminal' | 'api')}
+          className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary focus:outline-none focus:border-accent"
+        >
+          <option value="terminal">Terminal (PTY)</option>
+          <option value="api">API (Agent SDK)</option>
+        </select>
+      </div>
+      {connectionMode === 'api' && (
+        <ApiModeOptions
+          model={model}
+          effort={effort}
+          models={models}
+          modelsLoading={modelsLoading}
+          onModelChange={onModelChange}
+          onEffortChange={onEffortChange}
+        />
+      )}
       <EnvVarEditor ref={envEditorRef} env={env} onChange={onEnvChange} command={command} />
       <div className="space-y-1">
         <label className="text-xs text-text-secondary">Auto-approve flag</label>
@@ -254,15 +339,86 @@ function AgentEditForm({
   )
 }
 
+/** Model + effort controls shown when connection mode is API. */
+function ApiModeOptions({ model, effort, models, modelsLoading, onModelChange, onEffortChange }: {
+  model?: string
+  effort?: string
+  models: SdkModelInfo[]
+  modelsLoading: boolean
+  onModelChange?: (v: string) => void
+  onEffortChange?: (v: string) => void
+}) {
+  const selectedModel = models.find((m) => m.value === model) ?? models[0]
+  const effortLevels = selectedModel.supportedEffortLevels ?? []
+  const supportsEffort = effortLevels.length > 0 && !!selectedModel.supportsEffort
+
+  // If current effort isn't supported by the new model, clear it
+  const effectiveEffort = (supportsEffort && effortLevels.includes(effort as 'low' | 'medium' | 'high' | 'max'))
+    ? effort
+    : ''
+
+  return (
+    <>
+      <div className="space-y-1">
+        <label className="text-xs text-text-secondary flex items-center gap-1">
+          Model
+          {modelsLoading && <span className="text-text-tertiary">(loading...)</span>}
+        </label>
+        <select
+          value={model || DEFAULT_MODEL}
+          onChange={(e) => {
+            onModelChange?.(e.target.value)
+            // Reset effort when model changes since capabilities may differ
+            onEffortChange?.('')
+          }}
+          className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary focus:outline-none focus:border-accent"
+        >
+          {models.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.displayName}{m.description ? ` — ${m.description}` : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+      {supportsEffort && (
+        <div className="space-y-1">
+          <label className="text-xs text-text-secondary">Thinking effort</label>
+          <select
+            value={effectiveEffort}
+            onChange={(e) => onEffortChange?.(e.target.value)}
+            className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary focus:outline-none focus:border-accent"
+          >
+            <option value="">Auto (model decides)</option>
+            {effortLevels.map((level) => (
+              <option key={level} value={level}>{level}</option>
+            ))}
+          </select>
+          <p className="text-xs text-text-tertiary">
+            Controls how much Claude thinks before responding. Auto lets the model decide.
+          </p>
+        </div>
+      )}
+    </>
+  )
+}
+
 function AgentRow({
   agent,
+  models,
   onEdit,
   onDelete,
 }: {
   agent: AgentConfig
+  models: SdkModelInfo[]
   onEdit: (agent: AgentConfig) => void
   onDelete: (id: string) => void
 }) {
+  const modelInfo = agent.connectionMode === 'api' && agent.model
+    ? models.find((m) => m.value === agent.model)
+    : null
+  const modelLabel = modelInfo?.displayName ?? (agent.connectionMode === 'api' && agent.model ? agent.model : null)
+  const effortLabel = agent.connectionMode === 'api' && agent.effort ? agent.effort : null
+
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-3">
@@ -275,12 +431,16 @@ function AgentRow({
         <div>
           <div className="font-medium text-sm text-text-primary flex items-center gap-2">
             {agent.name}
+            {agent.connectionMode === 'api' && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-normal">API</span>
+            )}
             {agent.skipApprovalFlag && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 font-normal">auto</span>
             )}
           </div>
           <div className="text-xs text-text-secondary font-mono">
             {agent.command}
+            {modelLabel && <span className="ml-2 font-sans not-italic text-text-tertiary">({modelLabel}{effortLabel ? `, ${effortLabel}` : ''})</span>}
           </div>
         </div>
       </div>
@@ -330,3 +490,4 @@ function AgentRow({
     </div>
   )
 }
+

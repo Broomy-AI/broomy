@@ -6,7 +6,7 @@
  */
 import { IpcMain } from 'electron'
 import { existsSync, mkdirSync, writeFileSync, copyFileSync, readdirSync } from 'fs'
-import { readFile, writeFile, rename, copyFile, mkdir, access } from 'fs/promises'
+import { readFile, writeFile, rename, copyFile, mkdir, access, readdir } from 'fs/promises'
 import { join } from 'path'
 import { makeExecutable } from '../platform'
 import {
@@ -98,7 +98,7 @@ async function loadConfigFile(configFile: string): Promise<Record<string, unknow
       }
       for (const agent of config.agents) {
         const def = defaultsById.get(agent.id)
-        if (def && 'skipApprovalFlag' in def && agent.skipApprovalFlag === undefined) {
+        if (def && 'skipApprovalFlag' in def && !agent.skipApprovalFlag) {
           agent.skipApprovalFlag = def.skipApprovalFlag
         }
       }
@@ -124,6 +124,57 @@ async function loadConfigFile(configFile: string): Promise<Record<string, unknow
   }
 }
 
+type ProfilesData = { profiles: { id: string; name: string; color: string }[]; lastProfileId: string }
+
+// Atomic write for profiles.json: write to tmp, backup current, rename tmp → profiles.json
+async function atomicWriteProfiles(data: ProfilesData): Promise<void> {
+  await mkdir(CONFIG_DIR, { recursive: true })
+  const tmpFile = `${PROFILES_FILE}.tmp`
+  const backupFile = `${PROFILES_FILE}.backup`
+  await writeFile(tmpFile, JSON.stringify(data, null, 2))
+  if (await fileExists(PROFILES_FILE)) {
+    await copyFile(PROFILES_FILE, backupFile)
+  }
+  await rename(tmpFile, PROFILES_FILE)
+}
+
+// Try to derive a human-readable profile name from its config file
+async function deriveProfileName(dirName: string, isDev: boolean): Promise<string> {
+  const fallback = dirName === 'default' ? 'Default' : dirName
+  for (const dev of [isDev, !isDev]) {
+    const configFile = getProfileConfigFile(dirName, dev)
+    if (await fileExists(configFile)) {
+      const raw = await readFile(configFile, 'utf-8')
+      const config = JSON.parse(raw)
+      if (config.agents?.[0]?.name) {
+        return config.agents[0].name.replace(/^Claude\s+/i, '') || fallback
+      }
+    }
+  }
+  return fallback
+}
+
+// Scan profile directories and reconcile any missing from profiles.json
+async function reconcileOrphanProfiles(data: ProfilesData, isDev: boolean): Promise<boolean> {
+  if (!await fileExists(PROFILES_DIR)) return false
+  const entries = await readdir(PROFILES_DIR, { withFileTypes: true })
+  const knownIds = new Set(data.profiles.map(p => p.id))
+  let reconciled = false
+  for (const entry of entries) {
+    if (!entry.isDirectory() || knownIds.has(entry.name)) continue
+    let name: string
+    try {
+      name = await deriveProfileName(entry.name, isDev)
+    } catch {
+      name = entry.name
+    }
+    console.warn(`[profiles:list] Recovered orphan profile directory: ${entry.name} (name: ${name})`)
+    data.profiles.push({ id: entry.name, name, color: '#6b7280' })
+    reconciled = true
+  }
+  return reconciled
+}
+
 export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   const legacyConfigFile = getLegacyConfigFile(ctx.isDev)
 
@@ -140,21 +191,51 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     }
   }
 
+  // Track how many profiles were loaded so we can guard against saving fewer
+  let loadedProfileCount = 0
+
   // Profiles IPC handlers
   ipcMain.handle('profiles:list', async () => {
     if (ctx.isE2ETest) {
       return DEFAULT_PROFILES
     }
 
+    let data: ProfilesData | null = null
+
+    // Try primary file, then backup
     try {
-      if (!await fileExists(PROFILES_FILE)) {
-        return DEFAULT_PROFILES
+      if (await fileExists(PROFILES_FILE)) {
+        data = JSON.parse(await readFile(PROFILES_FILE, 'utf-8'))
       }
-      const data = await readFile(PROFILES_FILE, 'utf-8')
-      return JSON.parse(data)
     } catch {
-      return DEFAULT_PROFILES
+      const backupFile = `${PROFILES_FILE}.backup`
+      try {
+        if (await fileExists(backupFile)) {
+          console.warn('[profiles:list] Primary profiles.json corrupt, falling back to backup')
+          data = JSON.parse(await readFile(backupFile, 'utf-8'))
+        }
+      } catch {
+        // backup also corrupt
+      }
     }
+
+    if (!data) {
+      data = { ...DEFAULT_PROFILES, profiles: [...DEFAULT_PROFILES.profiles] }
+    }
+
+    // Track loaded count for save guard
+    loadedProfileCount = Math.max(loadedProfileCount, data.profiles.length)
+
+    // Self-healing: scan profile directories and reconcile any missing from profiles.json
+    try {
+      if (await reconcileOrphanProfiles(data, ctx.isDev)) {
+        await atomicWriteProfiles(data)
+      }
+    } catch {
+      // scan failed — return what we have
+    }
+
+    return data
   })
 
   ipcMain.handle('profiles:save', async (_event, data: { profiles: { id: string; name: string; color: string }[]; lastProfileId: string }) => {
@@ -162,9 +243,19 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
       return { success: true }
     }
 
+    // Save guard: refuse to persist fewer profiles than were loaded from disk.
+    // This prevents bugs (e.g. failed load returning DEFAULT_PROFILES) from overwriting real data.
+    if (data.profiles.length < loadedProfileCount && loadedProfileCount > 1) {
+      console.warn(
+        `[profiles:save] Save guard: refusing to save ${data.profiles.length} profiles ` +
+        `(${loadedProfileCount} were loaded from disk)`
+      )
+      return { success: false, error: 'Save guard: would lose profiles' }
+    }
+
     try {
-      await mkdir(CONFIG_DIR, { recursive: true })
-      await writeFile(PROFILES_FILE, JSON.stringify(data, null, 2))
+      await atomicWriteProfiles(data)
+      loadedProfileCount = Math.max(loadedProfileCount, data.profiles.length)
       return { success: true }
     } catch (error) {
       return { success: false, error: String(error) }

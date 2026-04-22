@@ -52,17 +52,21 @@ If the repo has an obvious way to generate screenshot walkthroughs (e.g. a featu
 
 ## Action
 
-1. Create the PR:
-   \`\`\`
-   gh pr create --title "<title>" --body "<body>"
-   \`\`\`
-2. After creating the PR, write the result to \`.broomy/output/pr-result.json\`:
-   \`\`\`json
-   {
-     "url": "<the PR URL returned by gh>",
-     "number": <PR number>,
-     "title": "<the title you used>"
-   }
-   \`\`\`
+Create the PR:
+\`\`\`
+gh pr create --title "<title>" --body "<body>"
+\`\`\`
+
+## Wait for CI and Fix Failures
+
+1. Wait for all CI checks to complete on the PR. Poll with \`gh pr checks <number> --watch\` or periodically check with \`gh pr checks <number>\`.
+2. If all checks pass, you're done.
+3. If any checks fail:
+   a. Inspect the failed check logs: \`gh run view <run-id> --log-failed\`
+   b. Diagnose and fix the failures in the code.
+   c. Commit the fixes with a clear message describing what was fixed.
+   d. Push the fixes to the branch.
+   e. Go back to step 1 and wait for CI to run again on the new push.
+4. Repeat until all checks pass or you've made 3 fix attempts. If checks still fail after 3 attempts, summarize the remaining failures for the user.
 `
 }

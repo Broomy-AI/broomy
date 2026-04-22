@@ -20,6 +20,11 @@ simulate_spinner() {
     printf "\r✓ %s\n" "$message"
 }
 
+# Show the original command that was requested (for E2E testing of command flags)
+if [ -n "$BROOMY_ORIGINAL_COMMAND" ]; then
+  echo "BROOMY_COMMAND=$BROOMY_ORIGINAL_COMMAND"
+fi
+
 # Show ready marker
 echo "FAKE_CLAUDE_READY"
 

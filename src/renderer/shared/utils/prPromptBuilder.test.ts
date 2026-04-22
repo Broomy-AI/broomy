@@ -29,11 +29,6 @@ describe('buildCreatePrPrompt', () => {
     expect(prompt).toContain('Testing')
   })
 
-  it('instructs agent to write pr-result.json', () => {
-    const prompt = buildCreatePrPrompt('main')
-    expect(prompt).toContain('.broomy/output/pr-result.json')
-  })
-
   it('instructs agent to use gh pr create', () => {
     const prompt = buildCreatePrPrompt('main')
     expect(prompt).toContain('gh pr create')

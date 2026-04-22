@@ -1,24 +1,22 @@
 /**
- * Banner component showing pull request status, sync actions, and merge conflict alerts.
+ * Banner component showing pull request status and merge conflict alerts.
  */
-import type { GitFileStatus, GitStatusResult, GitHubPrStatus } from '../../../../../preload/index'
-import type { BranchStatus } from '../../../../store/sessions'
+import type { GitHubPrStatus } from '../../../../../preload/index'
+import type { BranchStatus, StatusChip } from '../../../../store/sessions'
 import type { NavigationTarget } from '../../../../shared/utils/fileNavigation'
-import { prStateBadgeClass } from '../../../../features/git/explorerHelpers'
+import { branchStatusBadge, prStateBadge } from '../../../../features/git/explorerHelpers'
 import { DialogErrorBanner } from '../../../../shared/components/ErrorBanner'
 import { useRepoStore } from '../../../../store/repos'
 import { AuthSetupSection, isAuthError } from '../../../../shared/components/AuthSetupSection'
 import { isGitConfigError } from '../../../../shared/components/GitIdentitySetup'
+import { ReviewStatusChip } from '../../../../shared/components/ReviewStatusChip'
 
 interface SCPrBannerProps {
   prStatus: GitHubPrStatus
   isPrLoading: boolean
   branchStatus?: BranchStatus
+  statusChip?: StatusChip
   branchBaseName: string
-  gitStatus: GitFileStatus[]
-  syncStatus?: GitStatusResult | null
-  isSyncingWithMain: boolean
-  onSyncWithMain: () => void
   gitOpError: { operation: string; message: string } | null
   onDismissError: () => void
   agentMergeMessage: string | null
@@ -30,6 +28,8 @@ interface SCPrBannerProps {
   onFileSelect?: (target: NavigationTarget) => void
   onRefresh?: () => void
   isRefreshing?: boolean
+  reviewStatus?: 'pending' | 'reviewed'
+  isReview?: boolean
 }
 
 function RefreshButton({ onRefresh, isRefreshing }: { onRefresh: () => void; isRefreshing?: boolean }) {
@@ -58,38 +58,56 @@ function RefreshButton({ onRefresh, isRefreshing }: { onRefresh: () => void; isR
   )
 }
 
-function PrStatusContent({
-  prStatus, branchStatus, branchBaseName, gitStatus, syncStatus,
-  isSyncingWithMain, onSyncWithMain, issueNumber, issueTitle, issueUrl,
-  onFileSelect, onRefresh, isRefreshing, isPrLoading,
-}: Pick<SCPrBannerProps,
-  'prStatus' | 'branchStatus' | 'branchBaseName' | 'gitStatus' | 'syncStatus' |
-  'isSyncingWithMain' | 'onSyncWithMain' | 'issueNumber' | 'issueTitle' | 'issueUrl' |
-  'onFileSelect' | 'onRefresh' | 'isRefreshing' | 'isPrLoading'
->) {
-  const refresh = onRefresh ? <RefreshButton onRefresh={onRefresh} isRefreshing={isRefreshing} /> : null
+/**
+ * Compute the badge and visibility for the PR link.
+ *
+ * Shows the PR link whenever prStatus has metadata from gh, unless it's a stale
+ * MERGED/CLOSED PR on a branch that has moved on. Derives the badge from the live
+ * PR state when branchStatus hasn't caught up yet (e.g. still 'pushed' or
+ * 'in-progress' because useGitPolling hasn't recomputed).
+ */
+function computePrBadge(
+  prStatus: GitHubPrStatus,
+  branchStatus: BranchStatus | undefined,
+  statusChip: StatusChip | undefined,
+): { badge: { label: string; classes: string }; isStale: boolean } | null {
+  const hasPrMetadata = prStatus?.number && prStatus.url
+  if (!hasPrMetadata) return null
 
-  if (isPrLoading) {
-    return (
-      <div className="flex items-center justify-between">
-        <div className="text-xs text-text-secondary">Loading PR status...</div>
-        {refresh}
-      </div>
-    )
-  }
-
-  // Determine whether to show PR info (hide stale MERGED/CLOSED when branch has moved on)
-  const showPr = prStatus?.number && prStatus.url && !(
+  const isStaleTerminalPr =
     (prStatus.state === 'MERGED' || prStatus.state === 'CLOSED') &&
     (branchStatus === 'in-progress' || branchStatus === 'pushed')
-  )
 
-  if (showPr) {
+  // When branchStatus is PR-aware (open/merged/closed/feedback/failed), use its badge.
+  // Otherwise the branch status hasn't caught up with the live PR data, so derive
+  // the badge directly from the PR state.
+  const chipKey = statusChip ?? branchStatus
+  const branchBadge = chipKey ? branchStatusBadge[chipKey] : undefined
+  const isPrAwareBranch = branchStatus === 'open' || branchStatus === 'merged' || branchStatus === 'closed'
+    || statusChip === 'feedback' || statusChip === 'failed'
+  const badge = (isPrAwareBranch && branchBadge) ? branchBadge : prStateBadge[prStatus.state]
+
+  return { badge, isStale: isStaleTerminalPr }
+}
+
+function PrStatusContent({
+  prStatus, branchStatus, statusChip, branchBaseName, issueNumber, issueTitle, issueUrl,
+  onFileSelect, onRefresh, isRefreshing, reviewStatus, isReview,
+}: Pick<SCPrBannerProps,
+  'prStatus' | 'branchStatus' | 'statusChip' | 'branchBaseName' |
+  'issueNumber' | 'issueTitle' | 'issueUrl' |
+  'onFileSelect' | 'onRefresh' | 'isRefreshing' |
+  'reviewStatus' | 'isReview'
+>) {
+  const refresh = onRefresh ? <RefreshButton onRefresh={onRefresh} isRefreshing={isRefreshing} /> : null
+  const prInfo = computePrBadge(prStatus, branchStatus, statusChip)
+
+  if (prInfo && !prInfo.isStale && prStatus) {
     return (
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
-          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${prStateBadgeClass(prStatus.state)}`}>
-            {prStatus.state}
+          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${prInfo.badge.classes}`}>
+            {prInfo.badge.label}
           </span>
           <button
             onClick={() => onFileSelect
@@ -99,19 +117,9 @@ function PrStatusContent({
           >
             #{prStatus.number}: {prStatus.title}
           </button>
+          {isReview && reviewStatus && <ReviewStatusChip status={reviewStatus} />}
           {refresh}
         </div>
-        {prStatus.state === 'OPEN' && gitStatus.length === 0 && syncStatus?.current !== branchBaseName && (
-          <div className="flex items-center gap-2 mt-1">
-            <button
-              onClick={onSyncWithMain}
-              disabled={isSyncingWithMain}
-              className="px-2 py-1 text-xs rounded bg-bg-tertiary text-text-primary hover:bg-bg-secondary disabled:opacity-50"
-            >
-              {isSyncingWithMain ? 'Syncing...' : `Sync with ${branchBaseName}`}
-            </button>
-          </div>
-        )}
       </div>
     )
   }
@@ -154,10 +162,11 @@ function PrStatusContent({
 }
 
 export function SCPrBanner({
-  prStatus, isPrLoading, branchStatus, branchBaseName, gitStatus, syncStatus,
-  isSyncingWithMain, onSyncWithMain, gitOpError, onDismissError,
+  prStatus, isPrLoading, branchStatus, statusChip, branchBaseName,
+  gitOpError, onDismissError,
   agentMergeMessage, onDismissAgentMerge, issueNumber, issueTitle, issueUrl,
   onRetryGitOp, onFileSelect, onRefresh, isRefreshing,
+  reviewStatus, isReview,
 }: SCPrBannerProps) {
   const { ghAvailable } = useRepoStore()
   return (
@@ -165,11 +174,11 @@ export function SCPrBanner({
       {/* PR Status banner */}
       <div className="px-3 py-2 border-b border-border bg-bg-secondary">
         <PrStatusContent
-          prStatus={prStatus} isPrLoading={isPrLoading} branchStatus={branchStatus}
-          branchBaseName={branchBaseName} gitStatus={gitStatus} syncStatus={syncStatus}
-          isSyncingWithMain={isSyncingWithMain} onSyncWithMain={onSyncWithMain}
+          prStatus={prStatus} branchStatus={branchStatus} statusChip={statusChip}
+          branchBaseName={branchBaseName}
           issueNumber={issueNumber} issueTitle={issueTitle} issueUrl={issueUrl}
-          onFileSelect={onFileSelect} onRefresh={onRefresh} isRefreshing={isRefreshing}
+          onFileSelect={onFileSelect} onRefresh={onRefresh} isRefreshing={isRefreshing || isPrLoading}
+          reviewStatus={reviewStatus} isReview={isReview}
         />
       </div>
 

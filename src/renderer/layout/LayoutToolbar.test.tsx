@@ -77,14 +77,14 @@ describe('LayoutToolbar', () => {
     expect(screen.getByText('Broomy')).toBeTruthy()
   })
 
-  it('shows DEV badge when isDev is true', () => {
+  it('shows DEV badge with commit hash when isDev is true', () => {
     renderToolbar({ isDev: true })
-    expect(screen.getByText('DEV')).toBeTruthy()
+    expect(screen.getByText(/^DEV /)).toBeTruthy()
   })
 
   it('hides DEV badge when isDev is false', () => {
     renderToolbar({ isDev: false })
-    expect(screen.queryByText('DEV')).toBeNull()
+    expect(screen.queryByText(/^DEV /)).toBeNull()
   })
 
   it('renders profile chip when provided', () => {

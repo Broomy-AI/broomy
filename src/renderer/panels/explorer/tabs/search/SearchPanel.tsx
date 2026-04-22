@@ -60,6 +60,7 @@ function SearchHistoryList({ history, sessionId, onSelect, onRemove }: {
 }
 
 function SearchTreeResults({ node, depth, collapsedGroups, onToggleGroup, onFileSelect, searchQuery }: {
+  key?: string | number | bigint | null
   node: SearchTreeNode
   depth: number
   collapsedGroups: Set<string>

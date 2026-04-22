@@ -9,10 +9,11 @@ export function CollapsibleSection({
   defaultOpen = false,
   children,
 }: {
+  key?: string | number | bigint | null
   title: string
   count?: number
   defaultOpen?: boolean
-  children: React.ReactNode
+  children?: React.ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
 

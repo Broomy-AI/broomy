@@ -5,7 +5,6 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import type { GitFileStatus, GitStatusResult, GitHubPrStatus, GitCommitInfo } from '../../../../../preload/index'
 import type { BranchStatus, PrState } from '../../../../store/sessions'
 import { useRepoStore } from '../../../../store/repos'
-import { usePrResultWatcher } from './usePrResultWatcher'
 
 export interface SourceControlDataProps {
   directory?: string
@@ -13,6 +12,8 @@ export interface SourceControlDataProps {
   syncStatus?: GitStatusResult | null
   branchStatus?: BranchStatus
   onUpdatePrState?: (prState: PrState, prNumber?: number, prUrl?: string) => void
+  onUpdateFeedbackStatus?: (hasFeedback: boolean) => void
+  onUpdateChecksStatus?: (checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
   repoId?: string
   scView: 'working' | 'branch' | 'commits'
 }
@@ -22,11 +23,13 @@ interface PrEffectsConfig {
   syncStatus?: GitStatusResult | null
   branchStatus?: BranchStatus
   onUpdatePrState?: (prState: PrState, prNumber?: number, prUrl?: string) => void
+  onUpdateFeedbackStatus?: (hasFeedback: boolean) => void
+  onUpdateChecksStatus?: (checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
 }
 
 /** PR data-fetching effects, extracted for function size limits. */
 function usePrEffects(config: PrEffectsConfig) {
-  const { directory, syncStatus, branchStatus, onUpdatePrState } = config
+  const { directory, syncStatus, branchStatus, onUpdatePrState, onUpdateFeedbackStatus, onUpdateChecksStatus } = config
   const [prStatus, setPrStatus] = useState<GitHubPrStatus>(null)
   const [isPrLoading, setIsPrLoading] = useState(false)
   const [hasWriteAccess, setHasWriteAccess] = useState(false)
@@ -34,19 +37,10 @@ function usePrEffects(config: PrEffectsConfig) {
   const [hasPrLoadedOnce, setHasPrLoadedOnce] = useState(false)
   const [prRefreshKey, setPrRefreshKey] = useState(0)
 
-  // Listen for focus-based PR check events (webview blur, explorer focus-in)
-  // and re-fetch only when the current PR is OPEN (may have been merged externally).
-  useEffect(() => {
-    const handler = () => {
-      if (directory && prStatus?.state === 'OPEN') {
-        setPrRefreshKey(k => k + 1)
-      }
-    }
-    document.addEventListener('broomy:check-pr-status', handler)
-    return () => document.removeEventListener('broomy:check-pr-status', handler)
-  }, [directory, prStatus?.state])
+  // Agent-finished PR detection is handled by useGitPolling (always mounted)
+  // so it works even when the source control tab isn't open.
 
-  // Fetch PR status, write access, and checks when source control is active
+  // Fetch PR status, write access, checks, and feedback when source control is active
   useEffect(() => {
     if (!directory) { setHasPrLoadedOnce(true); return }
     let cancelled = false
@@ -62,18 +56,27 @@ function usePrEffects(config: PrEffectsConfig) {
         setPrStatus(prResult)
         setHasWriteAccess(writeAccess)
 
-        // Fetch checks status only if there's an open PR
+        // Fetch checks + feedback in parallel only if there's an open PR
         if (prResult?.state === 'OPEN') {
-          const checks = await window.gh.prChecksStatus(directory).catch(() => 'none' as const)
+          const [checks, feedback] = await Promise.all([
+            window.gh.prChecksStatus(directory).catch(() => 'none' as const),
+            window.gh.prFeedbackStatus(directory, prResult.number).catch(() => false),
+          ])
           setChecksStatus(checks)
+          onUpdateChecksStatus?.(checks)
+          onUpdateFeedbackStatus?.(feedback)
         } else {
           setChecksStatus('none')
+          onUpdateChecksStatus?.('none')
+          onUpdateFeedbackStatus?.(false)
         }
       } catch {
         if (cancelled) return
         setPrStatus(null)
         setHasWriteAccess(false)
         setChecksStatus('none')
+        onUpdateChecksStatus?.('none')
+        onUpdateFeedbackStatus?.(false)
       } finally {
         if (!cancelled) {
           setIsPrLoading(false)
@@ -90,9 +93,11 @@ function usePrEffects(config: PrEffectsConfig) {
   // Don't re-persist MERGED/CLOSED state if the branch has moved on (new work after merge).
   // The git polling hook clears stale PR state when it detects new commits, and we avoid
   // re-setting it here so the branch can transition to a fresh PR lifecycle.
+  // Wait until hasPrLoadedOnce so we don't clear persisted state on initial mount
+  // before the gh fetch has had a chance to run.
   useEffect(() => {
     if (!onUpdatePrState) return
-    if (isPrLoading) return
+    if (!hasPrLoadedOnce) return
     if (prStatus) {
       const isTerminalState = prStatus.state === 'MERGED' || prStatus.state === 'CLOSED'
       const branchMovedOn = branchStatus === 'in-progress' || branchStatus === 'pushed'
@@ -104,10 +109,7 @@ function usePrEffects(config: PrEffectsConfig) {
     } else {
       onUpdatePrState(null)
     }
-  }, [prStatus, isPrLoading, branchStatus])
-
-  // Watch for agent-created pr-result.json to detect PR creation immediately
-  usePrResultWatcher({ directory, onUpdatePrState, setPrStatus })
+  }, [prStatus, hasPrLoadedOnce, branchStatus])
 
   // Reset on directory change
   const resetPr = () => {
@@ -135,6 +137,8 @@ export function useSourceControlData({
   syncStatus,
   branchStatus,
   onUpdatePrState,
+  onUpdateFeedbackStatus,
+  onUpdateChecksStatus,
   repoId,
   scView,
 }: SourceControlDataProps) {
@@ -144,7 +148,6 @@ export function useSourceControlData({
   const [commitError, setCommitError] = useState<string | null>(null)
   const [commitErrorExpanded, setCommitErrorExpanded] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
-  const [isSyncingWithMain, setIsSyncingWithMain] = useState(false)
   const [gitOpError, setGitOpError] = useState<{ operation: string; message: string } | null>(null)
   const [branchChanges, setBranchChanges] = useState<{ path: string; status: string }[]>([])
   const [branchBaseName, setBranchBaseName] = useState<string>('main')
@@ -170,7 +173,7 @@ export function useSourceControlData({
   const [askedAgentToResolve, setAskedAgentToResolve] = useState(false)
 
   // PR effects
-  const pr = usePrEffects({ directory, syncStatus, branchStatus, onUpdatePrState })
+  const pr = usePrEffects({ directory, syncStatus, branchStatus, onUpdatePrState, onUpdateFeedbackStatus, onUpdateChecksStatus })
 
   // Repo lookup for allowApproveAndMerge
   const repos = useRepoStore((s) => s.repos)
@@ -281,7 +284,6 @@ export function useSourceControlData({
     commitError, setCommitError,
     commitErrorExpanded, setCommitErrorExpanded,
     isSyncing, setIsSyncing,
-    isSyncingWithMain, setIsSyncingWithMain,
     gitOpError, setGitOpError,
     branchChanges,
     branchBaseName,

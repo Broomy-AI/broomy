@@ -30,10 +30,10 @@ export function RepoSettingsView({
   useEffect(() => {
     if (isolated) {
       void window.devcontainer.status().then(setDevcontainerStatus)
-      const mainWorktree = `${repo.rootDir}/${repo.defaultBranch}`
+      const mainWorktree = `${repo.rootDir}/main`
       void window.devcontainer.hasConfig(mainWorktree).then(setHasDevcontainerConfig)
     }
-  }, [isolated, repo.rootDir, repo.defaultBranch])
+  }, [isolated, repo.rootDir])
 
   // Load init script
   useEffect(() => {
@@ -159,7 +159,7 @@ export function RepoSettingsView({
               hasDevcontainerConfig={hasDevcontainerConfigState}
               onIsolatedChange={setIsolated} onSkipApprovalChange={setSkipApproval}
               onGenerateDevcontainerConfig={async () => {
-                await window.devcontainer.generateDefaultConfig(`${repo.rootDir}/${repo.defaultBranch}`)
+                await window.devcontainer.generateDefaultConfig(`${repo.rootDir}/main`)
                 setHasDevcontainerConfig(true)
               }}
             />

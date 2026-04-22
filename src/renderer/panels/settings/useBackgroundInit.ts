@@ -31,7 +31,7 @@ export function useBackgroundInit({
   }) => {
     const { repo, branchName, agentId, issue } = params
     const worktreePath = `${repo.rootDir}/${branchName}`
-    const mainDir = `${repo.rootDir}/${repo.defaultBranch}`
+    const mainDir = `${repo.rootDir}/main`
 
     const sessionId = addInitializingSession({
       directory: worktreePath,
@@ -102,7 +102,7 @@ export function useBackgroundInit({
   }) => {
     const { repo, branchName, agentId } = params
     const worktreePath = `${repo.rootDir}/${branchName}`
-    const mainDir = `${repo.rootDir}/${repo.defaultBranch}`
+    const mainDir = `${repo.rootDir}/main`
 
     const sessionId = addInitializingSession({
       directory: worktreePath,

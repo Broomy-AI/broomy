@@ -1,7 +1,7 @@
 /**
  * Manages file navigation state including diff mode, scroll-to-line, search highlights, and dirty-file save coordination across sessions.
  */
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { resolveNavigation, applyPendingNavigation, type NavigationTarget } from '../../../shared/utils/fileNavigation'
 
 export function useFileNavigation({
@@ -21,6 +21,25 @@ export function useFileNavigation({
   const [diffLabel, setDiffLabel] = useState<string | undefined>(undefined)
   const [pendingNavigation, setPendingNavigation] = useState<NavigationTarget | null>(null)
 
+  // Reset diff-related state when switching sessions so diff mode from one
+  // session doesn't leak into another.
+  //
+  // The effect updates the actual state, but consumers see the corrected values
+  // immediately via the "effective" return values below (sessionSwitchPending).
+  // This eliminates the 1-render window where stale diff state could leak into
+  // the new session and cause the file viewer to get stuck in diff mode.
+  const prevSessionRef = useRef(activeSessionId)
+  const sessionSwitchPending = prevSessionRef.current !== activeSessionId
+  useEffect(() => {
+    if (prevSessionRef.current !== activeSessionId) {
+      prevSessionRef.current = activeSessionId
+      setOpenFileInDiffMode(false)
+      setDiffBaseRef(undefined)
+      setDiffCurrentRef(undefined)
+      setDiffLabel(undefined)
+    }
+  }, [activeSessionId])
+
   // Per-session dirty state and save function maps
   const dirtyMapRef = useRef<Record<string, boolean>>({})
   const saveMapRef = useRef<Record<string, (() => Promise<void>) | null>>({})
@@ -37,6 +56,11 @@ export function useFileNavigation({
     saveMapRef.current[sessionId] = null
   }, [])
 
+  // Track the file path that navigateToFile (or pending handlers) set via selectFile,
+  // so we can detect when the selected file changes through OTHER paths (e.g., AgentChat
+  // calling selectFile directly) and clear stale diff state for those cases.
+  const lastNavigatedFileRef = useRef<string | null>(null)
+
   // Navigate to a file, checking for unsaved changes first
   const navigateToFile = useCallback((target: NavigationTarget) => {
     if (!activeSessionId) return
@@ -52,6 +76,7 @@ export function useFileNavigation({
       setDiffLabel(result.state.diffLabel)
     }
     if (result.action === 'navigate') {
+      lastNavigatedFileRef.current = result.filePath
       selectFile(activeSessionId, result.filePath)
     }
     if (result.action === 'pending') {
@@ -74,6 +99,7 @@ export function useFileNavigation({
       setDiffBaseRef(state.diffBaseRef)
       setDiffCurrentRef(state.diffCurrentRef)
       setDiffLabel(state.diffLabel)
+      lastNavigatedFileRef.current = filePath
       selectFile(activeSessionId, filePath)
     }
     setPendingNavigation(null)
@@ -94,22 +120,45 @@ export function useFileNavigation({
       if (activeSessionId) {
         dirtyMapRef.current[activeSessionId] = false
       }
+      lastNavigatedFileRef.current = filePath
       selectFile(activeSessionId, filePath)
     }
     setPendingNavigation(null)
   }, [pendingNavigation, activeSessionId, selectFile])
+
+  // Clear stale diff state when the selected file changes through a path other
+  // than navigateToFile (e.g., AgentChat calling selectFile directly).
+  // navigateToFile sets diff state atomically with selectFile, so its file changes
+  // are excluded via lastNavigatedFileRef.
+  const prevSelectedFileRef = useRef(activeSessionSelectedFilePath)
+  useEffect(() => {
+    if (prevSelectedFileRef.current !== activeSessionSelectedFilePath) {
+      prevSelectedFileRef.current = activeSessionSelectedFilePath
+      if (lastNavigatedFileRef.current === activeSessionSelectedFilePath) {
+        // This file change came from navigateToFile — diff state was set intentionally
+        lastNavigatedFileRef.current = null
+        return
+      }
+      lastNavigatedFileRef.current = null
+      // File changed without navigateToFile — clear stale diff state
+      setOpenFileInDiffMode(false)
+      setDiffBaseRef(undefined)
+      setDiffCurrentRef(undefined)
+      setDiffLabel(undefined)
+    }
+  }, [activeSessionSelectedFilePath])
 
   const handlePendingCancel = useCallback(() => {
     setPendingNavigation(null)
   }, [])
 
   return {
-    openFileInDiffMode,
+    openFileInDiffMode: sessionSwitchPending ? false : openFileInDiffMode,
     scrollToLine,
     searchHighlight,
-    diffBaseRef,
-    diffCurrentRef,
-    diffLabel,
+    diffBaseRef: sessionSwitchPending ? undefined : diffBaseRef,
+    diffCurrentRef: sessionSwitchPending ? undefined : diffCurrentRef,
+    diffLabel: sessionSwitchPending ? undefined : diffLabel,
     pendingNavigation,
     navigateToFile,
     handlePendingSave,

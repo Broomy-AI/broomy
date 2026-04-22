@@ -31,11 +31,11 @@ export function RepoSettingsEditor({
   useEffect(() => {
     if (isolated) {
       void window.devcontainer.status().then(setDevcontainerStatus)
-      // Check main worktree for devcontainer config (rootDir/defaultBranch/)
-      const mainWorktree = `${repo.rootDir}/${repo.defaultBranch}`
+      // Check main worktree for devcontainer config (rootDir/main/)
+      const mainWorktree = `${repo.rootDir}/main`
       void window.devcontainer.hasConfig(mainWorktree).then(setHasDevcontainerConfig)
     }
-  }, [isolated, repo.rootDir, repo.defaultBranch])
+  }, [isolated, repo.rootDir])
 
   useEffect(() => {
     if (isolated) {
@@ -137,7 +137,7 @@ export function RepoSettingsEditor({
         onIsolatedChange={setIsolated}
         onSkipApprovalChange={setSkipApproval}
         onGenerateDevcontainerConfig={async () => {
-          await window.devcontainer.generateDefaultConfig(`${repo.rootDir}/${repo.defaultBranch}`)
+          await window.devcontainer.generateDefaultConfig(`${repo.rootDir}/main`)
           setHasDevcontainerConfig(true)
         }}
       />

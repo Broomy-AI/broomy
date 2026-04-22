@@ -8,7 +8,11 @@
 import { memo, useEffect, useState } from 'react'
 import { useSessionStore } from '../../store/sessions'
 import { useShallow } from 'zustand/react/shallow'
-import type { SessionStatus, BranchStatus } from '../../store/sessions'
+import type { SessionStatus, StatusChip } from '../../store/sessions'
+import { formatElapsedTime } from '../../shared/utils/formatTime'
+import { useElapsedSeconds } from '../../shared/hooks/useElapsedSeconds'
+import { branchStatusBadge } from '../../features/git/explorerHelpers'
+import { ReviewStatusChip } from '../../shared/components/ReviewStatusChip'
 
 const statusLabels: Record<SessionStatus, string> = {
   working: 'Working',
@@ -66,18 +70,9 @@ function StatusIndicator({ status, isUnread }: { status: SessionStatus; isUnread
   return <span className="w-2 h-2 rounded-full bg-status-idle" />
 }
 
-function BranchStatusChip({ status }: { status: BranchStatus }) {
+function StatusChipBadge({ status }: { status: StatusChip }) {
   if (status === 'in-progress') return null
-
-  const config: Record<string, { label: string; classes: string }> = {
-    pushed: { label: 'PUSHED', classes: 'bg-blue-500/20 text-blue-400' },
-    empty: { label: 'EMPTY', classes: 'bg-gray-500/20 text-gray-400' },
-    open: { label: 'PR OPEN', classes: 'bg-green-500/20 text-green-400' },
-    merged: { label: 'MERGED', classes: 'bg-purple-500/20 text-purple-400' },
-    closed: { label: 'CLOSED', classes: 'bg-red-500/20 text-red-400' },
-  }
-
-  const { label, classes } = config[status]
+  const { label, classes } = branchStatusBadge[status]
   return (
     <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium leading-none ${classes}`}>
       {label}
@@ -108,8 +103,9 @@ export default memo(function SessionCard({
         branch: sess.branch,
         name: sess.name,
         lastMessage: sess.lastMessage,
-        branchStatus: sess.branchStatus,
+        statusChip: sess.statusChip,
         prNumber: sess.prNumber,
+        lastKnownPrNumber: sess.lastKnownPrNumber,
         isArchived: sess.isArchived,
         sessionType: sess.sessionType,
         reviewStatus: sess.reviewStatus,
@@ -132,6 +128,8 @@ export default memo(function SessionCard({
       setShowWorking(false)
     }
   }, [session?.status])
+
+  const elapsedSeconds = useElapsedSeconds(sessionId)
 
   if (!session) return null
 
@@ -218,20 +216,12 @@ export default memo(function SessionCard({
       <div className="flex items-center gap-2 text-xs text-text-secondary">
         <span className="truncate flex-1">{session.name}</span>
         {session.sessionType === 'review' ? (
-          session.reviewStatus === 'reviewed' ? (
-            <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-green-500/20 text-green-400 flex-shrink-0">
-              Reviewed
-            </span>
-          ) : (
-            <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-cyan-500/20 text-cyan-400 flex-shrink-0">
-              Review
-            </span>
-          )
+          <ReviewStatusChip status={session.reviewStatus ?? 'pending'} />
         ) : (
-          <BranchStatusChip status={session.branchStatus} />
+          <StatusChipBadge status={session.statusChip} />
         )}
-        {session.prNumber && (
-          <span className="text-purple-400 flex-shrink-0">PR #{session.prNumber}</span>
+        {(session.prNumber || session.lastKnownPrNumber) && (
+          <span className="text-purple-400 flex-shrink-0">PR #{session.prNumber || session.lastKnownPrNumber}</span>
         )}
       </div>
       {session.initError ? (
@@ -239,14 +229,20 @@ export default memo(function SessionCard({
           {session.initError}
         </div>
       ) : session.lastMessage ? (
-        <div className={`text-xs mt-1 truncate ${
+        <div className={`text-xs mt-1 flex items-center gap-1.5 ${
           isUnread ? 'text-text-secondary' : 'text-text-secondary/60'
         }`}>
-          "{session.lastMessage}"
+          <span className="truncate">"{session.lastMessage}"</span>
+          {showWorking && elapsedSeconds > 0 && (
+            <span className="flex-shrink-0 text-text-secondary/40">{formatElapsedTime(elapsedSeconds)}</span>
+          )}
         </div>
       ) : (
-        <div className="text-xs text-text-secondary/60 mt-1 truncate">
-          {statusLabels[displayStatus]}
+        <div className="text-xs text-text-secondary/60 mt-1 flex items-center gap-1.5">
+          <span className="truncate">{statusLabels[displayStatus]}</span>
+          {showWorking && elapsedSeconds > 0 && (
+            <span className="flex-shrink-0 text-text-secondary/40">{formatElapsedTime(elapsedSeconds)}</span>
+          )}
         </div>
       )}
     </div>

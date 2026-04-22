@@ -21,7 +21,7 @@ export const EnvVarEditor = forwardRef<
     onChange: (env: Record<string, string>) => void
     command: string
   }
->(function EnvVarEditor({ env, onChange, command }, ref) {
+>(function EnvVarEditor({ env, onChange, command }: { env: Record<string, string>; onChange: (env: Record<string, string>) => void; command: string }, ref) {
   const [newKey, setNewKey] = useState('')
   const [newValue, setNewValue] = useState('')
 

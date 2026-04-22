@@ -213,7 +213,7 @@ async function handleReadFileBase64(ctx: HandlerContext, filePath: string) {
 
 const MAX_WATCHERS = 8
 
-async function handleWatch(ctx: HandlerContext, _event: IpcMainInvokeEvent, id: string, watchPath: string) {
+async function handleWatch(ctx: HandlerContext, _event: IpcMainInvokeEvent, id: string, watchPath: string, options?: { recursive?: boolean }) {
   if (ctx.isE2ETest && !ctx.e2eRealRepos) {
     return { success: true }
   }
@@ -240,7 +240,7 @@ async function handleWatch(ctx: HandlerContext, _event: IpcMainInvokeEvent, id: 
   }
 
   try {
-    const watcher = watch(watchPath, (eventType, filename) => {
+    const watcher = watch(watchPath, { recursive: options?.recursive }, (eventType, filename) => {
       const ownerWindow = ctx.watcherOwnerWindows.get(id) || ctx.mainWindow
       if (ownerWindow && !ownerWindow.isDestroyed()) {
         ownerWindow.webContents.send(`fs:change:${id}`, { eventType, filename })
@@ -288,6 +288,6 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   ipcMain.handle('fs:rename', (_event, oldPath: string, newPath: string) => handleRename(ctx, oldPath, newPath))
   ipcMain.handle('fs:createFile', (_event, filePath: string) => handleCreateFile(ctx, filePath))
   ipcMain.handle('fs:readFileBase64', (_event, filePath: string) => handleReadFileBase64(ctx, filePath))
-  ipcMain.handle('fs:watch', (_event, id: string, watchPath: string) => handleWatch(ctx, _event, id, watchPath))
+  ipcMain.handle('fs:watch', (_event, id: string, watchPath: string, options?: { recursive?: boolean }) => handleWatch(ctx, _event, id, watchPath, options))
   ipcMain.handle('fs:unwatch', (_event, id: string) => handleUnwatch(ctx, id))
 }

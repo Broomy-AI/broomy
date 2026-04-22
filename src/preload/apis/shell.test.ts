@@ -73,6 +73,11 @@ describe('preload shell API', () => {
       expect(mockInvoke).toHaveBeenCalledWith('app:getVersion')
     })
 
+    it('getBuildInfo invokes app:getBuildInfo', async () => {
+      await appApi.getBuildInfo()
+      expect(mockInvoke).toHaveBeenCalledWith('app:getBuildInfo')
+    })
+
     it('getCrashLog invokes app:getCrashLog', async () => {
       await appApi.getCrashLog()
       expect(mockInvoke).toHaveBeenCalledWith('app:getCrashLog')

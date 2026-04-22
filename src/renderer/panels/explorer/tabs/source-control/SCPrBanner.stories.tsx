@@ -10,22 +10,27 @@ const meta: Meta<typeof SCPrBanner> = {
     prStatus: emptyPr,
     isPrLoading: false,
     branchBaseName: 'main',
-    gitStatus: [],
-    syncStatus: { files: [], ahead: 0, behind: 0, tracking: 'origin/main', current: 'feature/test', isMerging: false, hasConflicts: false },
-    isSyncingWithMain: false,
-    onSyncWithMain: () => {},
     gitOpError: null,
     onDismissError: () => {},
     agentMergeMessage: null,
     onDismissAgentMerge: () => {},
     onFileSelect: () => {},
+    onRefresh: () => {},
   },
 }
 export default meta
 type Story = StoryObj<typeof SCPrBanner>
 
-export const Loading: Story = {
+export const Refreshing: Story = {
   args: {
+    prStatus: {
+      number: 123,
+      title: 'Add authentication flow',
+      state: 'OPEN',
+      url: 'https://github.com/test/my-app/pull/123',
+      headRefName: 'feature/auth',
+      baseRefName: 'main',
+    },
     isPrLoading: true,
   },
 }
@@ -108,17 +113,3 @@ export const WithAgentMergeMessage: Story = {
   },
 }
 
-export const SyncingWithMain: Story = {
-  args: {
-    prStatus: {
-      number: 123,
-      title: 'Add feature',
-      state: 'OPEN',
-      url: 'https://github.com/test/my-app/pull/123',
-      headRefName: 'feature/test',
-      baseRefName: 'main',
-    },
-    branchStatus: 'open',
-    isSyncingWithMain: true,
-  },
-}

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createPtyDataHandler, MAX_BUFFER_SIZE } from './ptyDataHandler'
+import { createPtyDataHandler } from './ptyDataHandler'
 
 vi.mock('../utils/terminalActivityDetector', () => ({
   evaluateActivity: vi.fn().mockReturnValue({ status: null, scheduleIdle: false }),
@@ -13,6 +13,10 @@ function makeTerminal() {
     cols: 80,
     rows: 24,
     resize: vi.fn(),
+    scrollToBottom: vi.fn(),
+    parser: {
+      registerCsiHandler: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+    },
   } as unknown as import('@xterm/xterm').Terminal
 }
 
@@ -22,7 +26,7 @@ function makeState() {
     lastUserInputRef: { current: 0 },
     lastInteractionRef: { current: 0 },
     lastStatusRef: { current: 'idle' as const },
-    idleTimeoutRef: { current: null },
+    idleTimeoutRef: { current: null } as { current: ReturnType<typeof setTimeout> | null },
     scheduleUpdate: vi.fn(),
   }
 }
@@ -30,118 +34,47 @@ function makeState() {
 describe('createPtyDataHandler', () => {
   let terminal: ReturnType<typeof makeTerminal>
   let state: ReturnType<typeof makeState>
-  let isActiveRef: { current: boolean }
 
   beforeEach(() => {
     vi.clearAllMocks()
     terminal = makeTerminal()
     state = makeState()
-    isActiveRef = { current: true }
   })
 
-  function createHandler(overrides: { isAgent?: boolean; command?: string } = {}) {
+  function createHandler(overrides: { isAgent?: boolean } = {}) {
     return createPtyDataHandler({
       terminal,
       isAgent: overrides.isAgent ?? false,
-      command: overrides.command,
       state,
       effectStartTime: Date.now(),
-      isActiveRef,
     })
   }
 
-  it('writes data to terminal when active', () => {
+  it('writes data to terminal', () => {
     const handler = createHandler()
     handler.handleData('hello')
     expect(terminal.write).toHaveBeenCalledWith('hello')
   })
 
-  it('does not call scrollToBottom — xterm 6 handles scroll pinning natively', () => {
+  it('does not call scrollToBottom on regular data — only on repaint transactions', () => {
     const handler = createHandler()
     handler.handleData('data')
-    // scrollToBottom should never be called by the data handler
-    expect((terminal as { scrollToBottom?: unknown }).scrollToBottom).toBeUndefined()
+    expect(terminal.scrollToBottom).not.toHaveBeenCalled()
   })
 
-  it('buffers data when inactive instead of writing to terminal', () => {
-    isActiveRef.current = false
+  it('always writes data to terminal regardless of visibility', () => {
     const handler = createHandler()
-    handler.handleData('hello')
-    handler.handleData(' world')
-    expect(terminal.write).not.toHaveBeenCalled()
-  })
-
-  it('flushes buffered data as a single write', () => {
-    isActiveRef.current = false
-    const handler = createHandler()
-    handler.handleData('hello')
-    handler.handleData(' world')
-    handler.handleData('!')
-
-    isActiveRef.current = true
-    handler.flush()
-
-    expect(terminal.write).toHaveBeenCalledTimes(1)
-    expect(terminal.write).toHaveBeenCalledWith('hello world!')
-  })
-
-  it('flush is a no-op when buffer is empty', () => {
-    const handler = createHandler()
-    handler.flush()
-    expect(terminal.write).not.toHaveBeenCalled()
-  })
-
-  it('clears buffer after flush', () => {
-    isActiveRef.current = false
-    const handler = createHandler()
-    handler.handleData('data')
-    handler.flush()
-    // Second flush should be a no-op
-    vi.mocked(terminal.write).mockClear()
-    handler.flush()
-    expect(terminal.write).not.toHaveBeenCalled()
-  })
-
-  it('caps buffer at MAX_BUFFER_SIZE by dropping oldest chunks', () => {
-    isActiveRef.current = false
-    const handler = createHandler()
-
-    // Write chunks that exceed MAX_BUFFER_SIZE
-    const chunkSize = 1024 * 1024 // 1MB
-    const chunk = 'x'.repeat(chunkSize)
-    for (let i = 0; i < 7; i++) {
-      handler.handleData(chunk)
-    }
-
-    // Flush and check the total size is <= MAX_BUFFER_SIZE
-    handler.flush()
-    expect(terminal.write).toHaveBeenCalledTimes(1)
-    const writtenData = vi.mocked(terminal.write).mock.calls[0][0] as string
-    expect(writtenData.length).toBeLessThanOrEqual(MAX_BUFFER_SIZE)
-    // Should have dropped earliest chunks
-    expect(writtenData.length).toBeGreaterThan(0)
-  })
-
-  it('skips buffering for codex terminals (writes through when inactive)', () => {
-    isActiveRef.current = false
-    const handler = createHandler({ isAgent: true, command: 'codex' })
     handler.handleData('hello')
     handler.handleData(' world')
     expect(terminal.write).toHaveBeenCalledTimes(2)
+    expect(terminal.write).toHaveBeenCalledWith('hello')
+    expect(terminal.write).toHaveBeenCalledWith(' world')
   })
 
-  it('still buffers non-codex agent terminals when inactive', () => {
-    isActiveRef.current = false
-    const handler = createHandler({ isAgent: true, command: 'claude' })
-    handler.handleData('hello')
-    expect(terminal.write).not.toHaveBeenCalled()
-  })
-
-  it('still runs activity detection when inactive (agent terminal)', async () => {
+  it('runs activity detection for agent terminals', async () => {
     const { evaluateActivity } = await import('../utils/terminalActivityDetector')
     vi.mocked(evaluateActivity).mockReturnValue({ status: 'working', scheduleIdle: true })
 
-    isActiveRef.current = false
     const handler = createHandler({ isAgent: true })
     handler.handleData('output')
 
@@ -155,11 +88,211 @@ describe('createPtyDataHandler', () => {
     expect(state.processPlanDetection).not.toHaveBeenCalled()
   })
 
-  describe('clearTimers', () => {
-    it('is a no-op (kept for interface compatibility)', () => {
-      const handler = createHandler()
+  it('schedules idle timeout when scheduleIdle is true and status is not working', async () => {
+    vi.useFakeTimers()
+    const { evaluateActivity } = await import('../utils/terminalActivityDetector')
+    vi.mocked(evaluateActivity).mockReturnValue({ status: null, scheduleIdle: true })
+
+    const handler = createHandler({ isAgent: true })
+    handler.handleData('output')
+
+    // Idle timeout not yet fired
+    expect(state.scheduleUpdate).not.toHaveBeenCalledWith({ status: 'idle' })
+
+    // Existing idle timeout should have been cleared and a new one scheduled
+    vi.advanceTimersByTime(1000)
+    expect(state.lastStatusRef.current).toBe('idle')
+    expect(state.scheduleUpdate).toHaveBeenCalledWith({ status: 'idle' })
+
+    vi.useRealTimers()
+  })
+
+  it('clears previous idle timeout when scheduleIdle and status is not working', async () => {
+    vi.useFakeTimers()
+    const { evaluateActivity } = await import('../utils/terminalActivityDetector')
+    vi.mocked(evaluateActivity).mockReturnValue({ status: null, scheduleIdle: true })
+
+    const handler = createHandler({ isAgent: true })
+    // Set up an existing idle timeout
+    state.idleTimeoutRef.current = setTimeout(() => {}, 5000)
+    handler.handleData('output')
+
+    // The old timeout should have been replaced
+    vi.advanceTimersByTime(1000)
+    expect(state.scheduleUpdate).toHaveBeenCalledWith({ status: 'idle' })
+
+    vi.useRealTimers()
+  })
+
+  describe('repaint transaction detection', () => {
+    it('registers CSI handlers for agent terminals', () => {
+      createHandler({ isAgent: true })
+      // Should register 3 CSI handlers: sync set, clear scrollback, sync reset
+      expect(terminal.parser.registerCsiHandler).toHaveBeenCalledTimes(3)
+    })
+
+    it('does not register CSI handlers for non-agent terminals', () => {
+      createHandler({ isAgent: false })
+      expect(terminal.parser.registerCsiHandler).not.toHaveBeenCalled()
+    })
+
+    it('scrolls to bottom after a repaint transaction (CSI 3 J inside DEC mode 2026)', () => {
+      vi.useFakeTimers()
+
+      // Capture the CSI handler callbacks
+      const handlers: { prefix?: string; final: string; cb: (params: (number | number[])[]) => void }[] = []
+      vi.mocked(terminal.parser.registerCsiHandler).mockImplementation(
+        (id: { prefix?: string; final: string }, cb: (params: (number | number[])[]) => boolean | Promise<boolean>) => {
+          handlers.push({ ...id, cb: cb as (params: (number | number[])[]) => void })
+          return { dispose: vi.fn() }
+        },
+      )
+
+      createHandler({ isAgent: true })
+
+      // Find handlers by their signature
+      const syncSetHandler = handlers.find(h => h.prefix === '?' && h.final === 'h')!
+      const clearScrollbackHandler = handlers.find(h => h.final === 'J' && !h.prefix)!
+      const syncResetHandler = handlers.find(h => h.prefix === '?' && h.final === 'l')!
+
+      // Simulate: DEC mode 2026 set → CSI 3 J → DEC mode 2026 reset
+      syncSetHandler.cb([2026])
+      clearScrollbackHandler.cb([3])
+      syncResetHandler.cb([2026])
+
+      // scrollToBottom should be called after 20ms delay
+      expect(terminal.scrollToBottom).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(20)
+      expect(terminal.scrollToBottom).toHaveBeenCalledTimes(1)
+
+      vi.useRealTimers()
+    })
+
+    it('does not scroll to bottom if CSI 3 J is not inside a sync transaction', () => {
+      vi.useFakeTimers()
+
+      const handlers: { prefix?: string; final: string; cb: (params: (number | number[])[]) => void }[] = []
+      vi.mocked(terminal.parser.registerCsiHandler).mockImplementation(
+        (id: { prefix?: string; final: string }, cb: (params: (number | number[])[]) => boolean | Promise<boolean>) => {
+          handlers.push({ ...id, cb: cb as (params: (number | number[])[]) => void })
+          return { dispose: vi.fn() }
+        },
+      )
+
+      createHandler({ isAgent: true })
+
+      const clearScrollbackHandler = handlers.find(h => h.final === 'J' && !h.prefix)!
+      const syncResetHandler = handlers.find(h => h.prefix === '?' && h.final === 'l')!
+
+      // CSI 3 J without prior DEC mode 2026 set
+      clearScrollbackHandler.cb([3])
+      syncResetHandler.cb([2026])
+
+      vi.advanceTimersByTime(20)
+      expect(terminal.scrollToBottom).not.toHaveBeenCalled()
+
+      vi.useRealTimers()
+    })
+
+    it('does not scroll if repaint transaction exceeds timeout', () => {
+      vi.useFakeTimers()
+
+      const handlers: { prefix?: string; final: string; cb: (params: (number | number[])[]) => void }[] = []
+      vi.mocked(terminal.parser.registerCsiHandler).mockImplementation(
+        (id: { prefix?: string; final: string }, cb: (params: (number | number[])[]) => boolean | Promise<boolean>) => {
+          handlers.push({ ...id, cb: cb as (params: (number | number[])[]) => void })
+          return { dispose: vi.fn() }
+        },
+      )
+
+      createHandler({ isAgent: true })
+
+      const syncSetHandler = handlers.find(h => h.prefix === '?' && h.final === 'h')!
+      const clearScrollbackHandler = handlers.find(h => h.final === 'J' && !h.prefix)!
+      const syncResetHandler = handlers.find(h => h.prefix === '?' && h.final === 'l')!
+
+      // Start transaction
+      syncSetHandler.cb([2026])
+      clearScrollbackHandler.cb([3])
+
+      // Wait longer than MAX_REPAINT_TRANSACTION_MS (2000ms)
+      vi.advanceTimersByTime(2100)
+
+      // End transaction — too late
+      syncResetHandler.cb([2026])
+      vi.advanceTimersByTime(20)
+      expect(terminal.scrollToBottom).not.toHaveBeenCalled()
+
+      vi.useRealTimers()
+    })
+
+    it('disposes CSI handlers on clearTimers', () => {
+      const disposeFns = [vi.fn(), vi.fn(), vi.fn()]
+      let callIdx = 0
+      vi.mocked(terminal.parser.registerCsiHandler).mockImplementation(() => {
+        return { dispose: disposeFns[callIdx++] }
+      })
+
+      const handler = createHandler({ isAgent: true })
       handler.clearTimers()
-      // Should not throw
+
+      disposeFns.forEach(fn => expect(fn).toHaveBeenCalled())
+    })
+
+    it('ignores non-2026 DEC mode params', () => {
+      vi.useFakeTimers()
+
+      const handlers: { prefix?: string; final: string; cb: (params: (number | number[])[]) => void }[] = []
+      vi.mocked(terminal.parser.registerCsiHandler).mockImplementation(
+        (id: { prefix?: string; final: string }, cb: (params: (number | number[])[]) => boolean | Promise<boolean>) => {
+          handlers.push({ ...id, cb: cb as (params: (number | number[])[]) => void })
+          return { dispose: vi.fn() }
+        },
+      )
+
+      createHandler({ isAgent: true })
+
+      const syncSetHandler = handlers.find(h => h.prefix === '?' && h.final === 'h')!
+      const clearScrollbackHandler = handlers.find(h => h.final === 'J' && !h.prefix)!
+      const syncResetHandler = handlers.find(h => h.prefix === '?' && h.final === 'l')!
+
+      // Use a different DEC mode (not 2026)
+      syncSetHandler.cb([1049])
+      clearScrollbackHandler.cb([3])
+      syncResetHandler.cb([1049])
+
+      vi.advanceTimersByTime(20)
+      expect(terminal.scrollToBottom).not.toHaveBeenCalled()
+
+      vi.useRealTimers()
+    })
+
+    it('ignores non-3 erase params (e.g. CSI 2 J)', () => {
+      vi.useFakeTimers()
+
+      const handlers: { prefix?: string; final: string; cb: (params: (number | number[])[]) => void }[] = []
+      vi.mocked(terminal.parser.registerCsiHandler).mockImplementation(
+        (id: { prefix?: string; final: string }, cb: (params: (number | number[])[]) => boolean | Promise<boolean>) => {
+          handlers.push({ ...id, cb: cb as (params: (number | number[])[]) => void })
+          return { dispose: vi.fn() }
+        },
+      )
+
+      createHandler({ isAgent: true })
+
+      const syncSetHandler = handlers.find(h => h.prefix === '?' && h.final === 'h')!
+      const clearScrollbackHandler = handlers.find(h => h.final === 'J' && !h.prefix)!
+      const syncResetHandler = handlers.find(h => h.prefix === '?' && h.final === 'l')!
+
+      // CSI 2 J (clear screen, not scrollback)
+      syncSetHandler.cb([2026])
+      clearScrollbackHandler.cb([2])
+      syncResetHandler.cb([2026])
+
+      vi.advanceTimersByTime(20)
+      expect(terminal.scrollToBottom).not.toHaveBeenCalled()
+
+      vi.useRealTimers()
     })
   })
 })

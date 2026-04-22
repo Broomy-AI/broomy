@@ -455,6 +455,17 @@ describe('fsCore handlers', () => {
       expect(ctx.fileWatchers.has('watch-1')).toBe(true)
     })
 
+    it('passes recursive option to fs.watch', async () => {
+      const mockWatcher = { on: vi.fn(), close: vi.fn() }
+      vi.mocked(watch).mockReturnValue(mockWatcher as never)
+      vi.mocked(BrowserWindow.fromWebContents).mockReturnValue(null)
+
+      const handlers = setupHandlers()
+      const event = { sender: {} }
+      await handlers['fs:watch'](event, 'watch-1', '/dir', { recursive: true })
+      expect(watch).toHaveBeenCalledWith('/dir', { recursive: true }, expect.any(Function))
+    })
+
     it('returns error when directory does not exist', async () => {
       vi.mocked(access).mockRejectedValue(new Error('ENOENT'))
       vi.mocked(BrowserWindow.fromWebContents).mockReturnValue(null)
@@ -483,7 +494,7 @@ describe('fsCore handlers', () => {
     it('sends fs:change events through watcher callback', async () => {
       let watchCallback: (eventType: string, filename: string | null) => void = () => {}
       const mockWatcher = { on: vi.fn(), close: vi.fn() }
-      vi.mocked(watch).mockImplementation(((_path: string, cb: unknown) => {
+      vi.mocked(watch).mockImplementation(((_path: string, _opts: unknown, cb: unknown) => {
         watchCallback = cb as (eventType: string, filename: string | null) => void
         return mockWatcher as never
       }) as unknown as typeof watch)
@@ -504,7 +515,7 @@ describe('fsCore handlers', () => {
     it('uses mainWindow when owner window is not available', async () => {
       let watchCallback: (eventType: string, filename: string | null) => void = () => {}
       const mockWatcher = { on: vi.fn(), close: vi.fn() }
-      vi.mocked(watch).mockImplementation(((_path: string, cb: unknown) => {
+      vi.mocked(watch).mockImplementation(((_path: string, _opts: unknown, cb: unknown) => {
         watchCallback = cb as (eventType: string, filename: string | null) => void
         return mockWatcher as never
       }) as unknown as typeof watch)

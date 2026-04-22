@@ -213,6 +213,7 @@ function useReviewMarkdownComponents(
 
 /** A collapsible card for a ### sub-section within a ## section */
 function SubSectionCard({ title, body, defaultOpen, customComponents }: {
+  key?: string | number | bigint | null
   title: string
   body: string
   defaultOpen: boolean

@@ -4,7 +4,7 @@ import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/re
 import '../../../../test/react-setup'
 import { useAgentStore } from '../../../store/agents'
 import { useRepoStore } from '../../../store/repos'
-import { useSessionStore } from '../../../store/sessions'
+import { useSessionStore, type StatusChip } from '../../../store/sessions'
 import { NewBranchView } from './NewBranchView'
 import type { ManagedRepo } from '../../../../preload/index'
 
@@ -281,6 +281,9 @@ describe('NewBranchView', () => {
           searchHistory: [],
           terminalTabs: { tabs: [{ id: 'tab-1', name: 'Terminal' }], activeTabId: 'tab-1' },
           branchStatus: 'in-progress' as const,
+          hasFeedback: false,
+          checksStatus: 'none' as const,
+          statusChip: 'in-progress' as StatusChip,
           isArchived: false,
           isRestored: false,
         }],
@@ -348,6 +351,136 @@ describe('NewBranchView', () => {
         expect(window.git.deleteBranch).toHaveBeenCalledWith('/repos/my-project/main', 'fix/lint')
       })
     })
+  })
+
+  it('allows changing the agent selection', () => {
+    useAgentStore.setState({
+      agents: [
+        { id: 'agent-1', name: 'Claude', command: 'claude', color: '#4a9eff' },
+        { id: 'agent-2', name: 'GPT', command: 'gpt', color: '#00ff00' },
+      ],
+    })
+    render(
+      <NewBranchView repo={mockRepo} onBack={vi.fn()} onComplete={vi.fn()} />
+    )
+    const select = screen.getByDisplayValue('Claude')
+    fireEvent.change(select, { target: { value: '' } })
+    expect((select as HTMLSelectElement).value).toBe('')
+  })
+
+  it('shows NO_WRITE_ACCESS error and cleans up worktree', async () => {
+    vi.mocked(window.git.pull).mockResolvedValue({ success: true })
+    vi.mocked(window.git.worktreeAdd).mockResolvedValue({ success: true })
+    vi.mocked(window.git.pushNewBranch).mockResolvedValue({
+      success: false,
+      error: 'NO_WRITE_ACCESS:You do not have write access to this repo',
+    })
+    vi.mocked(window.git.worktreeRemove).mockResolvedValue({ success: true })
+    vi.mocked(window.git.deleteBranch).mockResolvedValue({ success: true })
+
+    const onComplete = vi.fn()
+    render(
+      <NewBranchView repo={mockRepo} onBack={vi.fn()} onComplete={onComplete} />
+    )
+
+    const input = screen.getByPlaceholderText('feature/my-feature')
+    fireEvent.change(input, { target: { value: 'feature/auth' } })
+    fireEvent.click(screen.getByText('Create Branch'))
+
+    await waitFor(() => {
+      expect(screen.getByText(/do not have write access/)).toBeTruthy()
+    })
+    expect(onComplete).not.toHaveBeenCalled()
+  })
+
+  it('dismisses error banner when onDismiss is called', async () => {
+    vi.mocked(window.git.pull).mockResolvedValue({ success: true })
+    vi.mocked(window.git.worktreeAdd).mockResolvedValue({ success: false, error: 'some failure' })
+
+    render(
+      <NewBranchView repo={mockRepo} onBack={vi.fn()} onComplete={vi.fn()} />
+    )
+
+    const input = screen.getByPlaceholderText('feature/my-feature')
+    fireEvent.change(input, { target: { value: 'feature/auth' } })
+    fireEvent.click(screen.getByText('Create Branch'))
+
+    await waitFor(() => {
+      expect(screen.getByText(/some failure/)).toBeTruthy()
+    })
+
+    // Click the dismiss button on the error banner
+    const dismissBtn = screen.getByTitle('Dismiss')
+    fireEvent.click(dismissBtn)
+
+    await waitFor(() => {
+      expect(screen.queryByText(/some failure/)).toBeNull()
+    })
+  })
+
+  it('switches to existing session when "Open existing session" is clicked', async () => {
+    vi.mocked(window.git.pull).mockResolvedValue({ success: true })
+    vi.mocked(window.git.worktreeAdd).mockResolvedValue({ success: true })
+    vi.mocked(window.git.pushNewBranch).mockResolvedValue({
+      success: false,
+      error: 'BRANCH_EXISTS:The remote branch "fix/lint" has diverged.',
+    })
+    vi.mocked(window.git.worktreeRemove).mockResolvedValue({ success: true })
+    vi.mocked(window.git.deleteBranch).mockResolvedValue({ success: true })
+
+    const setActiveSession = vi.fn()
+    useSessionStore.setState({
+      sessions: [{
+        id: 'existing-session',
+        name: 'test',
+        directory: '/repos/my-project/fix/lint',
+        branch: 'fix/lint',
+        status: 'idle' as const,
+        agentId: null,
+        repoId: 'repo-1',
+        panelVisibility: {},
+        showExplorer: false,
+        showFileViewer: false,
+        showDiff: false,
+        selectedFilePath: null,
+        planFilePath: null,
+        fileViewerPosition: 'top' as const,
+        layoutSizes: { explorerWidth: 256, fileViewerSize: 300, userTerminalHeight: 192, diffPanelWidth: 320, tutorialPanelWidth: 320 },
+        explorerFilter: 'files' as const,
+        lastMessage: null,
+        lastMessageTime: null,
+        isUnread: false,
+        workingStartTime: null,
+        recentFiles: [],
+        searchHistory: [],
+        terminalTabs: { tabs: [{ id: 'tab-1', name: 'Terminal' }], activeTabId: 'tab-1' },
+        branchStatus: 'in-progress' as const,
+        hasFeedback: false,
+        checksStatus: 'none' as const,
+        statusChip: 'in-progress' as StatusChip,
+        isArchived: false,
+        isRestored: false,
+      }],
+      activeSessionId: null,
+      setActiveSession,
+    })
+
+    const onBack = vi.fn()
+    render(
+      <NewBranchView repo={mockRepo} onBack={onBack} onComplete={vi.fn()} />
+    )
+
+    const input = screen.getByPlaceholderText('feature/my-feature')
+    fireEvent.change(input, { target: { value: 'fix/lint' } })
+    fireEvent.click(screen.getByText('Create Branch'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Open existing session')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByText('Open existing session'))
+    expect(setActiveSession).toHaveBeenCalledWith('existing-session')
+    expect(onBack).toHaveBeenCalled()
   })
 
   describe('auth error flow', () => {

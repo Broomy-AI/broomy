@@ -41,10 +41,6 @@ function WebviewViewerComponent({ filePath, onEditorReady }: FileViewerComponent
       })()`)
     }
 
-    const handleBlur = () => {
-      document.dispatchEvent(new CustomEvent('broomy:check-pr-status'))
-    }
-
     const handleFoundInPage = (e: Electron.FoundInPageEvent) => {
       setFindResult({ activeMatch: e.result.activeMatchOrdinal, matches: e.result.matches })
     }
@@ -52,14 +48,12 @@ function WebviewViewerComponent({ filePath, onEditorReady }: FileViewerComponent
     webview.addEventListener('did-navigate', handleNavigation)
     webview.addEventListener('did-navigate-in-page', handleNavigation)
     webview.addEventListener('dom-ready', handleDomReady)
-    webview.addEventListener('blur', handleBlur)
     webview.addEventListener('found-in-page', handleFoundInPage)
 
     return () => {
       webview.removeEventListener('did-navigate', handleNavigation)
       webview.removeEventListener('did-navigate-in-page', handleNavigation)
       webview.removeEventListener('dom-ready', handleDomReady)
-      webview.removeEventListener('blur', handleBlur)
       webview.removeEventListener('found-in-page', handleFoundInPage)
     }
   }, [])
@@ -90,6 +84,15 @@ function WebviewViewerComponent({ filePath, onEditorReady }: FileViewerComponent
     const container = webviewRef.current?.parentElement?.parentElement
     container?.addEventListener('keydown', handleKeyDown, true)
     return () => container?.removeEventListener('keydown', handleKeyDown, true)
+  }, [openFindBar])
+
+  // Handle Cmd+F when the webview itself has focus. Keyboard events inside
+  // a <webview> don't propagate to the embedder DOM, so the main process
+  // intercepts them via before-input-event and forwards as a CustomEvent.
+  useEffect(() => {
+    const handler = () => openFindBar()
+    window.addEventListener('webview:find-in-page', handler)
+    return () => window.removeEventListener('webview:find-in-page', handler)
   }, [openFindBar])
 
   // Run findInPage when query changes
@@ -159,6 +162,16 @@ function WebviewViewerComponent({ filePath, onEditorReady }: FileViewerComponent
           {currentUrl}
         </div>
         <button
+          onClick={openFindBar}
+          className="p-1 rounded text-text-secondary hover:text-text-primary transition-colors"
+          title="Find in page (Cmd+F)"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+        </button>
+        <button
           onClick={() => void window.shell.openExternal(currentUrl)}
           className="p-1 rounded text-text-secondary hover:text-text-primary transition-colors"
           title="Open in browser"
@@ -188,7 +201,7 @@ function WebviewViewerComponent({ filePath, onEditorReady }: FileViewerComponent
           ref={webviewRef as React.Ref<Electron.WebviewTag>}
           src={filePath}
           className="w-full h-full"
-          /* @ts-expect-error - webview attributes are not in React types */
+          // @ts-expect-error allowpopups is a string attribute in the DOM but typed as boolean in Electron
           allowpopups="true"
         />
       </div>

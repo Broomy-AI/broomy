@@ -109,9 +109,14 @@ export function useFileViewer({
     }
     const shouldUseDiffMode = canShowDiff && (fileStatus === 'deleted' || initialViewMode === 'diff')
     setViewMode(shouldUseDiffMode ? 'diff' : 'latest')
-    // canShowDiff and fileStatus are intentionally read from the closure — only filePath and
-    // initialViewMode changes should trigger this effect to avoid resets on session switch.
-  }, [filePath, initialViewMode])
+  }, [filePath, initialViewMode, canShowDiff, fileStatus])
+
+  // Safety guard: viewMode must never be 'diff' when diffs are unavailable.
+  // This catches any race condition or stale state that could leave the viewer
+  // stuck showing a diff for a file that has no diff (e.g. after session switch,
+  // or navigating from a modified file to a clean file/URL).
+  // Computed every render from fresh values — no stale closures possible.
+  const effectiveViewMode: ViewMode = (viewMode === 'diff' && !canShowDiff) ? 'latest' : viewMode
 
   // Save handler (called by editor on Cmd+S)
   // Returns false if the save was aborted due to external changes.
@@ -168,12 +173,12 @@ export function useFileViewer({
 
   // Guarded view mode switching — prompts to save if dirty
   const requestViewMode = useCallback((mode: ViewMode) => {
-    if (isDirty && viewMode === 'latest' && mode !== 'latest') {
+    if (isDirty && effectiveViewMode === 'latest' && mode !== 'latest') {
       setPendingViewMode(mode)
     } else {
       setViewMode(mode)
     }
-  }, [isDirty, viewMode])
+  }, [isDirty, effectiveViewMode])
 
   const handleViewModeSave = useCallback(async () => {
     if (!filePath || !editedContent) return
@@ -208,7 +213,7 @@ export function useFileViewer({
     isSaving,
     saveError,
     clearSaveError: () => setSaveError(null),
-    viewMode,
+    viewMode: effectiveViewMode,
     diffSideBySide,
     editorActions,
     content,

@@ -1,6 +1,7 @@
 /**
  * Shared type definitions for all preload APIs.
  */
+export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk'
 export type FileEntry = {
   name: string
   path: string
@@ -127,6 +128,18 @@ export type AgentData = {
   color?: string
   env?: Record<string, string>  // Environment variables for this agent
   skipApprovalFlag?: string    // Free-text flag to append for auto-approval (e.g. "--dangerously-skip-permissions")
+  connectionMode?: 'terminal' | 'api'  // How to connect: PTY terminal or Agent SDK API (default: 'terminal')
+  model?: string               // Claude model to use in API mode (e.g. 'claude-opus-4-6', 'claude-sonnet-4-6')
+  effort?: 'low' | 'medium' | 'high' | 'max'  // Effort/thinking level for API mode
+}
+
+export type SdkModelInfo = {
+  value: string
+  displayName: string
+  description: string
+  supportsEffort?: boolean
+  supportedEffortLevels?: ('low' | 'medium' | 'high' | 'max')[]
+  supportsAdaptiveThinking?: boolean
 }
 
 export type DockerStatus = {
@@ -201,6 +214,8 @@ export type SessionData = {
   searchHistory?: string[]
   // Archive state
   isArchived?: boolean
+  // Agent SDK session ID for resume
+  sdkSessionId?: string
 }
 
 export type ConfigData = {

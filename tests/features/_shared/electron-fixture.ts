@@ -87,6 +87,66 @@ interface ResetOptions {
   mockGitAhead?: number
   /** Override git status tracking branch */
   mockGitTracking?: string
+  /**
+   * Canned agent responses for E2E tests. Each entry maps a prompt substring
+   * to a reply string. The first matching entry is used; when nothing matches
+   * the mock falls back to a generic placeholder.
+   *
+   * @example
+   *   agentResponses: [{ match: 'hello', response: 'Hi there!' }]
+   */
+  agentResponses?: { match: string; response: string }[]
+  /**
+   * Delay in milliseconds before the mock agent sends its response.
+   * Use this to test mid-turn injection — the delay gives tests time to type
+   * and queue a message while the agent appears to be working.
+   */
+  agentResponseDelayMs?: number
+  /**
+   * When true, use a fake SDK implementation that goes through the real
+   * buildQueryOptions and runTurn code paths, validating that critical
+   * options (settingSources, tools, cwd) are correctly set.
+   * Slash commands will return a response confirming the options.
+   */
+  fakeSdk?: boolean
+}
+
+/** Converts an optional number to a string for env var transport; returns '' for undefined. */
+const optNum = (n: number | undefined) => n !== undefined ? String(n) : ''
+
+/** Build the env overrides object from ResetOptions. */
+function buildEnvOverrides(opts?: ResetOptions) {
+  return {
+    sc: opts?.scenario ?? 'default',
+    mm: opts?.mockMerge ?? '',
+    prState: opts?.mockPrState ?? '',
+    isMerged: opts?.mockIsMerged ? 'true' : '',
+    hasBranchCommits: opts?.mockHasBranchCommits ? 'true' : '',
+    gitClean: opts?.mockGitClean ? 'true' : '',
+    gitAhead: optNum(opts?.mockGitAhead),
+    gitTracking: opts?.mockGitTracking ?? '',
+    agentResponses: opts?.agentResponses ? JSON.stringify(opts.agentResponses) : '',
+    agentResponseDelayMs: optNum(opts?.agentResponseDelayMs),
+    fakeSdk: opts?.fakeSdk ? 'true' : '',
+  }
+}
+
+/** Apply env overrides to the main process. */
+async function applyEnvOverrides(electronApp: ElectronApplication, envOverrides: ReturnType<typeof buildEnvOverrides>) {
+  await electronApp.evaluate((_electron, env) => {
+    process.env.E2E_SCENARIO = env.sc
+    const setOrDelete = (key: string, val: string) => { process.env[key] = val || '' }
+    setOrDelete('E2E_MOCK_MERGE', env.mm)
+    setOrDelete('E2E_MOCK_PR_STATE', env.prState)
+    setOrDelete('E2E_MOCK_IS_MERGED', env.isMerged)
+    setOrDelete('E2E_MOCK_HAS_BRANCH_COMMITS', env.hasBranchCommits)
+    setOrDelete('E2E_MOCK_GIT_CLEAN', env.gitClean)
+    setOrDelete('E2E_MOCK_GIT_AHEAD', env.gitAhead)
+    setOrDelete('E2E_MOCK_GIT_TRACKING', env.gitTracking)
+    setOrDelete('E2E_AGENT_RESPONSES', env.agentResponses)
+    setOrDelete('E2E_AGENT_RESPONSE_DELAY_MS', env.agentResponseDelayMs)
+    setOrDelete('E2E_FAKE_SDK', env.fakeSdk)
+  }, envOverrides)
 }
 
 /**
@@ -99,29 +159,7 @@ export async function resetApp(opts?: ResetOptions): Promise<{ electronApp: Elec
   const { electronApp, page } = await getOrLaunchApp()
 
   // Set env vars on the main process before reload so IPC handlers pick them up
-  const scenario = opts?.scenario ?? 'default'
-  const mockMerge = opts?.mockMerge ?? ''
-  const envOverrides = {
-    sc: scenario,
-    mm: mockMerge,
-    prState: opts?.mockPrState ?? '',
-    isMerged: opts?.mockIsMerged ? 'true' : '',
-    hasBranchCommits: opts?.mockHasBranchCommits ? 'true' : '',
-    gitClean: opts?.mockGitClean ? 'true' : '',
-    gitAhead: opts?.mockGitAhead !== undefined ? String(opts.mockGitAhead) : '',
-    gitTracking: opts?.mockGitTracking ?? '',
-  }
-  await electronApp.evaluate((_electron, env) => {
-    process.env.E2E_SCENARIO = env.sc
-    const setOrDelete = (key: string, val: string) => { process.env[key] = val || '' }
-    setOrDelete('E2E_MOCK_MERGE', env.mm)
-    setOrDelete('E2E_MOCK_PR_STATE', env.prState)
-    setOrDelete('E2E_MOCK_IS_MERGED', env.isMerged)
-    setOrDelete('E2E_MOCK_HAS_BRANCH_COMMITS', env.hasBranchCommits)
-    setOrDelete('E2E_MOCK_GIT_CLEAN', env.gitClean)
-    setOrDelete('E2E_MOCK_GIT_AHEAD', env.gitAhead)
-    setOrDelete('E2E_MOCK_GIT_TRACKING', env.gitTracking)
-  }, envOverrides)
+  await applyEnvOverrides(electronApp, buildEnvOverrides(opts))
 
   if (isFirstCall) {
     // First call — app is already fresh from launch

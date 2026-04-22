@@ -24,7 +24,7 @@ export function useSourceControlActions({
   const {
     setIsCommitting, setCommitError,
     setGitOpError, setAgentMergeMessage,
-    setIsSyncing, setIsSyncingWithMain,
+    setIsSyncing,
     gitStatus,
     expandedCommits, setExpandedCommits,
     commitFilesByHash, setCommitFilesByHash,
@@ -63,36 +63,6 @@ export function useSourceControlActions({
       setIsSyncing(false)
     }
   }
-
-  const handleSyncWithMain = async () => {
-    if (!directory) return
-
-    if (gitStatus.length > 0) {
-      setGitOpError({ operation: 'Sync with main', message: 'Commit or stash changes before syncing with main' })
-      return
-    }
-
-    setIsSyncingWithMain(true)
-    setGitOpError(null)
-    setAgentMergeMessage(null)
-    try {
-      await withGitProgress(activeSessionId, async () => {
-        const result = await window.git.pullOriginMain(directory)
-        if (result.success) {
-          onGitStatusRefresh?.()
-        } else if (result.hasConflicts) {
-          onGitStatusRefresh?.()
-        } else {
-          setGitOpError({ operation: 'Sync with main', message: result.error || 'Sync failed' })
-        }
-      })
-    } catch (err) {
-      setGitOpError({ operation: 'Sync with main', message: String(err) })
-    } finally {
-      setIsSyncingWithMain(false)
-    }
-  }
-
 
 
   const handleCommitMerge = async () => {
@@ -182,7 +152,6 @@ export function useSourceControlActions({
     handleUnstage,
     handleCommitMerge,
     handleSync,
-    handleSyncWithMain,
     handleToggleCommit,
   }
 }

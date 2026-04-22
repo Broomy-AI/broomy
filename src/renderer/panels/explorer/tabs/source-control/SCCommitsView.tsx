@@ -28,6 +28,7 @@ function CommitRow({
   onToggleCommit,
   onFileSelect,
 }: {
+  key?: string | number | bigint | null
   commit: GitCommitInfo
   directory: string
   isExpanded: boolean

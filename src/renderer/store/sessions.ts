@@ -11,7 +11,7 @@
  */
 import { create } from 'zustand'
 import { PANEL_IDS, DEFAULT_TOOLBAR_PANELS } from '../panels/system/types'
-import type { BranchStatus, PrState } from '../features/git/branchStatus'
+import type { BranchStatus, PrState, StatusChip } from '../features/git/branchStatus'
 import {
   debouncedSave,
   syncLegacyFields,
@@ -21,7 +21,7 @@ import { createPanelActions } from './sessionPanelActions'
 import { createBranchActions } from './sessionBranchActions'
 import { createCoreActions, DEFAULT_SIDEBAR_WIDTH } from './sessionCoreActions'
 
-export type { BranchStatus, PrState }
+export type { BranchStatus, PrState, StatusChip }
 
 export type SessionStatus = 'working' | 'idle' | 'error' | 'initializing'
 export type FileViewerPosition = 'top' | 'left'
@@ -99,12 +99,19 @@ export interface Session {
   hasHadCommits?: boolean
   // Branch status (runtime, derived)
   branchStatus: BranchStatus
+  // PR metadata (runtime, derived from GitHub API)
+  hasFeedback: boolean
+  checksStatus: 'passed' | 'failed' | 'pending' | 'none'
+  // Unified status chip (runtime, derived) — single source of truth for both sidebar and SCM
+  statusChip: StatusChip
   // PR state tracking (persisted)
   lastKnownPrState?: PrState
   lastKnownPrNumber?: number
   lastKnownPrUrl?: string
   // Archive state (persisted)
   isArchived: boolean
+  // Agent SDK session ID for resume (persisted)
+  sdkSessionId?: string
   // Whether this session was loaded from config (runtime only, not persisted)
   isRestored: boolean
   // Error from background initialization (runtime only, not persisted)
@@ -166,12 +173,17 @@ interface SessionStore {
   closeCommandsEditor: (sessionId: string) => void
   // Agent PTY tracking (runtime only)
   setAgentPtyId: (sessionId: string, ptyId: string) => void
+  // Agent SDK session ID (persisted for resume)
+  setSdkSessionId: (sessionId: string, sdkSessionId: string) => void
   // Branch status actions
   markHasHadCommits: (sessionId: string) => void
   clearHasHadCommits: (sessionId: string) => void
   updateBranchStatus: (sessionId: string, status: BranchStatus) => void
+  updateSessionBranch: (sessionId: string, branch: string) => void
   updatePrState: (sessionId: string, prState: PrState, prNumber?: number, prUrl?: string) => void
   updateReviewStatus: (sessionId: string, reviewStatus: 'pending' | 'reviewed') => void
+  updateFeedbackStatus: (sessionId: string, hasFeedback: boolean) => void
+  updateChecksStatus: (sessionId: string, checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
   // Search history actions
   addSearchHistory: (sessionId: string, query: string) => void
   removeSearchHistoryItem: (sessionId: string, query: string) => void
@@ -294,6 +306,10 @@ export const useSessionStore = create<SessionStore>((set, get) => {
         const workingDuration = Date.now() - (s.workingStartTime ?? Date.now())
         if (workingDuration >= 3000) {
           changes.isUnread = true
+          // Notify source control to refresh PR status after agent finishes work
+          if (typeof document !== 'undefined') {
+            document.dispatchEvent(new CustomEvent('broomy:agent-finished'))
+          }
         }
         changes.workingStartTime = null
       }
@@ -322,6 +338,17 @@ export const useSessionStore = create<SessionStore>((set, get) => {
     )
     set({ sessions: updatedSessions })
     // Don't persist - runtime only
+  },
+
+  setSdkSessionId: (sessionId: string, sdkSessionId: string) => {
+    const { sessions } = get()
+    const existing = sessions.find((s) => s.id === sessionId)
+    if (existing?.sdkSessionId === sdkSessionId) return
+    const updatedSessions = sessions.map((s) =>
+      s.id === sessionId ? { ...s, sdkSessionId } : s
+    )
+    set({ sessions: updatedSessions })
+    debouncedSave()
   },
 
   // Search history actions

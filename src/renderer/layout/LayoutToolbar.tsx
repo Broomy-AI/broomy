@@ -54,8 +54,11 @@ export default function LayoutToolbar({
       >
         <span className="text-sm font-medium text-text-primary" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>{title || 'Broomy'}</span>
         {isDev && (
-          <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
-            DEV
+          <span
+            className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
+            title={`Build: ${__BUILD_COMMIT__} (${__BUILD_TIME__})`}
+          >
+            DEV {__BUILD_COMMIT__}
           </span>
         )}
         {profileChip}

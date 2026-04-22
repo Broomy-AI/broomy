@@ -2,9 +2,9 @@
  * Top-level source control container that composes the PR banner, view toggle, and sub-views.
  * Integrates the modular commands.json action system.
  */
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import type { GitFileStatus, GitStatusResult } from '../../../../../preload/index'
-import type { BranchStatus, PrState } from '../../../../store/sessions'
+import type { BranchStatus, PrState, StatusChip } from '../../../../store/sessions'
 import type { NavigationTarget } from '../../../../shared/utils/fileNavigation'
 import { useSourceControlData } from './useSourceControlData'
 import { useSourceControlActions } from './useSourceControlActions'
@@ -26,16 +26,21 @@ interface SourceControlProps {
   onFileSelect?: (target: NavigationTarget) => void
   onGitStatusRefresh?: () => void
   branchStatus?: BranchStatus
+  statusChip?: StatusChip
   repoId?: string
   agentPtyId?: string
   agentId?: string | null
   onUpdatePrState?: (prState: PrState, prNumber?: number, prUrl?: string) => void
+  onUpdateFeedbackStatus?: (hasFeedback: boolean) => void
+  onUpdateChecksStatus?: (checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
   issueNumber?: number
   issueTitle?: string
   issueUrl?: string
   onSwitchTab?: (tab: string) => void
   onOpenCommandsEditor?: () => void
   isReview?: boolean
+  reviewStatus?: 'pending' | 'reviewed'
+  onRefreshReviewStatus?: () => void
 }
 
 export function SourceControl({
@@ -45,16 +50,21 @@ export function SourceControl({
   onFileSelect,
   onGitStatusRefresh,
   branchStatus,
+  statusChip,
   repoId,
   agentPtyId,
   agentId,
   onUpdatePrState,
+  onUpdateFeedbackStatus,
+  onUpdateChecksStatus,
   issueNumber,
   issueTitle,
   issueUrl,
   onSwitchTab,
   onOpenCommandsEditor,
   isReview,
+  reviewStatus,
+  onRefreshReviewStatus,
 }: SourceControlProps) {
   const [scView, setScView] = useState<'working' | 'branch' | 'commits'>('working')
   const [showSetupDialog, setShowSetupDialog] = useState(false)
@@ -72,7 +82,7 @@ export function SourceControl({
 
   const data = useSourceControlData({
     directory, gitStatus, syncStatus, branchStatus, onUpdatePrState,
-    repoId, scView,
+    onUpdateFeedbackStatus, onUpdateChecksStatus, repoId, scView,
   })
 
   // Check if repo has isolation enabled but no devcontainer config
@@ -91,6 +101,11 @@ export function SourceControl({
   const actions = useSourceControlActions({
     directory, onGitStatusRefresh, agentPtyId, agentId, data,
   })
+
+  const handleRefresh = useCallback(() => {
+    data.refreshPr()
+    onRefreshReviewStatus?.()
+  }, [data.refreshPr, onRefreshReviewStatus])
 
   // All async sources must complete before we update condition state.
   // This prevents buttons from appearing one-at-a-time as independent fetches resolve.
@@ -152,11 +167,8 @@ export function SourceControl({
         prStatus={data.prStatus}
         isPrLoading={data.isPrLoading}
         branchStatus={branchStatus}
+        statusChip={statusChip}
         branchBaseName={data.branchBaseName}
-        gitStatus={gitStatus}
-        syncStatus={syncStatus}
-        isSyncingWithMain={data.isSyncingWithMain}
-        onSyncWithMain={actions.handleSyncWithMain}
         gitOpError={data.gitOpError}
         onDismissError={() => data.setGitOpError(null)}
         agentMergeMessage={data.agentMergeMessage}
@@ -166,8 +178,10 @@ export function SourceControl({
         issueUrl={issueUrl}
         onRetryGitOp={actions.handleSync}
         onFileSelect={onFileSelect}
-        onRefresh={data.refreshPr}
+        onRefresh={handleRefresh}
         isRefreshing={data.isPrLoading}
+        reviewStatus={reviewStatus}
+        isReview={isReview}
       />
     </>
   )

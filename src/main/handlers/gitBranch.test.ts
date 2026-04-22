@@ -26,6 +26,10 @@ vi.mock('../cloneErrorHint', () => ({
   getGitAuthHint: vi.fn(() => null),
 }))
 
+vi.mock('fs', () => ({
+  existsSync: vi.fn(() => true),
+}))
+
 vi.mock('../platform', () => ({
   normalizePath: (p: string) => p.replace(/\\/g, '/'),
 }))
@@ -179,6 +183,16 @@ describe('gitBranch handlers', () => {
       expect(result.error).toContain('"release/linux"')
       expect(result.error).toContain('"release"')
       expect(result.error).not.toContain('refs/heads')
+    })
+
+    it('returns clear error when repo directory does not exist', async () => {
+      const { existsSync } = await import('fs')
+      vi.mocked(existsSync).mockReturnValueOnce(false)
+      const handlers = setupHandlers()
+      const result = await handlers['git:worktreeAdd'](null, '/repo', '/wt', 'branch', 'main')
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('main worktree directory was not found')
+      expect(result.error).toContain('/repo')
     })
   })
 

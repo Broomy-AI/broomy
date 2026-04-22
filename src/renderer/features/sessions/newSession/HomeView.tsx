@@ -16,6 +16,7 @@ function RepoRow({
   onOpenMain,
   onRepoSettings,
 }: {
+  key?: string | number | bigint | null
   repo: ManagedRepo
   isFocused: boolean
   ghAvailable: boolean | null
