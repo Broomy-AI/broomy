@@ -2,6 +2,7 @@ import { test, expect, _electron as electron, ElectronApplication, Page } from '
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { dockerArgs } from './electron-launch-args'
+import { waitForAppReady } from './e2e-helpers'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -25,13 +26,8 @@ test.beforeAll(async () => {
   // Get the first window
   page = await electronApp.firstWindow()
 
-  // Wait for the app to be ready
-  await page.waitForLoadState('domcontentloaded')
-
-  // Wait for React to render
-  await page.waitForSelector('#root > div', { timeout: 10000 })
-  // Wait for sessions to load (sidebar renders session cards with cursor-pointer)
-  await page.waitForSelector('.cursor-pointer', { timeout: 10000 })
+  // Wait for the app to be fully rendered
+  await waitForAppReady(page)
 })
 
 test.afterAll(async () => {
