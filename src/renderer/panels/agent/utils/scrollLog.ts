@@ -69,5 +69,3 @@ export class ScrollLog {
   }
 }
 
-// ── Global registry — re-exported from shared/utils ─────────────────
-export { scrollLogRegistry } from '../../../shared/utils/scrollLogRegistry'

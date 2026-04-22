@@ -177,9 +177,6 @@ function useFileViewerPanel(config: PanelsMapConfig) {
     closeCommandsEditor,
   } = config
 
-  const [tmpdir, setTmpdir] = useState('/tmp')
-  useEffect(() => { void window.app.tmpdir().then(setTmpdir) }, [])
-
   // Track initial view mode per-session so it doesn't change when sessions become inactive
   const [sessionViewModes, setSessionViewModes] = useState<Record<string, ViewMode>>({})
   useEffect(() => {
@@ -255,7 +252,7 @@ function useFileViewerPanel(config: PanelsMapConfig) {
         })}
       </div>
     )
-  }, [sessions, activeSessionId, selectedFileStatus, sessionViewModes, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel, fetchGitStatus, handleToggleFileViewer, handleFileViewerPositionChange, navigateToFile, tmpdir, setIsFileViewerDirty, makeSaveFunctionCallback, closeCommandsEditor])
+  }, [sessions, activeSessionId, selectedFileStatus, sessionViewModes, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel, fetchGitStatus, handleToggleFileViewer, handleFileViewerPositionChange, navigateToFile, setIsFileViewerDirty, makeSaveFunctionCallback, closeCommandsEditor])
 }
 
 export function usePanelsMap(config: PanelsMapConfig) {

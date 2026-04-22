@@ -3,11 +3,11 @@
  * Uses the V1 query() API with `resume` for token-efficient multi-turn conversations.
  */
 import { BrowserWindow, IpcMain } from 'electron'
-import { HandlerContext } from './types'
-import { getErrorMessage } from './gitUtils'
+import { HandlerContext, expandHomePath } from './types'
+import { getErrorMessage } from './handlerUtils'
 import type { AgentSdkPermissionRequest } from '../../shared/agentSdkTypes'
 import {
-  expandHome, nextMessageId, sendMsg, resolveAgentSdkCliPath,
+  nextMessageId, sendMsg, resolveAgentSdkCliPath,
   handleLoadHistory, handleStatus, handleFetchCommands, handleFetchModels, handleLogin,
   createFakeQuery, sendMockAgentResponse, isSessionNotFoundError,
   type SdkModelInfo, type SdkQuery,
@@ -251,7 +251,7 @@ function buildQueryOptions(
   const agentEnv: Record<string, string> = {}
   if (options.env) {
     for (const [key, value] of Object.entries(options.env)) {
-      agentEnv[key] = expandHome(value)
+      agentEnv[key] = expandHomePath(value)
     }
   }
   const env = { ...process.env, ...agentEnv }

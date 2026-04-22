@@ -18,8 +18,6 @@ import {
   FILE_VIEWER_MIN_HEIGHT,
   TUTORIAL_MIN, TUTORIAL_MAX,
 } from '../shared/hooks/useDividerResize'
-import { clamp } from '../shared/utils/clamp'
-
 export const DEFAULT_SIDEBAR_WIDTH = 224 // 14rem = 224px
 
 // Default layout sizes
@@ -30,6 +28,8 @@ const DEFAULT_LAYOUT_SIZES = {
   diffPanelWidth: 320, // 20rem = 320px
   tutorialPanelWidth: 320,
 }
+
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max))
 
 // Clamp layout sizes to respect minimums on load
 function clampLayoutSizes(sizes: typeof DEFAULT_LAYOUT_SIZES): typeof DEFAULT_LAYOUT_SIZES {

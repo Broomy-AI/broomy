@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { ScrollLog, scrollLogRegistry } from './scrollLog'
+import { ScrollLog } from './scrollLog'
+import { scrollLogRegistry } from '../../../shared/utils/scrollLogRegistry'
 
 function makeEvent(overrides: Partial<Parameters<ScrollLog['add']>[0]> = {}) {
   return {

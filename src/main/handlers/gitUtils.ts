@@ -11,11 +11,6 @@ export function withNonInteractive(git: ReturnType<typeof simpleGit>) {
   return git.env({ ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' })
 }
 
-/** Safely extract an error message string from an unknown thrown value. */
-export function getErrorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
-}
-
 /**
  * Detect the default branch for a repository by checking (in order):
  * 1. The symbolic ref `refs/remotes/origin/HEAD`

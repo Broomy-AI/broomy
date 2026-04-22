@@ -22,7 +22,8 @@ import { terminalBufferRegistry } from '../../../shared/utils/terminalBufferRegi
 import { useTerminalKeyboard } from './useTerminalKeyboard'
 import { usePlanDetection } from '../../../features/git/hooks/usePlanDetection'
 import { createPtyDataHandler } from './ptyDataHandler'
-import { ScrollLog, scrollLogRegistry } from '../utils/scrollLog'
+import { ScrollLog } from '../utils/scrollLog'
+import { scrollLogRegistry } from '../../../shared/utils/scrollLogRegistry'
 import type { ScrollSource } from '../utils/scrollLog'
 
 export interface TerminalConfig {

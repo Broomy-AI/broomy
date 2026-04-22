@@ -7,9 +7,7 @@
  */
 import { useState, useEffect } from 'react'
 import type { FileStatus } from '../FileViewer'
-import { getMimeType, isImageFile } from './viewerUtils'
-
-export { isImageFile }
+import { getMimeType } from './viewerUtils'
 
 interface ImageDiffViewerProps {
   filePath: string
