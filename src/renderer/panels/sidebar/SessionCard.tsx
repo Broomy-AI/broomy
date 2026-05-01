@@ -70,12 +70,15 @@ function StatusIndicator({ status, isUnread }: { status: SessionStatus; isUnread
   return <span className="w-2 h-2 rounded-full bg-status-idle" />
 }
 
-function StatusChipBadge({ status }: { status: StatusChip }) {
-  if (status === 'in-progress') return null
-  const { label, classes } = branchStatusBadge[status]
+function StatusChipBadge({ status, hasKnownPr }: { status: StatusChip; hasKnownPr?: boolean }) {
+  // When branch is in-progress but has a known open PR, show the PR badge
+  // so the user knows the PR exists even while they have unpushed work.
+  if (status === 'in-progress' && !hasKnownPr) return null
+  const badge = branchStatusBadge[status === 'in-progress' ? 'open' : status]
+  if (!badge) return null
   return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium leading-none ${classes}`}>
-      {label}
+    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium leading-none ${badge.classes}`}>
+      {badge.label}
     </span>
   )
 }
@@ -218,7 +221,7 @@ export default memo(function SessionCard({
         {session.sessionType === 'review' ? (
           <ReviewStatusChip status={session.reviewStatus ?? 'pending'} />
         ) : (
-          <StatusChipBadge status={session.statusChip} />
+          <StatusChipBadge status={session.statusChip} hasKnownPr={!!(session.prNumber || session.lastKnownPrNumber)} />
         )}
         {(session.prNumber || session.lastKnownPrNumber) && (
           <span className="text-purple-400 flex-shrink-0">PR #{session.prNumber || session.lastKnownPrNumber}</span>
