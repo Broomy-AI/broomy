@@ -202,9 +202,29 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
   scrollToLineRef.current = scrollToLine
   searchHighlightRef.current = searchHighlight
 
-  // Update original content when file changes
-  useEffect(() => {
+  // Dirty detection baseline. Sync it to the parent's `content` prop on every
+  // render BEFORE child effects fire, so the wrapper's setValue-driven onChange
+  // (which is normally suppressed, but if it fires for any reason) compares
+  // against the latest parent content. We later overwrite this ref with
+  // editor.getValue() once Monaco has the content — Monaco may normalize
+  // content (line endings, BOM stripping, etc.) so its actual value can differ
+  // from the prop, and a stale-prop baseline would then consistently flag the
+  // file as dirty even when the user has not edited it.
+  if (originalContentRef.current !== content) {
     originalContentRef.current = content
+  }
+
+  // After parent updates content (file load, watcher reload, save), let Monaco
+  // process the new value, then reset the dirty baseline to whatever Monaco
+  // actually has in the editor. This is the core defense against false-positive
+  // dirty detection: regardless of any normalization Monaco applies (CRLF↔LF,
+  // BOM, trailing-newline behavior), getValue() === getValue() so the file
+  // shows as clean until the user actually types.
+  useEffect(() => {
+    const editor = editorRef.current
+    if (editor) {
+      originalContentRef.current = editor.getValue()
+    }
     onDirtyChange?.(false, content)
   }, [content, filePath])
 
@@ -223,6 +243,12 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
 
   const handleEditorDidMount = (editor: monaco.editor.IStandaloneCodeEditor, monacoInstance: Monaco) => {
     editorRef.current = editor
+    // Anchor the dirty-detection baseline to Monaco's actual editor value, not
+    // the content prop. Monaco may normalize the content (line endings, BOM,
+    // etc.); using its post-normalization value as the baseline guarantees the
+    // first onChange after mount can only fire as dirty if the user has
+    // genuinely edited the text.
+    originalContentRef.current = editor.getValue()
     // Apply pending scroll/highlight now that the editor is ready
     if (scrollToLineRef.current) {
       // Monaco editor is ready at onMount, but give it a moment for layout

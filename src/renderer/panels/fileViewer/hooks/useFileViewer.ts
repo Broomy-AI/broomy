@@ -105,11 +105,12 @@ export function useFileViewer({
   useEffect(() => {
     if (prevFilePathRef.current !== filePath) {
       setIsDirty(false)
+      onDirtyStateChange?.(false)
       prevFilePathRef.current = filePath
     }
     const shouldUseDiffMode = canShowDiff && (fileStatus === 'deleted' || initialViewMode === 'diff')
     setViewMode(shouldUseDiffMode ? 'diff' : 'latest')
-  }, [filePath, initialViewMode, canShowDiff, fileStatus])
+  }, [filePath, initialViewMode, canShowDiff, fileStatus, onDirtyStateChange])
 
   // Safety guard: viewMode must never be 'diff' when diffs are unavailable.
   // This catches any race condition or stale state that could leave the viewer
@@ -134,12 +135,13 @@ export function useFileViewer({
       setContent(newContent)
       setEditedContent(newContent)
       setIsDirty(false)
+      onDirtyStateChange?.(false)
       onSaveComplete?.()
       return true
     } finally {
       setIsSaving(false)
     }
-  }, [filePath, onSaveComplete, checkForExternalChanges])
+  }, [filePath, onSaveComplete, onDirtyStateChange, checkForExternalChanges])
 
   // Expose save function to parent via callback
   useEffect(() => {
