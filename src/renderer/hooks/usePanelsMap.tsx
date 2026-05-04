@@ -71,6 +71,7 @@ export interface PanelsMapConfig {
   diffBaseRef: string | undefined
   diffCurrentRef: string | undefined
   diffLabel: string | undefined
+  navigationToken: number
   setIsFileViewerDirty: (sessionId: string, dirty: boolean) => void
   registerSaveFunction: (sessionId: string, fn: (() => Promise<void>) | null) => void
   unregisterSaveFunction: (sessionId: string) => void
@@ -171,7 +172,7 @@ function useExplorerPanel(config: PanelsMapConfig) {
 function useFileViewerPanel(config: PanelsMapConfig) {
   const {
     sessions, activeSessionId, navigateToFile, openFileInDiffMode, scrollToLine, searchHighlight,
-    diffBaseRef, diffCurrentRef, diffLabel, setIsFileViewerDirty,
+    diffBaseRef, diffCurrentRef, diffLabel, navigationToken, setIsFileViewerDirty,
     registerSaveFunction,
     handleToggleFileViewer, handleFileViewerPositionChange, selectedFileStatus, fetchGitStatus,
     closeCommandsEditor,
@@ -242,6 +243,7 @@ function useFileViewerPanel(config: PanelsMapConfig) {
                 diffBaseRef={isActive ? diffBaseRef : undefined}
                 diffCurrentRef={isActive ? diffCurrentRef : undefined}
                 diffLabel={isActive ? diffLabel : undefined}
+                navigationToken={isActive ? navigationToken : undefined}
                 isActive={isActive}
                 reviewContext={session.sessionType === 'review' ? {
                   sessionDirectory: session.directory,
@@ -255,7 +257,7 @@ function useFileViewerPanel(config: PanelsMapConfig) {
         })}
       </div>
     )
-  }, [sessions, activeSessionId, selectedFileStatus, sessionViewModes, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel, fetchGitStatus, handleToggleFileViewer, handleFileViewerPositionChange, navigateToFile, tmpdir, setIsFileViewerDirty, makeSaveFunctionCallback, closeCommandsEditor])
+  }, [sessions, activeSessionId, selectedFileStatus, sessionViewModes, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel, navigationToken, fetchGitStatus, handleToggleFileViewer, handleFileViewerPositionChange, navigateToFile, tmpdir, setIsFileViewerDirty, makeSaveFunctionCallback, closeCommandsEditor])
 }
 
 export function usePanelsMap(config: PanelsMapConfig) {
