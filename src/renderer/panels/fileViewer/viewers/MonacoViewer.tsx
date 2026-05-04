@@ -191,6 +191,14 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
   const searchHighlightRef = useRef(searchHighlight)
   const onOpenFileRef = useRef(onOpenFile)
   onOpenFileRef.current = onOpenFile
+  // Refs for callbacks used inside Monaco's editor.addCommand. addCommand is
+  // registered once on mount and the @monaco-editor/react Editor reuses the
+  // same instance across files, so a direct closure capture would go stale
+  // whenever the parent re-issues handleSave (e.g., after filePath changes).
+  const onSaveRef = useRef(onSave)
+  const onDirtyChangeRef = useRef(onDirtyChange)
+  onSaveRef.current = onSave
+  onDirtyChangeRef.current = onDirtyChange
 
   const { commentLine, setCommentLine, commentText, setCommentText, handleAddComment } = useMonacoComments({
     filePath,
@@ -258,13 +266,14 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
     // Add Cmd/Ctrl+S save handler
     editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS, () => {
       const editorContent = editor.getValue()
-      if (onSave && editorContent !== originalContentRef.current) {
-        void onSave(editorContent).then((saved) => {
+      const save = onSaveRef.current
+      if (save && editorContent !== originalContentRef.current) {
+        void save(editorContent).then((saved) => {
           // Only reset dirty state if the save actually went through
           // (it may be aborted if the file changed on disk)
           if (saved) {
             originalContentRef.current = editorContent
-            onDirtyChange?.(false, editorContent)
+            onDirtyChangeRef.current?.(false, editorContent)
           }
         })
       }
