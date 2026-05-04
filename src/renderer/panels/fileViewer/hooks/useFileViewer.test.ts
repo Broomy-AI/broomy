@@ -228,6 +228,30 @@ describe('useFileViewer', () => {
       expect(saveResult).toBe(true)
       expect(window.fs.writeFile).toHaveBeenCalledWith('/test/file.ts', 'new content')
     })
+
+    it('notifies onDirtyStateChange(false) after a successful save (regression)', async () => {
+      // Without this notification, the per-session dirtyMap stays true after save,
+      // and the next file switch falsely prompts "discard unsaved changes".
+      vi.mocked(window.fs.writeFile).mockResolvedValue({ success: true })
+      const onDirtyStateChange = vi.fn()
+
+      const { result } = renderHook(() =>
+        useFileViewer({ filePath: '/test/file.ts', onDirtyStateChange })
+      )
+
+      // Mark dirty first.
+      act(() => {
+        result.current.handleDirtyChange(true, 'edited')
+      })
+      expect(onDirtyStateChange).toHaveBeenLastCalledWith(true)
+
+      onDirtyStateChange.mockClear()
+      await act(async () => {
+        await result.current.handleSave('edited')
+      })
+
+      expect(onDirtyStateChange).toHaveBeenCalledWith(false)
+    })
   })
 
   describe('handleSaveButton', () => {
@@ -582,6 +606,21 @@ describe('useFileViewer', () => {
 
       rerender({ filePath: '/test/file2.ts' })
       expect(result.current.isDirty).toBe(false)
+    })
+
+    it('notifies onDirtyStateChange(false) when filePath changes (regression)', () => {
+      // Defensive reset — the per-session dirtyMap must be cleared on file
+      // change, not just our local state, otherwise the next navigation can
+      // see a stale dirty=true and prompt to discard.
+      const onDirtyStateChange = vi.fn()
+      const { rerender } = renderHook(
+        ({ filePath }) => useFileViewer({ filePath, onDirtyStateChange }),
+        { initialProps: { filePath: '/test/file1.ts' as string | null } }
+      )
+
+      onDirtyStateChange.mockClear()
+      rerender({ filePath: '/test/file2.ts' })
+      expect(onDirtyStateChange).toHaveBeenCalledWith(false)
     })
 
     it('resets editorActions when filePath changes', () => {

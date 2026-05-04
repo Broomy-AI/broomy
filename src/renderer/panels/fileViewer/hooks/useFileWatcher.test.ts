@@ -4,7 +4,7 @@ import { renderHook, act } from '@testing-library/react'
 import { useFileWatcher } from './useFileWatcher'
 
 describe('useFileWatcher', () => {
-  let onChangeCallback: ((filename?: string) => void) | null = null
+  let onChangeCallback: ((filename?: string | null) => void) | null = null
   const mockRemoveListener = vi.fn()
 
   beforeEach(() => {
@@ -12,9 +12,15 @@ describe('useFileWatcher', () => {
     vi.useFakeTimers()
     onChangeCallback = null
 
-    // Capture the onChange callback when registered
+    // Capture the onChange callback when registered. Default fires events for our
+    // watched file ('file.ts'); tests that simulate sibling-file changes pass an
+    // alternate filename explicitly. A null filename simulates platforms where
+    // the watcher omits filename info.
     vi.mocked(window.fs.onChange).mockImplementation((_watcherId, callback) => {
-      onChangeCallback = (filename?: string) => callback({ eventType: 'change', filename: filename ?? 'file.ts' })
+      onChangeCallback = (filename?: string | null) => callback({
+        eventType: 'change',
+        filename: filename === undefined ? 'file.ts' : filename,
+      })
       return mockRemoveListener
     })
     vi.mocked(window.fs.watch).mockResolvedValue({ success: true })
@@ -36,10 +42,10 @@ describe('useFileWatcher', () => {
   }
 
   describe('watcher setup', () => {
-    it('watches the file directly', () => {
+    it('watches the parent directory (not the file itself, for atomic-rename robustness)', () => {
       renderHook(() => useFileWatcher(defaultParams))
 
-      expect(window.fs.watch).toHaveBeenCalledWith('fileviewer-/test/file.ts', '/test/file.ts')
+      expect(window.fs.watch).toHaveBeenCalledWith('fileviewer-/test/file.ts', '/test')
       expect(window.fs.onChange).toHaveBeenCalledWith('fileviewer-/test/file.ts', expect.any(Function))
     })
 
@@ -175,6 +181,63 @@ describe('useFileWatcher', () => {
         await vi.advanceTimersByTimeAsync(300)
       })
     })
+
+    it('ignores events for sibling files in the same parent directory', async () => {
+      const setContent = vi.fn()
+      renderHook(() => useFileWatcher({ ...defaultParams, setContent }))
+
+      vi.mocked(window.fs.readFile).mockResolvedValue('new content')
+
+      // A different file in /test/ changes — we must not react.
+      onChangeCallback!('other.ts')
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(300)
+      })
+
+      expect(window.fs.readFile).not.toHaveBeenCalled()
+      expect(setContent).not.toHaveBeenCalled()
+    })
+
+    it('still reacts when filename is null (platform did not provide one)', async () => {
+      const setContent = vi.fn()
+      renderHook(() => useFileWatcher({ ...defaultParams, setContent }))
+
+      vi.mocked(window.fs.readFile).mockResolvedValue('new content')
+
+      onChangeCallback!(null)
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(300)
+      })
+
+      expect(setContent).toHaveBeenCalledWith('new content')
+    })
+
+    it('continues detecting changes after an atomic-rename event (regression)', async () => {
+      // Simulates an editor / CLI saving via temp-file-then-rename. With the
+      // previous file-path watcher, the inode reference died here and all later
+      // changes were silently lost. The parent-dir watcher must keep working.
+      const setContent = vi.fn()
+      renderHook(() => useFileWatcher({ ...defaultParams, setContent }))
+
+      vi.mocked(window.fs.readFile).mockResolvedValueOnce('content after rename')
+      onChangeCallback!('file.ts') // 'rename' event from atomic save
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(300)
+      })
+      expect(setContent).toHaveBeenLastCalledWith('content after rename')
+
+      // A subsequent in-place change must still be observed.
+      vi.mocked(window.fs.readFile).mockResolvedValueOnce('content after second edit')
+      onChangeCallback!('file.ts')
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(300)
+      })
+      expect(setContent).toHaveBeenLastCalledWith('content after second edit')
+    })
   })
 
   describe('handleKeepLocalChanges', () => {
@@ -267,7 +330,7 @@ describe('useFileWatcher', () => {
     it('sets up watcher when enabled is true (default)', () => {
       renderHook(() => useFileWatcher(defaultParams))
 
-      expect(window.fs.watch).toHaveBeenCalledWith('fileviewer-/test/file.ts', '/test/file.ts')
+      expect(window.fs.watch).toHaveBeenCalledWith('fileviewer-/test/file.ts', '/test')
     })
 
     it('tears down watcher when enabled transitions to false', () => {
@@ -292,7 +355,7 @@ describe('useFileWatcher', () => {
 
       rerender({ enabled: true })
 
-      expect(window.fs.watch).toHaveBeenCalledWith('fileviewer-/test/file.ts', '/test/file.ts')
+      expect(window.fs.watch).toHaveBeenCalledWith('fileviewer-/test/file.ts', '/test')
     })
 
     it('checks for external changes when transitioning from disabled to enabled', async () => {

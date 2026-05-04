@@ -2,6 +2,7 @@
  * Watches a file on disk for external changes and provides conflict resolution when the file is modified outside the editor.
  */
 import { useEffect, useCallback, useRef, useState } from 'react'
+import { dirname, basename } from 'path-browserify'
 
 interface UseFileWatcherParams {
   filePath: string | null
@@ -42,22 +43,29 @@ export function useFileWatcher({
     isDirtyRef.current = isDirty
   }, [isDirty])
 
-  // Watch the file directly for external changes
+  // Watch the parent directory and filter events by filename. Watching the file
+  // path directly is unreliable on macOS: atomic-rename saves (used by most editors
+  // and CLI tools) replace the file's inode, invalidating the watcher and silently
+  // dropping all subsequent events. Watching the parent dir survives this.
   useEffect(() => {
     if (!filePath || !enabled || filePath.startsWith('https://')) return
 
     const watcherId = `fileviewer-${filePath}`
+    const watchDir = dirname(filePath)
+    const targetName = basename(filePath)
     let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
-    void window.fs.watch(watcherId, filePath)
-    const removeListener = window.fs.onChange(watcherId, () => {
-      // Debounce to avoid multiple triggers
+    void window.fs.watch(watcherId, watchDir)
+    const removeListener = window.fs.onChange(watcherId, ({ filename }) => {
+      // Filter to events for our specific file. A null filename (some platforms
+      // don't always provide one) is treated as potentially-relevant.
+      if (filename && filename !== targetName) return
+
       if (debounceTimer) clearTimeout(debounceTimer)
       debounceTimer = setTimeout(() => {
         void (async () => {
           try {
             const newContent = await window.fs.readFile(filePath)
-            // Only trigger if content actually changed
             if (newContent !== contentRef.current) {
               if (isDirtyRef.current) {
                 setFileChangedOnDisk(true)
