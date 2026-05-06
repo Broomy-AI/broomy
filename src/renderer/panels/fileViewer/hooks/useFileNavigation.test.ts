@@ -45,6 +45,45 @@ describe('useFileNavigation', () => {
     expect(result.current.diffCurrentRef).toBeUndefined()
     expect(result.current.diffLabel).toBeUndefined()
     expect(result.current.pendingNavigation).toBeNull()
+    expect(result.current.navigationToken).toBe(0)
+  })
+
+  // --- navigationToken increments on every navigateToFile call ---
+  it('increments navigationToken on navigate and update-scroll, including same-path re-clicks', () => {
+    vi.mocked(resolveNavigation).mockReturnValueOnce({
+      action: 'navigate',
+      state: defaultState,
+      filePath: 'https://example.com',
+    }).mockReturnValueOnce({
+      action: 'update-scroll',
+      state: defaultState,
+    }).mockReturnValueOnce({
+      action: 'update-scroll',
+      state: defaultState,
+    })
+    const params = makeParams()
+    const { result } = renderHook(() => useFileNavigation(params))
+    const initial = result.current.navigationToken
+
+    act(() => result.current.navigateToFile({ filePath: 'https://example.com', openInDiffMode: false }))
+    const afterFirst = result.current.navigationToken
+    expect(afterFirst).toBe(initial + 1)
+
+    // Re-clicking the same URL still bumps the token so the webview can reload.
+    act(() => result.current.navigateToFile({ filePath: 'https://example.com', openInDiffMode: false }))
+    expect(result.current.navigationToken).toBe(afterFirst + 1)
+
+    act(() => result.current.navigateToFile({ filePath: 'https://example.com', openInDiffMode: false }))
+    expect(result.current.navigationToken).toBe(afterFirst + 2)
+  })
+
+  it('does not bump navigationToken when navigation goes pending (dirty file)', () => {
+    const target: NavigationTarget = { filePath: '/project/file.ts', openInDiffMode: false }
+    vi.mocked(resolveNavigation).mockReturnValue({ action: 'pending', target })
+    const { result } = renderHook(() => useFileNavigation(makeParams()))
+    const initial = result.current.navigationToken
+    act(() => result.current.navigateToFile(target))
+    expect(result.current.navigationToken).toBe(initial)
   })
 
   // --- navigateToFile with 'navigate' action ---

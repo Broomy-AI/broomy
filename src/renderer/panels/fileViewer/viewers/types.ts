@@ -41,6 +41,8 @@ export interface FileViewerComponentProps {
   scrollToLine?: number
   /** Text to highlight in the file */
   searchHighlight?: string
+  /** Bumps each time the user explicitly navigates to this path. Viewers that hold internal navigation state (e.g. WebviewViewer) use it to detect re-clicks and force a reload back to filePath. */
+  navigationToken?: number
   /** Review context - present when viewing files in a review session */
   reviewContext?: {
     sessionDirectory: string

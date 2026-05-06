@@ -20,6 +20,11 @@ export function useFileNavigation({
   const [diffCurrentRef, setDiffCurrentRef] = useState<string | undefined>(undefined)
   const [diffLabel, setDiffLabel] = useState<string | undefined>(undefined)
   const [pendingNavigation, setPendingNavigation] = useState<NavigationTarget | null>(null)
+  // Increments on every explicit navigateToFile call so viewers can detect a
+  // re-click of the same path. The webview viewer uses this to force a reload
+  // back to the originally requested URL when the user has navigated away
+  // inside the page.
+  const [navigationToken, setNavigationToken] = useState(0)
 
   // Reset diff-related state when switching sessions so diff mode from one
   // session doesn't leak into another.
@@ -74,6 +79,7 @@ export function useFileNavigation({
       setDiffBaseRef(result.state.diffBaseRef)
       setDiffCurrentRef(result.state.diffCurrentRef)
       setDiffLabel(result.state.diffLabel)
+      setNavigationToken(t => t + 1)
     }
     if (result.action === 'navigate') {
       lastNavigatedFileRef.current = result.filePath
@@ -160,6 +166,7 @@ export function useFileNavigation({
     diffCurrentRef: sessionSwitchPending ? undefined : diffCurrentRef,
     diffLabel: sessionSwitchPending ? undefined : diffLabel,
     pendingNavigation,
+    navigationToken,
     navigateToFile,
     handlePendingSave,
     handlePendingDiscard,
