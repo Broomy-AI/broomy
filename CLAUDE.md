@@ -154,3 +154,7 @@ Stories are co-located as `*.stories.tsx` next to source files. Reference images
 1. Run `/validate` (covers lint, typecheck, check:all, unit tests, coverage, E2E)
 2. Run `/feature-doc <slug>` to create/update the screenshot walkthrough
 3. Run `/code-review` on changed files
+
+### Pull request body
+
+Use the template at `.github/PULL_REQUEST_TEMPLATE.md`. The `## Testing` heading must be spelled exactly that way and contain a checked E2E item (e.g. `- [x] Ran all E2E tests locally (pnpm test:e2e)`). The CI job "PR E2E attestation" greps for this and fails the PR otherwise. E2E tests are required on every PR — `/validate` runs them. Editing the body after the PR is opened does **not** re-trigger CI; push a commit or close + reopen the PR to refresh the event payload.
