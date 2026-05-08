@@ -7,28 +7,7 @@
  */
 import { useState, useEffect } from 'react'
 import type { FileStatus } from '../FileViewer'
-
-const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg']
-
-const getMimeType = (filePath: string): string => {
-  const ext = filePath.split('.').pop()?.toLowerCase() || ''
-  const mimeMap: Record<string, string> = {
-    png: 'image/png',
-    jpg: 'image/jpeg',
-    jpeg: 'image/jpeg',
-    gif: 'image/gif',
-    webp: 'image/webp',
-    bmp: 'image/bmp',
-    ico: 'image/x-icon',
-    svg: 'image/svg+xml',
-  }
-  return mimeMap[ext] || 'image/png'
-}
-
-export function isImageFile(filePath: string): boolean {
-  const ext = filePath.split('.').pop()?.toLowerCase() || ''
-  return IMAGE_EXTENSIONS.includes(ext)
-}
+import { getMimeType } from './viewerUtils'
 
 interface ImageDiffViewerProps {
   filePath: string

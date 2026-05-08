@@ -297,8 +297,8 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
         timeout: 10000,
       })
       return stdout.trim()
-    } catch (err) {
-      return { error: err instanceof Error ? err.message : String(err) }
+    } catch {
+      return null
     }
   })
 }

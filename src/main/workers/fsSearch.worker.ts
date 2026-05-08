@@ -7,6 +7,7 @@
 import { parentPort, workerData } from 'worker_threads'
 import { readFileSync, readdirSync, statSync } from 'fs'
 import { join } from 'path'
+import { normalizePath } from '../normalizePath'
 
 interface SearchInput {
   dirPath: string
@@ -26,10 +27,6 @@ const BINARY_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ic
 const MAX_RESULTS = 500
 const MAX_CONTENT_MATCHES_PER_FILE = 5
 const MAX_FILE_SIZE = 1024 * 1024
-
-function normalizePath(p: string): string {
-  return p.replace(/\\/g, '/')
-}
 
 function matchFileContent(filePath: string, ext: string, lowerQuery: string): { line: number; text: string }[] {
   if (BINARY_EXTENSIONS.has(ext)) return []

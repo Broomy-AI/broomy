@@ -27,8 +27,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   handleReset = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(this as any).setState({ hasError: false, errorMessage: null })
+    this.setState({ hasError: false, errorMessage: null })
   }
 
   render() {
@@ -50,7 +49,6 @@ export default class ErrorBoundary extends Component<Props, State> {
         </div>
       )
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (this as any).props.children
+    return this.props.children
   }
 }

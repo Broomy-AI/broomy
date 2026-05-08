@@ -2,6 +2,14 @@
  * Shared git utility functions used across handler modules.
  */
 import type { SimpleGit } from 'simple-git'
+import simpleGit from 'simple-git'
+
+/** Set env vars to prevent SSH/HTTPS prompts that would hang in Electron.
+ *  Spreads process.env so credential helpers retain access to HOME, PATH,
+ *  DBUS_SESSION_BUS_ADDRESS, etc. — required on Linux for keyring-based auth. */
+export function withNonInteractive(git: ReturnType<typeof simpleGit>) {
+  return git.env({ ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' })
+}
 
 /**
  * Detect the default branch for a repository by checking (in order):

@@ -10,7 +10,8 @@ import { homedir } from 'os'
 import * as pty from 'node-pty'
 import type { IPty } from 'node-pty'
 import { isWindows, getDefaultShell, resolveCommand, enhancedPath } from '../platform'
-import { HandlerContext } from './types'
+import { HandlerContext, expandHomePath } from './types'
+import { getErrorMessage } from './handlerUtils'
 import { getScenarioData } from './scenarios'
 import { isDockerAvailable, dockerSetupMessage, ensureAgentInstalled, acquireSetupLock } from '../containerUtils'
 import { isDevcontainerCliAvailable, hasDevcontainerConfig, devcontainerUp, buildDevcontainerExecArgs, devcontainerSetupMessage } from '../devcontainer'
@@ -262,7 +263,7 @@ function createDevcontainerPty(
         env: process.env as Record<string, string>,
       })
     } catch (err) {
-      displayTerminalError(id, `Failed to spawn Docker process: ${err instanceof Error ? err.message : String(err)}`, senderWindow)
+      displayTerminalError(id, `Failed to spawn Docker process: ${getErrorMessage(err)}`, senderWindow)
       return
     }
     const earlyExitDisposable = ptyProcess.onExit(() => {}) // prevent unhandled-exit crashes
@@ -282,7 +283,7 @@ function createDevcontainerPty(
 
   asyncSetup().catch((err: unknown) => {
     pendingSetups.delete(id)
-    displayTerminalError(id, `Unexpected error: ${err instanceof Error ? err.message : String(err)}`, senderWindow)
+    displayTerminalError(id, `Unexpected error: ${getErrorMessage(err)}`, senderWindow)
   })
 
   return { id }
@@ -371,16 +372,10 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     const baseEnv = { ...process.env, PATH: enhancedPath(process.env.PATH) } as Record<string, string>
     delete baseEnv.CLAUDE_CONFIG_DIR
 
-    const expandHome = (value: string) => {
-      if (value.startsWith('~/')) return join(homedir(), value.slice(2))
-      if (value === '~') return homedir()
-      return value
-    }
-
     const agentEnv: Record<string, string> = {}
     if (options.env) {
       for (const [key, value] of Object.entries(options.env)) {
-        const expanded = expandHome(value)
+        const expanded = expandHomePath(value)
         if (key === 'CLAUDE_CONFIG_DIR' && expanded === join(homedir(), '.claude')) continue
         agentEnv[key] = expanded
       }
@@ -398,7 +393,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
         env,
       })
     } catch (err) {
-      displayTerminalError(options.id, `Failed to start terminal: ${err instanceof Error ? err.message : String(err)}`, senderWindow)
+      displayTerminalError(options.id, `Failed to start terminal: ${getErrorMessage(err)}`, senderWindow)
       return { id: options.id }
     }
 

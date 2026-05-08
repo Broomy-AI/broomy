@@ -11,16 +11,9 @@ import { dirname } from 'path'
 import { getCloneErrorHint, getGitAuthHint } from '../cloneErrorHint'
 import { normalizePath } from '../platform'
 import { HandlerContext, expandHomePath } from './types'
-import { getDefaultBranch } from './gitUtils'
+import { getDefaultBranch, withNonInteractive } from './gitUtils'
 
 const execFileAsync = promisify(execFile)
-
-/** Set env vars to prevent SSH/HTTPS prompts that would hang in Electron.
- *  Spreads process.env so credential helpers retain access to HOME, PATH,
- *  DBUS_SESSION_BUS_ADDRESS, etc. — required on Linux for keyring-based auth. */
-function withNonInteractive(git: ReturnType<typeof simpleGit>) {
-  return git.env({ ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' })
-}
 
 async function handleClone(ctx: HandlerContext, url: string, targetDir: string) {
   if (ctx.isE2ETest && !ctx.e2eRealRepos) {

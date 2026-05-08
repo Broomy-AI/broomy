@@ -5,14 +5,7 @@ import { IpcMain } from 'electron'
 import simpleGit from 'simple-git'
 import { HandlerContext, expandHomePath } from './types'
 import { getScenarioData } from './scenarios'
-import { getDefaultBranch } from './gitUtils'
-
-/** Set env vars to prevent SSH/HTTPS prompts that would hang in Electron.
- *  Spreads process.env so credential helpers retain access to HOME, PATH,
- *  DBUS_SESSION_BUS_ADDRESS, etc. — required on Linux for keyring-based auth. */
-function withNonInteractive(git: ReturnType<typeof simpleGit>) {
-  return git.env({ ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' })
-}
+import { getDefaultBranch, withNonInteractive } from './gitUtils'
 
 async function handlePullOriginMain(ctx: HandlerContext, repoPath: string) {
   if (ctx.isE2ETest && !ctx.e2eRealRepos) {

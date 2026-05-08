@@ -120,7 +120,6 @@ function makeConfig(overrides: Partial<PanelsMapConfig> = {}): PanelsMapConfig {
 describe('usePanelsMap', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(window.app.tmpdir).mockResolvedValue('/tmp')
   })
 
   it('returns a map with all expected panel IDs', () => {

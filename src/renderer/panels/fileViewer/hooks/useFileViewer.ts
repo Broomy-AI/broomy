@@ -7,7 +7,7 @@ import { useFileLoading } from './useFileLoading'
 import { useFileDiff } from './useFileDiff'
 import { useFileWatcher } from './useFileWatcher'
 import type { FileStatus, ViewMode } from '../FileViewer'
-import { isImageFile as isImagePath } from '../viewers/ImageDiffViewer'
+import { isImageFile as isImagePath } from '../viewers/viewerUtils'
 
 interface UseFileViewerParams {
   filePath: string | null

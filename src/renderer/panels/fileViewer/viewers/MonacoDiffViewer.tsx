@@ -10,6 +10,7 @@ import { useEffect, useRef } from 'react'
 import { DiffEditor, loader } from '@monaco-editor/react'
 import * as monacoEditor from 'monaco-editor'
 import { useMonacoComments } from '../hooks/useMonacoComments'
+import { getLanguageFromPath } from './viewerUtils'
 
 // Configure Monaco to use locally bundled version instead of CDN
 loader.config({ monaco: monacoEditor })
@@ -23,60 +24,6 @@ interface MonacoDiffViewerProps {
   scrollToLine?: number
   reviewContext?: { sessionDirectory: string; commentsFilePath: string }
   onEditorReady?: (actions: import('./types').EditorActions | null) => void
-}
-
-// Map file extensions to Monaco language IDs
-const getLanguageFromPath = (filePath: string): string => {
-  const ext = filePath.split('.').pop()?.toLowerCase() || ''
-  const languageMap: Record<string, string> = {
-    ts: 'typescript',
-    tsx: 'typescript',
-    js: 'javascript',
-    jsx: 'javascript',
-    mjs: 'javascript',
-    cjs: 'javascript',
-    json: 'json',
-    md: 'markdown',
-    markdown: 'markdown',
-    css: 'css',
-    scss: 'scss',
-    sass: 'scss',
-    less: 'less',
-    html: 'html',
-    htm: 'html',
-    xml: 'xml',
-    yaml: 'yaml',
-    yml: 'yaml',
-    py: 'python',
-    rb: 'ruby',
-    go: 'go',
-    rs: 'rust',
-    java: 'java',
-    kt: 'kotlin',
-    scala: 'scala',
-    c: 'c',
-    cpp: 'cpp',
-    h: 'c',
-    hpp: 'cpp',
-    cs: 'csharp',
-    php: 'php',
-    lua: 'lua',
-    swift: 'swift',
-    dart: 'dart',
-    sh: 'shell',
-    bash: 'shell',
-    zsh: 'shell',
-    sql: 'sql',
-    graphql: 'graphql',
-    gql: 'graphql',
-    dockerfile: 'dockerfile',
-    makefile: 'makefile',
-    toml: 'ini',
-    ini: 'ini',
-    txt: 'plaintext',
-    log: 'plaintext',
-  }
-  return languageMap[ext] || 'plaintext'
 }
 
 export default function MonacoDiffViewer({

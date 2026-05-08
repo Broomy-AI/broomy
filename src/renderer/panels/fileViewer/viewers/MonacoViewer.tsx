@@ -17,6 +17,7 @@ import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import type { FileViewerPlugin, FileViewerComponentProps } from './types'
 import { getFileExtension } from './types'
+import { getLanguageFromPath } from './viewerUtils'
 import { useMonacoComments } from '../hooks/useMonacoComments'
 
 // Configure Monaco workers for Vite
@@ -79,78 +80,7 @@ export function hasKnownTextExtension(filePath: string): boolean {
   return KNOWN_TEXT_FILENAMES.includes(fileName)
 }
 
-// Map file extensions to Monaco language IDs
-const getLanguageFromPath = (filePath: string): string => {
-  const ext = getFileExtension(filePath)
-  const languageMap: Record<string, string> = {
-    ts: 'typescript',
-    tsx: 'typescript',
-    js: 'javascript',
-    jsx: 'javascript',
-    mjs: 'javascript',
-    cjs: 'javascript',
-    json: 'json',
-    md: 'markdown',
-    markdown: 'markdown',
-    css: 'css',
-    scss: 'scss',
-    sass: 'scss',
-    less: 'less',
-    html: 'html',
-    htm: 'html',
-    xml: 'xml',
-    xsl: 'xml',
-    xslt: 'xml',
-    svg: 'xml',
-    yaml: 'yaml',
-    yml: 'yaml',
-    py: 'python',
-    rb: 'ruby',
-    go: 'go',
-    rs: 'rust',
-    java: 'java',
-    kt: 'kotlin',
-    scala: 'scala',
-    c: 'c',
-    cpp: 'cpp',
-    cc: 'cpp',
-    cxx: 'cpp',
-    h: 'c',
-    hpp: 'cpp',
-    hxx: 'cpp',
-    cs: 'csharp',
-    fs: 'fsharp',
-    fsx: 'fsharp',
-    php: 'php',
-    pl: 'perl',
-    pm: 'perl',
-    lua: 'lua',
-    r: 'r',
-    swift: 'swift',
-    dart: 'dart',
-    sh: 'shell',
-    bash: 'shell',
-    zsh: 'shell',
-    fish: 'shell',
-    ps1: 'powershell',
-    bat: 'bat',
-    cmd: 'bat',
-    sql: 'sql',
-    graphql: 'graphql',
-    gql: 'graphql',
-    dockerfile: 'dockerfile',
-    makefile: 'makefile',
-    cmake: 'cmake',
-    toml: 'ini',
-    ini: 'ini',
-    cfg: 'ini',
-    env: 'ini',
-    properties: 'ini',
-    txt: 'plaintext',
-    log: 'plaintext',
-  }
-  return languageMap[ext] || 'plaintext'
-}
+// getLanguageFromPath is imported from viewerUtils.ts
 
 /** Scroll to a line and highlight search text in the editor */
 function scrollAndHighlight(

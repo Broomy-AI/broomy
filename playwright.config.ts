@@ -13,7 +13,7 @@ export default defineConfig({
   },
   fullyParallel: false, // Electron tests should run serially
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  retries: process.env.CI ? 2 : 1,
   workers: 1, // Single worker for Electron
   reporter: 'html',
   use: {

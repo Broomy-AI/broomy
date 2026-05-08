@@ -2,6 +2,7 @@ Run the full verification checklist and fix any failures.
 
 ## Steps
 
+0. Run `pnpm install` to ensure all dependencies (including the Electron binary) are up to date.
 1. Run `pnpm lint`. If there are lint errors, fix them in the source files and re-run until clean.
 2. Run `pnpm typecheck`. If there are type errors, fix them and re-run until clean.
 3. Run `pnpm check:all`. If any project-specific checks fail, fix them and re-run until clean.

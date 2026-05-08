@@ -249,9 +249,8 @@ export function getExecShell(): string | undefined {
   return process.env.SHELL || '/bin/sh'
 }
 
-export function normalizePath(p: string): string {
-  return p.replace(/\\/g, '/')
-}
+// Re-exported from normalizePath.ts so existing imports keep working.
+export { normalizePath } from './normalizePath'
 
 export function makeExecutable(filePath: string): void {
   if (!isWindows) {

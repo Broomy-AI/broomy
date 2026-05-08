@@ -6,9 +6,9 @@
 import { app, BrowserWindow } from 'electron'
 import { join, dirname } from 'path'
 import { existsSync } from 'fs'
-import { homedir } from 'os'
 import { spawn } from 'child_process'
 import { resolveCommand } from '../platform'
+import { expandHomePath } from './types'
 import type { AgentSdkMessage } from '../../shared/agentSdkTypes'
 
 /**
@@ -44,12 +44,6 @@ export function resolveAgentSdkCliPath(): string {
   return cliPath
 }
 
-export function expandHome(value: string): string {
-  if (value.startsWith('~/')) return join(homedir(), value.slice(2))
-  if (value === '~') return homedir()
-  return value
-}
-
 let messageCounter = 0
 export function nextMessageId(): string {
   return `sdk-msg-${String(++messageCounter)}-${String(Date.now())}`
@@ -63,7 +57,7 @@ export function sendMsg(win: BrowserWindow, sessionId: string, msg: AgentSdkMess
 export async function withConfigDir<T>(agentEnv: Record<string, string> | undefined, fn: () => Promise<T>): Promise<T> {
   const configDir = agentEnv?.CLAUDE_CONFIG_DIR
   const prevConfigDir = process.env.CLAUDE_CONFIG_DIR
-  if (configDir) process.env.CLAUDE_CONFIG_DIR = expandHome(configDir)
+  if (configDir) process.env.CLAUDE_CONFIG_DIR = expandHomePath(configDir)
   try {
     return await fn()
   } finally {

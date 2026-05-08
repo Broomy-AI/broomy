@@ -471,14 +471,14 @@ describe('ghCore handlers', () => {
       expect(result).toBe('octocat')
     })
 
-    it('returns error object on error', async () => {
+    it('returns null on error', async () => {
       vi.mocked(execFile).mockImplementation(() => {
         throw new Error('auth fail')
       })
 
       const handlers = setupHandlers()
       const result = await handlers['gh:currentUser'](null)
-      expect(result).toEqual({ error: 'auth fail' })
+      expect(result).toBeNull()
     })
   })
 })

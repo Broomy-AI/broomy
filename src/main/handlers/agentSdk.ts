@@ -3,10 +3,11 @@
  * Uses the V1 query() API with `resume` for token-efficient multi-turn conversations.
  */
 import { BrowserWindow, IpcMain } from 'electron'
-import { HandlerContext } from './types'
+import { HandlerContext, expandHomePath } from './types'
+import { getErrorMessage } from './handlerUtils'
 import type { AgentSdkPermissionRequest } from '../../shared/agentSdkTypes'
 import {
-  expandHome, nextMessageId, sendMsg, resolveAgentSdkCliPath,
+  nextMessageId, sendMsg, resolveAgentSdkCliPath,
   handleLoadHistory, handleStatus, handleFetchCommands, handleFetchModels, handleLogin,
   createFakeQuery, sendMockAgentResponse, isSessionNotFoundError,
   type SdkModelInfo, type SdkQuery,
@@ -197,7 +198,7 @@ async function runTurn(
       }
     }
   } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : String(err)
+    const errorMessage = getErrorMessage(err)
     if (errorMessage.includes('aborted')) {
       // User cancelled — not an error
     } else if (session.sdkSessionId && isSessionNotFoundError(errorMessage)) {
@@ -250,7 +251,7 @@ function buildQueryOptions(
   const agentEnv: Record<string, string> = {}
   if (options.env) {
     for (const [key, value] of Object.entries(options.env)) {
-      agentEnv[key] = expandHome(value)
+      agentEnv[key] = expandHomePath(value)
     }
   }
   const env = { ...process.env, ...agentEnv }
@@ -379,8 +380,7 @@ async function startTurn(
       })
       return startTurn(sessionId, prompt, cwd, win, { ...options, sdkSessionId: undefined })
     }
-
-    const errorMessage = err instanceof Error ? err.message : String(err)
+    const errorMessage = getErrorMessage(err)
     console.error('[agentSdk] startTurn error:', errorMessage)
     if (err instanceof Error && err.stack) console.error(err.stack)
     win.webContents.send(`agentSdk:error:${sessionId}`, errorMessage)
@@ -463,9 +463,16 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
 
   ipcMain.handle('agentSdk:stop', (_event, id: string) => {
     const session = activeSessions.get(id)
-    if (session?.query) {
-      session.query.close()
-      session.query = null
+    if (session) {
+      // Resolve any pending permission promise to prevent memory leaks
+      if (session.pendingPermission) {
+        session.pendingPermission.resolve({ behavior: 'deny', message: 'Session stopped' })
+        session.pendingPermission = null
+      }
+      if (session.query) {
+        session.query.close()
+        session.query = null
+      }
     }
     activeSessions.delete(id)
   })
@@ -495,7 +502,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
       }
       await session.query.streamInput(singleMessage())
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : String(err)
+      const errorMessage = getErrorMessage(err)
       console.error('[agentSdk] inject error:', errorMessage)
       session.ownerWindow.webContents.send(`agentSdk:error:${id}`, errorMessage)
     }

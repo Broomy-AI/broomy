@@ -69,21 +69,3 @@ export class ScrollLog {
   }
 }
 
-// ── Global registry so debug copy can access logs ──────────────────
-
-const logs = new Map<string, ScrollLog>()
-
-export const scrollLogRegistry = {
-  register(sessionId: string, log: ScrollLog) {
-    logs.set(sessionId, log)
-  },
-  unregister(sessionId: string) {
-    logs.delete(sessionId)
-  },
-  get(sessionId: string): ScrollLog | undefined {
-    return logs.get(sessionId)
-  },
-  format(sessionId: string): string {
-    return logs.get(sessionId)?.format() ?? '(no scroll log)'
-  },
-}
