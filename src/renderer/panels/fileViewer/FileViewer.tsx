@@ -32,6 +32,7 @@ interface FileViewerProps {
   initialViewMode?: ViewMode // Initial view mode when opening a file
   scrollToLine?: number // Line number to scroll to
   searchHighlight?: string // Text to highlight in the file
+  navigationToken?: number // Bumps on each explicit navigation; webview viewer uses it to force a reload back to filePath
   onDirtyStateChange?: (isDirty: boolean) => void // Report dirty state to parent
   onSaveFunctionChange?: (fn: (() => Promise<void>) | null) => void // Callback for parent to receive save function
   diffBaseRef?: string // Git ref to compare against (e.g. 'origin/main' for branch changes)
@@ -43,7 +44,7 @@ interface FileViewerProps {
   isActive?: boolean // Whether this session is the active one (controls file watcher)
 }
 
-export default function FileViewer({ filePath, position = 'top', onPositionChange, onClose, fileStatus, directory, onSaveComplete, initialViewMode = 'latest', scrollToLine, searchHighlight, onDirtyStateChange, onSaveFunctionChange, diffBaseRef, diffCurrentRef, diffLabel, reviewContext, prFilesUrl, onOpenFile, isActive }: FileViewerProps) {
+export default function FileViewer({ filePath, position = 'top', onPositionChange, onClose, fileStatus, directory, onSaveComplete, initialViewMode = 'latest', scrollToLine, searchHighlight, navigationToken, onDirtyStateChange, onSaveFunctionChange, diffBaseRef, diffCurrentRef, diffLabel, reviewContext, prFilesUrl, onOpenFile, isActive }: FileViewerProps) {
   const viewer = useFileViewer({
     filePath,
     fileStatus,
@@ -176,6 +177,7 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
               onDirtyChange={diffCurrentRef ? undefined : viewer.handleDirtyChange}
               scrollToLine={scrollToLine}
               searchHighlight={searchHighlight}
+              navigationToken={navigationToken}
               reviewContext={reviewContext}
               onEditorReady={viewer.setEditorActions}
               onOpenFile={onOpenFile}

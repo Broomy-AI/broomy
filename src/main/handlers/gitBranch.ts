@@ -6,6 +6,8 @@ import { execFile } from 'child_process'
 import { promisify } from 'util'
 import simpleGit from 'simple-git'
 import { existsSync } from 'fs'
+import { mkdir } from 'fs/promises'
+import { dirname } from 'path'
 import { getCloneErrorHint, getGitAuthHint } from '../cloneErrorHint'
 import { normalizePath } from '../platform'
 import { HandlerContext, expandHomePath } from './types'
@@ -18,8 +20,19 @@ async function handleClone(ctx: HandlerContext, url: string, targetDir: string) 
     return { success: true }
   }
 
+  const expandedTarget = expandHomePath(targetDir)
+
   try {
-    await withNonInteractive(simpleGit()).clone(url, expandHomePath(targetDir))
+    // Ensure the parent directory exists. Without this, cloning into a path
+    // like ~/repos/foo/main when ~/repos doesn't exist fails with a cryptic
+    // git error. recursive:true is a no-op when the path already exists.
+    await mkdir(dirname(expandedTarget), { recursive: true })
+  } catch (error) {
+    return { success: false, error: `Could not create parent folder for clone: ${String(error)}` }
+  }
+
+  try {
+    await withNonInteractive(simpleGit()).clone(url, expandedTarget)
     return { success: true }
   } catch (error) {
     const errorStr = String(error)

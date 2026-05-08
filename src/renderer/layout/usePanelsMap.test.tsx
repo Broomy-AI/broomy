@@ -79,6 +79,7 @@ function makeConfig(overrides: Partial<PanelsMapConfig> = {}): PanelsMapConfig {
     diffBaseRef: undefined,
     diffCurrentRef: undefined,
     diffLabel: undefined,
+    navigationToken: 0,
     setIsFileViewerDirty: vi.fn(),
     registerSaveFunction: vi.fn(),
     unregisterSaveFunction: vi.fn(),

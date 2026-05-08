@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '10'
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm check:all
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # pnpm 10 skips electron's postinstall (pnpm-workspace.yaml only lists
+      # node-pty under onlyBuiltDependencies), so the binary never downloads.
+      # Unit tests transitively import 'electron', which needs dist/ + path.txt.
+      - run: node node_modules/electron/install.js
+      - run: pnpm test:unit
+
+  # E2E is intentionally not in CI — it takes 30+ min per run on ubuntu-22.04
+  # and relies on screenshot refs baselined on macOS. Run locally via
+  # /validate or ./run-linux-e2e.sh before opening a PR.
+
+  pr-e2e-attestation:
+    name: PR E2E attestation
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Require E2E attestation in PR body
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s\n' "$PR_BODY" | awk '
+            BEGIN { in_testing = 0; found = 0 }
+            /^## [Tt]esting[[:space:]]*$/ { in_testing = 1; next }
+            in_testing && /^## / { in_testing = 0 }
+            in_testing && /^- \[[xX]\].*[Ee]2[Ee]/ { found = 1 }
+            END { exit found ? 0 : 1 }
+          ' || {
+            echo "::error::PR body must include a checked item under '## Testing' that mentions E2E."
+            echo "::error::Accepted forms:"
+            echo "::error::  - [x] Ran all E2E tests locally (./run-linux-e2e.sh)"
+            echo "::error::  - [x] E2E not applicable — CI-only change"
+            exit 1
+          }

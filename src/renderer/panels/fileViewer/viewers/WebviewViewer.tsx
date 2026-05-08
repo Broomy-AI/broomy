@@ -7,7 +7,7 @@ import { useRef, useCallback, useState, useEffect } from 'react'
 import type { FileViewerPlugin, FileViewerComponentProps } from './types'
 import FindBar from './FindBar'
 
-function WebviewViewerComponent({ filePath, onEditorReady }: FileViewerComponentProps) {
+function WebviewViewerComponent({ filePath, navigationToken, onEditorReady }: FileViewerComponentProps) {
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const findInputRef = useRef<HTMLInputElement | null>(null)
   const [canGoBack, setCanGoBack] = useState(false)
@@ -16,6 +16,26 @@ function WebviewViewerComponent({ filePath, onEditorReady }: FileViewerComponent
   const [showFindBar, setShowFindBar] = useState(false)
   const [findQuery, setFindQuery] = useState('')
   const [findResult, setFindResult] = useState<{ activeMatch: number; matches: number } | null>(null)
+
+  // When the user re-clicks a link to filePath, navigationToken bumps. Force the
+  // webview back to filePath in case the user has navigated away inside the page.
+  // The first observed token (mount or first activation after a session switch)
+  // is the baseline — the initial load is handled by <webview src={...}>.
+  const baselineTokenRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (navigationToken === undefined) {
+      baselineTokenRef.current = null
+      return
+    }
+    if (baselineTokenRef.current === null) {
+      baselineTokenRef.current = navigationToken
+      return
+    }
+    if (baselineTokenRef.current !== navigationToken) {
+      baselineTokenRef.current = navigationToken
+      void webviewRef.current?.loadURL(filePath)
+    }
+  }, [navigationToken, filePath])
 
   useEffect(() => {
     const webview = webviewRef.current

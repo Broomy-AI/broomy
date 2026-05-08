@@ -157,13 +157,22 @@ function ReviewEmptyState({
 }
 
 /** Parse a repo-relative file link like "src/file.tsx#L12-L45" into path and line number */
-function parseFileLink(href: string): { relativePath: string; line?: number } | null {
+export function parseFileLink(href: string): { relativePath: string; line?: number } | null {
   // Skip external URLs
   if (/^https?:\/\//.test(href)) return null
 
   // Split off fragment: src/file.tsx#L12-L45 → path=src/file.tsx, fragment=L12-L45
   const [path, fragment] = href.split('#')
   if (!path) return null
+
+  // ReactMarkdown URL-encodes hrefs per CommonMark, so "my file.tsx" arrives as "my%20file.tsx".
+  // Decode back to a real filesystem path. Fall back to the raw value if decoding fails.
+  let relativePath = path
+  try {
+    relativePath = decodeURIComponent(path)
+  } catch {
+    // Malformed escape sequence — keep the raw value
+  }
 
   let line: number | undefined
   if (fragment) {
@@ -172,7 +181,7 @@ function parseFileLink(href: string): { relativePath: string; line?: number } | 
     if (match) line = parseInt(match[1], 10)
   }
 
-  return { relativePath: path, line }
+  return { relativePath, line }
 }
 
 /** Build customized markdown components with review-specific link handling */

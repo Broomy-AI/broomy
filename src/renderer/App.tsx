@@ -217,7 +217,7 @@ function AppContent() {
 
   const {
     openFileInDiffMode, scrollToLine, searchHighlight, diffBaseRef, diffCurrentRef, diffLabel,
-    setIsFileViewerDirty, pendingNavigation, navigateToFile,
+    setIsFileViewerDirty, pendingNavigation, navigateToFile, navigationToken,
     handlePendingSave, handlePendingDiscard, handlePendingCancel,
     registerSaveFunction, unregisterSaveFunction,
   } = useFileNavigation({
@@ -289,7 +289,7 @@ function AppContent() {
     sessions, activeSessionId, activeSession,
     activeSessionGitStatus, activeSessionGitStatusResult, selectedFileStatus,
     navigateToFile, openFileInDiffMode, scrollToLine, searchHighlight,
-    diffBaseRef, diffCurrentRef, diffLabel, setIsFileViewerDirty,
+    diffBaseRef, diffCurrentRef, diffLabel, navigationToken, setIsFileViewerDirty,
     registerSaveFunction, unregisterSaveFunction,
     handleSelectSession, handleNewSession,
     removeSession: (id, deleteWorktree) => { handleDeleteSession(id, deleteWorktree) },

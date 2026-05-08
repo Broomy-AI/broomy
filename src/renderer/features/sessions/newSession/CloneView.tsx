@@ -7,7 +7,9 @@ import { useRepoStore } from '../../../store/repos'
 import { DialogErrorBanner } from '../../../shared/components/ErrorBanner'
 import { AuthSetupSection } from '../../../shared/components/AuthSetupSection'
 import { IsolationSettings } from '../../../shared/components/IsolationSettings'
-import type { DevcontainerStatus } from '../../../../preload/index'
+import type { DevcontainerStatus, AgentData } from '../../../../preload/index'
+import { parseCloneUrl, type ParsedCloneUrl } from './cloneUrl'
+import { useLocationStatus, type LocationStatus } from './useLocationStatus'
 
 function NoWriteAccessBanner({ onContinue }: { onContinue?: () => void }) {
   return (
@@ -27,6 +29,200 @@ function NoWriteAccessBanner({ onContinue }: { onContinue?: () => void }) {
       )}
     </div>
   )
+}
+
+function UrlField({
+  url, setUrl, parsed, onSubmit,
+}: {
+  url: string
+  setUrl: (v: string) => void
+  parsed: ParsedCloneUrl
+  onSubmit: () => void
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-text-secondary mb-1">Repository URL</label>
+      <input
+        type="text"
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            onSubmit()
+          }
+        }}
+        placeholder="https://github.com/user/repo.git or git@github.com:user/repo.git"
+        className="w-full px-3 py-2 text-sm rounded border border-border bg-bg-primary text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent"
+        autoFocus
+      />
+      {url.trim() && parsed.error ? (
+        <p className="text-xs text-red-400 mt-1">{parsed.error}</p>
+      ) : (
+        <p className="text-xs text-text-secondary mt-1">HTTPS (https://github.com/...), SSH (git@github.com:...), or owner/repo</p>
+      )}
+    </div>
+  )
+}
+
+function LocationField({
+  location, setLocation, status, repoName, onBrowse,
+}: {
+  location: string
+  setLocation: (v: string) => void
+  status: LocationStatus
+  repoName: string
+  onBrowse: () => void
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-text-secondary mb-1">Location</label>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          className="flex-1 px-3 py-2 text-sm rounded border border-border bg-bg-primary text-text-primary focus:outline-none focus:border-accent"
+        />
+        <button
+          onClick={onBrowse}
+          className="px-3 py-2 text-sm rounded border border-border bg-bg-primary hover:bg-bg-tertiary text-text-secondary transition-colors"
+        >
+          Browse
+        </button>
+      </div>
+      {status.kind === 'will-create' && (
+        <p className="text-xs text-text-secondary mt-1">
+          <span className="text-yellow-400">⚠</span> This folder doesn't exist yet — it will be created.
+        </p>
+      )}
+      {status.kind === 'target-exists' && (
+        <p className="text-xs text-red-400 mt-1">
+          A folder named "{repoName}" already exists here. Pick a different location or remove the existing folder.
+        </p>
+      )}
+    </div>
+  )
+}
+
+function PathPreview({ path }: { path: string }) {
+  return (
+    <div className="text-xs text-text-secondary">
+      Will clone to: <span className="font-mono text-text-primary">{path}</span>
+      <span className="text-text-secondary" title="Broomy keeps the main checkout in a 'main/' subfolder so additional worktrees (parallel branches) can sit alongside it.">
+        {' '}<span className="underline decoration-dotted cursor-help">Why /main/?</span>
+      </span>
+    </div>
+  )
+}
+
+function AgentField({
+  agents, selectedAgentId, setSelectedAgentId,
+}: {
+  agents: AgentData[]
+  selectedAgentId: string | null
+  setSelectedAgentId: (id: string | null) => void
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-text-secondary mb-1">Agent</label>
+      <select
+        value={selectedAgentId || ''}
+        onChange={(e) => setSelectedAgentId(e.target.value || null)}
+        className="w-full px-3 py-2 text-sm rounded border border-border bg-bg-primary text-text-primary focus:outline-none focus:border-accent"
+      >
+        {agents.map((a) => (
+          <option key={a.id} value={a.id}>{a.name}</option>
+        ))}
+        <option value="">Shell Only</option>
+      </select>
+    </div>
+  )
+}
+
+function InitScriptField({
+  initScript, setInitScript, show, setShow,
+}: {
+  initScript: string
+  setInitScript: (v: string) => void
+  show: boolean
+  setShow: (v: boolean) => void
+}) {
+  return (
+    <div>
+      <button
+        onClick={() => setShow(!show)}
+        className="text-xs text-text-secondary hover:text-text-primary transition-colors flex items-center gap-1"
+      >
+        <svg className={`w-3 h-3 transition-transform ${show ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+        Init Script
+      </button>
+      {show && (
+        <textarea
+          value={initScript}
+          onChange={(e) => setInitScript(e.target.value)}
+          placeholder="#!/bin/bash&#10;# Runs in each new worktree&#10;cp ../main/.env .env"
+          className="w-full mt-1 px-3 py-2 text-xs font-mono rounded border border-border bg-bg-primary text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent resize-y"
+          rows={3}
+        />
+      )}
+    </div>
+  )
+}
+
+function CloneFooter({
+  blockingReason, canClone, loading, onBack, onClone,
+}: {
+  blockingReason: string | null
+  canClone: boolean
+  loading: boolean
+  onBack: () => void
+  onClone: () => void
+}) {
+  return (
+    <div className="px-4 py-3 border-t border-border">
+      {blockingReason && (
+        <p className="text-xs text-text-secondary mb-2 text-right">{blockingReason}</p>
+      )}
+      <div className="flex justify-end gap-2">
+        <button
+          onClick={onBack}
+          className="px-4 py-2 text-sm text-text-secondary hover:text-text-primary transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={onClone}
+          disabled={!canClone}
+          className="px-4 py-2 text-sm rounded bg-accent text-white hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {loading ? 'Cloning...' : 'Clone'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function computeBlockingReason(args: {
+  loading: boolean
+  url: string
+  parsed: ParsedCloneUrl
+  cleanedLocation: string
+  repoName: string
+  status: LocationStatus
+}): string | null {
+  const { loading, url, parsed, cleanedLocation, repoName, status } = args
+  if (loading) return null
+  if (!url.trim()) return 'Enter a repository URL to continue.'
+  if (parsed.error) return parsed.error
+  if (!repoName) return 'Could not derive a folder name from this URL.'
+  if (!cleanedLocation) return 'Choose a location to clone into.'
+  if (status.kind === 'target-exists') {
+    return `A folder named "${repoName}" already exists at this location. Pick a different location or remove the existing folder.`
+  }
+  return null
 }
 
 export function CloneView({
@@ -58,35 +254,36 @@ export function CloneView({
     }
   }, [isolated])
 
-  // Derive repo name from URL
-  const repoName = url
-    .replace(/\.git$/, '')
-    .split('/')
-    .pop()
-    ?.replace(/[^a-zA-Z0-9._-]/g, '') || ''
+  const parsed = parseCloneUrl(url)
+  const repoName = parsed.repoName
+  const cleanedLocation = location.trim().replace(/\/+$/, '')
+  const previewRepoName = repoName || '<repo>'
+  const previewPath = cleanedLocation
+    ? `${cleanedLocation}/${previewRepoName}/main/`
+    : `<location>/${previewRepoName}/main/`
+  const locationStatus = useLocationStatus(cleanedLocation, repoName)
+  const blockingReason = computeBlockingReason({ loading, url, parsed, cleanedLocation, repoName, status: locationStatus })
+  const canClone = blockingReason === null && !loading
 
   const handleClone = async () => {
-    if (!url || !location || !repoName) return
+    if (!canClone) return
     setLoading(true)
     setError(null)
     setNoWriteAccess(false)
     setPendingComplete(null)
 
     try {
-      const rootDir = `${location}/${repoName}`
+      const rootDir = `${cleanedLocation}/${repoName}`
       const mainDir = `${rootDir}/main`
 
-      // Clone into rootDir/main/
-      const cloneResult = await window.git.clone(url, mainDir)
+      const cloneResult = await window.git.clone(parsed.url, mainDir)
       if (!cloneResult.success) {
         throw new Error(cloneResult.error || 'Clone failed')
       }
 
-      // Detect default branch and remote URL
       const defaultBranch = await window.git.defaultBranch(mainDir)
-      const remoteUrl = await window.git.remoteUrl(mainDir) || url
+      const remoteUrl = await window.git.remoteUrl(mainDir) || parsed.url
 
-      // Check write access to enable merge button by default
       let hasWriteAccess = false
       try {
         hasWriteAccess = await window.gh.hasWriteAccess(mainDir)
@@ -98,7 +295,6 @@ export function CloneView({
         setNoWriteAccess(true)
       }
 
-      // Save managed repo with default agent
       addRepo({
         name: repoName,
         remoteUrl,
@@ -110,17 +306,14 @@ export function CloneView({
         skipApproval: skipApproval || undefined,
       })
 
-      // Get the repo ID that was just created
       const config = await window.config.load()
       const newRepo = config.repos?.find((r: { name: string }) => r.name === repoName)
       const repoId = newRepo?.id
 
-      // Optionally save and run init script
       if (initScript.trim() && repoId) {
         await window.repos.saveInitScript(repoId, initScript)
       }
 
-      // If no write access, pause to show warning before completing
       if (!hasWriteAccess) {
         setPendingComplete({ dir: mainDir, agentId: selectedAgentId, extra: { repoId, name: repoName } })
         return
@@ -139,6 +332,10 @@ export function CloneView({
     if (folder) setLocation(folder)
   }
 
+  const triggerCloneFromKey = () => {
+    if (canClone) void handleClone()
+  }
+
   return (
     <>
       <div className="px-4 py-3 border-b border-border flex items-center gap-2">
@@ -151,113 +348,33 @@ export function CloneView({
       </div>
 
       <div className="p-4 space-y-3">
-        <div>
-          <label className="block text-xs font-medium text-text-secondary mb-1">Repository URL</label>
-          <input
-            type="text"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://github.com/user/repo.git or git@github.com:user/repo.git"
-            className="w-full px-3 py-2 text-sm rounded border border-border bg-bg-primary text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent"
-            autoFocus
-          />
-          <p className="text-xs text-text-secondary mt-1">HTTPS (https://github.com/...) or SSH (git@github.com:...)</p>
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-text-secondary mb-1">Location</label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              className="flex-1 px-3 py-2 text-sm rounded border border-border bg-bg-primary text-text-primary focus:outline-none focus:border-accent"
-            />
-            <button
-              onClick={handleBrowseLocation}
-              className="px-3 py-2 text-sm rounded border border-border bg-bg-primary hover:bg-bg-tertiary text-text-secondary transition-colors"
-            >
-              Browse
-            </button>
-          </div>
-        </div>
-
-        {repoName && (
-          <div className="text-xs text-text-secondary">
-            Will clone to: <span className="font-mono text-text-primary">{location}/{repoName}/main/</span>
-          </div>
-        )}
-
-        <div>
-          <label className="block text-xs font-medium text-text-secondary mb-1">Agent</label>
-          <select
-            value={selectedAgentId || ''}
-            onChange={(e) => setSelectedAgentId(e.target.value || null)}
-            className="w-full px-3 py-2 text-sm rounded border border-border bg-bg-primary text-text-primary focus:outline-none focus:border-accent"
-          >
-            {agents.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-            <option value="">Shell Only</option>
-          </select>
-        </div>
-
+        <UrlField url={url} setUrl={setUrl} parsed={parsed} onSubmit={triggerCloneFromKey} />
+        <LocationField location={location} setLocation={setLocation} status={locationStatus} repoName={repoName} onBrowse={() => void handleBrowseLocation()} />
+        <PathPreview path={previewPath} />
+        <AgentField agents={agents} selectedAgentId={selectedAgentId} setSelectedAgentId={setSelectedAgentId} />
         <IsolationSettings
           isolated={isolated} skipApproval={skipApproval}
           dockerStatus={null} devcontainerStatus={devcontainerStatus}
           hasDevcontainerConfig={null}
           onIsolatedChange={setIsolated} onSkipApprovalChange={setSkipApproval}
         />
-
-        <div>
-          <button
-            onClick={() => setShowInitScript(!showInitScript)}
-            className="text-xs text-text-secondary hover:text-text-primary transition-colors flex items-center gap-1"
-          >
-            <svg className={`w-3 h-3 transition-transform ${showInitScript ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-            Init Script
-          </button>
-          {showInitScript && (
-            <textarea
-              value={initScript}
-              onChange={(e) => setInitScript(e.target.value)}
-              placeholder="#!/bin/bash&#10;# Runs in each new worktree&#10;cp ../main/.env .env"
-              className="w-full mt-1 px-3 py-2 text-xs font-mono rounded border border-border bg-bg-primary text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent resize-y"
-              rows={3}
-            />
-          )}
-        </div>
-
-        {error && (
-          <DialogErrorBanner error={error} onDismiss={() => setError(null)} />
-        )}
-
+        <InitScriptField initScript={initScript} setInitScript={setInitScript} show={showInitScript} setShow={setShowInitScript} />
+        {error && <DialogErrorBanner error={error} onDismiss={() => setError(null)} />}
         {noWriteAccess && (
           <NoWriteAccessBanner
             onContinue={pendingComplete ? () => onComplete(pendingComplete.dir, pendingComplete.agentId, pendingComplete.extra) : undefined}
           />
         )}
-
         <AuthSetupSection error={error} ghAvailable={ghAvailable} onRetry={handleClone} retryLabel="Retry Clone" />
       </div>
 
-      <div className="px-4 py-3 border-t border-border flex justify-end gap-2">
-        <button
-          onClick={onBack}
-          className="px-4 py-2 text-sm text-text-secondary hover:text-text-primary transition-colors"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleClone}
-          disabled={!url || !location || !repoName || loading}
-          className="px-4 py-2 text-sm rounded bg-accent text-white hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {loading ? 'Cloning...' : 'Clone'}
-        </button>
-      </div>
+      <CloneFooter
+        blockingReason={blockingReason}
+        canClone={canClone}
+        loading={loading}
+        onBack={onBack}
+        onClone={() => void handleClone()}
+      />
     </>
   )
 }

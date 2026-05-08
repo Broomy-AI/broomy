@@ -121,6 +121,14 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
   const searchHighlightRef = useRef(searchHighlight)
   const onOpenFileRef = useRef(onOpenFile)
   onOpenFileRef.current = onOpenFile
+  // Refs for callbacks used inside Monaco's editor.addCommand. addCommand is
+  // registered once on mount and the @monaco-editor/react Editor reuses the
+  // same instance across files, so a direct closure capture would go stale
+  // whenever the parent re-issues handleSave (e.g., after filePath changes).
+  const onSaveRef = useRef(onSave)
+  const onDirtyChangeRef = useRef(onDirtyChange)
+  onSaveRef.current = onSave
+  onDirtyChangeRef.current = onDirtyChange
 
   const { commentLine, setCommentLine, commentText, setCommentText, handleAddComment } = useMonacoComments({
     filePath,
@@ -132,9 +140,29 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
   scrollToLineRef.current = scrollToLine
   searchHighlightRef.current = searchHighlight
 
-  // Update original content when file changes
-  useEffect(() => {
+  // Dirty detection baseline. Sync it to the parent's `content` prop on every
+  // render BEFORE child effects fire, so the wrapper's setValue-driven onChange
+  // (which is normally suppressed, but if it fires for any reason) compares
+  // against the latest parent content. We later overwrite this ref with
+  // editor.getValue() once Monaco has the content — Monaco may normalize
+  // content (line endings, BOM stripping, etc.) so its actual value can differ
+  // from the prop, and a stale-prop baseline would then consistently flag the
+  // file as dirty even when the user has not edited it.
+  if (originalContentRef.current !== content) {
     originalContentRef.current = content
+  }
+
+  // After parent updates content (file load, watcher reload, save), let Monaco
+  // process the new value, then reset the dirty baseline to whatever Monaco
+  // actually has in the editor. This is the core defense against false-positive
+  // dirty detection: regardless of any normalization Monaco applies (CRLF↔LF,
+  // BOM, trailing-newline behavior), getValue() === getValue() so the file
+  // shows as clean until the user actually types.
+  useEffect(() => {
+    const editor = editorRef.current
+    if (editor) {
+      originalContentRef.current = editor.getValue()
+    }
     onDirtyChange?.(false, content)
   }, [content, filePath])
 
@@ -153,6 +181,12 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
 
   const handleEditorDidMount = (editor: monaco.editor.IStandaloneCodeEditor, monacoInstance: Monaco) => {
     editorRef.current = editor
+    // Anchor the dirty-detection baseline to Monaco's actual editor value, not
+    // the content prop. Monaco may normalize the content (line endings, BOM,
+    // etc.); using its post-normalization value as the baseline guarantees the
+    // first onChange after mount can only fire as dirty if the user has
+    // genuinely edited the text.
+    originalContentRef.current = editor.getValue()
     // Apply pending scroll/highlight now that the editor is ready
     if (scrollToLineRef.current) {
       // Monaco editor is ready at onMount, but give it a moment for layout
@@ -162,13 +196,14 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
     // Add Cmd/Ctrl+S save handler
     editor.addCommand(monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.KeyS, () => {
       const editorContent = editor.getValue()
-      if (onSave && editorContent !== originalContentRef.current) {
-        void onSave(editorContent).then((saved) => {
+      const save = onSaveRef.current
+      if (save && editorContent !== originalContentRef.current) {
+        void save(editorContent).then((saved) => {
           // Only reset dirty state if the save actually went through
           // (it may be aborted if the file changed on disk)
           if (saved) {
             originalContentRef.current = editorContent
-            onDirtyChange?.(false, editorContent)
+            onDirtyChangeRef.current?.(false, editorContent)
           }
         })
       }

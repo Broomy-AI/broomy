@@ -30,6 +30,10 @@ vi.mock('fs', () => ({
   existsSync: vi.fn(() => true),
 }))
 
+vi.mock('fs/promises', () => ({
+  mkdir: vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock('../platform', () => ({
   normalizePath: (p: string) => p.replace(/\\/g, '/'),
 }))
@@ -136,6 +140,30 @@ describe('gitBranch handlers', () => {
       const result = await handlers['git:clone'](null, 'url', '/target')
       expect(result.success).toBe(false)
       expect(result.error).toContain('generic error')
+    })
+
+    it('creates the parent directory before cloning', async () => {
+      const { mkdir } = await import('fs/promises')
+      vi.mocked(mkdir).mockResolvedValue(undefined)
+      mockGitInstance.clone.mockResolvedValue(undefined)
+
+      const handlers = setupHandlers()
+      const result = await handlers['git:clone'](null, 'https://github.com/org/repo.git', '/target/repo/main')
+      expect(result).toEqual({ success: true })
+      expect(mkdir).toHaveBeenCalledWith('/target/repo', { recursive: true })
+    })
+
+    it('returns clear error when parent directory cannot be created', async () => {
+      const { mkdir } = await import('fs/promises')
+      vi.mocked(mkdir).mockRejectedValueOnce(new Error('EACCES: permission denied'))
+
+      const handlers = setupHandlers()
+      const result = await handlers['git:clone'](null, 'url', '/forbidden/repo/main')
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('parent folder')
+      expect(result.error).toContain('permission denied')
+      // Should not have attempted the clone
+      expect(mockGitInstance.clone).not.toHaveBeenCalled()
     })
   })
 

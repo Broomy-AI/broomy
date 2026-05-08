@@ -44,7 +44,7 @@ vi.mock('../../../../hooks/useCommandsConfig', () => ({
   })),
 }))
 
-import ReviewPanel from './ReviewPanel'
+import ReviewPanel, { parseFileLink } from './ReviewPanel'
 
 function makeSession(overrides: Partial<Session> = {}): Session {
   return {
@@ -137,5 +137,41 @@ describe('ReviewPanel', () => {
     render(<ReviewPanel session={makeSession()} onSelectFile={vi.fn()} />)
     expect(screen.getByText('Overview')).toBeTruthy()
     expect(screen.getByText('Issues')).toBeTruthy()
+  })
+})
+
+describe('parseFileLink', () => {
+  it('parses a plain repo-relative path', () => {
+    expect(parseFileLink('src/file.tsx')).toEqual({ relativePath: 'src/file.tsx', line: undefined })
+  })
+
+  it('extracts the start line from an L<n> fragment', () => {
+    expect(parseFileLink('src/file.tsx#L12')).toEqual({ relativePath: 'src/file.tsx', line: 12 })
+  })
+
+  it('extracts the start line from an L<n>-L<m> range fragment', () => {
+    expect(parseFileLink('src/file.tsx#L12-L45')).toEqual({ relativePath: 'src/file.tsx', line: 12 })
+  })
+
+  it('decodes URL-encoded paths from ReactMarkdown hrefs', () => {
+    expect(parseFileLink('src/my%20file.tsx')).toEqual({ relativePath: 'src/my file.tsx', line: undefined })
+  })
+
+  it('decodes URL-encoded paths with a line fragment', () => {
+    expect(parseFileLink('src/my%20file.tsx#L7')).toEqual({ relativePath: 'src/my file.tsx', line: 7 })
+  })
+
+  it('decodes percent-encoded special characters', () => {
+    expect(parseFileLink('packages/%40scope/pkg.ts')).toEqual({ relativePath: 'packages/@scope/pkg.ts', line: undefined })
+  })
+
+  it('falls back to the raw path when decoding fails', () => {
+    // %ZZ is not a valid escape sequence — decodeURIComponent throws
+    expect(parseFileLink('src/bad%ZZpath.tsx')).toEqual({ relativePath: 'src/bad%ZZpath.tsx', line: undefined })
+  })
+
+  it('skips external URLs', () => {
+    expect(parseFileLink('https://example.com/foo')).toBeNull()
+    expect(parseFileLink('http://example.com/foo')).toBeNull()
   })
 })

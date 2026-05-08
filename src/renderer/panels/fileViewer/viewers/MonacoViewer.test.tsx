@@ -265,6 +265,92 @@ describe('MonacoViewerComponent', () => {
     expect(onDirtyChange).toHaveBeenCalledWith(false, 'updated')
   })
 
+  it('does not flag dirty when Monaco fires onChange after a parent-driven content change (regression)', () => {
+    // Real-world scenario: file reloads from disk -> parent passes new content prop ->
+    // @monaco-editor/react's setValue effect fires onDidChangeModelContent ->
+    // our onChange handler runs with the NEW content. If originalContentRef hasn't
+    // been synced by then, we'd report dirty=true and poison the per-session
+    // dirtyMap, producing a spurious "discard unsaved changes" prompt on next nav.
+    const onDirtyChange = vi.fn()
+    const { rerender } = render(
+      <MonacoViewerComponent filePath="/test/file.ts" content="original" onDirtyChange={onDirtyChange} />
+    )
+
+    rerender(
+      <MonacoViewerComponent filePath="/test/file.ts" content="reloaded from disk" onDirtyChange={onDirtyChange} />
+    )
+
+    // Simulate Monaco's setValue effect firing onChange with the new value.
+    const onChangeCall = mockEditor.mock.calls[mockEditor.mock.calls.length - 1][0]
+    onDirtyChange.mockClear()
+    onChangeCall.onChange('reloaded from disk')
+
+    // Must NOT report dirty=true at any point.
+    expect(onDirtyChange).not.toHaveBeenCalledWith(true, expect.anything())
+    expect(onDirtyChange).toHaveBeenCalledWith(false, 'reloaded from disk')
+  })
+
+  it('still flags dirty when user actually edits after a content reload', () => {
+    // Counterpart to the regression test above: real edits must still mark dirty.
+    const onDirtyChange = vi.fn()
+    const { rerender } = render(
+      <MonacoViewerComponent filePath="/test/file.ts" content="original" onDirtyChange={onDirtyChange} />
+    )
+
+    rerender(
+      <MonacoViewerComponent filePath="/test/file.ts" content="reloaded" onDirtyChange={onDirtyChange} />
+    )
+
+    const onChangeCall = mockEditor.mock.calls[mockEditor.mock.calls.length - 1][0]
+    onDirtyChange.mockClear()
+
+    // User types something genuinely different.
+    onChangeCall.onChange('reloaded + my edit')
+
+    expect(onDirtyChange).toHaveBeenCalledWith(true, 'reloaded + my edit')
+  })
+
+  it('does not flag dirty when Monaco normalizes the content (BOM, line endings, etc.)', () => {
+    // Monaco strips BOMs and may normalize line endings, so editor.getValue()
+    // can differ from the file's raw bytes. The dirty baseline must come from
+    // the editor's actual value, not the prop, otherwise files with these
+    // characteristics show as dirty consistently before the user types anything.
+    const onDirtyChange = vi.fn()
+    render(
+      <MonacoViewerComponent
+        filePath="/test/file.json"
+        content={'﻿{"key": "value"}\r\n'}
+        onSave={vi.fn()}
+        onDirtyChange={onDirtyChange}
+      />
+    )
+
+    // After mount, simulate Monaco's actual stored value (BOM stripped, CRLF→LF).
+    const props = mockEditor.mock.calls[mockEditor.mock.calls.length - 1][0] as Record<string, unknown>
+    const onMount = props.onMount as (editor: unknown, monaco: unknown) => void
+    const normalizedValue = '{"key": "value"}\n'
+    const editor = {
+      addCommand: vi.fn(),
+      onMouseDown: vi.fn(),
+      focus: vi.fn(),
+      trigger: vi.fn(),
+      getValue: vi.fn().mockReturnValue(normalizedValue),
+      revealLineInCenter: vi.fn(),
+      getModel: vi.fn().mockReturnValue({ getLineContent: vi.fn() }),
+      setSelection: vi.fn(),
+      createDecorationsCollection: vi.fn(),
+    }
+    onMount(editor, { KeyMod: { CtrlCmd: 2048 }, KeyCode: { KeyS: 49 }, editor: { MouseTargetType: { GUTTER_GLYPH_MARGIN: 2 } } })
+
+    // Monaco's onChange fires with its normalized value (e.g. via the wrapper
+    // syncing the model on mount, or any code path that re-emits the value).
+    onDirtyChange.mockClear()
+    const onChangeCall = props.onChange as (value: string) => void
+    onChangeCall(normalizedValue)
+
+    expect(onDirtyChange).not.toHaveBeenCalledWith(true, expect.anything())
+  })
+
   it('passes filePath as path to Monaco', () => {
     render(
       <MonacoViewerComponent filePath="/test/file.ts" content="" />
@@ -334,10 +420,15 @@ describe('MonacoViewerComponent onMount lifecycle', () => {
     const props = getLastEditorProps()
     const onMount = props.onMount as (editor: unknown, monaco: unknown) => void
     const editor = makeMockEditorInstance()
-    editor.getValue.mockReturnValue('modified')
+    // At mount, the editor's value matches the initial content (the dirty
+    // baseline is anchored to getValue() here).
+    editor.getValue.mockReturnValue('original')
     const monacoInst = makeMockMonaco()
 
     onMount(editor, monacoInst)
+
+    // Now the user types — editor reports the new value.
+    editor.getValue.mockReturnValue('modified')
 
     // Get the save callback (second arg to addCommand)
     const saveCallback = editor.addCommand.mock.calls[0][1] as () => void
@@ -360,11 +451,89 @@ describe('MonacoViewerComponent onMount lifecycle', () => {
     const monacoInst = makeMockMonaco()
 
     onMount(editor, monacoInst)
+    // Editor's value never diverges from the mount baseline — Cmd+S is a no-op.
 
     const saveCallback = editor.addCommand.mock.calls[0][1] as () => void
     saveCallback()
 
     expect(onSave).not.toHaveBeenCalled()
+  })
+
+  it('Cmd+S handler uses latest onSave after re-render (no stale closure)', async () => {
+    const onSave1 = vi.fn().mockResolvedValue(true)
+    const onSave2 = vi.fn().mockResolvedValue(true)
+    const { rerender } = render(
+      <MonacoViewerComponent filePath="/test/file.ts" content="original" onSave={onSave1} />
+    )
+    const props = getLastEditorProps()
+    const onMount = props.onMount as (editor: unknown, monaco: unknown) => void
+    const editor = makeMockEditorInstance()
+    editor.getValue.mockReturnValue('modified')
+    const monacoInst = makeMockMonaco()
+    onMount(editor, monacoInst)
+
+    // Parent re-renders with a new onSave (e.g., handleSave's identity changed
+    // because filePath or checkForExternalChanges changed)
+    rerender(
+      <MonacoViewerComponent filePath="/test/file.ts" content="original" onSave={onSave2} />
+    )
+
+    const saveCallback = editor.addCommand.mock.calls[0][1] as () => void
+    saveCallback()
+
+    await vi.waitFor(() => {
+      expect(onSave2).toHaveBeenCalledWith('modified')
+    })
+    expect(onSave1).not.toHaveBeenCalled()
+  })
+
+  it('Cmd+S handler is a no-op when onSave becomes undefined (e.g., diff-ref view)', () => {
+    const onSave = vi.fn().mockResolvedValue(true)
+    const { rerender } = render(
+      <MonacoViewerComponent filePath="/test/file.ts" content="original" onSave={onSave} />
+    )
+    const props = getLastEditorProps()
+    const onMount = props.onMount as (editor: unknown, monaco: unknown) => void
+    const editor = makeMockEditorInstance()
+    editor.getValue.mockReturnValue('modified')
+    const monacoInst = makeMockMonaco()
+    onMount(editor, monacoInst)
+
+    // Switch to a view where saving is disallowed (diffCurrentRef sets onSave to undefined)
+    rerender(
+      <MonacoViewerComponent filePath="/test/file.ts" content="original" />
+    )
+
+    const saveCallback = editor.addCommand.mock.calls[0][1] as () => void
+    saveCallback()
+
+    expect(onSave).not.toHaveBeenCalled()
+  })
+
+  it('Cmd+S handler reports dirty=false on save success via the latest onDirtyChange', async () => {
+    const onSave = vi.fn().mockResolvedValue(true)
+    const onDirtyChange1 = vi.fn()
+    const onDirtyChange2 = vi.fn()
+    const { rerender } = render(
+      <MonacoViewerComponent filePath="/test/file.ts" content="original" onSave={onSave} onDirtyChange={onDirtyChange1} />
+    )
+    const props = getLastEditorProps()
+    const onMount = props.onMount as (editor: unknown, monaco: unknown) => void
+    const editor = makeMockEditorInstance()
+    editor.getValue.mockReturnValue('modified')
+    const monacoInst = makeMockMonaco()
+    onMount(editor, monacoInst)
+
+    rerender(
+      <MonacoViewerComponent filePath="/test/file.ts" content="original" onSave={onSave} onDirtyChange={onDirtyChange2} />
+    )
+
+    const saveCallback = editor.addCommand.mock.calls[0][1] as () => void
+    saveCallback()
+
+    await vi.waitFor(() => {
+      expect(onDirtyChange2).toHaveBeenCalledWith(false, 'modified')
+    })
   })
 
   it('registers glyph margin click handler when reviewContext is provided', () => {

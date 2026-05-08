@@ -31,6 +31,10 @@ beforeEach(() => {
     defaultCloneDir: '~/repos',
     addRepo: vi.fn(),
   })
+  // Default: location exists, target folder does not (so Clone isn't blocked).
+  vi.mocked(window.fs.exists).mockImplementation((path: string) =>
+    Promise.resolve(path === '~/repos')
+  )
 })
 
 describe('CloneView', () => {
@@ -264,6 +268,95 @@ describe('CloneView', () => {
       expect(screen.queryByText('Install GitHub CLI')).toBeNull()
     })
 
+  })
+
+  describe('inline guidance', () => {
+    it('shows path preview with placeholder repo name when URL is empty', () => {
+      render(<CloneView onBack={vi.fn()} onComplete={vi.fn()} />)
+      expect(screen.getByText(/<repo>\/main/)).toBeTruthy()
+    })
+
+    it('shows blocking reason when URL is empty', () => {
+      render(<CloneView onBack={vi.fn()} onComplete={vi.fn()} />)
+      expect(screen.getByText(/Enter a repository URL/i)).toBeTruthy()
+    })
+
+    it('shows inline error for a GitHub tree URL', () => {
+      render(<CloneView onBack={vi.fn()} onComplete={vi.fn()} />)
+      const urlInput = screen.getByPlaceholderText(/https:\/\/github\.com/)
+      fireEvent.change(urlInput, { target: { value: 'https://github.com/user/repo/tree/main' } })
+      // Error appears both under the input and above the button
+      expect(screen.getAllByText(/tree page/i).length).toBeGreaterThan(0)
+    })
+
+    it('shows blocking reason for invalid URL', () => {
+      render(<CloneView onBack={vi.fn()} onComplete={vi.fn()} />)
+      const urlInput = screen.getByPlaceholderText(/https:\/\/github\.com/)
+      fireEvent.change(urlInput, { target: { value: 'not a url' } })
+      // Both inline (under input) and above button — at least one must appear
+      expect(screen.getAllByText(/HTTPS URL/i).length).toBeGreaterThan(0)
+    })
+
+    it('disables Clone for an invalid URL', () => {
+      render(<CloneView onBack={vi.fn()} onComplete={vi.fn()} />)
+      const urlInput = screen.getByPlaceholderText(/https:\/\/github\.com/)
+      fireEvent.change(urlInput, { target: { value: 'https://github.com/user/repo/tree/main' } })
+      expect(screen.getByText('Clone').hasAttribute('disabled')).toBe(true)
+    })
+
+    it('shows "folder will be created" hint when location does not exist', async () => {
+      vi.mocked(window.fs.exists).mockResolvedValue(false)
+      render(<CloneView onBack={vi.fn()} onComplete={vi.fn()} />)
+      await waitFor(() => {
+        expect(screen.getByText(/will be created/i)).toBeTruthy()
+      })
+    })
+
+    it('blocks Clone when target folder already exists', async () => {
+      vi.mocked(window.fs.exists).mockResolvedValue(true)
+      render(<CloneView onBack={vi.fn()} onComplete={vi.fn()} />)
+      const urlInput = screen.getByPlaceholderText(/https:\/\/github\.com/)
+      fireEvent.change(urlInput, { target: { value: 'https://github.com/user/test.git' } })
+      await waitFor(() => {
+        expect(screen.getAllByText(/already exists/i).length).toBeGreaterThan(0)
+      })
+      expect(screen.getByText('Clone').hasAttribute('disabled')).toBe(true)
+    })
+
+    it('triggers clone when Enter is pressed in the URL field', async () => {
+      vi.mocked(window.git.clone).mockResolvedValue({ success: true })
+      vi.mocked(window.git.defaultBranch).mockResolvedValue('main')
+      vi.mocked(window.git.remoteUrl).mockResolvedValue('https://github.com/user/test.git')
+      vi.mocked(window.gh.hasWriteAccess).mockResolvedValue(true)
+      vi.mocked(window.config.load).mockResolvedValue({ agents: [], sessions: [], repos: [{ id: 'repo-1', name: 'test', remoteUrl: 'https://github.com/user/test.git', rootDir: '~/repos/test', defaultBranch: 'main' }] })
+
+      render(<CloneView onBack={vi.fn()} onComplete={vi.fn()} />)
+      const urlInput = screen.getByPlaceholderText(/https:\/\/github\.com/)
+      fireEvent.change(urlInput, { target: { value: 'https://github.com/user/test.git' } })
+      fireEvent.keyDown(urlInput, { key: 'Enter' })
+
+      await waitFor(() => {
+        expect(window.git.clone).toHaveBeenCalled()
+      })
+    })
+
+    it('does not trigger clone when Enter is pressed and Clone is blocked', () => {
+      render(<CloneView onBack={vi.fn()} onComplete={vi.fn()} />)
+      const urlInput = screen.getByPlaceholderText(/https:\/\/github\.com/)
+      fireEvent.keyDown(urlInput, { key: 'Enter' })
+      expect(window.git.clone).not.toHaveBeenCalled()
+    })
+
+    it('accepts owner/repo shorthand', () => {
+      render(<CloneView onBack={vi.fn()} onComplete={vi.fn()} />)
+      const urlInput = screen.getByPlaceholderText(/https:\/\/github\.com/)
+      fireEvent.change(urlInput, { target: { value: 'user/my-repo' } })
+      expect(screen.getByText(/my-repo\/main/)).toBeTruthy()
+      expect(screen.getByText('Clone').hasAttribute('disabled')).toBe(false)
+    })
+  })
+
+  describe('auth terminal flow', () => {
     it('creates PTY and shows auth terminal when gh available and auth button clicked', async () => {
       vi.mocked(window.git.clone).mockResolvedValue({ success: false, error: 'fatal: could not read Username' })
       vi.mocked(window.app.homedir).mockResolvedValue('/home/user')
