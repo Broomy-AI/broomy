@@ -75,7 +75,6 @@ function StatusChipBadge({ status, hasKnownPr }: { status: StatusChip; hasKnownP
   // so the user knows the PR exists even while they have unpushed work.
   if (status === 'in-progress' && !hasKnownPr) return null
   const badge = branchStatusBadge[status === 'in-progress' ? 'open' : status]
-  if (!badge) return null
   return (
     <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium leading-none ${badge.classes}`}>
       {badge.label}
