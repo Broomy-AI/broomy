@@ -1,0 +1,6 @@
+{"version":2,"width":80,"height":24,"timestamp":1700000000}
+[0,"o","main screen line 1\r\nmain screen line 2\r\n"]
+[0.1,"o","\u001b[?1049h"]
+[0.2,"o","ALT SCREEN CONTENT\r\n"]
+[0.3,"o","\u001b[?1049l"]
+[0.4,"o","back on main\r\n"]

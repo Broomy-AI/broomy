@@ -205,6 +205,7 @@ const mockWindowControls: Mocked<WindowControlsApi> = {
 // Mock window.dialog
 const mockDialog: Mocked<DialogApi> = {
   openFolder: vi.fn().mockResolvedValue(null),
+  saveFile: vi.fn().mockResolvedValue(null),
 }
 
 // Mock window.agentSdk

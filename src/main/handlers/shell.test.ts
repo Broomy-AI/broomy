@@ -10,6 +10,7 @@ vi.mock('child_process', () => ({
 // Mock electron
 const mockShellOpenExternal = vi.fn()
 const mockDialogShowOpenDialog = vi.fn()
+const mockDialogShowSaveDialog = vi.fn()
 const mockMenuBuildFromTemplate = vi.fn()
 const mockBrowserWindowFromWebContents = vi.fn()
 
@@ -22,6 +23,7 @@ vi.mock('electron', () => ({
   },
   dialog: {
     showOpenDialog: (...args: unknown[]) => mockDialogShowOpenDialog(...args),
+    showSaveDialog: (...args: unknown[]) => mockDialogShowSaveDialog(...args),
   },
   Menu: {
     buildFromTemplate: (...args: unknown[]) => mockMenuBuildFromTemplate(...args),
@@ -237,6 +239,46 @@ describe('shell handlers', () => {
 
       await handlers['dialog:openFolder'](mockEvent)
       expect(mockDialogShowOpenDialog).toHaveBeenCalledWith(mockMainWin, expect.any(Object))
+    })
+  })
+
+  describe('dialog:saveFile', () => {
+    it('returns chosen path when user selects a file', async () => {
+      const { register } = await import('./shell')
+      const mockWindow = { id: 1 }
+      const ctx = createCtx({ mainWindow: mockWindow as never })
+      register(mockIpcMain as never, ctx)
+
+      mockBrowserWindowFromWebContents.mockReturnValue(mockWindow)
+      mockDialogShowSaveDialog.mockResolvedValue({ canceled: false, filePath: '/tmp/out.cast' })
+
+      const result = await handlers['dialog:saveFile'](mockEvent, { defaultPath: 'out.cast', title: 'Save' })
+      expect(result).toBe('/tmp/out.cast')
+      expect(mockDialogShowSaveDialog).toHaveBeenCalledWith(mockWindow, expect.objectContaining({
+        defaultPath: 'out.cast', title: 'Save',
+      }))
+    })
+
+    it('returns null when the user cancels', async () => {
+      const { register } = await import('./shell')
+      const ctx = createCtx()
+      register(mockIpcMain as never, ctx)
+
+      mockBrowserWindowFromWebContents.mockReturnValue(null)
+      mockDialogShowSaveDialog.mockResolvedValue({ canceled: true, filePath: undefined })
+
+      const result = await handlers['dialog:saveFile'](mockEvent, {})
+      expect(result).toBeNull()
+    })
+
+    it('returns null in E2E mode without opening a dialog', async () => {
+      const { register } = await import('./shell')
+      const ctx = createCtx({ isE2ETest: true })
+      register(mockIpcMain as never, ctx)
+
+      const result = await handlers['dialog:saveFile'](mockEvent, {})
+      expect(result).toBeNull()
+      expect(mockDialogShowSaveDialog).not.toHaveBeenCalled()
     })
   })
 

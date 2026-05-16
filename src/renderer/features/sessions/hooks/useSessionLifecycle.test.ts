@@ -16,6 +16,17 @@ vi.mock('../../../shared/utils/terminalBufferRegistry', () => ({
   },
 }))
 
+vi.mock('../../../shared/utils/ptyCaptureRegistry', () => ({
+  ptyCaptureRegistry: {
+    init: vi.fn(),
+    recordOutput: vi.fn(),
+    recordResize: vi.fn(),
+    dispose: vi.fn(),
+    hasRecorder: vi.fn().mockReturnValue(true),
+    serializeAsciinema: vi.fn().mockReturnValue('{"version":2,"width":80,"height":24,"timestamp":0}\n[0,"o","hello"]\n'),
+  },
+}))
+
 // Mock monacoProjectContext
 vi.mock('../../../shared/utils/monacoProjectContext', () => ({
   loadMonacoProjectContext: vi.fn().mockResolvedValue(undefined),
@@ -301,13 +312,11 @@ describe('useSessionLifecycle', () => {
   })
 
   describe('Cmd+Shift+C keyboard shortcut', () => {
-    it('copies terminal content and session info to clipboard', () => {
-      const mockWriteText = vi.fn().mockResolvedValue(undefined)
-      Object.defineProperty(navigator, 'clipboard', {
-        value: { writeText: mockWriteText },
-        writable: true,
-        configurable: true,
-      })
+    it('saves an asciinema cast plus sidecar metadata via the save dialog', async () => {
+      const { ptyCaptureRegistry } = await import('../../../shared/utils/ptyCaptureRegistry')
+      vi.mocked(ptyCaptureRegistry.serializeAsciinema).mockReturnValue('{"version":2}\n[0,"o","hi"]\n')
+      vi.mocked(window.dialog.saveFile).mockResolvedValue('/tmp/capture.cast')
+      vi.mocked(window.fs.writeFile).mockResolvedValue({ success: true })
 
       const params = makeHookParams({
         activeSession: makeSession({
@@ -329,14 +338,32 @@ describe('useSessionLifecycle', () => {
       Object.defineProperty(event, 'preventDefault', { value: mockPreventDefault })
 
       act(() => { window.dispatchEvent(event) })
+      await act(async () => { await vi.advanceTimersByTimeAsync(0) })
 
       expect(mockPreventDefault).toHaveBeenCalled()
-      expect(mockWriteText).toHaveBeenCalledWith(expect.stringContaining('My Session'))
-      expect(mockWriteText).toHaveBeenCalledWith(expect.stringContaining('/my/dir'))
-      expect(mockWriteText).toHaveBeenCalledWith(expect.stringContaining('idle'))
-      expect(mockWriteText).toHaveBeenCalledWith(expect.stringContaining('Done'))
+      expect(window.dialog.saveFile).toHaveBeenCalledWith(expect.objectContaining({
+        defaultPath: expect.stringContaining('broomy-capture-my-session-'),
+        filters: expect.arrayContaining([{ name: 'Asciinema cast', extensions: ['cast'] }]),
+      }))
+      expect(window.fs.writeFile).toHaveBeenCalledWith('/tmp/capture.cast', expect.stringContaining('version'))
+      expect(window.fs.writeFile).toHaveBeenCalledWith('/tmp/capture.meta.json', expect.stringContaining('My Session'))
 
-      // Clean up to avoid listener leak to next test
+      unmount()
+    })
+
+    it('aborts when the user cancels the save dialog', async () => {
+      vi.mocked(window.dialog.saveFile).mockResolvedValue(null)
+      vi.mocked(window.fs.writeFile).mockResolvedValue({ success: true })
+
+      const params = makeHookParams()
+      const { unmount } = renderLifecycleHook(params)
+
+      const event = new KeyboardEvent('keydown', { key: 'c', metaKey: true, shiftKey: true, bubbles: true })
+      act(() => { window.dispatchEvent(event) })
+      await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+
+      expect(window.dialog.saveFile).toHaveBeenCalled()
+      expect(window.fs.writeFile).not.toHaveBeenCalled()
       unmount()
     })
 
@@ -357,7 +384,6 @@ describe('useSessionLifecycle', () => {
       Object.defineProperty(event, 'preventDefault', { value: mockPreventDefault })
 
       act(() => { window.dispatchEvent(event) })
-      // The handler returns early when !activeSession, so preventDefault is NOT called
       expect(mockPreventDefault).not.toHaveBeenCalled()
 
       unmount()

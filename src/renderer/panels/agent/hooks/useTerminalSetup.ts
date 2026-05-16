@@ -19,6 +19,7 @@ import { SerializeAddon } from '@xterm/addon-serialize'
 import { useSessionStore } from '../../../store/sessions'
 import { useRepoStore } from '../../../store/repos'
 import { terminalBufferRegistry } from '../../../shared/utils/terminalBufferRegistry'
+import { ptyCaptureRegistry } from '../../../shared/utils/ptyCaptureRegistry'
 import { useTerminalKeyboard } from './useTerminalKeyboard'
 import { usePlanDetection } from '../../../features/git/hooks/usePlanDetection'
 import { createPtyDataHandler } from './ptyDataHandler'
@@ -431,6 +432,13 @@ export function useTerminalSetup(
       try { return serializeAddon.serialize() } catch { return '' }
     })
 
+    // Raw byte capture for Cmd+Shift+C debug dumps (asciinema v2 format).
+    ptyCaptureRegistry.init(registryKey, terminal.cols, terminal.rows, {
+      TERM: 'xterm-256color',
+      ...(envVars || {}),
+    })
+    terminal.onResize(({ cols, rows }) => ptyCaptureRegistry.recordResize(registryKey, cols, rows))
+
     const viewportEl = containerRef.current.querySelector<HTMLElement>('.xterm-viewport')
 
     // ── Scroll state tracking (Wave Terminal approach) ───────────────
@@ -488,7 +496,10 @@ export function useTerminalSetup(
       effectStartTime,
       wasRecentlyAtBottom: scrollState.wasRecentlyAtBottom,
     })
-    const removeDataListener = window.pty.onData(id, dataHandler.handleData)
+    const removeDataListener = window.pty.onData(id, (data: string) => {
+      ptyCaptureRegistry.recordOutput(registryKey, data)
+      dataHandler.handleData(data)
+    })
 
     const removeExitListener = window.pty.onExit(id, (exitCode: number) => {
       terminal.write(`\r\n[Process exited with code ${exitCode}]\r\n`)
@@ -576,6 +587,7 @@ export function useTerminalSetup(
       }
       terminalBufferRegistry.unregister(registryKey)
       scrollLogRegistry.unregister(registryKey)
+      ptyCaptureRegistry.dispose(registryKey)
     }
   }, [sessionId, restartKey, config.command]) // Recreate terminal when session identity, command, or restart key changes
 
