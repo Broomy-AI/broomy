@@ -12,6 +12,7 @@ export type ShellApi = {
 
 export type DialogApi = {
   openFolder: () => Promise<string | null>
+  saveFile: (options: { defaultPath?: string; title?: string; filters?: { name: string; extensions: string[] }[] }) => Promise<string | null>
 }
 
 export type AppApi = {
@@ -61,6 +62,7 @@ export const shellApi: ShellApi = {
 
 export const dialogApi: DialogApi = {
   openFolder: () => ipcRenderer.invoke('dialog:openFolder'),
+  saveFile: (options) => ipcRenderer.invoke('dialog:saveFile', options),
 }
 
 export const appApi: AppApi = {

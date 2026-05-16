@@ -58,6 +58,18 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     return normalizePath(result.filePaths[0])
   })
 
+  ipcMain.handle('dialog:saveFile', async (_event, options: { defaultPath?: string; title?: string; filters?: { name: string; extensions: string[] }[] } = {}) => {
+    if (ctx.isE2ETest) return null
+    const senderWindow = BrowserWindow.fromWebContents(_event.sender) || ctx.mainWindow
+    const result = await dialog.showSaveDialog(senderWindow!, {
+      defaultPath: options.defaultPath,
+      title: options.title,
+      filters: options.filters,
+    })
+    if (result.canceled || !result.filePath) return null
+    return result.filePath
+  })
+
   ipcMain.handle('menu:appMenuPopup', async (_event) => {
     if (ctx.isE2ETest) {
       return null

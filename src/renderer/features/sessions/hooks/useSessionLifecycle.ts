@@ -5,10 +5,59 @@ import { useEffect, useCallback, useState } from 'react'
 import type { Session } from '../../../store/sessions'
 import type { ProfileData } from '../../../store/profiles'
 import { terminalBufferRegistry } from '../../../shared/utils/terminalBufferRegistry'
+import { ptyCaptureRegistry } from '../../../shared/utils/ptyCaptureRegistry'
 import { scrollLogRegistry } from '../../../panels/agent/utils/scrollLog'
 import { loadMonacoProjectContext } from '../../../shared/utils/monacoProjectContext'
 import { restoreSessionFocus } from '../../../shared/utils/focusHelpers'
 import { fetchReviewStatus } from '../../../shared/utils/reviewStatus'
+
+function fileSafeSlug(input: string): string {
+  return input.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'session'
+}
+
+async function saveCapture(activeSession: Session): Promise<void> {
+  const sessionId = activeSession.id
+  const cast = ptyCaptureRegistry.serializeAsciinema(sessionId)
+  if (!cast) {
+    console.warn('[capture] No PTY capture available for session', sessionId)
+    return
+  }
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').replace(/Z$/, '')
+  const defaultName = `broomy-capture-${fileSafeSlug(activeSession.name)}-${stamp}.cast`
+
+  const chosenPath = await window.dialog.saveFile({
+    defaultPath: defaultName,
+    title: 'Save terminal capture',
+    filters: [{ name: 'Asciinema cast', extensions: ['cast'] }, { name: 'All files', extensions: ['*'] }],
+  })
+  if (!chosenPath) return
+
+  const metaPath = chosenPath.endsWith('.cast') ? `${chosenPath.slice(0, -5)}.meta.json` : `${chosenPath}.meta.json`
+  const sidecar = {
+    session: {
+      id: activeSession.id,
+      name: activeSession.name,
+      directory: activeSession.directory,
+      status: activeSession.status,
+      lastMessage: activeSession.lastMessage ?? null,
+    },
+    renderedBufferTail: terminalBufferRegistry.getLastLines(activeSession.id, 200) ?? null,
+    scrollLog: scrollLogRegistry.format(activeSession.id),
+    capturedAt: new Date().toISOString(),
+    buildCommit: typeof __BUILD_COMMIT__ === 'string' ? __BUILD_COMMIT__ : 'unknown',
+  }
+
+  const castResult = await window.fs.writeFile(chosenPath, cast)
+  if (!castResult.success) {
+    console.error('[capture] Failed to write cast file:', castResult.error)
+    return
+  }
+  const metaResult = await window.fs.writeFile(metaPath, JSON.stringify(sidecar, null, 2))
+  if (!metaResult.success) {
+    console.error('[capture] Failed to write sidecar:', metaResult.error)
+  }
+}
 
 export function useSessionLifecycle({
   activeSession,
@@ -109,38 +158,21 @@ export function useSessionLifecycle({
     return () => { cancelled = true }
   }, [activeSessionId])
 
-  // Keyboard shortcut to copy terminal content + summary (Cmd+Shift+C)
+  // Keyboard shortcut to save a terminal-rendering capture (Cmd+Shift+C).
+  // Writes an asciinema v2 .cast file (raw PTY byte stream) plus a sidecar
+  // .meta.json with session metadata and scroll log. The .cast can be replayed
+  // through the terminal harness to reproduce rendering bugs deterministically.
   useEffect(() => {
-    const handleCopyTerminal = (e: KeyboardEvent) => {
-      // Cmd+Shift+C (Mac) or Ctrl+Shift+C (other)
+    const handleCaptureShortcut = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'c') {
         if (!activeSession) return
         e.preventDefault()
-
-        // Get terminal buffer (last 200 lines to keep it manageable)
-        const buffer = terminalBufferRegistry.getLastLines(activeSession.id, 200)
-
-        // Build the copy content with summary
-        let content = '=== Agent Session Debug Info ===\n\n'
-        content += `Session: ${activeSession.name}\n`
-        content += `Directory: ${activeSession.directory}\n`
-        content += `Status: ${activeSession.status}\n`
-        content += `Last Message: ${activeSession.lastMessage || '(none)'}\n`
-        // Scroll event log for debugging viewport jump issues
-        const scrollLogContent = scrollLogRegistry.format(activeSession.id)
-        content += '\n=== Scroll Event Log ===\n\n'
-        content += scrollLogContent
-        content += '\n\n=== Terminal Output (last 200 lines) ===\n\n'
-        content += buffer || '(no content)'
-
-        void navigator.clipboard.writeText(content).catch((err: unknown) => {
-          console.error('Failed to copy to clipboard:', err)
-        })
+        void saveCapture(activeSession)
       }
     }
 
-    window.addEventListener('keydown', handleCopyTerminal)
-    return () => window.removeEventListener('keydown', handleCopyTerminal)
+    window.addEventListener('keydown', handleCaptureShortcut)
+    return () => window.removeEventListener('keydown', handleCaptureShortcut)
   }, [activeSession])
 
   return {
