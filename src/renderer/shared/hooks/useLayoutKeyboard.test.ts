@@ -499,6 +499,29 @@ describe('useLayoutKeyboard', () => {
       expect(onShowShortcuts).toHaveBeenCalled()
     })
 
+    it('Cmd+/ does not call onShowShortcuts when focus is in monaco-editor', () => {
+      const editor = document.createElement('div')
+      editor.classList.add('monaco-editor')
+      const textarea = document.createElement('div')
+      textarea.tabIndex = 0
+      editor.appendChild(textarea)
+      document.body.appendChild(editor)
+      textarea.focus()
+
+      renderHook(() => useLayoutKeyboard(defaultProps))
+
+      let defaultPrevented = false
+      act(() => {
+        const event = new KeyboardEvent('keydown', { key: '/', metaKey: true, bubbles: true, cancelable: true })
+        window.dispatchEvent(event)
+        defaultPrevented = event.defaultPrevented
+      })
+
+      expect(onShowShortcuts).not.toHaveBeenCalled()
+      expect(defaultPrevented).toBe(false)
+      document.body.removeChild(editor)
+    })
+
     it('Alt+Down calls onNextSession', () => {
       renderHook(() => useLayoutKeyboard(defaultProps))
       act(() => {
