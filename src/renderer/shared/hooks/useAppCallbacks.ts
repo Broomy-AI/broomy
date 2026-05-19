@@ -5,7 +5,6 @@ import { useCallback } from 'react'
 import { type Session, type LayoutSizes } from '../../store/sessions'
 import { PANEL_IDS } from '../../panels'
 import type { AgentConfig } from '../../store/agents'
-import type { PrState } from '../../features/git/branchStatus'
 import type { DuplicateSessionResult } from '../../store/sessionCoreActions'
 import { restoreSessionFocus } from '../utils/focusHelpers'
 import { fetchReviewStatus } from '../utils/reviewStatus'
@@ -26,9 +25,7 @@ interface AppCallbacksDeps {
   togglePanel: (sessionId: string, panelId: string) => void
   updateLayoutSize: (id: string, key: keyof LayoutSizes, value: number) => void
   setFileViewerPosition: (id: string, position: 'top' | 'left') => void
-  updatePrState: (sessionId: string, prState: PrState, prNumber?: number, prUrl?: string) => void
-  updateFeedbackStatus: (sessionId: string, hasFeedback: boolean) => void
-  updateChecksStatus: (sessionId: string, checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
+  refreshSession: (sessionId: string, opts?: { includePr?: boolean }) => Promise<void>
   updateReviewStatus: (sessionId: string, reviewStatus: 'pending' | 'reviewed') => void
   setShowNewSessionDialog: (show: boolean) => void
   onSessionAlreadyExists?: (info: { name: string; wasArchived: boolean }) => void
@@ -49,9 +46,7 @@ export function useAppCallbacks({
   togglePanel,
   updateLayoutSize,
   setFileViewerPosition,
-  updatePrState,
-  updateFeedbackStatus,
-  updateChecksStatus,
+  refreshSession,
   updateReviewStatus,
   setShowNewSessionDialog,
   onSessionAlreadyExists,
@@ -84,29 +79,10 @@ export function useAppCallbacks({
 
   const refreshPrStatus = useCallback(async () => {
     await Promise.allSettled(sessions.map(async (session) => {
-      const prResult = await window.gh.prStatus(session.directory)
-      if (prResult) {
-        updatePrState(session.id, prResult.state, prResult.number, prResult.url)
-        // Fetch feedback and checks in parallel for open PRs
-        if (prResult.state === 'OPEN') {
-          const [checks, feedback] = await Promise.all([
-            window.gh.prChecksStatus(session.directory).catch(() => 'none' as const),
-            window.gh.prFeedbackStatus(session.directory, prResult.number).catch(() => false),
-          ])
-          updateChecksStatus(session.id, checks)
-          updateFeedbackStatus(session.id, feedback)
-        } else {
-          updateChecksStatus(session.id, 'none')
-          updateFeedbackStatus(session.id, false)
-        }
-      } else {
-        updatePrState(session.id, null)
-        updateChecksStatus(session.id, 'none')
-        updateFeedbackStatus(session.id, false)
-      }
+      await refreshSession(session.id, { includePr: true })
       await fetchReviewStatus(session, updateReviewStatus)
     }))
-  }, [sessions, updatePrState, updateFeedbackStatus, updateChecksStatus, updateReviewStatus])
+  }, [sessions, refreshSession, updateReviewStatus])
 
   const getAgentCommand = useCallback((session: Session) => {
     if (!session.agentId) return undefined

@@ -1,7 +1,11 @@
 /**
- * Session store actions for branch status, PR state, and session lifecycle.
+ * Session store actions for review status and session archiving.
+ *
+ * Branch status, PR state, feedback, checks, and hasHadCommits are all owned by
+ * the single `refreshSession` action in sessionRefresh.ts and not written from
+ * anywhere else. Keep this module narrow.
  */
-import type { Session, BranchStatus, PrState } from './sessions'
+import type { Session } from './sessions'
 import { computeStatusChip } from '../features/git/branchStatus'
 import { debouncedSave } from './sessionPersistence'
 
@@ -22,104 +26,15 @@ type StoreSet = (partial: Partial<{
 
 export function createBranchActions(get: StoreGet, set: StoreSet) {
   return {
-    markHasHadCommits: (sessionId: string) => {
-      const { sessions } = get()
-      const session = sessions.find((s) => s.id === sessionId)
-      if (!session || session.hasHadCommits) return
-      const updatedSessions = sessions.map((s) =>
-        s.id === sessionId ? { ...s, hasHadCommits: true } : s
-      )
-      set({ sessions: updatedSessions })
-      debouncedSave()
-    },
-
-    clearHasHadCommits: (sessionId: string) => {
-      const { sessions } = get()
-      const session = sessions.find((s) => s.id === sessionId)
-      if (!session?.hasHadCommits) return
-      const updatedSessions = sessions.map((s) =>
-        s.id === sessionId ? { ...s, hasHadCommits: false } : s
-      )
-      set({ sessions: updatedSessions })
-      debouncedSave()
-    },
-
-    updateBranchStatus: (sessionId: string, status: BranchStatus) => {
-      const { sessions } = get()
-      const updatedSessions = sessions.map((s) =>
-        s.id === sessionId ? recomputeStatusChip({ ...s, branchStatus: status }) : s
-      )
-      set({ sessions: updatedSessions })
-    },
-
-    updateSessionBranch: (sessionId: string, branch: string) => {
-      const { sessions } = get()
-      const session = sessions.find((s) => s.id === sessionId)
-      if (!session || session.branch === branch) return
-      const updatedSessions = sessions.map((s) =>
-        s.id === sessionId
-          ? {
-              ...s,
-              branch,
-              hasHadCommits: false,
-              lastKnownPrState: undefined,
-              lastKnownPrNumber: undefined,
-              lastKnownPrUrl: undefined,
-              branchStatus: 'none' as BranchStatus,
-            }
-          : s
-      )
-      set({ sessions: updatedSessions })
-      debouncedSave()
-    },
-
-    updatePrState: (sessionId: string, prState: PrState, prNumber?: number, prUrl?: string) => {
-      const { sessions } = get()
-      const updatedSessions = sessions.map((s) =>
-        s.id === sessionId
-          ? {
-              ...s,
-              lastKnownPrState: prState,
-              // When clearing PR state (null), also clear number and URL so the session
-              // can start a fresh PR lifecycle.
-              lastKnownPrNumber: prState === null ? undefined : (prNumber ?? s.lastKnownPrNumber),
-              lastKnownPrUrl: prState === null ? undefined : (prUrl ?? s.lastKnownPrUrl),
-            }
-          : s
-      )
-      set({ sessions: updatedSessions })
-      debouncedSave()
-    },
-
     updateReviewStatus: (sessionId: string, reviewStatus: 'pending' | 'reviewed') => {
       const { sessions } = get()
       const session = sessions.find((s) => s.id === sessionId)
       if (!session || session.reviewStatus === reviewStatus) return
       const updatedSessions = sessions.map((s) =>
-        s.id === sessionId ? { ...s, reviewStatus } : s
+        s.id === sessionId ? recomputeStatusChip({ ...s, reviewStatus }) : s
       )
       set({ sessions: updatedSessions })
       debouncedSave()
-    },
-
-    updateFeedbackStatus: (sessionId: string, hasFeedback: boolean) => {
-      const { sessions } = get()
-      const session = sessions.find((s) => s.id === sessionId)
-      if (!session || session.hasFeedback === hasFeedback) return
-      const updatedSessions = sessions.map((s) =>
-        s.id === sessionId ? recomputeStatusChip({ ...s, hasFeedback }) : s
-      )
-      set({ sessions: updatedSessions })
-    },
-
-    updateChecksStatus: (sessionId: string, checksStatus: 'passed' | 'failed' | 'pending' | 'none') => {
-      const { sessions } = get()
-      const session = sessions.find((s) => s.id === sessionId)
-      if (!session || session.checksStatus === checksStatus) return
-      const updatedSessions = sessions.map((s) =>
-        s.id === sessionId ? recomputeStatusChip({ ...s, checksStatus }) : s
-      )
-      set({ sessions: updatedSessions })
     },
 
     archiveSession: (sessionId: string) => {

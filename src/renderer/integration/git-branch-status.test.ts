@@ -78,13 +78,14 @@ describe('Git branch status integration', () => {
     expect(computeBranchStatus(makeInput())).toBe('in-progress')
   })
 
-  it('in-progress takes priority: changes override PR state', () => {
-    // Even with a PR open, uncommitted changes mean in-progress
+  it('open PR wins over local in-progress changes', () => {
+    // Users want to see the PR badge while iterating locally — the PR is the
+    // shared artifact they care about, not the private in-progress state.
     expect(computeBranchStatus(makeInput({
       uncommittedFiles: 1,
       hasTrackingBranch: true,
       lastKnownPrState: 'OPEN',
-    }))).toBe('in-progress')
+    }))).toBe('open')
   })
 
   // ── Lifecycle sequence tests ──────────────────────────────────────────

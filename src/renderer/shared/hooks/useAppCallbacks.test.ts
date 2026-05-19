@@ -21,9 +21,7 @@ function makeDeps(overrides: Partial<Parameters<typeof useAppCallbacks>[0]> = {}
     togglePanel: vi.fn(),
     updateLayoutSize: vi.fn(),
     setFileViewerPosition: vi.fn(),
-    updatePrState: vi.fn(),
-    updateFeedbackStatus: vi.fn(),
-    updateChecksStatus: vi.fn(),
+    refreshSession: vi.fn().mockResolvedValue(undefined),
     updateReviewStatus: vi.fn(),
     setShowNewSessionDialog: vi.fn(),
     onSessionAlreadyExists: vi.fn(),
@@ -111,29 +109,28 @@ describe('useAppCallbacks', () => {
   })
 
   // --- refreshPrStatus ---
-  it('refreshPrStatus calls gh.prStatus for each session and updates state', async () => {
+  it('refreshPrStatus calls refreshSession with includePr=true for every session', async () => {
     const sessions = [
       { id: 's1', directory: '/d1' },
       { id: 's2', directory: '/d2' },
     ] as Parameters<typeof useAppCallbacks>[0]['sessions']
     const deps = makeDeps({ sessions })
-    vi.mocked(window.gh.prStatus)
-      .mockResolvedValueOnce({ state: 'open', number: 10, url: 'http://pr/10' } as never)
-      .mockResolvedValueOnce(null)
     const { result } = renderHook(() => useAppCallbacks(deps))
     await act(() => result.current.refreshPrStatus())
-    expect(deps.updatePrState).toHaveBeenCalledWith('s1', 'open', 10, 'http://pr/10')
-    expect(deps.updatePrState).toHaveBeenCalledWith('s2', null)
+    expect(deps.refreshSession).toHaveBeenCalledWith('s1', { includePr: true })
+    expect(deps.refreshSession).toHaveBeenCalledWith('s2', { includePr: true })
   })
 
   it('refreshPrStatus ignores errors from individual sessions', async () => {
     const sessions = [{ id: 's1', directory: '/d1' }] as Parameters<typeof useAppCallbacks>[0]['sessions']
-    const deps = makeDeps({ sessions })
-    vi.mocked(window.gh.prStatus).mockRejectedValue(new Error('net'))
+    const deps = makeDeps({
+      sessions,
+      refreshSession: vi.fn().mockRejectedValue(new Error('net')),
+    })
     const { result } = renderHook(() => useAppCallbacks(deps))
     // Should not throw
     await act(() => result.current.refreshPrStatus())
-    expect(deps.updatePrState).not.toHaveBeenCalled()
+    expect(deps.refreshSession).toHaveBeenCalledWith('s1', { includePr: true })
   })
 
   // --- getAgentCommand / getAgentEnv ---

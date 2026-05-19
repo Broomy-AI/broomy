@@ -252,8 +252,8 @@ describe('useSourceControlData', () => {
     expect(result.current.hasWriteAccess).toBe(false)
   })
 
-  it('calls onUpdatePrState when PR status changes', async () => {
-    const onUpdatePrState = vi.fn()
+  it('calls onRefreshPr when the source control tab mounts', async () => {
+    const onRefreshPr = vi.fn()
     vi.mocked(window.gh.prStatus).mockResolvedValue({
       number: 42,
       title: 'Test PR',
@@ -263,30 +263,14 @@ describe('useSourceControlData', () => {
       baseRefName: '',
     })
     vi.mocked(window.gh.hasWriteAccess).mockResolvedValue(true)
-    vi.mocked(window.git.headCommit).mockResolvedValue('abc123')
 
-    renderHook(() => useSourceControlData({ ...defaultProps, onUpdatePrState }))
-
-    await act(async () => {
-      await new Promise(r => setTimeout(r, 0))
-    })
-
-    expect(onUpdatePrState).toHaveBeenCalledWith('OPEN', 42, 'https://github.com/test/pr/42')
-  })
-
-  it('calls onUpdatePrState with null when no PR', async () => {
-    const onUpdatePrState = vi.fn()
-    vi.mocked(window.gh.prStatus).mockResolvedValue(null)
-    vi.mocked(window.gh.hasWriteAccess).mockResolvedValue(false)
-    vi.mocked(window.git.headCommit).mockResolvedValue(null)
-
-    renderHook(() => useSourceControlData({ ...defaultProps, onUpdatePrState }))
+    renderHook(() => useSourceControlData({ ...defaultProps, onRefreshPr }))
 
     await act(async () => {
       await new Promise(r => setTimeout(r, 0))
     })
 
-    expect(onUpdatePrState).toHaveBeenCalledWith(null)
+    expect(onRefreshPr).toHaveBeenCalled()
   })
 
   it('fetches checks status for open PRs', async () => {

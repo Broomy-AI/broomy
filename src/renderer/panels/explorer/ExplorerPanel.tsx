@@ -30,9 +30,7 @@ export default function Explorer({
   planFilePath,
   branchStatus,
   statusChip,
-  onUpdatePrState,
-  onUpdateFeedbackStatus,
-  onUpdateChecksStatus,
+  onRefreshPr,
   repoId,
   agentPtyId,
   session,
@@ -143,9 +141,7 @@ export default function Explorer({
               repoId={repoId}
               agentPtyId={agentPtyId}
               agentId={session?.agentId}
-              onUpdatePrState={onUpdatePrState}
-              onUpdateFeedbackStatus={onUpdateFeedbackStatus}
-              onUpdateChecksStatus={onUpdateChecksStatus}
+              onRefreshPr={onRefreshPr}
               issueNumber={issueNumber}
               issueTitle={issueTitle}
               issueUrl={issueUrl}

@@ -26,23 +26,32 @@ describe('computeBranchStatus', () => {
     }))).toBe('in-progress')
   })
 
-  it('returns in-progress when there are uncommitted files', () => {
+  it('returns open when uncommitted files exist but PR is open', () => {
+    // Open PR dominates local in-progress state — the user still wants to see
+    // the PR badge while iterating locally.
     expect(computeBranchStatus(makeInput({
       uncommittedFiles: 3,
       hasTrackingBranch: true,
       lastKnownPrState: 'OPEN',
-    }))).toBe('in-progress')
+    }))).toBe('open')
   })
 
-  it('returns in-progress when there are commits ahead', () => {
+  it('returns open when commits are ahead but PR is open', () => {
     expect(computeBranchStatus(makeInput({
       ahead: 2,
       hasTrackingBranch: true,
       lastKnownPrState: 'OPEN',
+    }))).toBe('open')
+  })
+
+  it('returns in-progress when uncommitted/ahead and no PR', () => {
+    expect(computeBranchStatus(makeInput({
+      uncommittedFiles: 3,
+      hasTrackingBranch: true,
     }))).toBe('in-progress')
   })
 
-  it('returns in-progress with both uncommitted and ahead', () => {
+  it('returns in-progress with both uncommitted and ahead (no PR)', () => {
     expect(computeBranchStatus(makeInput({
       uncommittedFiles: 1,
       ahead: 1,
@@ -143,12 +152,12 @@ describe('computeBranchStatus', () => {
     }))).toBe('in-progress')
   })
 
-  it('ahead commits override PR state', () => {
+  it('open PR wins over ahead commits (user sees PR while iterating)', () => {
     expect(computeBranchStatus(makeInput({
       ahead: 1,
       lastKnownPrState: 'OPEN',
       hasTrackingBranch: true,
-    }))).toBe('in-progress')
+    }))).toBe('open')
   })
 
   it('returns merged (not empty) when PR is merged but hasHadCommits was missed', () => {

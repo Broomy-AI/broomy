@@ -106,9 +106,7 @@ function makeConfig(overrides: Partial<PanelsMapConfig> = {}): PanelsMapConfig {
     toggleGlobalPanel: vi.fn(),
     selectFile: vi.fn(),
     setExplorerFilter: vi.fn(),
-    updatePrState: vi.fn(),
-    updateFeedbackStatus: vi.fn(),
-    updateChecksStatus: vi.fn(),
+    refreshSession: vi.fn().mockResolvedValue(undefined),
     setPanelVisibility: vi.fn(),
     setToolbarPanels: vi.fn(),
     closeCommandsEditor: vi.fn(),
@@ -294,12 +292,12 @@ describe('usePanelsMap', () => {
       expect(setExplorerFilter).toHaveBeenCalledWith('session-1', 'source-control')
     })
 
-    it('onUpdatePrState calls updatePrState with active session id', () => {
-      const updatePrState = vi.fn()
-      const { lastExplorerProps: props } = renderExplorer({ updatePrState })
-      const onUpdatePrState = props.onUpdatePrState as (state: string, num?: number, url?: string) => void
-      onUpdatePrState('open', 42, 'https://github.com/org/repo/pull/42')
-      expect(updatePrState).toHaveBeenCalledWith('session-1', 'open', 42, 'https://github.com/org/repo/pull/42')
+    it('onRefreshPr calls refreshSession with includePr=true for active session', () => {
+      const refreshSession = vi.fn().mockResolvedValue(undefined)
+      const { lastExplorerProps: props } = renderExplorer({ refreshSession })
+      const onRefreshPr = props.onRefreshPr as () => void
+      onRefreshPr()
+      expect(refreshSession).toHaveBeenCalledWith('session-1', { includePr: true })
     })
 
     it('passes session and repo props for review tab', () => {

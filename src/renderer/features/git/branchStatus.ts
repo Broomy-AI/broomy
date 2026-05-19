@@ -48,39 +48,48 @@ export function computeBranchStatus(input: BranchStatusInput): BranchStatus {
     lastKnownPrState,
   } = input
 
+  const hasLocalWork = uncommittedFiles > 0 || ahead > 0
+
   // 1. On main branch -> always in-progress
   if (isOnMainBranch) {
     return 'in-progress'
   }
 
-  // 2. Has uncommitted changes or commits ahead of remote -> in-progress
-  if (uncommittedFiles > 0 || ahead > 0) {
-    return 'in-progress'
-  }
-
-  // 3. Git-native merge check (works for UI push, terminal push, and GitHub PR merge)
-  if (isMergedToMain && hasHadCommits && hasTrackingBranch) {
+  // 2. Git-native merge check — authoritative, but only when the branch is
+  //    currently clean. If the user has resumed work on a merged branch,
+  //    that work takes priority (handled below in rule 4).
+  if (isMergedToMain && hasHadCommits && hasTrackingBranch && !hasLocalWork) {
     return 'merged'
   }
 
-  // 4. Check persisted PR state (before empty-branch check so that a merged PR
-  //    is never misclassified as "empty" when hasHadCommits was missed)
-  if (lastKnownPrState === 'MERGED') return 'merged'
-  if (lastKnownPrState === 'CLOSED') return 'closed'
+  // 3. Open PR dominates local "in-progress" state: while the user iterates on
+  //    their branch with unpushed commits, they still want to see that the PR
+  //    exists. The PR is the shared artifact; local uncommitted work is private.
   if (lastKnownPrState === 'OPEN') return 'open'
 
-  // 5. Fresh branch with tracking: isMergedToMain is true because there are 0 commits
+  // 4. Has uncommitted changes or commits ahead of remote -> in-progress
+  if (hasLocalWork) {
+    return 'in-progress'
+  }
+
+  // 5. Persisted PR state for terminal states (OPEN already handled above).
+  //    Checked before empty-branch so a merged PR isn't misclassified as "empty"
+  //    when hasHadCommits was missed (e.g. session inactive during the cycle).
+  if (lastKnownPrState === 'MERGED') return 'merged'
+  if (lastKnownPrState === 'CLOSED') return 'closed'
+
+  // 6. Fresh branch with tracking: isMergedToMain is true because there are 0 commits
   // ahead of main, but there were never any commits — this is an empty/fresh branch.
   if (isMergedToMain && !hasHadCommits && hasTrackingBranch) {
     return 'empty'
   }
 
-  // 6. Has remote tracking branch, no PR -> pushed
+  // 7. Has remote tracking branch, no PR -> pushed
   if (hasTrackingBranch) {
     return 'pushed'
   }
 
-  // 7. Default
+  // 8. Default
   return 'in-progress'
 }
 

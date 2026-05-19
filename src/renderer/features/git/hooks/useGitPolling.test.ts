@@ -1,21 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { renderHook, act } from '@testing-library/react'
+import { renderHook, act, cleanup } from '@testing-library/react'
 import { useGitPolling } from './useGitPolling'
-import type { GitStatusResult, ManagedRepo } from '../../../../preload/index'
-import type { Session, BranchStatus } from '../../../store/sessions'
-
-// Mock dependencies
-vi.mock('../gitStatusNormalizer', () => ({
-  normalizeGitStatus: vi.fn((status: unknown) => status),
-}))
-
-vi.mock('../branchStatus', () => ({
-  computeBranchStatus: vi.fn().mockReturnValue('in-progress'),
-}))
-
-import { normalizeGitStatus } from '../gitStatusNormalizer'
-import { computeBranchStatus } from '../branchStatus'
+import type { GitStatusResult } from '../../../../preload/index'
+import type { Session } from '../../../store/sessions'
 
 function makeSession(overrides: Partial<Session> = {}): Session {
   return {
@@ -55,507 +43,178 @@ function makeGitStatus(overrides: Partial<GitStatusResult> = {}): GitStatusResul
   }
 }
 
-function makeRepo(overrides: Partial<ManagedRepo> = {}): ManagedRepo {
-  return {
-    id: 'repo-1',
-    name: 'test',
-    remoteUrl: 'https://github.com/test/test',
-    rootDir: '/test/project',
-    defaultBranch: 'main',
-    ...overrides,
-  }
-}
-
 describe('useGitPolling', () => {
-  const markHasHadCommits: (sessionId: string) => void = vi.fn()
-  const clearHasHadCommits: (sessionId: string) => void = vi.fn()
-  const updateBranchStatus: (sessionId: string, status: BranchStatus) => void = vi.fn()
-  const updateSessionBranch: (sessionId: string, branch: string) => void = vi.fn()
-  const updatePrState = vi.fn()
+  const refreshSession = vi.fn<(sessionId: string, opts?: { includePr?: boolean }) => Promise<void>>()
 
   beforeEach(() => {
     vi.clearAllMocks()
     vi.useFakeTimers()
-
-    vi.mocked(normalizeGitStatus).mockImplementation((status: unknown) => status as GitStatusResult)
-    vi.mocked(computeBranchStatus).mockReturnValue('in-progress')
-
-    vi.mocked(window.git.status).mockResolvedValue(makeGitStatus())
-    vi.mocked(window.git.isMergedInto).mockResolvedValue(false)
-    vi.mocked(window.git.hasBranchCommits).mockResolvedValue(false)
+    refreshSession.mockResolvedValue(undefined)
   })
 
   afterEach(() => {
+    cleanup()
     vi.useRealTimers()
   })
 
-  const activeSession = makeSession()
+  describe('polling', () => {
+    it('calls refreshSession once immediately on mount (even when idle)', async () => {
+      const activeSession = makeSession({ status: 'idle' })
+      renderHook(() => useGitPolling({ activeSession, refreshSession }))
 
-  const defaultProps = {
-    sessions: [activeSession],
-    activeSession,
-    repos: [makeRepo()],
-    markHasHadCommits,
-    clearHasHadCommits,
-    updateBranchStatus,
-    updateSessionBranch,
-    updatePrState,
-  }
+      await act(async () => { await vi.advanceTimersByTimeAsync(0) })
 
-  describe('fetchGitStatus', () => {
-    it('fetches git status for active session', async () => {
-      const gitStatus = makeGitStatus({ current: 'feature/test' })
-      vi.mocked(window.git.status).mockResolvedValue(gitStatus)
-      vi.mocked(normalizeGitStatus).mockReturnValue(gitStatus)
-
-      const { result } = renderHook(() => useGitPolling(defaultProps))
-
-      await act(async () => {
-        await result.current.fetchGitStatus()
-      })
-
-      expect(window.git.status).toHaveBeenCalledWith('/test/project')
+      expect(refreshSession).toHaveBeenCalledWith('session-1')
+      expect(refreshSession).toHaveBeenCalledTimes(1)
     })
 
-    it('marks hasHadCommits when ahead > 0', async () => {
-      const gitStatus = makeGitStatus({ ahead: 2, current: 'feature/test' })
-      vi.mocked(window.git.status).mockResolvedValue(gitStatus)
-      vi.mocked(normalizeGitStatus).mockReturnValue(gitStatus)
+    it('does not set up interval polling while idle', async () => {
+      const activeSession = makeSession({ status: 'idle' })
+      renderHook(() => useGitPolling({ activeSession, refreshSession }))
 
-      const { result } = renderHook(() => useGitPolling(defaultProps))
+      await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+      refreshSession.mockClear()
 
-      await act(async () => {
-        await result.current.fetchGitStatus()
-      })
-
-      expect(markHasHadCommits).toHaveBeenCalledWith('session-1')
+      await act(async () => { await vi.advanceTimersByTimeAsync(10000) })
+      expect(refreshSession).not.toHaveBeenCalled()
     })
 
-    it('checks merge status for non-main branches', async () => {
-      const gitStatus = makeGitStatus({ current: 'feature/test' })
-      vi.mocked(window.git.status).mockResolvedValue(gitStatus)
-      vi.mocked(normalizeGitStatus).mockReturnValue(gitStatus)
+    it('polls every 2 seconds while agent is working', async () => {
+      const activeSession = makeSession({ status: 'working' })
+      renderHook(() => useGitPolling({ activeSession, refreshSession }))
 
-      const { result } = renderHook(() => useGitPolling(defaultProps))
+      await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+      refreshSession.mockClear()
 
-      await act(async () => {
-        await result.current.fetchGitStatus()
-      })
+      await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+      expect(refreshSession).toHaveBeenCalledTimes(1)
 
-      expect(window.git.isMergedInto).toHaveBeenCalledWith('/test/project', 'main')
-      expect(window.git.hasBranchCommits).toHaveBeenCalledWith('/test/project', 'main')
+      await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+      expect(refreshSession).toHaveBeenCalledTimes(2)
     })
 
-    it('does not check merge status for main branch', async () => {
-      const gitStatus = makeGitStatus({ current: 'main' })
-      vi.mocked(window.git.status).mockResolvedValue(gitStatus)
-      vi.mocked(normalizeGitStatus).mockReturnValue(gitStatus)
-
-      const { result } = renderHook(() => useGitPolling(defaultProps))
-
-      await act(async () => {
-        await result.current.fetchGitStatus()
-      })
-
-      expect(window.git.isMergedInto).not.toHaveBeenCalled()
-    })
-
-    it('does not check merge status for master branch', async () => {
-      const gitStatus = makeGitStatus({ current: 'master' })
-      vi.mocked(window.git.status).mockResolvedValue(gitStatus)
-      vi.mocked(normalizeGitStatus).mockReturnValue(gitStatus)
-
-      const { result } = renderHook(() => useGitPolling(defaultProps))
-
-      await act(async () => {
-        await result.current.fetchGitStatus()
-      })
-
-      expect(window.git.isMergedInto).not.toHaveBeenCalled()
-    })
-
-    it('marks hasHadCommits when hasBranchCommits returns true', async () => {
-      const gitStatus = makeGitStatus({ current: 'feature/test' })
-      vi.mocked(window.git.status).mockResolvedValue(gitStatus)
-      vi.mocked(normalizeGitStatus).mockReturnValue(gitStatus)
-      vi.mocked(window.git.hasBranchCommits).mockResolvedValue(true)
-
-      const { result } = renderHook(() => useGitPolling(defaultProps))
-
-      await act(async () => {
-        await result.current.fetchGitStatus()
-      })
-
-      expect(markHasHadCommits).toHaveBeenCalledWith('session-1')
-    })
-
-    it('does nothing without active session', async () => {
-      const { result } = renderHook(() =>
-        useGitPolling({ ...defaultProps, activeSession: undefined })
+    it('stops polling when agent transitions from working to idle', async () => {
+      const workingSession = makeSession({ status: 'working' })
+      const { rerender } = renderHook(
+        ({ s }) => useGitPolling({ activeSession: s, refreshSession }),
+        { initialProps: { s: workingSession } }
       )
 
-      await act(async () => {
-        await result.current.fetchGitStatus()
-      })
+      await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+      refreshSession.mockClear()
 
-      expect(window.git.status).not.toHaveBeenCalled()
-    })
+      const idleSession = makeSession({ status: 'idle' })
+      rerender({ s: idleSession })
 
-    it('handles errors silently', async () => {
-      vi.mocked(window.git.status).mockRejectedValue(new Error('git fail'))
+      // The rerender fires one refresh (initial-on-mount behavior carries over).
+      // After that, no further polls should occur.
+      await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+      refreshSession.mockClear()
 
-      const { result } = renderHook(() => useGitPolling(defaultProps))
-
-      // Should not throw
-      await act(async () => {
-        await result.current.fetchGitStatus()
-      })
-    })
-
-    it('uses repo defaultBranch for merge checks', async () => {
-      const gitStatus = makeGitStatus({ current: 'feature/test' })
-      vi.mocked(window.git.status).mockResolvedValue(gitStatus)
-      vi.mocked(normalizeGitStatus).mockReturnValue(gitStatus)
-
-      const customProps = {
-        ...defaultProps,
-        repos: [makeRepo({ defaultBranch: 'develop' })],
-      }
-
-      const { result } = renderHook(() => useGitPolling(customProps))
-
-      await act(async () => {
-        await result.current.fetchGitStatus()
-      })
-
-      expect(window.git.isMergedInto).toHaveBeenCalledWith('/test/project', 'develop')
-    })
-
-    it('defaults to main when repo is not found', async () => {
-      const gitStatus = makeGitStatus({ current: 'feature/test' })
-      vi.mocked(window.git.status).mockResolvedValue(gitStatus)
-      vi.mocked(normalizeGitStatus).mockReturnValue(gitStatus)
-
-      const customProps = {
-        ...defaultProps,
-        repos: [makeRepo({ id: 'other-repo' })],
-      }
-
-      const { result } = renderHook(() => useGitPolling(customProps))
-
-      await act(async () => {
-        await result.current.fetchGitStatus()
-      })
-
-      expect(window.git.isMergedInto).toHaveBeenCalledWith('/test/project', 'main')
-    })
-  })
-
-  describe('polling', () => {
-    it('polls every 2 seconds', async () => {
-      vi.mocked(window.git.status).mockResolvedValue(makeGitStatus())
-      vi.mocked(normalizeGitStatus).mockReturnValue(makeGitStatus())
-
-      renderHook(() => useGitPolling(defaultProps))
-
-      // Initial fetch
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(0)
-      })
-
-      vi.mocked(window.git.status).mockClear()
-
-      // After 2 seconds
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(2000)
-      })
-
-      expect(window.git.status).toHaveBeenCalledTimes(1)
-
-      // After another 2 seconds
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(2000)
-      })
-
-      expect(window.git.status).toHaveBeenCalledTimes(2)
-    })
-
-    it('stops polling on unmount', async () => {
-      vi.mocked(window.git.status).mockResolvedValue(makeGitStatus())
-      vi.mocked(normalizeGitStatus).mockReturnValue(makeGitStatus())
-
-      const { unmount } = renderHook(() => useGitPolling(defaultProps))
-
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(0)
-      })
-
-      vi.mocked(window.git.status).mockClear()
-      unmount()
-
-      await vi.advanceTimersByTimeAsync(4000)
-      expect(window.git.status).not.toHaveBeenCalled()
+      await act(async () => { await vi.advanceTimersByTimeAsync(10000) })
+      expect(refreshSession).not.toHaveBeenCalled()
     })
 
     it('does not poll without active session', async () => {
-      renderHook(() =>
-        useGitPolling({ ...defaultProps, activeSession: undefined })
-      )
-
-      await vi.advanceTimersByTimeAsync(5000)
-      expect(window.git.status).not.toHaveBeenCalled()
+      renderHook(() => useGitPolling({ activeSession: undefined, refreshSession }))
+      await act(async () => { await vi.advanceTimersByTimeAsync(5000) })
+      expect(refreshSession).not.toHaveBeenCalled()
     })
 
-    it('starts polling after session transitions from initializing to idle', async () => {
-      vi.mocked(window.git.status).mockResolvedValue(makeGitStatus())
-      vi.mocked(normalizeGitStatus).mockReturnValue(makeGitStatus())
+    it('does not poll while initializing', async () => {
+      const activeSession = makeSession({ status: 'initializing' })
+      renderHook(() => useGitPolling({ activeSession, refreshSession }))
+      await act(async () => { await vi.advanceTimersByTimeAsync(5000) })
+      expect(refreshSession).not.toHaveBeenCalled()
+    })
 
-      const initSession = makeSession({ status: 'initializing' })
-      const props = { ...defaultProps, sessions: [initSession], activeSession: initSession }
+    it('stops polling on unmount', async () => {
+      const activeSession = makeSession({ status: 'working' })
+      const { unmount } = renderHook(() => useGitPolling({ activeSession, refreshSession }))
 
-      const { rerender } = renderHook(
-        (p) => useGitPolling(p),
-        { initialProps: props }
-      )
+      await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+      refreshSession.mockClear()
+      unmount()
 
-      // Should not poll while initializing
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(3000)
-      })
-      expect(window.git.status).not.toHaveBeenCalled()
-
-      // Transition to idle (same id/directory, only status changes)
-      const idleSession = makeSession({ status: 'idle' })
-      rerender({ ...defaultProps, sessions: [idleSession], activeSession: idleSession })
-
-      // Should start polling now
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(0)
-      })
-      expect(window.git.status).toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(4000)
+      expect(refreshSession).not.toHaveBeenCalled()
     })
   })
 
-  describe('branch status computation', () => {
-    it('calls computeBranchStatus with correct params', async () => {
-      const gitStatus = makeGitStatus({
-        files: [{ path: 'file.ts', status: 'modified', staged: false, indexStatus: ' ', workingDirStatus: 'M' }],
-        ahead: 1,
-        tracking: 'origin/feature',
-        current: 'feature/test',
-      })
-      vi.mocked(window.git.status).mockResolvedValue(gitStatus)
-      vi.mocked(normalizeGitStatus).mockReturnValue(gitStatus)
-      vi.mocked(computeBranchStatus).mockReturnValue('in-progress')
+  describe('agent-finished event', () => {
+    it('calls refreshSession with includePr=true on broomy:agent-finished', async () => {
+      const activeSession = makeSession()
+      renderHook(() => useGitPolling({ activeSession, refreshSession }))
 
-      renderHook(() => useGitPolling(defaultProps))
+      await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+      refreshSession.mockClear()
 
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(0)
+        document.dispatchEvent(new CustomEvent('broomy:agent-finished'))
       })
 
-      expect(computeBranchStatus).toHaveBeenCalledWith({
-        uncommittedFiles: 1,
-        ahead: 1,
-        hasTrackingBranch: true,
-        isOnMainBranch: false,
-        isMergedToMain: false,
-        hasHadCommits: false,
-        lastKnownPrState: undefined,
-      })
+      expect(refreshSession).toHaveBeenCalledWith('session-1', { includePr: true })
     })
 
-    it('updates branch status when it changes', async () => {
-      const gitStatus = makeGitStatus({ current: 'feature/test' })
-      vi.mocked(window.git.status).mockResolvedValue(gitStatus)
-      vi.mocked(normalizeGitStatus).mockReturnValue(gitStatus)
-      vi.mocked(computeBranchStatus).mockReturnValue('pushed')
-
-      const session = makeSession({ branchStatus: undefined })
-
-      renderHook(() =>
-        useGitPolling({
-          ...defaultProps,
-          sessions: [session],
-          activeSession: session,
-        })
-      )
-
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(0)
-      })
-
-      expect(updateBranchStatus).toHaveBeenCalledWith('session-1', 'pushed')
-    })
-
-    it('does not update branch status when unchanged', async () => {
-      const gitStatus = makeGitStatus({ current: 'feature/test' })
-      vi.mocked(window.git.status).mockResolvedValue(gitStatus)
-      vi.mocked(normalizeGitStatus).mockReturnValue(gitStatus)
-      vi.mocked(computeBranchStatus).mockReturnValue('in-progress')
-
-      const session = makeSession({ branchStatus: 'in-progress' as const })
-
-      renderHook(() =>
-        useGitPolling({
-          ...defaultProps,
-          sessions: [session],
-          activeSession: session,
-        })
-      )
-
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(0)
-      })
-
-      expect(updateBranchStatus).not.toHaveBeenCalled()
+    it('does not fire when no active session', () => {
+      renderHook(() => useGitPolling({ activeSession: undefined, refreshSession }))
+      document.dispatchEvent(new CustomEvent('broomy:agent-finished'))
+      expect(refreshSession).not.toHaveBeenCalled()
     })
   })
 
-  describe('selectedFileStatus', () => {
-    it('returns file status for selected file', async () => {
-      const gitStatus = makeGitStatus({
-        files: [{ path: 'src/file.ts', status: 'modified', staged: false, indexStatus: ' ', workingDirStatus: 'M' }],
-        current: 'feature/test',
-      })
-      vi.mocked(window.git.status).mockResolvedValue(gitStatus)
-      vi.mocked(normalizeGitStatus).mockReturnValue(gitStatus)
+  describe('derived values from session.gitStatus', () => {
+    it('returns files from the session gitStatus', () => {
+      const files = [{ path: 'file.ts', status: 'modified' as const, staged: false, indexStatus: ' ', workingDirStatus: 'M' }]
+      const activeSession = makeSession({ gitStatus: makeGitStatus({ files }) })
+      const { result } = renderHook(() => useGitPolling({ activeSession, refreshSession }))
 
-      const session = makeSession({
+      expect(result.current.activeSessionGitStatus).toEqual(files)
+      expect(result.current.activeSessionGitStatusResult).toEqual(activeSession.gitStatus)
+    })
+
+    it('returns empty array when session has no gitStatus', () => {
+      const activeSession = makeSession()
+      const { result } = renderHook(() => useGitPolling({ activeSession, refreshSession }))
+
+      expect(result.current.activeSessionGitStatus).toEqual([])
+      expect(result.current.activeSessionGitStatusResult).toBeNull()
+    })
+
+    it('returns selectedFileStatus for a file present in gitStatus', () => {
+      const files = [{ path: 'src/file.ts', status: 'modified' as const, staged: false, indexStatus: ' ', workingDirStatus: 'M' }]
+      const activeSession = makeSession({
         selectedFilePath: '/test/project/src/file.ts',
+        gitStatus: makeGitStatus({ files }),
       })
-
-      const { result } = renderHook(() =>
-        useGitPolling({
-          ...defaultProps,
-          sessions: [session],
-          activeSession: session,
-        })
-      )
-
-      await act(async () => {
-        await result.current.fetchGitStatus()
-      })
+      const { result } = renderHook(() => useGitPolling({ activeSession, refreshSession }))
 
       expect(result.current.selectedFileStatus).toBe('modified')
     })
 
-    it('returns null when no file selected', () => {
-      const { result } = renderHook(() => useGitPolling(defaultProps))
-      expect(result.current.selectedFileStatus).toBeNull()
-    })
-
-    it('returns null when file not in git status', async () => {
-      const gitStatus = makeGitStatus({ files: [], current: 'feature/test' })
-      vi.mocked(window.git.status).mockResolvedValue(gitStatus)
-      vi.mocked(normalizeGitStatus).mockReturnValue(gitStatus)
-
-      const session = makeSession({
-        selectedFilePath: '/test/project/src/unknown.ts',
-      })
-
-      const { result } = renderHook(() =>
-        useGitPolling({
-          ...defaultProps,
-          sessions: [session],
-          activeSession: session,
-        })
-      )
-
-      await act(async () => {
-        await result.current.fetchGitStatus()
-      })
-
+    it('returns null selectedFileStatus when no file selected', () => {
+      const activeSession = makeSession()
+      const { result } = renderHook(() => useGitPolling({ activeSession, refreshSession }))
       expect(result.current.selectedFileStatus).toBeNull()
     })
   })
 
-  describe('agent-finished PR fetch', () => {
-    it('fetches PR status when agent finishes work', async () => {
-      vi.mocked(window.git.status).mockResolvedValue(makeGitStatus())
-      vi.mocked(normalizeGitStatus).mockReturnValue(makeGitStatus())
-      vi.mocked(window.gh.prStatus).mockResolvedValue({
-        number: 42, title: 'Test PR', state: 'OPEN',
-        url: 'https://github.com/test/pr/42',
-        headRefName: 'feature/test', baseRefName: 'main',
-      })
+  describe('fetchGitStatus', () => {
+    it('calls refreshSession for the active session', async () => {
+      const activeSession = makeSession()
+      const { result } = renderHook(() => useGitPolling({ activeSession, refreshSession }))
 
-      renderHook(() => useGitPolling(defaultProps))
+      await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+      refreshSession.mockClear()
 
-      await act(async () => {
-        document.dispatchEvent(new CustomEvent('broomy:agent-finished'))
-        await vi.advanceTimersByTimeAsync(0)
-      })
-
-      expect(window.gh.prStatus).toHaveBeenCalledWith('/test/project')
-      expect(updatePrState).toHaveBeenCalledWith('session-1', 'OPEN', 42, 'https://github.com/test/pr/42')
+      await act(async () => { await result.current.fetchGitStatus() })
+      expect(refreshSession).toHaveBeenCalledWith('session-1')
     })
 
-    it('does not call updatePrState when no PR exists', async () => {
-      vi.mocked(window.git.status).mockResolvedValue(makeGitStatus())
-      vi.mocked(normalizeGitStatus).mockReturnValue(makeGitStatus())
-      vi.mocked(window.gh.prStatus).mockResolvedValue(null)
-
-      renderHook(() => useGitPolling(defaultProps))
-
-      await act(async () => {
-        document.dispatchEvent(new CustomEvent('broomy:agent-finished'))
-        await vi.advanceTimersByTimeAsync(0)
-      })
-
-      expect(window.gh.prStatus).toHaveBeenCalledWith('/test/project')
-      // updatePrState may be called by branch status computation, but not from the PR fetch
-      const prStateCalls = vi.mocked(updatePrState).mock.calls.filter(
-        ([, state]) => state === 'OPEN' || state === 'MERGED' || state === 'CLOSED'
-      )
-      expect(prStateCalls).toHaveLength(0)
-    })
-
-    it('handles gh.prStatus errors gracefully', async () => {
-      vi.mocked(window.git.status).mockResolvedValue(makeGitStatus())
-      vi.mocked(normalizeGitStatus).mockReturnValue(makeGitStatus())
-      vi.mocked(window.gh.prStatus).mockRejectedValue(new Error('gh not found'))
-
-      renderHook(() => useGitPolling(defaultProps))
-
-      // Should not throw
-      await act(async () => {
-        document.dispatchEvent(new CustomEvent('broomy:agent-finished'))
-        await vi.advanceTimersByTimeAsync(0)
-      })
-
-      // updatePrState should not be called with PR data on error
-      const prStateCalls = vi.mocked(updatePrState).mock.calls.filter(
-        ([, state]) => state === 'OPEN' || state === 'MERGED' || state === 'CLOSED'
-      )
-      expect(prStateCalls).toHaveLength(0)
-    })
-  })
-
-  describe('activeSessionGitStatus', () => {
-    it('returns files from active session git status', async () => {
-      const files = [{ path: 'file.ts', status: 'modified' as const, staged: false, indexStatus: ' ', workingDirStatus: 'M' }]
-      const gitStatus = makeGitStatus({ files, current: 'feature/test' })
-      vi.mocked(window.git.status).mockResolvedValue(gitStatus)
-      vi.mocked(normalizeGitStatus).mockReturnValue(gitStatus)
-
-      const { result } = renderHook(() => useGitPolling(defaultProps))
-
-      await act(async () => {
-        await result.current.fetchGitStatus()
-      })
-
-      expect(result.current.activeSessionGitStatus).toEqual(files)
-      expect(result.current.activeSessionGitStatusResult).toEqual(gitStatus)
-    })
-
-    it('returns empty array without active session', () => {
-      const { result } = renderHook(() =>
-        useGitPolling({ ...defaultProps, activeSession: undefined })
-      )
-
-      expect(result.current.activeSessionGitStatus).toEqual([])
-      expect(result.current.activeSessionGitStatusResult).toBeNull()
+    it('is a no-op when there is no active session', async () => {
+      const { result } = renderHook(() => useGitPolling({ activeSession: undefined, refreshSession }))
+      await result.current.fetchGitStatus()
+      expect(refreshSession).not.toHaveBeenCalled()
     })
   })
 })

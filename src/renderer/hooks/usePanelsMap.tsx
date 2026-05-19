@@ -16,7 +16,7 @@ import { PANEL_IDS } from '../panels'
 import { useOutputDirWatcher } from '../panels/explorer/hooks/useOutputDirWatcher'
 import type { FileStatus, ViewMode } from '../panels/fileViewer/FileViewer'
 import type { GitFileStatus, GitStatusResult, ManagedRepo } from '../../preload/index'
-import type { ExplorerFilter, PrState } from '../store/sessions'
+import type { ExplorerFilter } from '../store/sessions'
 import type { NavigationTarget } from '../shared/utils/fileNavigation'
 
 /** Wrapper that subscribes each session terminal to its own visibility from the store. */
@@ -95,9 +95,7 @@ export interface PanelsMapConfig {
   toggleGlobalPanel: (panelId: string) => void
   selectFile: (sessionId: string, filePath: string) => void
   setExplorerFilter: (sessionId: string, filter: ExplorerFilter) => void
-  updatePrState: (sessionId: string, prState: PrState, prNumber?: number, prUrl?: string) => void
-  updateFeedbackStatus: (sessionId: string, hasFeedback: boolean) => void
-  updateChecksStatus: (sessionId: string, checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
+  refreshSession: (sessionId: string, opts?: { includePr?: boolean }) => Promise<void>
   setPanelVisibility: (sessionId: string, panelId: string, visible: boolean) => void
   setToolbarPanels: (panels: string[]) => void
   closeCommandsEditor: (sessionId: string) => void
@@ -108,7 +106,7 @@ function useExplorerPanel(config: PanelsMapConfig) {
   const {
     activeSessionId, activeSession, activeSessionGitStatus, activeSessionGitStatusResult,
     navigateToFile, fetchGitStatus, setExplorerFilter,
-    updatePrState, updateFeedbackStatus, updateChecksStatus, repos,
+    refreshSession, repos,
   } = config
 
   const { issuePlanExists, suggestGitignore, dismissGitignore } = useOutputDirWatcher(activeSessionId, activeSession?.directory)
@@ -122,17 +120,9 @@ function useExplorerPanel(config: PanelsMapConfig) {
     if (activeSessionId) setExplorerFilter(activeSessionId, filter)
   }, [activeSessionId, setExplorerFilter])
 
-  const handleUpdatePrState = useCallback((prState: PrState, prNumber?: number, prUrl?: string) => {
-    if (activeSessionId) updatePrState(activeSessionId, prState, prNumber, prUrl)
-  }, [activeSessionId, updatePrState])
-
-  const handleUpdateFeedbackStatus = useCallback((hasFeedback: boolean) => {
-    if (activeSessionId) updateFeedbackStatus(activeSessionId, hasFeedback)
-  }, [activeSessionId, updateFeedbackStatus])
-
-  const handleUpdateChecksStatus = useCallback((checksStatus: 'passed' | 'failed' | 'pending' | 'none') => {
-    if (activeSessionId) updateChecksStatus(activeSessionId, checksStatus)
-  }, [activeSessionId, updateChecksStatus])
+  const handleRefreshPr = useCallback(() => {
+    if (activeSessionId) void refreshSession(activeSessionId, { includePr: true })
+  }, [activeSessionId, refreshSession])
 
   return useMemo(() => {
     if (!activeSession?.showExplorer || activeSession.status === 'initializing') return null
@@ -151,9 +141,7 @@ function useExplorerPanel(config: PanelsMapConfig) {
         planFilePath={activeSession.planFilePath}
         branchStatus={activeSession.branchStatus}
         statusChip={activeSession.statusChip}
-        onUpdatePrState={handleUpdatePrState}
-        onUpdateFeedbackStatus={handleUpdateFeedbackStatus}
-        onUpdateChecksStatus={handleUpdateChecksStatus}
+        onRefreshPr={handleRefreshPr}
         repoId={activeSession.repoId}
         agentPtyId={activeSession.agentPtyId}
         session={activeSession}
@@ -166,7 +154,7 @@ function useExplorerPanel(config: PanelsMapConfig) {
         onDismissGitignore={dismissGitignore}
       />
     )
-  }, [activeSessionId, activeSession, activeSessionGitStatus, activeSessionGitStatusResult, navigateToFile, fetchGitStatus, activeRepo, issuePlanExists, suggestGitignore, dismissGitignore, handleFilterChange, handleUpdatePrState, handleUpdateFeedbackStatus, handleUpdateChecksStatus])
+  }, [activeSessionId, activeSession, activeSessionGitStatus, activeSessionGitStatusResult, navigateToFile, fetchGitStatus, activeRepo, issuePlanExists, suggestGitignore, dismissGitignore, handleFilterChange, handleRefreshPr])
 }
 
 function useFileViewerPanel(config: PanelsMapConfig) {

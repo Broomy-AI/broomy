@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import type { GitFileStatus, GitStatusResult } from '../../../../../preload/index'
-import type { BranchStatus, PrState, StatusChip } from '../../../../store/sessions'
+import type { BranchStatus, StatusChip } from '../../../../store/sessions'
 import type { NavigationTarget } from '../../../../shared/utils/fileNavigation'
 import { useSourceControlData } from './useSourceControlData'
 import { useSourceControlActions } from './useSourceControlActions'
@@ -30,9 +30,8 @@ interface SourceControlProps {
   repoId?: string
   agentPtyId?: string
   agentId?: string | null
-  onUpdatePrState?: (prState: PrState, prNumber?: number, prUrl?: string) => void
-  onUpdateFeedbackStatus?: (hasFeedback: boolean) => void
-  onUpdateChecksStatus?: (checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
+  /** Trigger a PR-inclusive refresh of the active session's status. */
+  onRefreshPr?: () => void
   issueNumber?: number
   issueTitle?: string
   issueUrl?: string
@@ -54,9 +53,7 @@ export function SourceControl({
   repoId,
   agentPtyId,
   agentId,
-  onUpdatePrState,
-  onUpdateFeedbackStatus,
-  onUpdateChecksStatus,
+  onRefreshPr,
   issueNumber,
   issueTitle,
   issueUrl,
@@ -81,8 +78,8 @@ export function SourceControl({
   }, [directory])
 
   const data = useSourceControlData({
-    directory, gitStatus, syncStatus, branchStatus, onUpdatePrState,
-    onUpdateFeedbackStatus, onUpdateChecksStatus, repoId, scView,
+    directory, gitStatus, syncStatus, branchStatus, onRefreshPr,
+    repoId, scView,
   })
 
   // Check if repo has isolation enabled but no devcontainer config
