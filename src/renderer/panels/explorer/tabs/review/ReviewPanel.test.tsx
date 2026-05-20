@@ -36,13 +36,29 @@ vi.mock('./useReviewActions', () => ({
   useReviewActions: vi.fn().mockImplementation(() => mockActions),
 }))
 
-vi.mock('../../../../hooks/useCommandsConfig', () => ({
+vi.mock('../../../../features/commands/hooks/useCommandsConfig', () => ({
   useCommandsConfig: vi.fn().mockImplementation(() => ({
-    config: null,
+    merged: null,
+    userExists: false,
+    projectExists: false,
     loading: false,
-    exists: false,
   })),
 }))
+
+vi.mock('../../../../store/sessions', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../../store/sessions')>()
+  return {
+    ...actual,
+    useSessionStore: vi.fn().mockImplementation((selector: (s: { sessions: unknown[]; activeSessionId: string | null; setSessionStage: () => void }) => unknown) => {
+      const fakeStore = {
+        sessions: [],
+        activeSessionId: null,
+        setSessionStage: vi.fn(),
+      }
+      return selector(fakeStore)
+    }),
+  }
+})
 
 import ReviewPanel, { parseFileLink } from './ReviewPanel'
 
@@ -83,6 +99,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     statusChip: 'in-progress' as StatusChip,
     isArchived: false,
     isRestored: false,
+    stage: 'new',
     prTitle: 'Test PR',
     prNumber: 42,
     prUrl: 'https://github.com/pr/42',
