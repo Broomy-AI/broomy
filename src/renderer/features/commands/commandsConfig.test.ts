@@ -483,7 +483,7 @@ describe('v2 schema', () => {
           showWhen: ['has-changes'],
           stages: ['planning', 'building'],
           setStage: 'verifying',
-          args: [{ name: 'x', description: 'd', default: 'v' }],
+          args: [{ name: 'x', description: 'd' }],
           style: 'primary',
           surface: 'source-control',
           switchTab: 'review',

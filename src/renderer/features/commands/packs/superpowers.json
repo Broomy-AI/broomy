@@ -13,7 +13,7 @@
       "label": "Brainstorm",
       "description": "Turn an idea into a design spec.",
       "template": "/brainstorm {idea}",
-      "args": [{ "name": "idea", "description": "The thing you want to design.", "default": "" }],
+      "args": [{ "name": "idea", "description": "The thing you want to design." }],
       "setStage": "planning",
       "style": "primary"
     },
@@ -23,8 +23,8 @@
       "description": "Produce an implementation plan from a spec.",
       "template": "/plan {spec} --focus {focus}",
       "args": [
-        { "name": "spec", "description": "Path to the spec or topic to plan.", "default": "" },
-        { "name": "focus", "description": "Optional aspect to emphasise.", "default": "" }
+        { "name": "spec", "description": "Path to the spec or topic to plan." },
+        { "name": "focus", "description": "Optional aspect to emphasise." }
       ],
       "stages": ["planning"],
       "setStage": "implementing",
@@ -44,7 +44,7 @@
       "label": "Debug",
       "description": "Systematic debugging walkthrough.",
       "template": "/debug {symptom}",
-      "args": [{ "name": "symptom", "description": "What's going wrong.", "default": "" }],
+      "args": [{ "name": "symptom", "description": "What's going wrong." }],
       "stages": ["implementing", "verifying"],
       "style": "secondary"
     },

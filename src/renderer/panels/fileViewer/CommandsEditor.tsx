@@ -310,7 +310,7 @@ function Detail({
   const argsMeta = selected.args ?? []
   const mode: 'one-line' | 'block' = selected.template.includes('\n') ? 'block' : 'one-line'
 
-  function updateArgMeta(name: string, patch: Partial<{ description: string; default: string }>) {
+  function updateArgMeta(name: string, patch: Partial<{ description: string }>) {
     const existing = argsMeta.find(a => a.name === name)
     const next = existing
       ? argsMeta.map(a => a.name === name ? { ...a, ...patch } : a)
@@ -370,7 +370,6 @@ function Detail({
               <tr className="text-text-tertiary">
                 <th className="text-left pr-2 pb-1">Name</th>
                 <th className="text-left pr-2 pb-1">Description</th>
-                <th className="text-left pr-2 pb-1">Default</th>
                 <th className="text-left pb-1"></th>
               </tr>
             </thead>
@@ -385,14 +384,6 @@ function Detail({
                         type="text"
                         value={meta?.description ?? ''}
                         onChange={e => updateArgMeta(a.name, { description: e.target.value })}
-                        className="w-full px-1 py-0.5 text-xs rounded border border-border bg-bg-primary text-text-primary"
-                      />
-                    </td>
-                    <td className="pr-2 py-0.5">
-                      <input
-                        type="text"
-                        value={meta?.default ?? ''}
-                        onChange={e => updateArgMeta(a.name, { default: e.target.value })}
                         className="w-full px-1 py-0.5 text-xs rounded border border-border bg-bg-primary text-text-primary"
                       />
                     </td>

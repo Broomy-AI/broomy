@@ -13,7 +13,6 @@ export const CURRENT_CONFIG_VERSION = 2
 export interface ArgSpec {
   name: string
   description?: string
-  default?: string
 }
 
 export interface ActionDefinition {
@@ -169,9 +168,6 @@ function validateArgs(args: unknown, label: string, errors: string[]): void {
     }
     if (a.description !== undefined && typeof a.description !== 'string') {
       errors.push(`${label} args[${i}]: "description" must be a string.`)
-    }
-    if (a.default !== undefined && typeof a.default !== 'string') {
-      errors.push(`${label} args[${i}]: "default" must be a string.`)
     }
   }
 }

@@ -29,7 +29,7 @@ export const RequiredAndOptionalFlag: Story = {
     template: '/plan {topic} --depth {depth}',
     argsMeta: [
       { name: 'topic', description: 'What to plan.' },
-      { name: 'depth', description: 'How deep to go.', default: '3' },
+      { name: 'depth', description: 'How deep to go.' },
     ],
   },
 }

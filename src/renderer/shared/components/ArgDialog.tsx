@@ -22,11 +22,10 @@ export function ArgDialog({ title, description, template, argsMeta, context, ini
   const [values, setValues] = useState<Record<string, ArgValue>>(() => {
     const init: Record<string, ArgValue> = {}
     for (const a of parsed.args) {
-      const meta = metaByName.get(a.name)
       const prior = initialValues?.[a.name]
       init[a.name] = a.optional
-        ? { value: prior?.value ?? meta?.default ?? '', enabled: prior?.enabled ?? false }
-        : { value: prior?.value ?? meta?.default ?? '' }
+        ? { value: prior?.value ?? '', enabled: prior?.enabled ?? false }
+        : { value: prior?.value ?? '' }
     }
     return init
   })
