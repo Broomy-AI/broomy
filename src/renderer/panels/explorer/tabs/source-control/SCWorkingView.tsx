@@ -8,7 +8,8 @@ import { useCallback, memo } from 'react'
 import type { GitFileStatus, GitStatusResult } from '../../../../../preload/index'
 import type { BranchStatus } from '../../../../store/sessions'
 import type { NavigationTarget } from '../../../../shared/utils/fileNavigation'
-import type { ActionDefinition, ConditionState, TemplateVars } from '../../../../features/commands/commandsConfig'
+import type { ActionDefinition, ConditionState } from '../../../../features/commands/commandsConfig'
+import type { SubContext } from '../../../../features/commands/templateSubstitute'
 import { StatusBadge, BranchStatusCard } from '../../icons'
 import { statusLabel, getStatusColor } from '../../../../features/git/explorerHelpers'
 import { ActionButtons } from '../../../../shared/components/ActionButtons'
@@ -33,7 +34,11 @@ export interface SCWorkingViewProps {
   // Modular actions
   actions: ActionDefinition[] | null
   conditionState: ConditionState
-  templateVars: TemplateVars
+  templateVars: SubContext
+  currentStage: string
+  onSetSessionStage: (stage: string) => void
+  onSetup: () => void
+  onStartBlank: () => void
   agentPtyId?: string
   agentId?: string | null
   onOpenCommandsEditor?: () => void
@@ -228,6 +233,10 @@ export function SCWorkingView({
   actions,
   conditionState,
   templateVars,
+  currentStage,
+  onSetSessionStage,
+  onSetup,
+  onStartBlank,
   agentPtyId,
   agentId,
   onOpenCommandsEditor,
@@ -253,6 +262,10 @@ export function SCWorkingView({
         actions={actions}
         conditionState={conditionState}
         templateVars={templateVars}
+        currentStage={currentStage}
+        onSetSessionStage={onSetSessionStage}
+        onSetup={onSetup}
+        onStartBlank={onStartBlank}
         directory={directory}
         agentPtyId={agentPtyId}
         agentId={agentId}

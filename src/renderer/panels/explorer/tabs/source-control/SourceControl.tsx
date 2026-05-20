@@ -13,11 +13,10 @@ import { SCPrBanner } from './SCPrBanner'
 import { SCCommitsView } from './SCCommitsView'
 import { SCBranchView } from './SCBranchView'
 import { SCWorkingView } from './SCWorkingView'
-import { CommandsSetupBanner } from './CommandsSetupBanner'
 import { CommandsSetupDialog } from './CommandsSetupDialog'
 import { useCommandsConfig } from '../../../../features/commands/hooks/useCommandsConfig'
 import { computeConditionState } from '../../../../features/commands/conditionState'
-import type { TemplateVars } from '../../../../features/commands/commandsConfig'
+import { useSessionStore } from '../../../../store/sessions'
 
 interface SourceControlProps {
   directory?: string
@@ -72,7 +71,13 @@ export function SourceControl({
   const [hasDevcontainerLoaded, setHasDevcontainerLoaded] = useState(false)
 
   // Load commands.json
-  const { config: commandsConfig, exists: commandsExists } = useCommandsConfig(directory)
+  const { merged: commandsConfig, userExists, projectExists } = useCommandsConfig(directory)
+  const commandsExists = userExists || projectExists
+
+  // Session stage state
+  const stage = useSessionStore(s => s.sessions.find(x => x.id === s.activeSessionId)?.stage ?? 'new')
+  const setSessionStage = useSessionStore(s => s.setSessionStage)
+  const activeSessionId = useSessionStore(s => s.activeSessionId)
 
   // Reset view when directory (session) changes
   useEffect(() => {
@@ -137,11 +142,11 @@ export function SourceControl({
   const conditionState = settledConditionState.current
 
   // Template variables for action labels and prompts
-  const templateVars: TemplateVars = useMemo(() => ({
+  const templateVars = useMemo(() => ({
     main: data.branchBaseName || 'main',
     branch: syncStatus?.current ?? '',
     directory: directory ?? '',
-    issueNumber: issueNumber ? String(issueNumber) : undefined,
+    issueNumber: issueNumber ? String(issueNumber) : '',
   }), [data.branchBaseName, syncStatus?.current, directory, issueNumber])
 
   if (!directory) return null
@@ -159,9 +164,6 @@ export function SourceControl({
 
   const banners = (
     <>
-      {!commandsExists && (
-        <CommandsSetupBanner onSetup={() => setShowSetupDialog(true)} />
-      )}
       <SCPrBanner
         prStatus={data.prStatus}
         isPrLoading={data.isPrLoading}
@@ -250,6 +252,10 @@ export function SourceControl({
         actions={commandsConfig?.actions ?? null}
         conditionState={conditionState}
         templateVars={templateVars}
+        currentStage={stage}
+        onSetSessionStage={(next) => activeSessionId && setSessionStage(activeSessionId, next)}
+        onSetup={() => setShowSetupDialog(true)}
+        onStartBlank={onOpenCommandsEditor ?? (() => undefined)}
         agentPtyId={agentPtyId}
         agentId={agentId}
         onOpenCommandsEditor={commandsExists ? onOpenCommandsEditor : undefined}

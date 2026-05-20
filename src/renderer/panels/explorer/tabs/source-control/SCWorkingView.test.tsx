@@ -3,7 +3,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import '../../../../../test/react-setup'
 import { SCWorkingView } from './SCWorkingView'
-import type { ConditionState, TemplateVars } from '../../../../features/commands/commandsConfig'
+import type { ConditionState } from '../../../../features/commands/commandsConfig'
+import type { SubContext } from '../../../../features/commands/templateSubstitute'
 
 afterEach(() => {
   cleanup()
@@ -30,7 +31,11 @@ const defaultProps = {
   onFileSelect: vi.fn(),
   actions: null,
   conditionState: {} as ConditionState,
-  templateVars: { main: 'main', branch: 'feature/test', directory: '/repos/project' } as TemplateVars,
+  templateVars: { main: 'main', branch: 'feature/test', directory: '/repos/project', issueNumber: '' } as SubContext,
+  currentStage: 'new',
+  onSetSessionStage: vi.fn(),
+  onSetup: vi.fn(),
+  onStartBlank: vi.fn(),
 }
 
 describe('SCWorkingView', () => {

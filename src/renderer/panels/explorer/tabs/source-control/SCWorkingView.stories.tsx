@@ -54,7 +54,11 @@ const meta: Meta<typeof SCWorkingView> = {
     onGitStatusRefresh: () => {},
     actions: null,
     conditionState: defaultConditionState,
-    templateVars: { main: 'main', branch: 'feature/test', directory: '/Users/test/projects/my-app' },
+    templateVars: { main: 'main', branch: 'feature/test', directory: '/Users/test/projects/my-app', issueNumber: '' },
+    currentStage: 'new',
+    onSetSessionStage: () => {},
+    onSetup: () => {},
+    onStartBlank: () => {},
   },
 }
 export default meta
