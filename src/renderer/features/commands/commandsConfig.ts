@@ -8,36 +8,29 @@
 
 // --- Types ---
 
+export const CURRENT_CONFIG_VERSION = 2
+
+export interface ArgSpec {
+  name: string
+  description?: string
+  default?: string
+}
+
 export interface ActionDefinition {
   id: string
   label: string
-  type: 'agent' | 'shell'
+  description?: string
+  template: string
 
-  // For type: "agent"
-  prompt?: string
+  showWhen?: string[]
+  stages?: string[]
+  setStage?: string | null
 
-  // For type: "shell"
-  command?: string
+  args?: ArgSpec[]
 
-  // Conditions for showing this action (ALL must be true)
-  showWhen: string[]
-
-  // Visual style
   style?: 'primary' | 'secondary' | 'accent' | 'danger'
-
-  // Agent-specific overrides keyed by agent type
-  agents?: Record<string, AgentOverride>
-
-  // Where this action appears: 'source-control', 'review', etc.
-  // Defaults to 'source-control' if not specified.
   surface?: string | string[]
-
-  // Switch to a different explorer tab after executing (e.g. "review")
   switchTab?: string
-}
-
-export interface AgentOverride {
-  prompt?: string
 }
 
 export interface CommandsConfig {
@@ -129,7 +122,6 @@ export function matchesSurface(action: ActionDefinition, surface: string): boole
 
 // --- Validation ---
 
-const VALID_TYPES = ['agent', 'shell'] as const
 const VALID_STYLES = ['primary', 'secondary', 'accent', 'danger'] as const
 
 function validateSurface(surface: unknown, label: string, errors: string[]): void {
@@ -144,6 +136,45 @@ function validateSurface(surface: unknown, label: string, errors: string[]): voi
   errors.push(`${label}: "surface" must be a string or array of strings.`)
 }
 
+function validateStages(stages: unknown, label: string, errors: string[]): void {
+  if (stages === undefined) return
+  if (!Array.isArray(stages) || stages.some(v => typeof v !== 'string')) {
+    errors.push(`${label}: "stages" must be an array of strings.`)
+  }
+}
+
+function validateSetStage(setStage: unknown, label: string, errors: string[]): void {
+  if (setStage === undefined) return
+  if (setStage === null) return
+  if (typeof setStage !== 'string') {
+    errors.push(`${label}: "setStage" must be a string or null.`)
+  }
+}
+
+function validateArgs(args: unknown, label: string, errors: string[]): void {
+  if (args === undefined) return
+  if (!Array.isArray(args)) {
+    errors.push(`${label}: "args" must be an array.`)
+    return
+  }
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i] as Record<string, unknown>
+    if (typeof a !== 'object' || a === null) {
+      errors.push(`${label} args[${i}]: must be an object.`)
+      continue
+    }
+    if (typeof a.name !== 'string' || !a.name) {
+      errors.push(`${label} args[${i}]: "name" must be a non-empty string.`)
+    }
+    if (a.description !== undefined && typeof a.description !== 'string') {
+      errors.push(`${label} args[${i}]: "description" must be a string.`)
+    }
+    if (a.default !== undefined && typeof a.default !== 'string') {
+      errors.push(`${label} args[${i}]: "default" must be a string.`)
+    }
+  }
+}
+
 function actionLabel(action: Record<string, unknown>, index: number): string {
   const id = typeof action.id === 'string' ? action.id : '?'
   return `Action ${index + 1} (${id})`
@@ -152,38 +183,26 @@ function actionLabel(action: Record<string, unknown>, index: number): string {
 function validateAction(action: Record<string, unknown>, index: number, errors: string[]): void {
   const label = actionLabel(action, index)
 
-  if (typeof action.id !== 'string' || !action.id) {
-    errors.push(`Action ${index + 1}: "id" must be a non-empty string.`)
+  if (typeof action.id !== 'string' || !action.id) errors.push(`Action ${index + 1}: "id" must be a non-empty string.`)
+  if (typeof action.label !== 'string' || !action.label) errors.push(`${label}: "label" must be a non-empty string.`)
+  if (typeof action.template !== 'string' || !action.template) errors.push(`${label}: "template" must be a non-empty string.`)
+  if (action.description !== undefined && typeof action.description !== 'string') errors.push(`${label}: "description" must be a string.`)
+
+  if (action.showWhen !== undefined) {
+    if (!Array.isArray(action.showWhen) || action.showWhen.some((v: unknown) => typeof v !== 'string')) {
+      errors.push(`${label}: "showWhen" must be an array of strings.`)
+    }
   }
-  if (typeof action.label !== 'string' || !action.label) {
-    errors.push(`${label}: "label" must be a non-empty string.`)
-  }
-  if (!VALID_TYPES.includes(action.type as typeof VALID_TYPES[number])) {
-    errors.push(`${label}: "type" must be "agent" or "shell".`)
-  }
-  if (action.type === 'agent' && action.prompt !== undefined && typeof action.prompt !== 'string') {
-    errors.push(`${label}: "prompt" must be a string.`)
-  }
-  if (action.type === 'shell' && action.command !== undefined && typeof action.command !== 'string') {
-    errors.push(`${label}: "command" must be a string.`)
-  }
-  if (!Array.isArray(action.showWhen)) {
-    errors.push(`${label}: "showWhen" must be an array of strings.`)
-  } else if (action.showWhen.some((v: unknown) => typeof v !== 'string')) {
-    errors.push(`${label}: "showWhen" entries must be strings.`)
-  }
+
+  validateStages(action.stages, label, errors)
+  validateSetStage(action.setStage, label, errors)
+  validateArgs(action.args, label, errors)
+
   if (action.style !== undefined && !VALID_STYLES.includes(action.style as typeof VALID_STYLES[number])) {
     errors.push(`${label}: "style" must be one of: ${VALID_STYLES.join(', ')}.`)
   }
   validateSurface(action.surface, label, errors)
-  if (action.switchTab !== undefined && typeof action.switchTab !== 'string') {
-    errors.push(`${label}: "switchTab" must be a string.`)
-  }
-  if (action.agents !== undefined) {
-    if (typeof action.agents !== 'object' || action.agents === null || Array.isArray(action.agents)) {
-      errors.push(`${label}: "agents" must be an object.`)
-    }
-  }
+  if (action.switchTab !== undefined && typeof action.switchTab !== 'string') errors.push(`${label}: "switchTab" must be a string.`)
 }
 
 export function validateCommandsConfig(config: unknown): string[] {
@@ -196,10 +215,7 @@ export function validateCommandsConfig(config: unknown): string[] {
 
   const obj = config as Record<string, unknown>
 
-  if (typeof obj.version !== 'number') {
-    errors.push('"version" must be a number.')
-  }
-
+  if (typeof obj.version !== 'number') errors.push('"version" must be a number.')
   if (!Array.isArray(obj.actions)) {
     errors.push('"actions" must be an array.')
     return errors
@@ -248,16 +264,6 @@ export async function loadCommandsConfig(directory: string): Promise<LoadResult 
     }
 
     const config = parsed as CommandsConfig
-
-    // Migrate: strip agent overrides that have no prompt (e.g. legacy skill-only entries)
-    for (const action of config.actions) {
-      if (action.agents) {
-        const cleaned = Object.fromEntries(
-          Object.entries(action.agents).filter(([, v]) => v.prompt),
-        )
-        action.agents = Object.keys(cleaned).length > 0 ? cleaned : undefined
-      }
-    }
 
     return { ok: true, config }
   } catch {
