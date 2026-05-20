@@ -35,7 +35,6 @@ const defaultProps = {
   currentStage: 'new',
   onSetSessionStage: vi.fn(),
   onSetup: vi.fn(),
-  onStartBlank: vi.fn(),
 }
 
 describe('SCWorkingView', () => {

@@ -34,7 +34,6 @@ describe('ActionButtons', () => {
         currentStage="new"
         directory="/r"
         onSetup={vi.fn()}
-        onStartBlank={vi.fn()}
         onSetSessionStage={vi.fn()}
       />
     )
@@ -50,7 +49,6 @@ describe('ActionButtons', () => {
         currentStage="new"
         directory="/r"
         onSetup={vi.fn()}
-        onStartBlank={vi.fn()}
         onSetSessionStage={vi.fn()}
       />
     )
@@ -67,7 +65,6 @@ describe('ActionButtons', () => {
         currentStage="new"
         directory="/r"
         onSetup={vi.fn()}
-        onStartBlank={vi.fn()}
         onSetSessionStage={vi.fn()}
       />
     )
@@ -83,7 +80,6 @@ describe('ActionButtons', () => {
         currentStage="new"
         directory="/r"
         onSetup={vi.fn()}
-        onStartBlank={vi.fn()}
         onSetSessionStage={vi.fn()}
       />
     )
@@ -99,7 +95,6 @@ describe('ActionButtons', () => {
         currentStage="new"
         directory="/r"
         onSetup={vi.fn()}
-        onStartBlank={vi.fn()}
         onSetSessionStage={vi.fn()}
       />
     )
@@ -117,7 +112,6 @@ describe('ActionButtons', () => {
         directory="/r"
         agentPtyId="pty-1"
         onSetup={vi.fn()}
-        onStartBlank={vi.fn()}
         onSetSessionStage={vi.fn()}
       />
     )
@@ -135,7 +129,6 @@ describe('ActionButtons', () => {
         directory="/r"
         agentPtyId="pty-1"
         onSetup={vi.fn()}
-        onStartBlank={vi.fn()}
         onSetSessionStage={vi.fn()}
       />
     )
@@ -152,7 +145,6 @@ describe('ActionButtons', () => {
         currentStage="new"
         directory="/r"
         onSetup={vi.fn()}
-        onStartBlank={vi.fn()}
         onSetSessionStage={vi.fn()}
       />
     )
@@ -169,7 +161,6 @@ describe('ActionButtons', () => {
         directory="/r"
         agentPtyId="pty-1"
         onSetup={vi.fn()}
-        onStartBlank={vi.fn()}
         onSetSessionStage={vi.fn()}
       />
     )

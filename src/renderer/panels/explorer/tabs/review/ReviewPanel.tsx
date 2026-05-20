@@ -416,7 +416,6 @@ export default function ReviewPanel({ session, repo, onSelectFile, gitStatus, sy
         currentStage={stage}
         onSetSessionStage={(next) => activeSessionId && setSessionStage(activeSessionId, next)}
         onSetup={() => undefined}
-        onStartBlank={() => undefined}
         directory={session.directory}
         agentPtyId={session.agentPtyId}
         agentId={session.agentId}

@@ -57,4 +57,26 @@ describe('CommandsSetupDialog', () => {
     await new Promise(r => setTimeout(r, 0))
     expect(screen.getByText(/replace existing user commands/i)).toBeInTheDocument()
   })
+
+  it('shows requires-plugin note when Superpowers is selected', () => {
+    render(<CommandsSetupDialog onClose={vi.fn()} onInstalled={vi.fn()} />)
+    fireEvent.click(screen.getByTestId('pack-card-superpowers'))
+    expect(screen.getByText(/requires superpowers/i)).toBeInTheDocument()
+  })
+
+  it('disables Install until plugin checkbox is checked when Superpowers is selected', async () => {
+    render(<CommandsSetupDialog onClose={vi.fn()} onInstalled={vi.fn()} />)
+    fireEvent.click(screen.getByTestId('pack-card-superpowers'))
+    const installBtn = screen.getByRole('button', { name: /install/i })
+    expect(installBtn).toBeDisabled()
+    fireEvent.click(screen.getByTestId('plugin-confirmed-checkbox'))
+    expect(installBtn).not.toBeDisabled()
+  })
+
+  it('enables Install immediately when Basics is selected (no plugin required)', () => {
+    render(<CommandsSetupDialog onClose={vi.fn()} onInstalled={vi.fn()} />)
+    fireEvent.click(screen.getByTestId('pack-card-basics'))
+    const installBtn = screen.getByRole('button', { name: /install/i })
+    expect(installBtn).not.toBeDisabled()
+  })
 })

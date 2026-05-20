@@ -3,6 +3,10 @@
   "name": "gstack",
   "description": "Stack-based git workflows.",
   "version": 2,
+  "requiresPlugin": {
+    "name": "gstack",
+    "url": "https://github.com/getstack/gstack"
+  },
   "actions": [
     {
       "id": "stack",

@@ -58,7 +58,6 @@ const meta: Meta<typeof SCWorkingView> = {
     currentStage: 'new',
     onSetSessionStage: () => {},
     onSetup: () => {},
-    onStartBlank: () => {},
   },
 }
 export default meta

@@ -38,7 +38,6 @@ export interface SCWorkingViewProps {
   currentStage: string
   onSetSessionStage: (stage: string) => void
   onSetup: () => void
-  onStartBlank: () => void
   agentPtyId?: string
   agentId?: string | null
   onOpenCommandsEditor?: () => void
@@ -236,7 +235,6 @@ export function SCWorkingView({
   currentStage,
   onSetSessionStage,
   onSetup,
-  onStartBlank,
   agentPtyId,
   agentId,
   onOpenCommandsEditor,
@@ -265,7 +263,6 @@ export function SCWorkingView({
         currentStage={currentStage}
         onSetSessionStage={onSetSessionStage}
         onSetup={onSetup}
-        onStartBlank={onStartBlank}
         directory={directory}
         agentPtyId={agentPtyId}
         agentId={agentId}

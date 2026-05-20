@@ -3,6 +3,10 @@
   "name": "Superpowers",
   "description": "Brainstorm, plan, build, verify, debug.",
   "version": 2,
+  "requiresPlugin": {
+    "name": "Superpowers",
+    "url": "https://github.com/anthropic-experimental/superpowers"
+  },
   "actions": [
     {
       "id": "brainstorm",

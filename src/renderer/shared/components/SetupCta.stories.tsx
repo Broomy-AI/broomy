@@ -8,4 +8,4 @@ const meta: Meta<typeof SetupCta> = {
 export default meta
 type Story = StoryObj<typeof SetupCta>
 
-export const Default: Story = { args: { onSetup: () => undefined, onStartBlank: () => undefined } }
+export const Default: Story = { args: { onSetup: () => undefined } }

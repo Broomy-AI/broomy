@@ -255,7 +255,6 @@ export function SourceControl({
         currentStage={stage}
         onSetSessionStage={(next) => activeSessionId && setSessionStage(activeSessionId, next)}
         onSetup={() => setShowSetupDialog(true)}
-        onStartBlank={onOpenCommandsEditor ?? (() => undefined)}
         agentPtyId={agentPtyId}
         agentId={agentId}
         onOpenCommandsEditor={commandsExists ? onOpenCommandsEditor : undefined}

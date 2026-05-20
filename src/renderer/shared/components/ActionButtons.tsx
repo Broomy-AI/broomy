@@ -25,7 +25,6 @@ interface ActionButtonsProps {
   onOpenCommandsEditor?: () => void
   onSetSessionStage: (stage: string) => void
   onSetup: () => void
-  onStartBlank: () => void
 }
 
 const STYLE_CLASSES: Record<string, string> = {
@@ -45,7 +44,7 @@ export function ActionButtons(props: ActionButtonsProps) {
   const {
     actions, conditionState, templateVars, currentStage, directory,
     agentPtyId, agentId, onGitStatusRefresh, onSwitchTab, surface = 'source-control',
-    onOpenCommandsEditor, onSetSessionStage, onSetup, onStartBlank,
+    onOpenCommandsEditor, onSetSessionStage, onSetup,
   } = props
 
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set())
@@ -88,7 +87,7 @@ export function ActionButtons(props: ActionButtonsProps) {
   }
 
   if (allActions.length === 0) {
-    return <SetupCta onSetup={onSetup} onStartBlank={onStartBlank} />
+    return <SetupCta onSetup={onSetup} />
   }
 
   return (

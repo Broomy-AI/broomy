@@ -9,6 +9,7 @@ export interface Pack {
   description: string
   version: number
   actions: ActionDefinition[]
+  requiresPlugin?: { name: string; url: string }
 }
 
 export const PACKS: Pack[] = [basics as Pack, superpowers as Pack, gstack as Pack]

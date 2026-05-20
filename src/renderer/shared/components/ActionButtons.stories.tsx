@@ -37,7 +37,6 @@ const meta: Meta<typeof ActionButtons> = {
     directory: '/Users/test/projects/my-app',
     onSetSessionStage: () => {},
     onSetup: () => {},
-    onStartBlank: () => {},
     onGitStatusRefresh: () => {},
   },
 }
