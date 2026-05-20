@@ -51,7 +51,8 @@ describe('parseTemplate', () => {
 
   it('flag-group beats bare when same name appears twice', () => {
     const r = parseTemplate('/x {topic} --topic-flag {topic}')
-    // Even though `topic` is referenced bare elsewhere, the dedupe keeps the first; result is one entry.
-    expect(r.args.map(a => a.name)).toEqual(['topic'])
+    // The flag-association pass runs to completion before the placeholder walk,
+    // so the arg ends up flagged + optional regardless of which placeholder is hit first.
+    expect(r.args).toEqual([{ name: 'topic', optional: true, flag: '--topic-flag' }])
   })
 })
