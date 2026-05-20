@@ -22,8 +22,9 @@ import { registerAllHandlers, HandlerContext, PROFILES_FILE } from './handlers'
 import { resolveShellEnv } from './shellEnv'
 import { writeCrashLog, appendErrorLog } from './crashLog'
 import { disposePtyListenersForWindow, disposeAllPtyListeners } from './handlers/pty'
-import { treeKill } from './treeKill'
+import { treeKill, type ExtraPid } from './treeKill'
 import { sweepOrphanedPtys, clearOwnMarkers } from './ptyMarkers'
+import { getHistoricalDescendants, untrackPty, startTracker, stopTracker } from './descendantsTracker'
 
 // Ensure app name is correct (in dev mode Electron defaults to "Electron")
 app.name = 'Broomy'
@@ -278,6 +279,48 @@ if (isE2ETest) {
 // Register all IPC handlers
 registerAllHandlers(ipcMain, context)
 
+/**
+ * Reap detached daemons left behind by previous agent runs in this Broomy
+ * session. Catches things like `next dev` workers, MCP servers, and jest
+ * workers that called `setpgid()` and outlived the shell that spawned them.
+ */
+async function handleKillOrphans(): Promise<void> {
+  // Snapshot the live process table once.
+  let snapshot: { pid: number; ppid: number; pgid: number }[]
+  try {
+    const stdout = execFileSync('ps', ['-axo', 'pid=,ppid=,pgid='], { encoding: 'utf-8', timeout: 5000 })
+    const { parsePsSnapshot, collectDescendants } = await import('./treeKill')
+    snapshot = [...parsePsSnapshot(stdout)]
+    const livePids = new Set(snapshot.map((r) => r.pid))
+
+    // PIDs currently reachable from any tracked PTY shell.
+    const reachable = new Set<number>()
+    for (const [id, ptyProcess] of ptyProcesses) {
+      void id
+      for (const pid of collectDescendants(snapshot, ptyProcess.pid)) reachable.add(pid)
+    }
+
+    // Orphans = ever-seen descendants that are still alive but no longer reachable.
+    // Carry the recorded startTime so treeKill can verify identity and skip
+    // PIDs that the kernel has reassigned to unrelated processes.
+    const orphans = new Map<number, ExtraPid>()
+    for (const id of ptyProcesses.keys()) {
+      for (const e of getHistoricalDescendants(id)) {
+        if (e.pid > 1 && livePids.has(e.pid) && !reachable.has(e.pid) && !orphans.has(e.pid)) orphans.set(e.pid, e)
+      }
+    }
+
+    if (orphans.size === 0) {
+      void dialog.showMessageBox({ message: 'No orphaned processes found.' })
+      return
+    }
+    await treeKill(NaN, undefined, [...orphans.values()])
+    void dialog.showMessageBox({ message: `Killed ${String(orphans.size)} orphaned process${orphans.size === 1 ? '' : 'es'}.` })
+  } catch (err) {
+    void dialog.showMessageBox({ message: `Could not scan for orphans: ${err instanceof Error ? err.message : String(err)}` })
+  }
+}
+
 async function checkForUpdatesFromMenu(): Promise<void> {
   if (isE2ETest || isDev) {
     void dialog.showMessageBox({ message: 'Update checking is disabled in development mode.' })
@@ -428,6 +471,11 @@ function buildAppMenu() {
             void shell.openExternal('https://github.com/Broomy-AI/broomy/issues')
           },
         },
+        { type: 'separator' },
+        {
+          label: 'Kill Orphaned Processes',
+          click: () => { void handleKillOrphans() },
+        },
       ],
     },
   ]
@@ -450,6 +498,11 @@ function buildAppMenu() {
         console.warn('[broomy] orphan sweep failed:', err)
       }
     }
+
+    // Periodically snapshot descendants of every active PTY so detached
+    // daemons (next dev, MCP servers, jest workers) can be killed even after
+    // their parent dies. Persists to the on-disk marker for crash recovery.
+    if (!isE2ETest) startTracker()
 
     // Build the application menu
     buildAppMenu()
@@ -485,17 +538,19 @@ function buildAppMenu() {
  * callers can void the result.
  */
 function killPtysForWindow(window: BrowserWindow): Promise<unknown> {
-  const pids: number[] = []
+  const toKill: { pid: number; historical: readonly ExtraPid[]; id: string }[] = []
   for (const [id, owner] of ptyOwnerWindows) {
     if (owner !== window) continue
     const proc = ptyProcesses.get(id)
     if (proc) {
-      pids.push(proc.pid)
+      toKill.push({ pid: proc.pid, historical: getHistoricalDescendants(id), id })
       ptyProcesses.delete(id)
     }
     ptyOwnerWindows.delete(id)
   }
-  return Promise.all(pids.map((pid) => treeKill(pid)))
+  return Promise.all(toKill.map(({ pid, historical, id }) =>
+    treeKill(pid, undefined, historical).then(() => untrackPty(id)),
+  ))
 }
 
 /** Close every file watcher owned by the given window. */
@@ -514,12 +569,14 @@ function closeWatchersForWindow(window: BrowserWindow): void {
 /** Tree-kill every tracked PTY across all windows. Awaits SIGKILL fallbacks. */
 async function killAllPtys(): Promise<void> {
   disposeAllPtyListeners()
-  const pids: number[] = []
+  const toKill: { pid: number; historical: readonly ExtraPid[]; id: string }[] = []
   for (const [id, ptyProcess] of ptyProcesses) {
-    pids.push(ptyProcess.pid)
+    toKill.push({ pid: ptyProcess.pid, historical: getHistoricalDescendants(id), id })
     ptyProcesses.delete(id)
   }
-  await Promise.all(pids.map((pid) => treeKill(pid)))
+  await Promise.all(toKill.map(({ pid, historical, id }) =>
+    treeKill(pid, undefined, historical).then(() => untrackPty(id)),
+  ))
 }
 
 /** Close every tracked file watcher across all windows. */
@@ -549,6 +606,7 @@ app.on('before-quit', (event) => {
   event.preventDefault()
   void (async () => {
     try {
+      stopTracker()
       closeAllWatchers()
       await killAllPtys()
       stopDockerContainers()

@@ -42,6 +42,27 @@ describe('preload pty API', () => {
     expect(mockInvoke).toHaveBeenCalledWith('pty:kill', 'pty-1')
   })
 
+  it('killForSession invokes pty:killForSession with the session id', async () => {
+    mockInvoke.mockResolvedValueOnce(3)
+    const count = await ptyApi.killForSession('session-42')
+    expect(mockInvoke).toHaveBeenCalledWith('pty:killForSession', 'session-42')
+    expect(count).toBe(3)
+  })
+
+  it('getStats invokes pty:getStats', async () => {
+    mockInvoke.mockResolvedValueOnce({ 'session-42': { rssMb: 100, cpuPct: 1.5, ptyCount: 2 } })
+    const stats = await ptyApi.getStats()
+    expect(mockInvoke).toHaveBeenCalledWith('pty:getStats')
+    expect(stats['session-42'].rssMb).toBe(100)
+  })
+
+  it('killOrphans invokes pty:killOrphans', async () => {
+    mockInvoke.mockResolvedValueOnce(7)
+    const count = await ptyApi.killOrphans()
+    expect(mockInvoke).toHaveBeenCalledWith('pty:killOrphans')
+    expect(count).toBe(7)
+  })
+
   describe('onData', () => {
     it('registers event listener on pty:data:${id}', () => {
       const callback = vi.fn()

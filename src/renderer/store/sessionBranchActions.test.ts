@@ -159,6 +159,12 @@ describe('sessionBranchActions', () => {
       useSessionStore.getState().archiveSession('test-session')
       expect(useSessionStore.getState().activeSessionId).toBeNull()
     })
+
+    it('calls pty.killForSession to defensively reap the agent and user terminals', () => {
+      addTestSession()
+      useSessionStore.getState().archiveSession('test-session')
+      expect(window.pty.killForSession).toHaveBeenCalledWith('test-session')
+    })
   })
 
   describe('unarchiveSession', () => {

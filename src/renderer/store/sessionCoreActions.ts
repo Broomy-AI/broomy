@@ -406,6 +406,11 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
         activeSessionId: newActiveId,
       })
 
+      // Belt-and-suspenders: React unmount cleanup normally fires pty.kill per
+      // tab, but call killForSession explicitly so a deleted session never
+      // leaves the agent or its user terminals running in the background.
+      void window.pty.killForSession(id)
+
       debouncedSave()
     },
 

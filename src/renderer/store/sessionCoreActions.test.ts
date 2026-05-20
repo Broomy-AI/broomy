@@ -308,6 +308,16 @@ describe('sessionCoreActions', () => {
       expect(remaining).toHaveLength(1)
       expect(useSessionStore.getState().activeSessionId).toBe(remaining[0].id)
     })
+
+    it('calls pty.killForSession to defensively reap any surviving PTYs', async () => {
+      vi.mocked(window.git.isGitRepo).mockResolvedValue(true)
+      await useSessionStore.getState().addSession('/test/repo', null)
+      const id = useSessionStore.getState().sessions[0].id
+
+      useSessionStore.getState().removeSession(id)
+
+      expect(window.pty.killForSession).toHaveBeenCalledWith(id)
+    })
   })
 
   describe('setActiveSession', () => {

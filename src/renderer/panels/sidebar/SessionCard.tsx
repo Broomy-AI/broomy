@@ -13,6 +13,41 @@ import { formatElapsedTime } from '../../shared/utils/formatTime'
 import { useElapsedSeconds } from '../../shared/hooks/useElapsedSeconds'
 import { branchStatusBadge } from '../../features/git/explorerHelpers'
 import { ReviewStatusChip } from '../../shared/components/ReviewStatusChip'
+import { useSessionUsageStats } from '../../shared/hooks/usePtyStats'
+
+/**
+ * Per-session usage thresholds. Below these we hide the chip entirely so the
+ * sidebar stays clean for normal sessions — it only appears when something is
+ * actually consuming notable resources.
+ *
+ * 300 MB is the floor: an idle `claude` shell sits around 250 MB on macOS, so
+ * a lower threshold would light up every healthy session and defeat the
+ * "draw attention only when it matters" goal.
+ */
+const USAGE_RSS_MB_THRESHOLD = 300
+const USAGE_CPU_PCT_THRESHOLD = 5
+const USAGE_RSS_MB_WARN = 1024
+const USAGE_CPU_PCT_WARN = 50
+
+function UsageChip({ sessionId }: { sessionId: string }) {
+  const stats = useSessionUsageStats(sessionId)
+  if (!stats) return null
+  const showRss = stats.rssMb >= USAGE_RSS_MB_THRESHOLD
+  const showCpu = stats.cpuPct >= USAGE_CPU_PCT_THRESHOLD
+  if (!showRss && !showCpu) return null
+  const isWarn = stats.rssMb >= USAGE_RSS_MB_WARN || stats.cpuPct >= USAGE_CPU_PCT_WARN
+  const cls = isWarn
+    ? 'text-[10px] px-1.5 py-0.5 rounded font-medium leading-none bg-red-500/15 text-red-300'
+    : 'text-[10px] px-1.5 py-0.5 rounded font-medium leading-none bg-yellow-500/10 text-yellow-300'
+  const memLabel = stats.rssMb >= 1024
+    ? `${(stats.rssMb / 1024).toFixed(1)}GB`
+    : `${String(stats.rssMb)}MB`
+  return (
+    <span className={cls} title={`Memory: ${memLabel} · CPU: ${stats.cpuPct.toFixed(1)}% · ${String(stats.ptyCount)} terminal${stats.ptyCount === 1 ? '' : 's'}`}>
+      {showRss ? memLabel : ''}{showRss && showCpu ? ' · ' : ''}{showCpu ? `${stats.cpuPct.toFixed(0)}%` : ''}
+    </span>
+  )
+}
 
 const statusLabels: Record<SessionStatus, string> = {
   working: 'Working',
@@ -215,6 +250,7 @@ export default memo(function SessionCard({
       </div>
       <div className="flex items-center gap-2 text-xs text-text-secondary">
         <span className="truncate flex-1">{session.name}</span>
+        <UsageChip sessionId={sessionId} />
         {session.sessionType === 'review' ? (
           <ReviewStatusChip status={session.reviewStatus ?? 'pending'} />
         ) : (
