@@ -1,0 +1,58 @@
+{
+  "id": "basics",
+  "name": "Basics",
+  "description": "Cross-agent git workflows. Works on Claude Code, Codex, Gemini.",
+  "version": 2,
+  "actions": [
+    {
+      "id": "commit",
+      "label": "Commit",
+      "description": "Commit current changes with an AI-written message.",
+      "template": "Commit the current changes with a clear message. Don't commit any files that contain secrets.",
+      "showWhen": ["has-changes", "!merging"],
+      "style": "primary"
+    },
+    {
+      "id": "resolve-conflicts",
+      "label": "Resolve conflicts",
+      "description": "Resolve merge conflicts, asking before guessing.",
+      "template": "Resolve the current merge conflicts. Ask before guessing on anything ambiguous.",
+      "showWhen": ["conflicts"],
+      "style": "danger"
+    },
+    {
+      "id": "sync",
+      "label": "Sync",
+      "description": "Pull the latest from main and fix conflicts.",
+      "template": "Pull the latest from {main} into this branch and fix any conflicts.",
+      "showWhen": ["behind-main", "!on-main", "!merging"],
+      "style": "primary"
+    },
+    {
+      "id": "push-branch",
+      "label": "Push branch",
+      "description": "Push this branch to the remote.",
+      "template": "!git push -u origin HEAD",
+      "showWhen": ["clean", "no-tracking", "!on-main"],
+      "style": "primary"
+    },
+    {
+      "id": "create-pr",
+      "label": "Create PR",
+      "description": "Open a PR for this branch against main.",
+      "template": "Create a PR for this branch against {main}.",
+      "showWhen": ["no-pr", "!on-main", "!empty", "!conflicts"],
+      "style": "primary"
+    },
+    {
+      "id": "review",
+      "label": "Review",
+      "description": "Run the agent's built-in code review on this branch.",
+      "template": "/review",
+      "showWhen": ["clean", "pushed|open"],
+      "style": "accent",
+      "surface": ["source-control", "review"],
+      "switchTab": "review"
+    }
+  ]
+}

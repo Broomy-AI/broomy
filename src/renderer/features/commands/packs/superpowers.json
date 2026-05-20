@@ -1,0 +1,73 @@
+{
+  "id": "superpowers",
+  "name": "Superpowers",
+  "description": "Brainstorm, plan, build, verify, debug.",
+  "version": 2,
+  "actions": [
+    {
+      "id": "brainstorm",
+      "label": "Brainstorm",
+      "description": "Turn an idea into a design spec.",
+      "template": "/brainstorm {idea}",
+      "args": [{ "name": "idea", "description": "The thing you want to design.", "default": "" }],
+      "setStage": "planning",
+      "style": "primary"
+    },
+    {
+      "id": "plan",
+      "label": "Write plan",
+      "description": "Produce an implementation plan from a spec.",
+      "template": "/plan {spec} --focus {focus}",
+      "args": [
+        { "name": "spec", "description": "Path to the spec or topic to plan.", "default": "" },
+        { "name": "focus", "description": "Optional aspect to emphasise.", "default": "" }
+      ],
+      "stages": ["planning"],
+      "setStage": "implementing",
+      "style": "primary"
+    },
+    {
+      "id": "verify",
+      "label": "Verify",
+      "description": "Run the verification checklist.",
+      "template": "/verify",
+      "stages": ["implementing", "verifying"],
+      "setStage": "verifying",
+      "style": "primary"
+    },
+    {
+      "id": "debug",
+      "label": "Debug",
+      "description": "Systematic debugging walkthrough.",
+      "template": "/debug {symptom}",
+      "args": [{ "name": "symptom", "description": "What's going wrong.", "default": "" }],
+      "stages": ["implementing", "verifying"],
+      "style": "secondary"
+    },
+    {
+      "id": "review-feedback",
+      "label": "Address feedback",
+      "description": "Apply code-review feedback systematically.",
+      "template": "/review-feedback",
+      "stages": ["verifying"],
+      "style": "secondary"
+    },
+    {
+      "id": "finish-branch",
+      "label": "Finish branch",
+      "description": "Decide on merge / PR / cleanup.",
+      "template": "/finish-branch",
+      "stages": ["verifying"],
+      "setStage": "new",
+      "style": "accent"
+    },
+    {
+      "id": "request-review",
+      "label": "Request review",
+      "description": "Ask for a fresh code review.",
+      "template": "/request-review",
+      "stages": ["verifying"],
+      "style": "secondary"
+    }
+  ]
+}

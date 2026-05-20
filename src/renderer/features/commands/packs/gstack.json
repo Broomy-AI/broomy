@@ -1,0 +1,53 @@
+{
+  "id": "gstack",
+  "name": "gstack",
+  "description": "Stack-based git workflows.",
+  "version": 2,
+  "actions": [
+    {
+      "id": "stack",
+      "label": "New stack entry",
+      "description": "Create a new stack entry from current branch.",
+      "template": "/stack {name}",
+      "args": [{ "name": "name", "description": "Name for the new stack entry." }],
+      "style": "primary"
+    },
+    {
+      "id": "submit",
+      "label": "Submit stack",
+      "description": "Submit the current stack as PRs.",
+      "template": "/submit",
+      "showWhen": ["clean"],
+      "style": "primary"
+    },
+    {
+      "id": "restack",
+      "label": "Restack",
+      "description": "Rebase all stack entries on the latest base.",
+      "template": "/restack",
+      "style": "secondary"
+    },
+    {
+      "id": "sync-stack",
+      "label": "Sync stack",
+      "description": "Pull latest base and update all stack entries.",
+      "template": "/sync",
+      "style": "secondary"
+    },
+    {
+      "id": "diff-stack",
+      "label": "Stack diff",
+      "description": "Show diff for the current stack entry.",
+      "template": "/diff",
+      "style": "secondary"
+    },
+    {
+      "id": "checkout",
+      "label": "Checkout entry",
+      "description": "Switch to a different stack entry.",
+      "template": "/checkout {entry}",
+      "args": [{ "name": "entry", "description": "Stack entry name to switch to." }],
+      "style": "secondary"
+    }
+  ]
+}
