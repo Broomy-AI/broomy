@@ -360,32 +360,6 @@ export function discoverStages(actions: ActionDefinition[], currentStage: string
   return ['new', ...rest]
 }
 
-// --- Agent type detection ---
-
-export function detectAgentType(command: string): string | null {
-  const base = command.trim().split(/\s+/)[0]
-  const name = base.includes('/') ? base.split('/').pop()! : base
-
-  if (name === 'claude') return 'claude'
-  if (name === 'aider') return 'aider'
-  if (name === 'cursor') return 'cursor'
-  if (name === 'codex') return 'codex'
-  if (name === 'gemini') return 'gemini'
-  return null
-}
-
-/**
- * Return unique sorted agent type strings from a list of agent configs.
- */
-export function getAgentTypes(agents: { command: string }[]): string[] {
-  const types = new Set<string>()
-  for (const agent of agents) {
-    const t = detectAgentType(agent.command)
-    if (t) types.add(t)
-  }
-  return [...types].sort()
-}
-
 // --- Legacy .broomy gitignore helpers ---
 
 /**

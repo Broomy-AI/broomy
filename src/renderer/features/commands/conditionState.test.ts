@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { computeConditionState, type ConditionStateInput } from './conditionState'
-import { evaluateShowWhen, getDefaultCommandsConfig } from './commandsConfig'
+import { evaluateShowWhen } from './commandsConfig'
+
+// merge-pr showWhen conditions (inlined from the legacy defaultCommands.json)
+const MERGE_PR_SHOW_WHEN = ['clean', 'open', 'checks-passed', 'has-write-access', 'allow-approve-and-merge', '!review']
 
 function makeInput(overrides: Partial<ConditionStateInput> = {}): ConditionStateInput {
   return {
@@ -78,13 +81,7 @@ describe('computeConditionState', () => {
   })
 })
 
-describe('merge-pr action visibility with default commands', () => {
-  const mergePrAction = getDefaultCommandsConfig().actions.find(a => a.id === 'merge-pr')
-
-  it('merge-pr action exists in default commands', () => {
-    expect(mergePrAction).toBeDefined()
-  })
-
+describe('merge-pr action visibility', () => {
   it('merge-pr is visible when PR is open, clean, checks passed, write access, and merge allowed', () => {
     const state = computeConditionState(makeInput({
       gitStatus: [],
@@ -94,7 +91,7 @@ describe('merge-pr action visibility with default commands', () => {
       allowApproveAndMerge: true,
       isReview: false,
     }))
-    expect(evaluateShowWhen(mergePrAction!.showWhen, state)).toBe(true)
+    expect(evaluateShowWhen(MERGE_PR_SHOW_WHEN, state)).toBe(true)
   })
 
   it('merge-pr is visible when PR is open and no CI checks exist', () => {
@@ -106,7 +103,7 @@ describe('merge-pr action visibility with default commands', () => {
       allowApproveAndMerge: true,
       isReview: false,
     }))
-    expect(evaluateShowWhen(mergePrAction!.showWhen, state)).toBe(true)
+    expect(evaluateShowWhen(MERGE_PR_SHOW_WHEN, state)).toBe(true)
   })
 
   it('merge-pr is hidden when checks are pending', () => {
@@ -117,7 +114,7 @@ describe('merge-pr action visibility with default commands', () => {
       hasWriteAccess: true,
       allowApproveAndMerge: true,
     }))
-    expect(evaluateShowWhen(mergePrAction!.showWhen, state)).toBe(false)
+    expect(evaluateShowWhen(MERGE_PR_SHOW_WHEN, state)).toBe(false)
   })
 
   it('merge-pr is hidden when checks failed', () => {
@@ -128,7 +125,7 @@ describe('merge-pr action visibility with default commands', () => {
       hasWriteAccess: true,
       allowApproveAndMerge: true,
     }))
-    expect(evaluateShowWhen(mergePrAction!.showWhen, state)).toBe(false)
+    expect(evaluateShowWhen(MERGE_PR_SHOW_WHEN, state)).toBe(false)
   })
 
   it('merge-pr is hidden when branch is not open', () => {
@@ -139,7 +136,7 @@ describe('merge-pr action visibility with default commands', () => {
       hasWriteAccess: true,
       allowApproveAndMerge: true,
     }))
-    expect(evaluateShowWhen(mergePrAction!.showWhen, state)).toBe(false)
+    expect(evaluateShowWhen(MERGE_PR_SHOW_WHEN, state)).toBe(false)
   })
 
   it('merge-pr is hidden when there are uncommitted changes', () => {
@@ -150,7 +147,7 @@ describe('merge-pr action visibility with default commands', () => {
       hasWriteAccess: true,
       allowApproveAndMerge: true,
     }))
-    expect(evaluateShowWhen(mergePrAction!.showWhen, state)).toBe(false)
+    expect(evaluateShowWhen(MERGE_PR_SHOW_WHEN, state)).toBe(false)
   })
 
   it('merge-pr is hidden when user has no write access', () => {
@@ -161,7 +158,7 @@ describe('merge-pr action visibility with default commands', () => {
       hasWriteAccess: false,
       allowApproveAndMerge: true,
     }))
-    expect(evaluateShowWhen(mergePrAction!.showWhen, state)).toBe(false)
+    expect(evaluateShowWhen(MERGE_PR_SHOW_WHEN, state)).toBe(false)
   })
 
   it('merge-pr is hidden when allowApproveAndMerge is false', () => {
@@ -172,7 +169,7 @@ describe('merge-pr action visibility with default commands', () => {
       hasWriteAccess: true,
       allowApproveAndMerge: false,
     }))
-    expect(evaluateShowWhen(mergePrAction!.showWhen, state)).toBe(false)
+    expect(evaluateShowWhen(MERGE_PR_SHOW_WHEN, state)).toBe(false)
   })
 
   it('merge-pr is hidden when in review mode', () => {
@@ -184,6 +181,6 @@ describe('merge-pr action visibility with default commands', () => {
       allowApproveAndMerge: true,
       isReview: true,
     }))
-    expect(evaluateShowWhen(mergePrAction!.showWhen, state)).toBe(false)
+    expect(evaluateShowWhen(MERGE_PR_SHOW_WHEN, state)).toBe(false)
   })
 })

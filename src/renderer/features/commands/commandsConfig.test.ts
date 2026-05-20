@@ -5,8 +5,6 @@ import {
   resolveTemplateVars,
   evaluateShowWhen,
   commandsConfigPath,
-  detectAgentType,
-  getAgentTypes,
   ensureOutputGitignore,
   matchesSurface,
   checkLegacyBroomyGitignore,
@@ -83,69 +81,6 @@ describe('commandsConfigPath', () => {
     expect(commandsConfigPath('/repo')).toBe('/repo/.broomy/commands.json')
   })
 })
-
-// REMOVE — replaced by loadConfigFromPath
-// describe('loadCommandsConfig', () => { ... })
-
-describe('detectAgentType', () => {
-  it('detects claude', () => {
-    expect(detectAgentType('claude')).toBe('claude')
-    expect(detectAgentType('/usr/bin/claude --flag')).toBe('claude')
-  })
-
-  it('detects aider', () => {
-    expect(detectAgentType('aider')).toBe('aider')
-  })
-
-  it('detects cursor', () => {
-    expect(detectAgentType('cursor')).toBe('cursor')
-  })
-
-  it('detects codex', () => {
-    expect(detectAgentType('codex')).toBe('codex')
-    expect(detectAgentType('/usr/local/bin/codex --flag')).toBe('codex')
-  })
-
-  it('detects gemini', () => {
-    expect(detectAgentType('gemini')).toBe('gemini')
-  })
-
-  it('returns null for unknown agent', () => {
-    expect(detectAgentType('unknown-agent')).toBeNull()
-    expect(detectAgentType('vim')).toBeNull()
-  })
-})
-
-describe('getAgentTypes', () => {
-  it('returns unique sorted agent types', () => {
-    const agents = [
-      { command: 'claude' },
-      { command: 'aider --model gpt-4' },
-      { command: 'claude --flag' },
-    ]
-    expect(getAgentTypes(agents)).toEqual(['aider', 'claude'])
-  })
-
-  it('returns empty array when no recognized agents', () => {
-    expect(getAgentTypes([{ command: 'vim' }])).toEqual([])
-  })
-
-  it('returns empty array for empty input', () => {
-    expect(getAgentTypes([])).toEqual([])
-  })
-
-  it('includes codex and gemini', () => {
-    const agents = [
-      { command: 'codex' },
-      { command: 'gemini' },
-      { command: 'claude' },
-    ]
-    expect(getAgentTypes(agents)).toEqual(['claude', 'codex', 'gemini'])
-  })
-})
-
-// REMOVE in Task 2 — getDefaultCommandsConfig tests use v1 schema fields, will be rewritten with migration
-// describe('getDefaultCommandsConfig', () => { ... })
 
 describe('matchesSurface', () => {
   const base: ActionDefinition = { id: 'test', label: 'Test', template: '/test' }
@@ -236,9 +171,6 @@ describe('removeLegacyBroomyGitignore', () => {
     await removeLegacyBroomyGitignore('/repo')
   })
 })
-
-// REMOVE in Task 2 — covered by migration tests (v1 schema fields: type, prompt, command, agents)
-// describe('validateCommandsConfig', () => { ... }) — all tests used v1 fields, removed with schema upgrade
 
 describe('ensureOutputGitignore', () => {
   it('creates new .gitignore when none exists', async () => {
