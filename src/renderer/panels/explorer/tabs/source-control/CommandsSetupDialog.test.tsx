@@ -23,16 +23,16 @@ beforeEach(() => {
 afterEach(() => { cleanup() })
 
 describe('CommandsSetupDialog', () => {
-  it('renders three pack cards with Superpowers first', () => {
+  it('renders two pack cards with Basics first', () => {
     render(<CommandsSetupDialog onClose={vi.fn()} onInstalled={vi.fn()} />)
     const cards = screen.getAllByTestId(/pack-card-/)
-    expect(cards.map(c => c.dataset.testid)).toEqual(['pack-card-superpowers', 'pack-card-gstack', 'pack-card-basics'])
+    expect(cards.map(c => c.dataset.testid)).toEqual(['pack-card-basics', 'pack-card-gstack'])
   })
 
-  it('labels Superpowers as Recommended', () => {
+  it('labels Basics as Recommended', () => {
     render(<CommandsSetupDialog onClose={vi.fn()} onInstalled={vi.fn()} />)
-    const superpowersCard = screen.getByTestId('pack-card-superpowers')
-    expect(within(superpowersCard).getByText(/recommended/i)).toBeInTheDocument()
+    const basicsCard = screen.getByTestId('pack-card-basics')
+    expect(within(basicsCard).getByText(/recommended/i)).toBeInTheDocument()
   })
 
   it('writes the chosen pack to ~/.broomy/commands.json and calls onInstalled', async () => {
@@ -40,7 +40,7 @@ describe('CommandsSetupDialog', () => {
     const onInstalled = vi.fn()
     render(<CommandsSetupDialog onClose={vi.fn()} onInstalled={onInstalled} />)
     fireEvent.click(screen.getByTestId('pack-card-basics'))
-    fireEvent.click(screen.getByRole('button', { name: /install/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^install(ing)?$/i }))
     // wait one tick
     await new Promise(r => setTimeout(r, 0))
     expect(vi.mocked(window.fs.writeFile)).toHaveBeenCalledWith(
@@ -54,21 +54,21 @@ describe('CommandsSetupDialog', () => {
     vi.mocked(window.fs.exists).mockResolvedValue(true)
     render(<CommandsSetupDialog onClose={vi.fn()} onInstalled={vi.fn()} />)
     fireEvent.click(screen.getByTestId('pack-card-basics'))
-    fireEvent.click(screen.getByRole('button', { name: /install/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^install(ing)?$/i }))
     await new Promise(r => setTimeout(r, 0))
     expect(screen.getByText(/replace existing user commands/i)).toBeInTheDocument()
   })
 
-  it('shows requires-plugin note when Superpowers is selected', () => {
+  it('shows requires-plugin note when gstack is selected', () => {
     render(<CommandsSetupDialog onClose={vi.fn()} onInstalled={vi.fn()} />)
-    fireEvent.click(screen.getByTestId('pack-card-superpowers'))
-    expect(screen.getByText(/requires superpowers/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('pack-card-gstack'))
+    expect(screen.getByText(/requires gstack/i)).toBeInTheDocument()
   })
 
-  it('disables Install until plugin checkbox is checked when Superpowers is selected', async () => {
+  it('disables Install until plugin checkbox is checked when gstack is selected', async () => {
     render(<CommandsSetupDialog onClose={vi.fn()} onInstalled={vi.fn()} />)
-    fireEvent.click(screen.getByTestId('pack-card-superpowers'))
-    const installBtn = screen.getByRole('button', { name: /install/i })
+    fireEvent.click(screen.getByTestId('pack-card-gstack'))
+    const installBtn = screen.getByRole('button', { name: /^install(ing)?$/i })
     expect(installBtn).toBeDisabled()
     fireEvent.click(screen.getByTestId('plugin-confirmed-checkbox'))
     expect(installBtn).not.toBeDisabled()
@@ -77,7 +77,7 @@ describe('CommandsSetupDialog', () => {
   it('enables Install immediately when Basics is selected (no plugin required)', () => {
     render(<CommandsSetupDialog onClose={vi.fn()} onInstalled={vi.fn()} />)
     fireEvent.click(screen.getByTestId('pack-card-basics'))
-    const installBtn = screen.getByRole('button', { name: /install/i })
+    const installBtn = screen.getByRole('button', { name: /^install(ing)?$/i })
     expect(installBtn).not.toBeDisabled()
   })
 })

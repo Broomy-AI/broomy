@@ -1,9 +1,69 @@
 {
   "id": "basics",
   "name": "Basics",
-  "description": "Cross-agent git workflows. Works on Claude Code, Codex, Gemini.",
+  "description": "A guided AI workflow: brainstorm → plan → build → verify → ship. Short prompts that work on any agent and naturally trigger Superpowers skills when installed.",
   "version": 2,
   "actions": [
+    {
+      "id": "brainstorm",
+      "label": "Brainstorm",
+      "description": "Refine the idea before any code.",
+      "template": "Help me brainstorm this. Ask me what I'm trying to build, surface my assumptions, and suggest two or three approaches with their tradeoffs. Don't write any code yet — we're refining the design first.",
+      "stages": ["new"],
+      "setStage": "planning",
+      "style": "primary"
+    },
+    {
+      "id": "write-plan",
+      "label": "Write plan",
+      "description": "Turn the design into a step-by-step implementation plan.",
+      "template": "We have a design. Write a step-by-step implementation plan to docs/plan.md that an engineer without project context could follow — exact file paths, complete code snippets, verification steps. Don't write the implementation yet.",
+      "stages": ["planning"],
+      "setStage": "implementing",
+      "style": "primary"
+    },
+    {
+      "id": "build",
+      "label": "Build (TDD)",
+      "description": "Implement the next task with test-driven development.",
+      "template": "Implement the next task from the plan using test-driven development: write the failing test first, run it to confirm it fails, then write the minimum code to make it pass. Commit at each step.",
+      "stages": ["implementing"],
+      "style": "primary"
+    },
+    {
+      "id": "debug",
+      "label": "Debug",
+      "description": "Systematic root-cause investigation.",
+      "template": "Something is broken. Investigate systematically: reproduce the issue first, then form a hypothesis, then test it. Don't guess at fixes without evidence — find the root cause before changing anything.",
+      "stages": ["implementing", "verifying"],
+      "style": "secondary"
+    },
+    {
+      "id": "verify",
+      "label": "Verify",
+      "description": "Run all the project's checks and fix failures.",
+      "template": "Verify this work is actually complete. Run the project's checks (lint, typecheck, tests — whatever the README or CLAUDE.md mentions). Fix every failure. Don't claim done until everything passes.",
+      "stages": ["implementing", "verifying"],
+      "setStage": "verifying",
+      "style": "primary"
+    },
+    {
+      "id": "self-review",
+      "label": "Self-review",
+      "description": "Read your own changes carefully before asking anyone else to.",
+      "template": "Self-review the changes on this branch. Read every modified file, compare against the plan, and list anything missing, redundant, or sub-par with file:line references. Then fix it.",
+      "stages": ["verifying"],
+      "style": "secondary"
+    },
+    {
+      "id": "address-feedback",
+      "label": "Address feedback",
+      "description": "Process incoming code review feedback rigorously.",
+      "template": "Code review feedback has come in. For each comment, decide with technical rigor whether you agree — don't just blindly implement suggestions. Implement what you agree with; thoughtfully reply to anything you don't.",
+      "stages": ["verifying"],
+      "setStage": "implementing",
+      "style": "secondary"
+    },
     {
       "id": "commit",
       "label": "Commit",
@@ -42,6 +102,7 @@
       "description": "Open a PR for this branch against main.",
       "template": "Create a PR for this branch against {main}.",
       "showWhen": ["no-pr", "!on-main", "!empty", "!conflicts"],
+      "setStage": "new",
       "style": "primary"
     },
     {
