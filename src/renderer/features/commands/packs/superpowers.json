@@ -100,8 +100,8 @@
     {
       "id": "push-branch",
       "label": "Push branch",
-      "description": "Push this branch to the remote.",
-      "template": "!git push -u origin HEAD",
+      "description": "Push this branch to the remote, fixing any pre-push hook failures.",
+      "template": "Push this branch to the remote (`git push -u origin HEAD` if there is no tracking branch yet). If the push is rejected by a pre-push hook (lint, type-check, tests, formatter, etc.), read the error output, fix the underlying problem, commit the fix, and push again. Repeat until the push succeeds. Never bypass hooks with --no-verify.",
       "showWhen": ["clean", "no-tracking", "!on-main"],
       "style": "primary"
     },
