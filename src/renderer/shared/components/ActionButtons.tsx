@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useRef } from 'react'
 import type { ActionDefinition, ConditionState } from '../../features/commands/commandsConfig'
 import type { SubContext, ArgValue } from '../../features/commands/templateSubstitute'
 import { isVisible, discoverStages } from '../../features/commands/commandsConfig'
@@ -51,11 +51,12 @@ export function ActionButtons(props: ActionButtonsProps) {
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set())
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [argDialogAction, setArgDialogAction] = useState<ActionDefinition | null>(null)
+  const lastUsedArgs = useRef<Map<string, Record<string, ArgValue>>>(new Map())
 
   const allActions = actions ?? []
   const visible = allActions.filter(a => isVisible(a, conditionState, currentStage, surface))
   const stagesShown = useMemo(() =>
-    allActions.some(a => a.stages || typeof a.setStage === 'string'),
+    allActions.some(a => a.stages || a.setStage !== undefined),
   [allActions])
   const stageOptions = useMemo(() => discoverStages(allActions, currentStage), [allActions, currentStage])
 
@@ -141,7 +142,13 @@ export function ActionButtons(props: ActionButtonsProps) {
           template={argDialogAction.template}
           argsMeta={argDialogAction.args ?? []}
           context={templateVars}
-          onRun={(values) => { const a = argDialogAction; setArgDialogAction(null); void dispatch(a, values) }}
+          initialValues={lastUsedArgs.current.get(argDialogAction.id)}
+          onRun={(values) => {
+            const a = argDialogAction
+            lastUsedArgs.current.set(a.id, values)
+            setArgDialogAction(null)
+            void dispatch(a, values)
+          }}
           onCancel={() => setArgDialogAction(null)}
         />
       )}

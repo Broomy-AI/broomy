@@ -10,11 +10,12 @@ interface ArgDialogProps {
   template: string
   argsMeta: ArgSpec[]
   context: SubContext
+  initialValues?: Record<string, ArgValue>
   onRun: (values: Record<string, ArgValue>) => void
   onCancel: () => void
 }
 
-export function ArgDialog({ title, description, template, argsMeta, context, onRun, onCancel }: ArgDialogProps) {
+export function ArgDialog({ title, description, template, argsMeta, context, initialValues, onRun, onCancel }: ArgDialogProps) {
   const parsed = useMemo(() => parseTemplate(template), [template])
   const metaByName = useMemo(() => new Map(argsMeta.map(a => [a.name, a])), [argsMeta])
 
@@ -22,9 +23,10 @@ export function ArgDialog({ title, description, template, argsMeta, context, onR
     const init: Record<string, ArgValue> = {}
     for (const a of parsed.args) {
       const meta = metaByName.get(a.name)
+      const prior = initialValues?.[a.name]
       init[a.name] = a.optional
-        ? { value: meta?.default ?? '', enabled: false }
-        : { value: meta?.default ?? '' }
+        ? { value: prior?.value ?? meta?.default ?? '', enabled: prior?.enabled ?? false }
+        : { value: prior?.value ?? meta?.default ?? '' }
     }
     return init
   })

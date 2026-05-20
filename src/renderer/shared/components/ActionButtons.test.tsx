@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import '../../../test/react-setup'
 
 vi.mock('../../features/commands/actionExecutor', () => ({
@@ -141,5 +141,45 @@ describe('ActionButtons', () => {
     )
     fireEvent.click(screen.getByText('A'))
     expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('shows stage pill when any action has setStage: null', () => {
+    render(
+      <ActionButtons
+        actions={[{ id: 'a', label: 'A', template: '/x', setStage: null }]}
+        conditionState={condState}
+        templateVars={ctx}
+        currentStage="new"
+        directory="/r"
+        onSetup={vi.fn()}
+        onStartBlank={vi.fn()}
+        onSetSessionStage={vi.fn()}
+      />
+    )
+    expect(screen.getByRole('button', { name: /stage:/i })).toBeInTheDocument()
+  })
+
+  it('pre-fills last-used arg values when reopening ArgDialog', async () => {
+    render(
+      <ActionButtons
+        actions={[{ id: 'a', label: 'A', template: '/x {topic}' }]}
+        conditionState={condState}
+        templateVars={ctx}
+        currentStage="new"
+        directory="/r"
+        agentPtyId="pty-1"
+        onSetup={vi.fn()}
+        onStartBlank={vi.fn()}
+        onSetSessionStage={vi.fn()}
+      />
+    )
+    // First open — type a value and run
+    fireEvent.click(screen.getByText('A', { selector: 'span' }))
+    fireEvent.change(screen.getByLabelText(/topic/i), { target: { value: 'auth' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }))
+    // Second open — value should be pre-filled (dialog closes, button re-enabled)
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    fireEvent.click(screen.getByText('A', { selector: 'span' }))
+    expect(screen.getByLabelText(/topic/i)).toHaveValue('auth')
   })
 })

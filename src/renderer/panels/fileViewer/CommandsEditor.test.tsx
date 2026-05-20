@@ -83,4 +83,61 @@ describe('CommandsEditor', () => {
     fireEvent.click(await screen.findByRole('tab', { name: /project/i }))
     expect(screen.getByRole('button', { name: /add project commands/i })).toBeInTheDocument()
   })
+
+  it('tab switch with dirty state shows Save/Discard/Cancel modal', async () => {
+    vi.mocked(window.fs.exists).mockImplementation(async (p: string) => p === '/Users/test/.broomy/commands.json')
+    vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify({
+      version: 2, actions: [{ id: 'u', label: 'A', template: '/x' }],
+    }))
+    render(<CommandsEditor directory="/repo" onClose={vi.fn()} />)
+    // Make dirty by editing a field
+    fireEvent.click(await screen.findByText('A'))
+    fireEvent.change(screen.getByDisplayValue('A'), { target: { value: 'B' } })
+    // Try to switch tab
+    fireEvent.click(screen.getByRole('tab', { name: /project/i }))
+    // Should show the modal with Discard and Cancel (Save may also be in the header)
+    expect(screen.getByRole('button', { name: /^Discard$/i })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /^Cancel$/i })[0]).toBeInTheDocument()
+    // Cancel keeps us on current tab
+    fireEvent.click(screen.getAllByRole('button', { name: /^Cancel$/i })[0])
+    expect(screen.getByRole('tab', { name: /user/i })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('delete command requires two clicks', async () => {
+    vi.mocked(window.fs.exists).mockImplementation(async (p: string) => p === '/Users/test/.broomy/commands.json')
+    vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify({
+      version: 2, actions: [{ id: 'u', label: 'My Cmd', template: '/x' }],
+    }))
+    render(<CommandsEditor directory="/repo" onClose={vi.fn()} />)
+    fireEvent.click(await screen.findByText('My Cmd'))
+    // First click shows confirm
+    fireEvent.click(screen.getByRole('button', { name: /delete command/i }))
+    expect(screen.getByRole('button', { name: /confirm delete/i })).toBeInTheDocument()
+    // Second click actually deletes
+    fireEvent.click(screen.getByRole('button', { name: /confirm delete/i }))
+    expect(screen.queryByText('My Cmd')).toBeNull()
+  })
+
+  it('save prunes stale arg metadata not in template', async () => {
+    vi.mocked(window.fs.exists).mockImplementation(async (p: string) => p === '/Users/test/.broomy/commands.json')
+    vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify({
+      version: 2,
+      actions: [{
+        id: 'u',
+        label: 'A',
+        template: '/x {topic}',
+        args: [{ name: 'topic', description: 'desc' }, { name: 'stale', description: 'old' }],
+      }],
+    }))
+    render(<CommandsEditor directory="/repo" onClose={vi.fn()} />)
+    // Make dirty
+    fireEvent.click(await screen.findByText('A'))
+    fireEvent.change(screen.getByDisplayValue('A'), { target: { value: 'B' } })
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    await waitFor(() => expect(vi.mocked(window.fs.writeFile)).toHaveBeenCalled())
+    const written = JSON.parse(vi.mocked(window.fs.writeFile).mock.calls[0][1])
+    const savedArgs = written.actions[0].args
+    expect(savedArgs).toHaveLength(1)
+    expect(savedArgs[0].name).toBe('topic')
+  })
 })

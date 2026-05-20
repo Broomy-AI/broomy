@@ -17,6 +17,7 @@ import { getUserCommandsConfigPath, userCommandsDir } from '../../features/comma
 import { parseTemplate } from '../../features/commands/templateParser'
 import { ShowWhenPicker } from '../../shared/components/ShowWhenPicker'
 import { DialogErrorBanner } from '../../shared/components/ErrorBanner'
+import { Field, StageChips, EmptyPane, DeleteButton, UnsavedChangesModal } from './CommandsEditorParts'
 
 type Tab = 'user' | 'project'
 
@@ -66,6 +67,7 @@ export function CommandsEditor({ directory, onClose }: CommandsEditorProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [pendingTabSwitch, setPendingTabSwitch] = useState<Tab | null>(null)
 
   const projectPath = projectCommandsConfigPath(directory)
 
@@ -115,11 +117,27 @@ export function CommandsEditor({ directory, onClose }: CommandsEditorProps) {
 
   function switchTab(next: Tab) {
     if (dirty) {
-      const proceed = window.confirm(`You have unsaved changes to ${tab === 'user' ? 'User' : 'Project'} commands. Discard?`)
-      if (!proceed) return
+      setPendingTabSwitch(next)
+      return
     }
     setTab(next)
     setSelectedId(null)
+  }
+
+  async function confirmTabSwitchSave() {
+    await save()
+    const next = pendingTabSwitch!
+    setPendingTabSwitch(null)
+    setTab(next)
+    setSelectedId(null)
+  }
+
+  function confirmTabSwitchDiscard() {
+    const next = pendingTabSwitch!
+    setPendingTabSwitch(null)
+    setTab(next)
+    setSelectedId(null)
+    void load()
   }
 
   async function save() {
@@ -130,7 +148,15 @@ export function CommandsEditor({ directory, onClose }: CommandsEditorProps) {
         ? userCommandsDir(userPath.replace(/\/\.broomy\/commands\.json$/, ''))
         : `${directory}/.broomy`
       await window.fs.mkdir(dir)
-      const config: CommandsConfig = { version: CURRENT_CONFIG_VERSION, actions: actions ?? [] }
+      const pruned = (actions ?? []).map(action => {
+        if (!action.args || action.args.length === 0) return action
+        const parsedNames = new Set(parseTemplate(action.template).args.map(a => a.name))
+        const filteredArgs = action.args.filter(a => parsedNames.has(a.name))
+        return filteredArgs.length === 0
+          ? (({ args: _args, ...rest }) => rest)(action)
+          : { ...action, args: filteredArgs }
+      })
+      const config: CommandsConfig = { version: CURRENT_CONFIG_VERSION, actions: pruned }
       await window.fs.writeFile(path, JSON.stringify(config, null, 2))
       if (tab === 'user') { setUserExists(true); setUserDirty(false) }
       else { setProjectExists(true); setProjectDirty(false) }
@@ -207,6 +233,15 @@ export function CommandsEditor({ directory, onClose }: CommandsEditorProps) {
           )}
         </div>
       </div>
+
+      {pendingTabSwitch && (
+        <UnsavedChangesModal
+          tabName={tab === 'user' ? 'User' : 'Project'}
+          onSave={() => void confirmTabSwitchSave()}
+          onDiscard={confirmTabSwitchDiscard}
+          onCancel={() => setPendingTabSwitch(null)}
+        />
+      )}
     </div>
   )
 }
@@ -262,22 +297,6 @@ function EditorHeader({
   )
 }
 
-function EmptyPane({ tab, onAddProjectFile }: { tab: Tab; onAddProjectFile: () => void }) {
-  if (tab === 'project') {
-    return (
-      <div className="p-4 flex flex-col items-center justify-center h-full text-center space-y-2">
-        <p className="text-sm text-text-secondary">No project commands.</p>
-        <button
-          onClick={onAddProjectFile}
-          className="px-3 py-1.5 text-sm rounded bg-accent text-white hover:bg-accent/80"
-        >
-          Add project commands
-        </button>
-      </div>
-    )
-  }
-  return <div className="p-4 text-sm text-text-secondary">No user commands.</div>
-}
 
 function Detail({
   selected, onUpdate, onDelete, stageOptions,
@@ -472,56 +491,8 @@ function Detail({
         </select>
       </Field>
 
-      <div className="pt-3 border-t border-border">
-        <button onClick={onDelete} className="text-xs text-red-400 hover:text-red-300">
-          Delete command
-        </button>
-      </div>
+      <DeleteButton id={selected.id} onDelete={onDelete} />
     </div>
   )
 }
 
-function Field({
-  label, hint, children,
-}: {
-  label: string
-  hint?: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="space-y-1">
-      <label className="text-xs text-text-secondary">{label}</label>
-      {children}
-      {hint && <p className="text-[11px] text-text-tertiary">{hint}</p>}
-    </div>
-  )
-}
-
-function StageChips({
-  selected, options, onChange,
-}: {
-  selected: string[]
-  options: string[]
-  onChange: (v: string[]) => void
-}) {
-  function toggle(s: string) {
-    onChange(selected.includes(s) ? selected.filter(x => x !== s) : [...selected, s])
-  }
-  return (
-    <div className="flex flex-wrap gap-1">
-      {options.map(s => {
-        const on = selected.includes(s)
-        return (
-          <button
-            key={s}
-            type="button"
-            onClick={() => toggle(s)}
-            className={`px-2 py-0.5 text-xs rounded-full border ${on ? 'bg-accent text-white border-accent' : 'bg-bg-primary border-border text-text-secondary'}`}
-          >
-            {s}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
