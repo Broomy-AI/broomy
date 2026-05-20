@@ -173,6 +173,7 @@ export function createInstantSetupActions(get: StoreGet, set: StoreSet) {
         checksStatus: 'none',
         statusChip: 'in-progress',
         isArchived: false,
+        stage: 'new',
         isRestored: false,
       }
 
@@ -276,6 +277,7 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
             lastKnownPrNumber: sessionData.lastKnownPrNumber,
             lastKnownPrUrl: sessionData.lastKnownPrUrl,
             isArchived: sessionData.isArchived ?? false,
+            stage: sessionData.stage ?? 'new',
             sdkSessionId: sessionData.sdkSessionId,
             isRestored: true,
           }
@@ -368,6 +370,7 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
         checksStatus: 'none',
         statusChip: extra?.lastKnownPrState === 'OPEN' ? 'open' : 'in-progress',
         isArchived: false,
+        stage: 'new',
         isRestored: false,
       }
 

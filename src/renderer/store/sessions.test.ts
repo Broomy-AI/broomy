@@ -79,6 +79,7 @@ describe('useSessionStore', () => {
       checksStatus: 'none' as const,
       statusChip: 'in-progress' as StatusChip,
       isArchived: false,
+      stage: 'new',
       isRestored: false,
     }
     return session
@@ -1099,6 +1100,57 @@ describe('useSessionStore', () => {
 
       // Save guard should have prevented the save
       expect(window.config.save).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('session.stage', () => {
+    it('new sessions default to "new"', async () => {
+      await useSessionStore.getState().addSession('/tmp', null)
+      const last = useSessionStore.getState().sessions.at(-1)
+      expect(last?.stage).toBe('new')
+    })
+
+    it('setSessionStage updates a single session', () => {
+      const s1 = createTestSession({ id: 's1' })
+      const s2 = createTestSession({ id: 's2' })
+      useSessionStore.setState({ sessions: [s1, s2], isLoading: false })
+
+      useSessionStore.getState().setSessionStage('s1', 'planning')
+      const state = useSessionStore.getState()
+      expect(state.sessions.find(s => s.id === 's1')?.stage).toBe('planning')
+      expect(state.sessions.find(s => s.id === 's2')?.stage).toBe('new')
+    })
+
+    it('setSessionStage is a no-op for unknown session id', () => {
+      const s1 = createTestSession({ id: 's1' })
+      useSessionStore.setState({ sessions: [s1], isLoading: false })
+
+      useSessionStore.getState().setSessionStage('unknown', 'planning')
+      expect(useSessionStore.getState().sessions[0].stage).toBe('new')
+    })
+
+    it('loadSessions restores stage from config', async () => {
+      vi.mocked(window.config.load).mockResolvedValue({
+        agents: [],
+        sessions: [
+          { id: 's1', name: 'S', directory: '/d', stage: 'planning' },
+        ],
+      })
+
+      await useSessionStore.getState().loadSessions()
+      expect(useSessionStore.getState().sessions[0].stage).toBe('planning')
+    })
+
+    it('loadSessions defaults stage to "new" when missing from config', async () => {
+      vi.mocked(window.config.load).mockResolvedValue({
+        agents: [],
+        sessions: [
+          { id: 's1', name: 'S', directory: '/d' },
+        ],
+      })
+
+      await useSessionStore.getState().loadSessions()
+      expect(useSessionStore.getState().sessions[0].stage).toBe('new')
     })
   })
 })
