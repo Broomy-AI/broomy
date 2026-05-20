@@ -32,8 +32,12 @@ const meta: Meta<typeof ActionButtons> = {
   args: {
     actions: null,
     conditionState: defaultConditionState,
-    templateVars: { main: 'main', branch: 'feature/test', directory: '/Users/test/projects/my-app' },
+    templateVars: { main: 'main', branch: 'feature/test', directory: '/Users/test/projects/my-app', issueNumber: '' },
+    currentStage: 'new',
     directory: '/Users/test/projects/my-app',
+    onSetSessionStage: () => {},
+    onSetup: () => {},
+    onStartBlank: () => {},
     onGitStatusRefresh: () => {},
   },
 }
@@ -47,8 +51,8 @@ export const Default: Story = {
 export const WithCustomActions: Story = {
   args: {
     actions: [
-      { id: 'push', label: 'Push to remote', type: 'shell', command: 'git push', showWhen: ['has-changes'], style: 'primary', surface: 'source-control' },
-      { id: 'lint', label: 'Run lint', type: 'shell', command: 'npm run lint', showWhen: [], style: 'secondary', surface: 'source-control' },
+      { id: 'push', label: 'Push to remote', template: '!git push', showWhen: ['has-changes'], style: 'primary', surface: 'source-control' },
+      { id: 'lint', label: 'Run lint', template: '!npm run lint', showWhen: [], style: 'secondary', surface: 'source-control' },
     ],
     conditionState: { ...defaultConditionState, 'has-changes': true, 'clean': false },
   },
@@ -69,7 +73,7 @@ export const WithCommandsEditor: Story = {
 export const NoAgentTerminal: Story = {
   args: {
     actions: [
-      { id: 'agent-task', label: 'Ask agent to fix', type: 'agent', prompt: 'Fix the failing tests', showWhen: [], style: 'primary', surface: 'source-control' },
+      { id: 'agent-task', label: 'Ask agent to fix', template: 'Fix the failing tests', showWhen: [], style: 'primary', surface: 'source-control' },
     ],
     agentPtyId: undefined,
   },

@@ -59,6 +59,7 @@ describe('sessionTerminalTabs', () => {
       checksStatus: 'none' as const,
       statusChip: 'in-progress' as StatusChip,
       isArchived: false,
+      stage: 'new',
       isRestored: false,
     }
     useSessionStore.setState({ sessions: [session], activeSessionId: id })
@@ -233,6 +234,7 @@ describe('sessionTerminalTabs', () => {
         checksStatus: 'none' as const,
         statusChip: 'in-progress' as StatusChip,
         isArchived: false,
+        stage: 'new',
         isRestored: false,
       }
       useSessionStore.setState({ sessions: [...current, session] })
