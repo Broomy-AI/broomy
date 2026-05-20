@@ -351,7 +351,7 @@ describe('loadConfigFromPath', () => {
     }))
     const r = await loadConfigFromPath('/x')
     expect(r).toMatchObject({ ok: true })
-    if (r && r.ok) {
+    if (r?.ok) {
       expect(r.config.actions[0].template).toBe('p')
     }
   })

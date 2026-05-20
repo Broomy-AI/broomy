@@ -29,7 +29,7 @@ export function ArgDialog({ title, description, template, argsMeta, context, onR
     return init
   })
 
-  const requiredOk = parsed.args.every(a => a.optional || (values[a.name]?.value ?? '').length > 0)
+  const requiredOk = parsed.args.every(a => a.optional || ((values[a.name] as ArgValue | undefined)?.value ?? '').length > 0)
   const resolved = substituteTemplate(template, { context, args: values })
 
   function update(name: string, patch: Partial<ArgValue>) {

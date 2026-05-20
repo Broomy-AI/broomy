@@ -14,6 +14,6 @@ describe('getUserCommandsConfigPath', () => {
   it('memoizes after first call', async () => {
     await getUserCommandsConfigPath()
     await getUserCommandsConfigPath()
-    expect(((globalThis as any).window.app.homedir as any).mock.calls.length).toBe(1)
+    expect((globalThis as any).window.app.homedir.mock.calls.length).toBe(1)
   })
 })

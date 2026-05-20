@@ -26,7 +26,7 @@ export function substituteTemplate(template: string, input: SubInput): string {
   for (const arg of parsed.args) {
     if (!arg.optional || !arg.flag) continue
     const val = input.args[arg.name]
-    const enabled = val?.enabled ?? false
+    const enabled = val.enabled ?? false
     if (!enabled) {
       // Remove the leading whitespace + flag + whitespace + {name} portion.
       const escapedFlag = arg.flag.replace(/[-]/g, '\\-')
@@ -42,10 +42,11 @@ export function substituteTemplate(template: string, input: SubInput): string {
     .replace(/\{directory\}/g, input.context.directory)
     .replace(/\{issueNumber\}/g, input.context.issueNumber)
 
-  // Substitute user args.
+  // Substitute user args (cast to allow lookup to be undefined at runtime).
+  const argsMap = input.args as Record<string, ArgValue | undefined>
   s = s.replace(/\{([A-Za-z_][\w]*)\}/g, (full, name: string) => {
-    const v = input.args[name]
-    return v ? v.value : full
+    const v = argsMap[name]
+    return v !== undefined ? v.value : full
   })
 
   return s

@@ -158,11 +158,12 @@ function validateArgs(args: unknown, label: string, errors: string[]): void {
     return
   }
   for (let i = 0; i < args.length; i++) {
-    const a = args[i] as Record<string, unknown>
-    if (typeof a !== 'object' || a === null) {
+    const raw = args[i]
+    if (typeof raw !== 'object' || raw === null) {
       errors.push(`${label} args[${i}]: must be an object.`)
       continue
     }
+    const a = raw as Record<string, unknown>
     if (typeof a.name !== 'string' || !a.name) {
       errors.push(`${label} args[${i}]: "name" must be a non-empty string.`)
     }

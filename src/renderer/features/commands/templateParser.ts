@@ -21,7 +21,7 @@ export function parseTemplate(template: string): ParsedTemplate {
   const flagBy = new Map<string, string>()
   let m: RegExpExecArray | null
   FLAG_AND_PLACEHOLDER.lastIndex = 0
-  while ((m = FLAG_AND_PLACEHOLDER.exec(template)) != null) {
+  while ((m = FLAG_AND_PLACEHOLDER.exec(template)) !== null) {
     const [, flag, name] = m
     if (!RESERVED_CONTEXT_VARS.has(name) && !flagBy.has(name)) {
       flagBy.set(name, flag)
@@ -31,13 +31,13 @@ export function parseTemplate(template: string): ParsedTemplate {
   const seen = new Set<string>()
   const args: TemplateArg[] = []
   ANY_PLACEHOLDER.lastIndex = 0
-  while ((m = ANY_PLACEHOLDER.exec(template)) != null) {
+  while ((m = ANY_PLACEHOLDER.exec(template)) !== null) {
     const name = m[1]
     if (RESERVED_CONTEXT_VARS.has(name)) continue
     if (seen.has(name)) continue
     seen.add(name)
     const flag = flagBy.get(name) ?? null
-    args.push({ name, optional: flag != null, flag })
+    args.push({ name, optional: flag !== null, flag })
   }
 
   return { args, isMultiLine }

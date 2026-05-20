@@ -127,7 +127,7 @@ async function doSave(): Promise<void> {
       // Archive state
       isArchived: s.isArchived || undefined,
       // Stage state machine
-      stage: s.stage ?? 'new',
+      stage: s.stage,
       // Agent SDK session ID for resume
       sdkSessionId: s.sdkSessionId,
     })),

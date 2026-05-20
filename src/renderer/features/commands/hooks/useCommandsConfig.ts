@@ -59,11 +59,11 @@ export function useCommandsConfig(directory: string | undefined): UseCommandsCon
     }
 
     const watchIds: string[] = []
-    const removeFns: Array<() => void> = []
+    const removeFns: (() => void)[] = []
 
     void loadAll().then((paths) => {
       if (!paths || cancelled) return
-      const watchEntries: Array<{ id: string; path: string }> = [
+      const watchEntries: { id: string; path: string }[] = [
         { id: 'user-commands-config', path: paths.userPath },
       ]
       if (paths.projectPath) watchEntries.push({ id: `project-commands-config-${directory}`, path: paths.projectPath })
