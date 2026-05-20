@@ -1,81 +1,90 @@
 /**
- * Hook that loads and watches commands.json for the active session's directory.
- * Returns null when no commands.json exists (prompting the setup banner).
+ * Loads user (~/.broomy/commands.json) and project (<repo>/.broomy/commands.json) configs.
+ * Watches both files for external edits.
+ * Returns each side plus the merged concatenation.
  */
 import { useState, useEffect } from 'react'
 import type { CommandsConfig } from '../commandsConfig'
-import { loadCommandsConfig } from '../commandsConfig'
+import { loadConfigFromPath, mergeConfigs, projectCommandsConfigPath } from '../commandsConfig'
+import { getUserCommandsConfigPath } from '../userConfigPath'
 
-export function useCommandsConfig(directory: string | undefined): {
-  config: CommandsConfig | null
+export interface UseCommandsConfigResult {
+  user: CommandsConfig | null
+  userError: string | null
+  userExists: boolean
+  project: CommandsConfig | null
+  projectError: string | null
+  projectExists: boolean
+  merged: CommandsConfig | null
   loading: boolean
-  exists: boolean
-  error: string | null
-} {
-  const [config, setConfig] = useState<CommandsConfig | null>(null)
+  reload: () => void
+}
+
+export function useCommandsConfig(directory: string | undefined): UseCommandsConfigResult {
+  const [user, setUser] = useState<CommandsConfig | null>(null)
+  const [userError, setUserError] = useState<string | null>(null)
+  const [userExists, setUserExists] = useState(false)
+  const [project, setProject] = useState<CommandsConfig | null>(null)
+  const [projectError, setProjectError] = useState<string | null>(null)
+  const [projectExists, setProjectExists] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [exists, setExists] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
-    if (!directory) {
-      setConfig(null)
-      setLoading(false)
-      setExists(false)
-      setError(null)
-      return
-    }
-
     let cancelled = false
 
-    const watcherId = `commands-config-${directory}`
-    const commandsFile = `${directory}/.broomy/commands.json`
-    let watching = false
-
-    function startWatching() {
-      if (watching) return
-      void window.fs.watch(watcherId, commandsFile).then((result: { success: boolean }) => {
-        watching = result.success
-      })
-    }
-
-    async function load() {
+    async function loadAll() {
       setLoading(true)
-      const result = await loadCommandsConfig(directory!)
-      if (!cancelled) {
-        if (result === null) {
-          setConfig(null)
-          setExists(false)
-          setError(null)
-        } else if (!result.ok) {
-          setConfig(null)
-          setExists(true)
-          setError(result.error)
-        } else {
-          setConfig(result.config)
-          setExists(true)
-          setError(null)
-        }
-        setLoading(false)
-        // If config exists, the file exists — start watching if not already
-        if (result !== null) startWatching()
+      const userPath = await getUserCommandsConfigPath()
+      const userResult = await loadConfigFromPath(userPath)
+      let projectResult: Awaited<ReturnType<typeof loadConfigFromPath>> = null
+      let projectPath: string | null = null
+      if (directory) {
+        projectPath = projectCommandsConfigPath(directory)
+        projectResult = await loadConfigFromPath(projectPath)
       }
+
+      if (cancelled) return
+
+      if (userResult === null) { setUser(null); setUserExists(false); setUserError(null) }
+      else if (!userResult.ok) { setUser(null); setUserExists(true); setUserError(userResult.error) }
+      else { setUser(userResult.config); setUserExists(true); setUserError(null) }
+
+      if (projectResult === null) { setProject(null); setProjectExists(false); setProjectError(null) }
+      else if (!projectResult.ok) { setProject(null); setProjectExists(true); setProjectError(projectResult.error) }
+      else { setProject(projectResult.config); setProjectExists(true); setProjectError(null) }
+
+      setLoading(false)
+      return { userPath, projectPath }
     }
 
-    void load()
+    const watchIds: string[] = []
+    const removeFns: Array<() => void> = []
 
-    // Watch the commands.json file directly for external edits
-    startWatching()
-    const removeListener = window.fs.onChange(watcherId, () => {
-      void load()
+    void loadAll().then((paths) => {
+      if (!paths || cancelled) return
+      const watchEntries: Array<{ id: string; path: string }> = [
+        { id: 'user-commands-config', path: paths.userPath },
+      ]
+      if (paths.projectPath) watchEntries.push({ id: `project-commands-config-${directory}`, path: paths.projectPath })
+
+      for (const w of watchEntries) {
+        void window.fs.watch(w.id, w.path)
+        watchIds.push(w.id)
+        const off = window.fs.onChange(w.id, () => setReloadKey(k => k + 1))
+        removeFns.push(off)
+      }
     })
 
     return () => {
       cancelled = true
-      removeListener()
-      void window.fs.unwatch(watcherId)
+      for (const off of removeFns) off()
+      for (const id of watchIds) void window.fs.unwatch(id)
     }
-  }, [directory])
+  }, [directory, reloadKey])
 
-  return { config, loading, exists, error }
+  const merged = mergeConfigs(user, project)
+  const reload = () => setReloadKey(k => k + 1)
+
+  return { user, userError, userExists, project, projectError, projectExists, merged, loading, reload }
 }
