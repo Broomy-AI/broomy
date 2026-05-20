@@ -15,6 +15,7 @@ import {
   removeLegacyBroomyGitignore,
   validateCommandsConfig,
   CURRENT_CONFIG_VERSION,
+  migrateConfig,
 } from './commandsConfig'
 import type { ActionDefinition } from './commandsConfig'
 import type { ConditionState, TemplateVars } from './commandsConfig'
@@ -358,6 +359,88 @@ describe('ensureOutputGitignore', () => {
 
     // Should not throw
     await ensureOutputGitignore('/repo')
+  })
+})
+
+describe('migrateConfig', () => {
+  it('passes v2 configs through unchanged', () => {
+    const v2 = {
+      version: 2,
+      actions: [{ id: 'a', label: 'A', template: '/x' }],
+    }
+    expect(migrateConfig(v2)).toEqual(v2)
+  })
+
+  it('migrates v1 agent prompt to template', () => {
+    const v1 = {
+      version: 1,
+      actions: [{
+        id: 'commit',
+        label: 'Commit',
+        type: 'agent',
+        prompt: 'Commit changes',
+        showWhen: ['has-changes'],
+        style: 'primary',
+      }],
+    }
+    const v2 = migrateConfig(v1)
+    expect(v2.version).toBe(2)
+    expect(v2.actions[0]).toEqual({
+      id: 'commit',
+      label: 'Commit',
+      template: 'Commit changes',
+      showWhen: ['has-changes'],
+      style: 'primary',
+    })
+  })
+
+  it('migrates v1 shell command to template with ! prefix', () => {
+    const v1 = {
+      version: 1,
+      actions: [{ id: 'push', label: 'Push', type: 'shell', command: 'git push' }],
+    }
+    expect(migrateConfig(v1).actions[0]).toEqual({
+      id: 'push',
+      label: 'Push',
+      template: '!git push',
+    })
+  })
+
+  it('drops agents overrides silently', () => {
+    const v1 = {
+      version: 1,
+      actions: [{
+        id: 'x',
+        label: 'X',
+        type: 'agent',
+        prompt: 'base',
+        agents: { claude: { prompt: 'claude prompt' } },
+      }],
+    }
+    const out = migrateConfig(v1).actions[0]
+    expect(out.template).toBe('base')
+    expect('agents' in out).toBe(false)
+  })
+
+  it('preserves surface and switchTab through migration', () => {
+    const v1 = {
+      version: 1,
+      actions: [{
+        id: 'r', label: 'R', type: 'agent', prompt: 'p',
+        surface: ['source-control', 'review'], switchTab: 'review',
+      }],
+    }
+    const out = migrateConfig(v1).actions[0]
+    expect(out.surface).toEqual(['source-control', 'review'])
+    expect(out.switchTab).toBe('review')
+  })
+
+  it('preserves empty showWhen', () => {
+    const v1 = {
+      version: 1,
+      actions: [{ id: 'a', label: 'A', type: 'agent', prompt: 'p', showWhen: [] }],
+    }
+    expect(migrateConfig(v1).actions[0].showWhen).toEqual([])
   })
 })
 

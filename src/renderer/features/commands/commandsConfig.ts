@@ -233,6 +233,59 @@ export function validateCommandsConfig(config: unknown): string[] {
   return errors
 }
 
+// --- Migration ---
+
+interface LegacyAgentOverride {
+  prompt?: string
+}
+interface LegacyActionV1 {
+  id: string
+  label: string
+  type?: 'agent' | 'shell'
+  prompt?: string
+  command?: string
+  showWhen?: string[]
+  style?: ActionDefinition['style']
+  surface?: string | string[]
+  switchTab?: string
+  agents?: Record<string, LegacyAgentOverride>
+}
+
+function migrateAction(a: LegacyActionV1): ActionDefinition {
+  let template: string
+  if (a.type === 'shell' && typeof a.command === 'string') {
+    template = `!${a.command}`
+  } else {
+    template = a.prompt ?? ''
+  }
+
+  const out: ActionDefinition = {
+    id: a.id,
+    label: a.label,
+    template,
+  }
+  if (a.showWhen !== undefined) out.showWhen = a.showWhen
+  if (a.style !== undefined) out.style = a.style
+  if (a.surface !== undefined) out.surface = a.surface
+  if (a.switchTab !== undefined) out.switchTab = a.switchTab
+  return out
+}
+
+export function migrateConfig(config: unknown): CommandsConfig {
+  if (typeof config !== 'object' || config === null) {
+    return { version: CURRENT_CONFIG_VERSION, actions: [] }
+  }
+  const obj = config as Record<string, unknown>
+  if (obj.version === CURRENT_CONFIG_VERSION) {
+    return obj as unknown as CommandsConfig
+  }
+  const rawActions = Array.isArray(obj.actions) ? (obj.actions as LegacyActionV1[]) : []
+  return {
+    version: CURRENT_CONFIG_VERSION,
+    actions: rawActions.map(migrateAction),
+  }
+}
+
 // --- Loading ---
 
 export function commandsConfigPath(directory: string): string {
