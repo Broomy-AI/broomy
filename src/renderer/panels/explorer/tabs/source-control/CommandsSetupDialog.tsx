@@ -1,113 +1,94 @@
-/**
- * Dialog for setting up .broomy/commands.json with default modular actions.
- * Warns if .broomy/ is currently in the repo's .gitignore (legacy pattern).
- */
 import { useState, useEffect } from 'react'
-import {
-  getDefaultCommandsConfig,
-  commandsConfigPath,
-  ensureOutputGitignore,
-  checkLegacyBroomyGitignore,
-  removeLegacyBroomyGitignore,
-} from '../../../../features/commands/commandsConfig'
+import { PACKS } from '../../../../features/commands/packs'
+import { getUserCommandsConfigPath, userCommandsDir } from '../../../../features/commands/userConfigPath'
+import { CURRENT_CONFIG_VERSION } from '../../../../features/commands/commandsConfig'
 
 interface CommandsSetupDialogProps {
-  directory: string
   onClose: () => void
-  onCreated: () => void
+  onInstalled: () => void
 }
 
-export function CommandsSetupDialog({ directory, onClose, onCreated }: CommandsSetupDialogProps) {
-  const [creating, setCreating] = useState(false)
-  const [hasLegacyGitignore, setHasLegacyGitignore] = useState(false)
-  const [removeLegacy, setRemoveLegacy] = useState(true)
+export function CommandsSetupDialog({ onClose, onInstalled }: CommandsSetupDialogProps) {
+  const [selectedId, setSelectedId] = useState<string>(PACKS[0]?.id ?? 'basics')
+  const [installing, setInstalling] = useState(false)
+  const [confirmReplace, setConfirmReplace] = useState(false)
+  const [home, setHome] = useState<string>('')
 
-  useEffect(() => {
-    void checkLegacyBroomyGitignore(directory).then(setHasLegacyGitignore)
-  }, [directory])
+  useEffect(() => { void window.app.homedir().then(setHome) }, [])
 
-  const handleCreate = async () => {
-    setCreating(true)
+  async function doInstall() {
+    setInstalling(true)
     try {
-      const broomyDir = `${directory}/.broomy`
-
-      // Create directories
-      await window.fs.mkdir(broomyDir)
-
-      // Write commands.json
-      const config = getDefaultCommandsConfig()
-      await window.fs.writeFile(commandsConfigPath(directory), JSON.stringify(config, null, 2))
-
-      // Write .broomy/.gitignore for output/
-      await ensureOutputGitignore(directory)
-
-      // Remove legacy .broomy from .gitignore if requested
-      if (hasLegacyGitignore && removeLegacy) {
-        await removeLegacyBroomyGitignore(directory)
-      }
-
-      onCreated()
+      const pack = PACKS.find(p => p.id === selectedId)
+      if (!pack) return
+      const path = await getUserCommandsConfigPath()
+      await window.fs.mkdir(userCommandsDir(home))
+      const config = { version: CURRENT_CONFIG_VERSION, actions: pack.actions }
+      await window.fs.writeFile(path, JSON.stringify(config, null, 2))
+      onInstalled()
       onClose()
-    } catch {
-      setCreating(false)
+    } finally {
+      setInstalling(false)
     }
+  }
+
+  async function onInstallClick() {
+    const path = await getUserCommandsConfigPath()
+    const exists = await window.fs.exists(path)
+    if (exists) {
+      setConfirmReplace(true)
+      return
+    }
+    void doInstall()
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div
-        role="dialog"
-        className="bg-bg-secondary rounded-lg shadow-xl border border-border w-full max-w-md mx-4 p-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="text-lg font-medium text-text-primary mb-2">Set up Broomy Actions</h3>
-        <p className="text-sm text-text-secondary mb-3">
-          <code className="font-mono bg-bg-tertiary px-1 rounded">commands.json</code> defines the actions
-          shown in the Broomy UI. Each action can be a shell command or an agent prompt,
-          shown based on your git state.
-        </p>
-        <p className="text-sm text-text-secondary mb-3">
-          Creating the default setup will add:
-        </p>
-        <ul className="text-sm text-text-secondary mb-4 space-y-1 list-disc list-inside">
-          <li><code className="font-mono bg-bg-tertiary px-1 rounded">.broomy/commands.json</code> &mdash; action definitions</li>
-          <li><code className="font-mono bg-bg-tertiary px-1 rounded">.broomy/.gitignore</code> &mdash; ignores generated output</li>
-        </ul>
+      <div role="dialog" className="bg-bg-secondary border border-border rounded-lg shadow-xl w-full max-w-2xl mx-4 p-4 space-y-3" onClick={e => e.stopPropagation()}>
+        <h3 className="text-lg font-medium text-text-primary">Set up commands</h3>
+        <p className="text-sm text-text-secondary">Pick a starter set. You can edit anything afterwards.</p>
 
-        {hasLegacyGitignore && (
-          <div className="mb-4 p-3 rounded bg-yellow-500/10 border border-yellow-500/30">
-            <p className="text-sm text-yellow-300 mb-2">
-              Your <code className="font-mono">.gitignore</code> currently
-              ignores <code className="font-mono">.broomy/</code>. This was previously recommended,
-              but config files now live in <code className="font-mono">.broomy/</code> and should be committed.
-              Generated files are now in <code className="font-mono">.broomy/output/</code> (ignored
-              via <code className="font-mono">.broomy/.gitignore</code>).
-            </p>
-            <label className="flex items-center gap-2 text-sm text-text-primary cursor-pointer">
-              <input
-                type="checkbox"
-                checked={removeLegacy}
-                onChange={(e) => setRemoveLegacy(e.target.checked)}
-                className="accent-accent"
-              />
-              Remove <code className="font-mono">.broomy/</code> from .gitignore
-            </label>
+        <div className="grid grid-cols-3 gap-3">
+          {PACKS.map((p, i) => {
+            const selected = selectedId === p.id
+            return (
+              <button
+                key={p.id}
+                data-testid={`pack-card-${p.id}`}
+                onClick={() => setSelectedId(p.id)}
+                className={`text-left p-3 rounded border transition-colors ${selected ? 'border-accent bg-bg-tertiary' : 'border-border bg-bg-primary hover:bg-bg-tertiary'}`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-text-primary">{p.name}</span>
+                  {i === 0 && <span className="text-[10px] px-1 py-0.5 rounded bg-accent/20 text-accent">Recommended</span>}
+                </div>
+                <div className="text-xs text-text-secondary mt-1">{p.description}</div>
+                <div className="text-[11px] text-text-tertiary mt-2">{p.actions.length} commands</div>
+              </button>
+            )
+          })}
+        </div>
+
+        <p className="text-xs text-text-tertiary">Installs to <code className="font-mono">~/.broomy/commands.json</code></p>
+
+        {confirmReplace && (
+          <div className="p-2 rounded border border-yellow-500/30 bg-yellow-500/10 text-sm text-yellow-300">
+            Replace existing user commands?
+            <div className="flex gap-2 mt-2">
+              <button onClick={() => { setConfirmReplace(false); void doInstall() }} className="px-3 py-1 text-xs rounded bg-accent text-white">Replace</button>
+              <button onClick={() => setConfirmReplace(false)} className="px-3 py-1 text-xs">Cancel</button>
+            </div>
           </div>
         )}
 
-        <div className="flex gap-2 justify-end">
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="px-3 py-1.5 text-sm text-text-secondary hover:text-text-primary">Cancel</button>
           <button
-            onClick={onClose}
-            className="px-3 py-1.5 text-sm text-text-secondary hover:text-text-primary transition-colors"
+            onClick={() => void onInstallClick()}
+            disabled={installing}
+            className="px-3 py-1.5 text-sm rounded bg-accent text-white hover:bg-accent/80 disabled:opacity-50"
           >
-            Cancel
-          </button>
-          <button
-            onClick={() => void handleCreate()}
-            disabled={creating}
-            className="px-3 py-1.5 text-sm rounded bg-accent text-white hover:bg-accent/80 transition-colors disabled:opacity-50"
-          >
-            {creating ? 'Creating...' : 'Create default commands.json'}
+            {installing ? 'Installing…' : 'Install'}
           </button>
         </div>
       </div>

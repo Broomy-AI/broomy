@@ -150,11 +150,10 @@ export function SourceControl({
     <SCViewToggle scView={scView} setScView={setScView} />
   )
 
-  const setupDialog = showSetupDialog && directory && (
+  const setupDialog = showSetupDialog && (
     <CommandsSetupDialog
-      directory={directory}
       onClose={() => setShowSetupDialog(false)}
-      onCreated={() => {/* config will auto-reload via file watcher */}}
+      onInstalled={() => {/* config will auto-reload via file watcher */}}
     />
   )
 
