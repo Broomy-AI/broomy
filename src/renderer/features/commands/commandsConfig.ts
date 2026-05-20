@@ -288,20 +288,21 @@ export function migrateConfig(config: unknown): CommandsConfig {
 
 // --- Loading ---
 
-export function commandsConfigPath(directory: string): string {
+export function projectCommandsConfigPath(directory: string): string {
   return `${directory}/.broomy/commands.json`
 }
+
+// Kept under its previous name for callers that still pass a repo directory.
+export const commandsConfigPath = projectCommandsConfigPath
 
 export type LoadResult =
   | { ok: true; config: CommandsConfig }
   | { ok: false; error: string }
 
-export async function loadCommandsConfig(directory: string): Promise<LoadResult | null> {
+export async function loadConfigFromPath(path: string): Promise<LoadResult | null> {
   try {
-    const path = commandsConfigPath(directory)
     const exists = await window.fs.exists(path)
     if (!exists) return null
-
     const content = await window.fs.readFile(path)
 
     let parsed: unknown
@@ -311,17 +312,52 @@ export async function loadCommandsConfig(directory: string): Promise<LoadResult 
       return { ok: false, error: `Invalid JSON: ${e instanceof Error ? e.message : String(e)}` }
     }
 
-    const validationErrors = validateCommandsConfig(parsed)
-    if (validationErrors.length > 0) {
-      return { ok: false, error: `Invalid commands.json:\n${validationErrors.join('\n')}` }
+    const migrated = migrateConfig(parsed)
+    const errors = validateCommandsConfig(migrated)
+    if (errors.length > 0) {
+      return { ok: false, error: `Invalid commands.json:\n${errors.join('\n')}` }
     }
-
-    const config = parsed as CommandsConfig
-
-    return { ok: true, config }
+    return { ok: true, config: migrated }
   } catch {
     return null
   }
+}
+
+// --- Merge ---
+
+export function mergeConfigs(user: CommandsConfig | null, project: CommandsConfig | null): CommandsConfig | null {
+  if (!user && !project) return null
+  return {
+    version: CURRENT_CONFIG_VERSION,
+    actions: [...(user?.actions ?? []), ...(project?.actions ?? [])],
+  }
+}
+
+// --- Visibility ---
+
+export function isVisible(
+  action: ActionDefinition,
+  state: ConditionState,
+  stage: string,
+  surface: string,
+): boolean {
+  if (!matchesSurface(action, surface)) return false
+  if (action.showWhen && action.showWhen.length > 0 && !evaluateShowWhen(action.showWhen, state)) return false
+  if (action.stages && !action.stages.includes(stage)) return false
+  return true
+}
+
+// --- Stage discovery ---
+
+export function discoverStages(actions: ActionDefinition[], currentStage: string): string[] {
+  const set = new Set<string>(['new'])
+  for (const a of actions) {
+    if (typeof a.setStage === 'string') set.add(a.setStage)
+    if (a.stages) for (const s of a.stages) set.add(s)
+  }
+  set.add(currentStage)
+  const rest = [...set].filter(s => s !== 'new').sort()
+  return ['new', ...rest]
 }
 
 // --- Agent type detection ---
@@ -349,15 +385,6 @@ export function getAgentTypes(agents: { command: string }[]): string[] {
   }
   return [...types].sort()
 }
-
-// --- Default config ---
-
-import defaultCommandsJson from './defaultCommands.json'
-
-export function getDefaultCommandsConfig(): CommandsConfig {
-  return defaultCommandsJson as CommandsConfig
-}
-
 
 // --- Legacy .broomy gitignore helpers ---
 

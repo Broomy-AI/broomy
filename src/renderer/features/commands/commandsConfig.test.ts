@@ -5,10 +5,8 @@ import {
   resolveTemplateVars,
   evaluateShowWhen,
   commandsConfigPath,
-  loadCommandsConfig,
   detectAgentType,
   getAgentTypes,
-  getDefaultCommandsConfig,
   ensureOutputGitignore,
   matchesSurface,
   checkLegacyBroomyGitignore,
@@ -86,64 +84,8 @@ describe('commandsConfigPath', () => {
   })
 })
 
-describe('loadCommandsConfig', () => {
-  it('returns null when file does not exist', async () => {
-    vi.mocked(window.fs.exists).mockResolvedValue(false)
-    const result = await loadCommandsConfig('/repo')
-    expect(result).toBeNull()
-  })
-
-  // REMOVE in Task 2 — covered by migration tests (uses v1 schema fields)
-  // it('loads valid config', async () => {
-  //   const config = { version: 1, actions: [{ id: 'test', label: 'Test', type: 'agent', showWhen: [] }] }
-  //   vi.mocked(window.fs.exists).mockResolvedValue(true)
-  //   vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify(config))
-  //   const result = await loadCommandsConfig('/repo')
-  //   expect(result).toEqual({ ok: true, config })
-  // })
-
-  it('returns error for invalid config (missing version)', async () => {
-    vi.mocked(window.fs.exists).mockResolvedValue(true)
-    vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify({ actions: [] }))
-
-    const result = await loadCommandsConfig('/repo')
-    expect(result).not.toBeNull()
-    expect(result!.ok).toBe(false)
-    if (!result!.ok) expect(result!.error).toContain('"version"')
-  })
-
-  it('returns error for invalid config (missing actions array)', async () => {
-    vi.mocked(window.fs.exists).mockResolvedValue(true)
-    vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify({ version: 1 }))
-
-    const result = await loadCommandsConfig('/repo')
-    expect(result).not.toBeNull()
-    expect(result!.ok).toBe(false)
-    if (!result!.ok) expect(result!.error).toContain('"actions"')
-  })
-
-  it('returns error for invalid JSON', async () => {
-    vi.mocked(window.fs.exists).mockResolvedValue(true)
-    vi.mocked(window.fs.readFile).mockResolvedValue('not valid json {{{')
-
-    const result = await loadCommandsConfig('/repo')
-    expect(result).not.toBeNull()
-    expect(result!.ok).toBe(false)
-    if (!result!.ok) expect(result!.error).toContain('Invalid JSON')
-  })
-
-  // REMOVE in Task 2 — covered by migration tests (agents field removed from v2 schema)
-  // it('strips agent overrides with no prompt (legacy skill-only entries)', ...)
-  // it('removes agents field entirely when all overrides are skill-only', ...)
-
-  it('returns null on read error', async () => {
-    vi.mocked(window.fs.exists).mockResolvedValue(true)
-    vi.mocked(window.fs.readFile).mockRejectedValue(new Error('read error'))
-
-    const result = await loadCommandsConfig('/repo')
-    expect(result).toBeNull()
-  })
-})
+// REMOVE — replaced by loadConfigFromPath
+// describe('loadCommandsConfig', () => { ... })
 
 describe('detectAgentType', () => {
   it('detects claude', () => {
@@ -441,6 +383,144 @@ describe('migrateConfig', () => {
       actions: [{ id: 'a', label: 'A', type: 'agent', prompt: 'p', showWhen: [] }],
     }
     expect(migrateConfig(v1).actions[0].showWhen).toEqual([])
+  })
+})
+
+import { loadConfigFromPath, mergeConfigs, isVisible, discoverStages } from './commandsConfig'
+
+describe('loadConfigFromPath', () => {
+  beforeEach(() => {
+    ;(globalThis as any).window = {
+      fs: {
+        exists: vi.fn(),
+        readFile: vi.fn(),
+      },
+    }
+  })
+
+  it('returns null when file missing', async () => {
+    ;(window.fs.exists as any).mockResolvedValue(false)
+    expect(await loadConfigFromPath('/x')).toBeNull()
+  })
+
+  it('returns ok with migrated config for valid v2', async () => {
+    ;(window.fs.exists as any).mockResolvedValue(true)
+    ;(window.fs.readFile as any).mockResolvedValue(JSON.stringify({
+      version: 2, actions: [{ id: 'a', label: 'A', template: 't' }],
+    }))
+    const r = await loadConfigFromPath('/x')
+    expect(r).toEqual({ ok: true, config: { version: 2, actions: [{ id: 'a', label: 'A', template: 't' }] } })
+  })
+
+  it('returns ok after v1 migration', async () => {
+    ;(window.fs.exists as any).mockResolvedValue(true)
+    ;(window.fs.readFile as any).mockResolvedValue(JSON.stringify({
+      version: 1, actions: [{ id: 'a', label: 'A', type: 'agent', prompt: 'p' }],
+    }))
+    const r = await loadConfigFromPath('/x')
+    expect(r).toMatchObject({ ok: true })
+    if (r && r.ok) {
+      expect(r.config.actions[0].template).toBe('p')
+    }
+  })
+
+  it('returns error for invalid JSON', async () => {
+    ;(window.fs.exists as any).mockResolvedValue(true)
+    ;(window.fs.readFile as any).mockResolvedValue('{ not json')
+    const r = await loadConfigFromPath('/x')
+    expect(r?.ok).toBe(false)
+  })
+
+  it('returns error for schema-invalid config (post-migration)', async () => {
+    ;(window.fs.exists as any).mockResolvedValue(true)
+    ;(window.fs.readFile as any).mockResolvedValue(JSON.stringify({
+      version: 2, actions: [{ id: 'a', label: 'A' }], // missing template
+    }))
+    const r = await loadConfigFromPath('/x')
+    expect(r?.ok).toBe(false)
+  })
+})
+
+describe('mergeConfigs', () => {
+  it('returns null when both inputs null', () => {
+    expect(mergeConfigs(null, null)).toBeNull()
+  })
+
+  it('returns user actions when project null', () => {
+    expect(mergeConfigs(
+      { version: 2, actions: [{ id: 'a', label: 'A', template: 't' }] },
+      null,
+    )?.actions.map(a => a.id)).toEqual(['a'])
+  })
+
+  it('returns project actions when user null', () => {
+    expect(mergeConfigs(
+      null,
+      { version: 2, actions: [{ id: 'b', label: 'B', template: 't' }] },
+    )?.actions.map(a => a.id)).toEqual(['b'])
+  })
+
+  it('concatenates user then project, keeping duplicate ids', () => {
+    const merged = mergeConfigs(
+      { version: 2, actions: [{ id: 'a', label: 'User A', template: 't' }] },
+      { version: 2, actions: [{ id: 'a', label: 'Project A', template: 't' }, { id: 'b', label: 'B', template: 't' }] },
+    )
+    expect(merged?.actions.map(a => a.label)).toEqual(['User A', 'Project A', 'B'])
+  })
+})
+
+describe('isVisible', () => {
+  const baseState = {
+    'has-changes': false, 'clean': true, 'merging': false, 'conflicts': false,
+    'no-tracking': false, 'ahead': false, 'behind': false, 'behind-main': false,
+    'on-main': false, 'in-progress': false, 'pushed': false, 'empty': false,
+    'open': false, 'merged': false, 'closed': false, 'no-pr': true,
+    'has-write-access': true, 'allow-approve-and-merge': true,
+    'checks-passed': true, 'has-issue': false, 'no-devcontainer': false, 'review': false,
+  } as any
+
+  it('is true when no filters specified', () => {
+    expect(isVisible({ id: 'a', label: 'A', template: 't' }, baseState, 'new', 'source-control')).toBe(true)
+  })
+
+  it('honors showWhen', () => {
+    expect(isVisible({ id: 'a', label: 'A', template: 't', showWhen: ['has-changes'] }, baseState, 'new', 'source-control')).toBe(false)
+    expect(isVisible({ id: 'a', label: 'A', template: 't', showWhen: ['clean'] }, baseState, 'new', 'source-control')).toBe(true)
+  })
+
+  it('honors stages list', () => {
+    expect(isVisible({ id: 'a', label: 'A', template: 't', stages: ['planning'] }, baseState, 'new', 'source-control')).toBe(false)
+    expect(isVisible({ id: 'a', label: 'A', template: 't', stages: ['new', 'planning'] }, baseState, 'new', 'source-control')).toBe(true)
+  })
+
+  it('honors surface filter', () => {
+    expect(isVisible({ id: 'a', label: 'A', template: 't', surface: 'review' }, baseState, 'new', 'source-control')).toBe(false)
+    expect(isVisible({ id: 'a', label: 'A', template: 't', surface: ['review', 'source-control'] }, baseState, 'new', 'source-control')).toBe(true)
+  })
+})
+
+describe('discoverStages', () => {
+  it('always includes "new" pinned first', () => {
+    expect(discoverStages([], 'new')).toEqual(['new'])
+  })
+
+  it('unions stages and setStage across actions, sorts non-"new" alphabetically', () => {
+    const stages = discoverStages([
+      { id: 'a', label: 'A', template: 't', setStage: 'planning' },
+      { id: 'b', label: 'B', template: 't', stages: ['planning', 'building'] },
+      { id: 'c', label: 'C', template: 't', stages: ['verifying'] },
+    ], 'new')
+    expect(stages).toEqual(['new', 'building', 'planning', 'verifying'])
+  })
+
+  it('includes current stage even if no command references it', () => {
+    expect(discoverStages([], 'mystage')).toEqual(['new', 'mystage'])
+  })
+
+  it('ignores setStage: null', () => {
+    expect(discoverStages([
+      { id: 'a', label: 'A', template: 't', setStage: null },
+    ], 'new')).toEqual(['new'])
   })
 })
 
