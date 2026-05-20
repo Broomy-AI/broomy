@@ -9,7 +9,7 @@
  * marketing website. Edit its data with care — changes affect published content.
  */
 import { join } from 'path'
-import { tmpdir } from 'os'
+import { tmpdir, homedir } from 'os'
 import { normalizePath } from '../platform'
 import { E2EScenario } from './types'
 import BASICS_PACK from '../../renderer/features/commands/packs/basics.json'
@@ -475,7 +475,12 @@ const DEFAULT: ScenarioData = {
       return 'export function add(a: number, b: number): number {\n  return a + b\n}\n\nexport function multiply(a: number, b: number): number {\n  return a * b\n}\n'
     }
     if (/\.broomy[/\\]commands\.json$/.exec(filePath)) {
-      return JSON.stringify(BASICS_PACK)
+      // Only the user-level config returns content; project file is treated as absent.
+      const homeUserCommands = `${homedir()}/.broomy/commands.json`
+      if (filePath === homeUserCommands) {
+        return JSON.stringify({ version: BASICS_PACK.version, actions: BASICS_PACK.actions })
+      }
+      return null
     }
     // Default scenario markdown review data (dark mode theme)
     if (/\.broomy[/\\]output[/\\]review\.md$/.exec(filePath)) {

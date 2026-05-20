@@ -12,7 +12,8 @@ export interface Pack {
   requiresPlugin?: { name: string; url: string }
 }
 
-export const PACKS: Pack[] = [basics as Pack, superpowers as Pack, gstack as Pack]
+// Order matters: the first pack gets the "Recommended" badge in the picker.
+export const PACKS: Pack[] = [superpowers as Pack, gstack as Pack, basics as Pack]
 
 export function getPack(id: string): Pack | undefined {
   return PACKS.find(p => p.id === id)

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, within } from '@testing-library/react'
 import '../../../../../test/react-setup'
 
 vi.mock('../../../../features/commands/userConfigPath', async () => {
@@ -23,15 +23,16 @@ beforeEach(() => {
 afterEach(() => { cleanup() })
 
 describe('CommandsSetupDialog', () => {
-  it('renders three pack cards with Basics first', () => {
+  it('renders three pack cards with Superpowers first', () => {
     render(<CommandsSetupDialog onClose={vi.fn()} onInstalled={vi.fn()} />)
     const cards = screen.getAllByTestId(/pack-card-/)
-    expect(cards.map(c => c.dataset.testid)).toEqual(['pack-card-basics', 'pack-card-superpowers', 'pack-card-gstack'])
+    expect(cards.map(c => c.dataset.testid)).toEqual(['pack-card-superpowers', 'pack-card-gstack', 'pack-card-basics'])
   })
 
-  it('labels Basics as Recommended', () => {
+  it('labels Superpowers as Recommended', () => {
     render(<CommandsSetupDialog onClose={vi.fn()} onInstalled={vi.fn()} />)
-    expect(screen.getByText(/recommended/i)).toBeInTheDocument()
+    const superpowersCard = screen.getByTestId('pack-card-superpowers')
+    expect(within(superpowersCard).getByText(/recommended/i)).toBeInTheDocument()
   })
 
   it('writes the chosen pack to ~/.broomy/commands.json and calls onInstalled', async () => {

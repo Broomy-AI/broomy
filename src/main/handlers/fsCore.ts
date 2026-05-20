@@ -8,6 +8,7 @@ import { BrowserWindow, IpcMain, IpcMainInvokeEvent } from 'electron'
 import { watch } from 'fs'
 import { readdir, readFile, writeFile, appendFile, stat, mkdir, rm, access, rename } from 'fs/promises'
 import { join } from 'path'
+import { homedir } from 'os'
 import { normalizePath } from '../platform'
 import { HandlerContext } from './types'
 import { getScenarioData, SHARED_README } from './scenarios'
@@ -109,7 +110,8 @@ async function handleExists(ctx: HandlerContext, filePath: string) {
       return true
     }
     if (/\.broomy[/\\]commands\.json$/.exec(filePath)) {
-      return true
+      // Only the user-level config exists in the E2E mock; project file is absent.
+      return filePath === `${homedir()}/.broomy/commands.json`
     }
     // Fall through to real fs for other paths (e.g. .git directory checks)
   }
