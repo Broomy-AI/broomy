@@ -44,6 +44,37 @@ const meta: Meta<typeof ActionButtons> = {
 export default meta
 type Story = StoryObj<typeof ActionButtons>
 
+/** actions=null → renders SetupCta asking user to pick a pack or start blank. */
+export const Empty: Story = {
+  args: {
+    actions: null,
+  },
+}
+
+/** Single button with no stages — stage pill hidden. */
+export const SingleButtonNoStages: Story = {
+  args: {
+    actions: [
+      { id: 'lint', label: 'Run lint', template: '!npm run lint', showWhen: [], style: 'primary', surface: 'source-control' },
+    ],
+    conditionState: { ...defaultConditionState },
+  },
+}
+
+/** Multiple buttons where at least one uses setStage — stage pill visible. */
+export const MultiButtonWithStagePill: Story = {
+  args: {
+    actions: [
+      { id: 'plan', label: 'Start planning', template: '/plan {topic}', showWhen: [], style: 'primary', surface: 'source-control', setStage: 'planning' },
+      { id: 'build', label: 'Build it', template: '/build', showWhen: [], style: 'secondary', surface: 'source-control', stages: ['planning'], setStage: 'building' },
+      { id: 'verify', label: 'Verify', template: '!npm test', showWhen: [], style: 'accent', surface: 'source-control', stages: ['building'], setStage: 'verifying' },
+    ],
+    currentStage: 'planning',
+    conditionState: { ...defaultConditionState },
+    onOpenCommandsEditor: () => {},
+  },
+}
+
 export const Default: Story = {
   args: {},
 }
