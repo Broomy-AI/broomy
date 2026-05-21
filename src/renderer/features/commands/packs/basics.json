@@ -62,14 +62,15 @@
       "template": "Read the review comments on the open PR for this branch and propose a plan for each one. Don't implement anything yet — this is the triage step.\n\n1. Run `gh pr view --json number,url,reviews,comments` to get the PR. Run `gh api repos/:owner/:repo/pulls/<PR_NUMBER>/comments` to fetch inline (line-level) review comments.\n2. For each comment (both general review comments and inline file/line comments), capture: the commenter, the file path and line range (if any), the comment body, and what the commenter is asking for or pointing out.\n3. For each one, propose a response with technical rigor — do NOT blindly agree:\n   - **Agree and implement**: include a brief sketch of what you'd change\n   - **Disagree because …**: explain why, citing code or constraints\n   - **Need clarification**: name the specific question\n   - **Already addressed in <commit-sha or file:line>**: link to where\n4. Write the result to `.broomy/output/feedback.md` as a markdown document. Group comments by file. For each comment, include: who said what (with quote), your proposed response, and an action line at the bottom.\n5. Do NOT change any code in this step. The user reviews `.broomy/output/feedback.md` first; the 'Address feedback' action implements afterwards.",
       "showWhen": ["open"],
       "stages": ["verifying"],
+      "setStage": "feedback-triaged",
       "style": "secondary"
     },
     {
       "id": "address-feedback",
       "label": "Address feedback",
-      "description": "Implement the plan written by 'Triage PR comments' (or any incoming review feedback).",
-      "template": "Code review feedback needs to be addressed. If `.broomy/output/feedback.md` exists, read it — it has the triaged plan for each comment. Otherwise, fetch the PR comments yourself (`gh api repos/:owner/:repo/pulls/<PR_NUMBER>/comments`).\n\nFor each comment, decide with technical rigor whether you agree — don't just blindly implement suggestions. Implement what you agree with; thoughtfully reply to anything you don't (use `gh api` POST to the review-comment reply endpoint). When you push the fixes, the original commenters get notified.",
-      "stages": ["verifying"],
+      "description": "Implement the triage plan written by 'Triage PR comments'.",
+      "template": "Read `.broomy/output/feedback.md` — it contains the triaged plan for each PR comment. Implement the items marked 'Agree and implement', skip those marked 'Disagree' or 'Already addressed', and for 'Need clarification' items ask the user before doing anything.\n\nFor each comment you act on, decide with technical rigor whether the proposed change is correct — don't just blindly implement what the triage doc says if you spot a problem. Reply to comments you disagree with using `gh api` POST to the review-comment reply endpoint, explaining why. When you push the fixes, the original commenters get notified.",
+      "stages": ["feedback-triaged"],
       "setStage": "implementing",
       "style": "secondary"
     },
