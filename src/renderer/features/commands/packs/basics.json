@@ -133,14 +133,6 @@
       "style": "secondary"
     },
     {
-      "id": "create-devcontainer",
-      "label": "Create dev container",
-      "description": "Generate a minimal .devcontainer/devcontainer.json for this repo.",
-      "template": "Analyze this repository and create a `.devcontainer/devcontainer.json` file appropriate for the project's technology stack.\n\n1. Look at dependency files (package.json, Gemfile, requirements.txt, go.mod, Cargo.toml, etc.) to determine the language and framework\n2. Choose an appropriate base image from the Microsoft devcontainers registry\n3. Add relevant dev container features for the tools the project needs\n4. If the project has specific system dependencies, add a `postCreateCommand` to install them\n5. Create the `.devcontainer/devcontainer.json` file\n\nKeep the configuration minimal — only include what the project actually needs.",
-      "showWhen": ["no-devcontainer"],
-      "style": "accent"
-    },
-    {
       "id": "screenshot-walkthrough",
       "label": "Screenshot walkthrough",
       "description": "Build a screenshot-driven walkthrough of what's been created on this branch.",
