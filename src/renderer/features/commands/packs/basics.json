@@ -8,7 +8,14 @@
       "id": "brainstorm",
       "label": "Brainstorm",
       "description": "Refine the idea before any code.",
-      "template": "Help me brainstorm this. Ask me what I'm trying to build, surface my assumptions, and suggest two or three approaches with their tradeoffs. Don't write any code yet — we're refining the design first.",
+      "template": "Help me brainstorm this: {goal}. Surface my assumptions, push back on the framing where useful, and suggest two or three approaches with their tradeoffs. Ask follow-up questions before doing anything. Don't write any code yet — we're refining the design first.",
+      "args": [
+        {
+          "name": "goal",
+          "description": "What you want to build or solve. Dump as much context as you have — pain points, who it's for, anything you've already tried.",
+          "multiline": true
+        }
+      ],
       "stages": ["new"],
       "setStage": "planning",
       "style": "primary"
@@ -34,7 +41,14 @@
       "id": "debug",
       "label": "Debug",
       "description": "Systematic root-cause investigation.",
-      "template": "Something is broken. Investigate systematically: reproduce the issue first, then form a hypothesis, then test it. Don't guess at fixes without evidence — find the root cause before changing anything.",
+      "template": "Something is broken: {symptom}. Investigate systematically: reproduce the issue first, then form a hypothesis, then test it. Don't guess at fixes without evidence — find the root cause before changing anything.",
+      "args": [
+        {
+          "name": "symptom",
+          "description": "What's going wrong. Paste error messages, stack traces, what you tried, what you expected vs got.",
+          "multiline": true
+        }
+      ],
       "stages": ["implementing", "verifying"],
       "style": "secondary"
     },

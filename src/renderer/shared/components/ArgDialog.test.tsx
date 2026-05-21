@@ -117,4 +117,50 @@ describe('ArgDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(onCancel).toHaveBeenCalled()
   })
+
+  it('renders a textarea for multi-line args', () => {
+    render(
+      <ArgDialog
+        title="Brainstorm"
+        template="Help me brainstorm: {goal}"
+        argsMeta={[{ name: 'goal', description: 'The thing', multiline: true }]}
+        context={ctx}
+        onRun={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    )
+    const field = screen.getByLabelText('goal')
+    expect(field.tagName).toBe('TEXTAREA')
+  })
+
+  it('renders an input (not textarea) when multiline is false or undefined', () => {
+    render(
+      <ArgDialog
+        title="Plan"
+        template="/plan {topic}"
+        argsMeta={[{ name: 'topic' }]}
+        context={ctx}
+        onRun={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    )
+    expect(screen.getByLabelText('topic').tagName).toBe('INPUT')
+  })
+
+  it('multi-line value substitutes into the resolved preview', () => {
+    render(
+      <ArgDialog
+        title="Brainstorm"
+        template="Help me brainstorm: {goal}"
+        argsMeta={[{ name: 'goal', multiline: true }]}
+        context={ctx}
+        onRun={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    )
+    fireEvent.change(screen.getByLabelText('goal'), { target: { value: 'line one\nline two' } })
+    const resolved = screen.getByTestId('resolved-preview')
+    expect(resolved.textContent).toContain('line one')
+    expect(resolved.textContent).toContain('line two')
+  })
 })

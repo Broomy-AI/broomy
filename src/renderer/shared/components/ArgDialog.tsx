@@ -32,6 +32,7 @@ export function ArgDialog({ title, description, template, argsMeta, context, ini
 
   const requiredOk = parsed.args.every(a => a.optional || ((values[a.name] as ArgValue | undefined)?.value ?? '').length > 0)
   const resolved = substituteTemplate(template, { context, args: values })
+  const hasMultiline = parsed.args.some(a => metaByName.get(a.name)?.multiline === true)
 
   function update(name: string, patch: Partial<ArgValue>) {
     setValues(v => ({ ...v, [name]: { ...v[name], ...patch } }))
@@ -51,13 +52,16 @@ export function ArgDialog({ title, description, template, argsMeta, context, ini
       onKeyDown={onKeyDown}
       role="dialog"
     >
-      <div className="bg-bg-secondary border border-border rounded-lg shadow-xl w-full max-w-md mx-4 p-4 space-y-3" onClick={e => e.stopPropagation()}>
+      <div className={`bg-bg-secondary border border-border rounded-lg shadow-xl w-full mx-4 p-4 space-y-3 ${hasMultiline ? 'max-w-xl' : 'max-w-md'}`} onClick={e => e.stopPropagation()}>
         <h3 className="text-base font-medium text-text-primary">{title}</h3>
         {description && <p className="text-xs text-text-secondary">{description}</p>}
 
-        {parsed.args.map(arg => {
+        {parsed.args.map((arg, i) => {
           const meta = metaByName.get(arg.name)
+          const multiline = meta?.multiline === true
           const v = values[arg.name]
+          const fieldClass = `w-full px-2 py-1.5 text-sm rounded border border-border bg-bg-primary text-text-primary font-mono focus:outline-none focus:border-accent`
+          const isFirst = i === 0
           if (arg.optional) {
             return (
               <div key={arg.name} className="space-y-1">
@@ -74,13 +78,23 @@ export function ArgDialog({ title, description, template, argsMeta, context, ini
                 {v.enabled && (
                   <>
                     <label className="text-xs text-text-secondary">{arg.name}</label>
-                    <input
-                      aria-label={arg.name}
-                      type="text"
-                      value={v.value}
-                      onChange={e => update(arg.name, { value: e.target.value })}
-                      className="w-full px-2 py-1.5 text-sm rounded border border-border bg-bg-primary text-text-primary font-mono focus:outline-none focus:border-accent"
-                    />
+                    {multiline ? (
+                      <textarea
+                        aria-label={arg.name}
+                        value={v.value}
+                        onChange={e => update(arg.name, { value: e.target.value })}
+                        rows={6}
+                        className={`${fieldClass} resize-y min-h-[120px]`}
+                      />
+                    ) : (
+                      <input
+                        aria-label={arg.name}
+                        type="text"
+                        value={v.value}
+                        onChange={e => update(arg.name, { value: e.target.value })}
+                        className={fieldClass}
+                      />
+                    )}
                     {meta?.description && <p className="text-[11px] text-text-tertiary">{meta.description}</p>}
                   </>
                 )}
@@ -90,14 +104,25 @@ export function ArgDialog({ title, description, template, argsMeta, context, ini
           return (
             <div key={arg.name} className="space-y-1">
               <label className="text-xs text-text-secondary">{arg.name} <span className="text-red-400">*</span></label>
-              <input
-                aria-label={arg.name}
-                type="text"
-                value={v.value}
-                onChange={e => update(arg.name, { value: e.target.value })}
-                className="w-full px-2 py-1.5 text-sm rounded border border-border bg-bg-primary text-text-primary font-mono focus:outline-none focus:border-accent"
-                autoFocus
-              />
+              {multiline ? (
+                <textarea
+                  aria-label={arg.name}
+                  value={v.value}
+                  onChange={e => update(arg.name, { value: e.target.value })}
+                  rows={8}
+                  autoFocus={isFirst}
+                  className={`${fieldClass} resize-y min-h-[160px]`}
+                />
+              ) : (
+                <input
+                  aria-label={arg.name}
+                  type="text"
+                  value={v.value}
+                  onChange={e => update(arg.name, { value: e.target.value })}
+                  autoFocus={isFirst}
+                  className={fieldClass}
+                />
+              )}
               {meta?.description && <p className="text-[11px] text-text-tertiary">{meta.description}</p>}
             </div>
           )
@@ -105,7 +130,7 @@ export function ArgDialog({ title, description, template, argsMeta, context, ini
 
         <div className="pt-2 border-t border-border">
           <div className="text-[11px] text-text-tertiary">Resolved:</div>
-          <code data-testid="resolved-preview" className="block text-xs font-mono text-text-primary break-all">{resolved}</code>
+          <pre data-testid="resolved-preview" className="text-xs font-mono text-text-primary whitespace-pre-wrap break-words max-h-32 overflow-y-auto">{resolved}</pre>
         </div>
 
         <div className="flex justify-end gap-2 pt-2">

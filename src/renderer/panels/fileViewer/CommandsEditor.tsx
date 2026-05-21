@@ -310,7 +310,7 @@ function Detail({
   const argsMeta = selected.args ?? []
   const mode: 'one-line' | 'block' = selected.template.includes('\n') ? 'block' : 'one-line'
 
-  function updateArgMeta(name: string, patch: Partial<{ description: string }>) {
+  function updateArgMeta(name: string, patch: Partial<{ description: string; multiline: boolean }>) {
     const existing = argsMeta.find(a => a.name === name)
     const next = existing
       ? argsMeta.map(a => a.name === name ? { ...a, ...patch } : a)
@@ -370,6 +370,7 @@ function Detail({
               <tr className="text-text-tertiary">
                 <th className="text-left pr-2 pb-1">Name</th>
                 <th className="text-left pr-2 pb-1">Description</th>
+                <th className="text-left pr-2 pb-1">Multi-line</th>
                 <th className="text-left pb-1"></th>
               </tr>
             </thead>
@@ -385,6 +386,15 @@ function Detail({
                         value={meta?.description ?? ''}
                         onChange={e => updateArgMeta(a.name, { description: e.target.value })}
                         className="w-full px-1 py-0.5 text-xs rounded border border-border bg-bg-primary text-text-primary"
+                      />
+                    </td>
+                    <td className="pr-2 py-0.5">
+                      <input
+                        type="checkbox"
+                        checked={meta?.multiline ?? false}
+                        onChange={e => updateArgMeta(a.name, { multiline: e.target.checked })}
+                        aria-label={`${a.name} multi-line`}
+                        className="accent-accent"
                       />
                     </td>
                     <td className="py-0.5">

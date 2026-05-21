@@ -13,6 +13,8 @@ export const CURRENT_CONFIG_VERSION = 2
 export interface ArgSpec {
   name: string
   description?: string
+  /** Render the arg dialog field as a multi-line textarea instead of a single-line input. */
+  multiline?: boolean
 }
 
 export interface ActionDefinition {
@@ -168,6 +170,9 @@ function validateArgs(args: unknown, label: string, errors: string[]): void {
     }
     if (a.description !== undefined && typeof a.description !== 'string') {
       errors.push(`${label} args[${i}]: "description" must be a string.`)
+    }
+    if (a.multiline !== undefined && typeof a.multiline !== 'boolean') {
+      errors.push(`${label} args[${i}]: "multiline" must be a boolean.`)
     }
   }
 }
