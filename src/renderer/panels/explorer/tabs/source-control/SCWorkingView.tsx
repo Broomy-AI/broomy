@@ -33,6 +33,7 @@ export interface SCWorkingViewProps {
   onGitStatusRefresh?: () => void
   // Modular actions
   actions: ActionDefinition[] | null
+  commandsLoading?: boolean
   conditionState: ConditionState
   templateVars: SubContext
   currentStage: string
@@ -230,6 +231,7 @@ export function SCWorkingView({
   onSwitchTab,
   onGitStatusRefresh,
   actions,
+  commandsLoading,
   conditionState,
   templateVars,
   currentStage,
@@ -258,6 +260,7 @@ export function SCWorkingView({
       {/* Modular action buttons from commands.json */}
       <ActionButtons
         actions={actions}
+        loading={commandsLoading}
         conditionState={conditionState}
         templateVars={templateVars}
         currentStage={currentStage}

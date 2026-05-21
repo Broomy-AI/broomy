@@ -13,6 +13,8 @@ import { SetupCta } from './SetupCta'
 
 interface ActionButtonsProps {
   actions: ActionDefinition[] | null
+  /** True while commands.json is still being read. Avoids flashing the Setup CTA. */
+  loading?: boolean
   conditionState: ConditionState
   templateVars: SubContext
   currentStage: string
@@ -42,7 +44,7 @@ function slashSubtitle(template: string): string | null {
 
 export function ActionButtons(props: ActionButtonsProps) {
   const {
-    actions, conditionState, templateVars, currentStage, directory,
+    actions, loading = false, conditionState, templateVars, currentStage, directory,
     agentPtyId, agentId, onGitStatusRefresh, onSwitchTab, surface = 'source-control',
     onOpenCommandsEditor, onSetSessionStage, onSetup,
   } = props
@@ -87,6 +89,13 @@ export function ActionButtons(props: ActionButtonsProps) {
   }
 
   if (allActions.length === 0) {
+    if (loading) {
+      return (
+        <div className="px-3 py-3 border-b border-border text-xs text-text-tertiary" data-testid="commands-loading">
+          Loading commands…
+        </div>
+      )
+    }
     return <SetupCta onSetup={onSetup} />
   }
 

@@ -71,7 +71,7 @@ export function SourceControl({
   const [hasDevcontainerLoaded, setHasDevcontainerLoaded] = useState(false)
 
   // Load commands.json
-  const { merged: commandsConfig, userExists, projectExists, reload: reloadCommandsConfig } = useCommandsConfig(directory)
+  const { merged: commandsConfig, userExists, projectExists, loading: commandsLoading, reload: reloadCommandsConfig } = useCommandsConfig(directory)
   const commandsExists = userExists || projectExists
 
   // Session stage state
@@ -250,6 +250,7 @@ export function SourceControl({
         onSwitchTab={onSwitchTab}
         onGitStatusRefresh={onGitStatusRefresh}
         actions={commandsConfig?.actions ?? null}
+        commandsLoading={commandsLoading}
         conditionState={conditionState}
         templateVars={templateVars}
         currentStage={stage}

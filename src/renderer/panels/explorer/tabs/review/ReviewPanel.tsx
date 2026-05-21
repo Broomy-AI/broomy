@@ -359,7 +359,7 @@ export default function ReviewPanel({ session, repo, onSelectFile, gitStatus, sy
   } = useReviewActions(session, repo, onSelectFile, state)
 
   // Load commands config for action buttons
-  const { merged: commandsConfig } = useCommandsConfig(session.directory)
+  const { merged: commandsConfig, loading: commandsLoading } = useCommandsConfig(session.directory)
 
   // Session stage state
   const stage = useSessionStore(s => s.sessions.find(x => x.id === s.activeSessionId)?.stage ?? 'new')
@@ -411,6 +411,7 @@ export default function ReviewPanel({ session, repo, onSelectFile, gitStatus, sy
       {/* Action buttons from commands.json filtered by surface='review' */}
       <ActionButtons
         actions={commandsConfig?.actions ?? null}
+        loading={commandsLoading}
         conditionState={conditionState}
         templateVars={templateVars}
         currentStage={stage}
