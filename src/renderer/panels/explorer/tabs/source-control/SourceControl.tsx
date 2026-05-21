@@ -71,7 +71,7 @@ export function SourceControl({
   const [hasDevcontainerLoaded, setHasDevcontainerLoaded] = useState(false)
 
   // Load commands.json
-  const { merged: commandsConfig, userExists, projectExists } = useCommandsConfig(directory)
+  const { merged: commandsConfig, userExists, projectExists, reload: reloadCommandsConfig } = useCommandsConfig(directory)
   const commandsExists = userExists || projectExists
 
   // Session stage state
@@ -158,7 +158,7 @@ export function SourceControl({
   const setupDialog = showSetupDialog && (
     <CommandsSetupDialog
       onClose={() => setShowSetupDialog(false)}
-      onInstalled={() => {/* config will auto-reload via file watcher */}}
+      onInstalled={() => reloadCommandsConfig()}
     />
   )
 

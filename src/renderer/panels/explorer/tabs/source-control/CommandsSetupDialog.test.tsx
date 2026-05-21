@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, cleanup, within } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import '../../../../../test/react-setup'
 
 vi.mock('../../../../features/commands/userConfigPath', async () => {
@@ -23,25 +23,23 @@ beforeEach(() => {
 afterEach(() => { cleanup() })
 
 describe('CommandsSetupDialog', () => {
-  it('renders two pack cards with Basics first', () => {
+  it('renders the Basics pack card', () => {
     render(<CommandsSetupDialog onClose={vi.fn()} onInstalled={vi.fn()} />)
-    const cards = screen.getAllByTestId(/pack-card-/)
-    expect(cards.map(c => c.dataset.testid)).toEqual(['pack-card-basics', 'pack-card-gstack'])
+    expect(screen.getByTestId('pack-card-basics')).toBeInTheDocument()
   })
 
-  it('labels Basics as Recommended', () => {
+  it('renders a "more starter packs coming" placeholder', () => {
     render(<CommandsSetupDialog onClose={vi.fn()} onInstalled={vi.fn()} />)
-    const basicsCard = screen.getByTestId('pack-card-basics')
-    expect(within(basicsCard).getByText(/recommended/i)).toBeInTheDocument()
+    expect(screen.getByTestId('pack-card-coming-soon')).toBeInTheDocument()
+    expect(screen.getByText(/more starter packs coming/i)).toBeInTheDocument()
   })
 
-  it('writes the chosen pack to ~/.broomy/commands.json and calls onInstalled', async () => {
+  it('writes the Basics pack to ~/.broomy/commands.json and calls onInstalled', async () => {
     vi.mocked(window.fs.exists).mockResolvedValue(false)
     const onInstalled = vi.fn()
     render(<CommandsSetupDialog onClose={vi.fn()} onInstalled={onInstalled} />)
     fireEvent.click(screen.getByTestId('pack-card-basics'))
     fireEvent.click(screen.getByRole('button', { name: /^install(ing)?$/i }))
-    // wait one tick
     await new Promise(r => setTimeout(r, 0))
     expect(vi.mocked(window.fs.writeFile)).toHaveBeenCalledWith(
       '/Users/test/.broomy/commands.json',
@@ -57,21 +55,6 @@ describe('CommandsSetupDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: /^install(ing)?$/i }))
     await new Promise(r => setTimeout(r, 0))
     expect(screen.getByText(/replace existing user commands/i)).toBeInTheDocument()
-  })
-
-  it('shows requires-plugin note when gstack is selected', () => {
-    render(<CommandsSetupDialog onClose={vi.fn()} onInstalled={vi.fn()} />)
-    fireEvent.click(screen.getByTestId('pack-card-gstack'))
-    expect(screen.getByText(/requires gstack/i)).toBeInTheDocument()
-  })
-
-  it('disables Install until plugin checkbox is checked when gstack is selected', async () => {
-    render(<CommandsSetupDialog onClose={vi.fn()} onInstalled={vi.fn()} />)
-    fireEvent.click(screen.getByTestId('pack-card-gstack'))
-    const installBtn = screen.getByRole('button', { name: /^install(ing)?$/i })
-    expect(installBtn).toBeDisabled()
-    fireEvent.click(screen.getByTestId('plugin-confirmed-checkbox'))
-    expect(installBtn).not.toBeDisabled()
   })
 
   it('enables Install immediately when Basics is selected (no plugin required)', () => {

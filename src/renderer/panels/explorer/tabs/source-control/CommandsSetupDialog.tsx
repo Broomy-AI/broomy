@@ -59,8 +59,8 @@ export function CommandsSetupDialog({ onClose, onInstalled }: CommandsSetupDialo
         <h3 className="text-lg font-medium text-text-primary">Set up commands</h3>
         <p className="text-sm text-text-secondary">Pick a starter set. You can edit anything afterwards.</p>
 
-        <div className="grid grid-cols-3 gap-3">
-          {PACKS.map((p, i) => {
+        <div className="grid grid-cols-2 gap-3">
+          {PACKS.map((p) => {
             const selected = selectedId === p.id
             return (
               <button
@@ -71,7 +71,6 @@ export function CommandsSetupDialog({ onClose, onInstalled }: CommandsSetupDialo
               >
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-text-primary">{p.name}</span>
-                  {i === 0 && <span className="text-[10px] px-1 py-0.5 rounded bg-accent/20 text-accent">Recommended</span>}
                 </div>
                 <div className="text-xs text-text-secondary mt-1">{p.description}</div>
                 {p.requiresPlugin && (
@@ -93,6 +92,15 @@ export function CommandsSetupDialog({ onClose, onInstalled }: CommandsSetupDialo
               </button>
             )
           })}
+          <div
+            data-testid="pack-card-coming-soon"
+            className="text-left p-3 rounded border border-dashed border-border bg-bg-primary/40 cursor-default"
+          >
+            <div className="font-medium text-text-tertiary">More starter packs coming</div>
+            <div className="text-xs text-text-tertiary mt-1">
+              Stack-based git, plugin-specific workflows, and team templates are on the way.
+            </div>
+          </div>
         </div>
 
         {requiresPlugin && (

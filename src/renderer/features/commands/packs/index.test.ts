@@ -3,8 +3,8 @@ import { PACKS, getPack } from './index'
 import { validateCommandsConfig } from '../commandsConfig'
 
 describe('packs', () => {
-  it('exposes basics (recommended) first, then gstack', () => {
-    expect(PACKS.map(p => p.id)).toEqual(['basics', 'gstack'])
+  it('exposes Basics as the only starter pack', () => {
+    expect(PACKS.map(p => p.id)).toEqual(['basics'])
   })
 
   it('every pack passes schema validation', () => {
@@ -36,8 +36,7 @@ describe('packs', () => {
     }
   })
 
-  it('only gstack has a requiresPlugin field', () => {
-    expect(getPack('gstack')?.requiresPlugin?.name).toBe('gstack')
+  it('basics has no requiresPlugin', () => {
     expect(getPack('basics')?.requiresPlugin).toBeUndefined()
   })
 })

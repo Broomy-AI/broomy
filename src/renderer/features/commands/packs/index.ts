@@ -1,6 +1,5 @@
 import type { ActionDefinition } from '../commandsConfig'
 import basics from './basics.json'
-import gstack from './gstack.json'
 
 export interface Pack {
   id: string
@@ -11,11 +10,9 @@ export interface Pack {
   requiresPlugin?: { name: string; url: string }
 }
 
-// Order matters: the first pack gets the "Recommended" badge in the picker.
-// Basics is a guided AI workflow that triggers Superpowers skills naturally when
-// the user has that plugin installed — Superpowers itself doesn't have user-facing
-// slash commands, so there's no Superpowers pack to ship.
-export const PACKS: Pack[] = [basics as Pack, gstack as Pack]
+// Basics is the only starter pack today. More are planned — the setup picker
+// shows a "more coming" placeholder so users know this list will grow.
+export const PACKS: Pack[] = [basics as Pack]
 
 export function getPack(id: string): Pack | undefined {
   return PACKS.find(p => p.id === id)
