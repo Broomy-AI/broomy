@@ -90,7 +90,7 @@ describe('executeAction', () => {
     expect(setStage).toHaveBeenCalledWith('sess', 'pushed')
   })
 
-  it('setStage: null writes "new"', async () => {
+  it('setStage: null writes the default stage', async () => {
     const setStage = vi.fn()
     const useSessionStore = (await import('../../store/sessions')).useSessionStore
     ;(useSessionStore.getState as any) = () => ({ setSessionStage: setStage, activeSessionId: 'sess', sessions: [] })
@@ -100,6 +100,6 @@ describe('executeAction', () => {
       { id: 'a', label: 'Finish', template: '/finish', setStage: null },
       { directory: '/r', agentPtyId: 'pty-1', templateVars: { main: 'main', branch: 'b', directory: '/r', issueNumber: '' }, argValues: {} },
     )
-    expect(setStage).toHaveBeenCalledWith('sess', 'new')
+    expect(setStage).toHaveBeenCalledWith('sess', 'planning')
   })
 })

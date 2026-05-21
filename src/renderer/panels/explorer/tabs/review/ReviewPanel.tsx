@@ -17,6 +17,7 @@ import { useReviewData } from './useReviewData'
 import { useReviewActions } from './useReviewActions'
 import { useCommandsConfig } from '../../../../features/commands/hooks/useCommandsConfig'
 import { computeConditionState } from '../../../../features/commands/conditionState'
+import { DEFAULT_STAGE } from '../../../../features/commands/commandsConfig'
 import type { SubContext } from '../../../../features/commands/templateSubstitute'
 import { ActionButtons } from '../../../../shared/components/ActionButtons'
 import { useSessionStore } from '../../../../store/sessions'
@@ -362,7 +363,7 @@ export default function ReviewPanel({ session, repo, onSelectFile, gitStatus, sy
   const { merged: commandsConfig, loading: commandsLoading } = useCommandsConfig(session.directory)
 
   // Session stage state
-  const stage = useSessionStore(s => s.sessions.find(x => x.id === s.activeSessionId)?.stage ?? 'new')
+  const stage = useSessionStore(s => s.sessions.find(x => x.id === s.activeSessionId)?.stage ?? DEFAULT_STAGE)
   const setSessionStage = useSessionStore(s => s.setSessionStage)
   const activeSessionId = useSessionStore(s => s.activeSessionId)
 

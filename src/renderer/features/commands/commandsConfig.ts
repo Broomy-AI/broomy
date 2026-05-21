@@ -10,6 +10,12 @@
 
 export const CURRENT_CONFIG_VERSION = 2
 
+/**
+ * Stage a session starts in, and the stage `setStage: null` resolves to.
+ * The first stage actions reach a user in — usually where brainstorm / write-plan live.
+ */
+export const DEFAULT_STAGE = 'planning'
+
 export interface ArgSpec {
   name: string
   description?: string
@@ -352,14 +358,14 @@ export function isVisible(
 // --- Stage discovery ---
 
 export function discoverStages(actions: ActionDefinition[], currentStage: string): string[] {
-  const set = new Set<string>(['new'])
+  const set = new Set<string>([DEFAULT_STAGE])
   for (const a of actions) {
     if (typeof a.setStage === 'string') set.add(a.setStage)
     if (a.stages) for (const s of a.stages) set.add(s)
   }
   set.add(currentStage)
-  const rest = [...set].filter(s => s !== 'new').sort()
-  return ['new', ...rest]
+  const rest = [...set].filter(s => s !== DEFAULT_STAGE).sort()
+  return [DEFAULT_STAGE, ...rest]
 }
 
 // --- Legacy .broomy gitignore helpers ---

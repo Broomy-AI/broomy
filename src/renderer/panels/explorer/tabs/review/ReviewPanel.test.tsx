@@ -99,7 +99,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     statusChip: 'in-progress' as StatusChip,
     isArchived: false,
     isRestored: false,
-    stage: 'new',
+    stage: 'planning',
     prTitle: 'Test PR',
     prNumber: 42,
     prUrl: 'https://github.com/pr/42',

@@ -33,7 +33,7 @@ const meta: Meta<typeof ActionButtons> = {
     actions: null,
     conditionState: defaultConditionState,
     templateVars: { main: 'main', branch: 'feature/test', directory: '/Users/test/projects/my-app', issueNumber: '' },
-    currentStage: 'new',
+    currentStage: 'planning',
     directory: '/Users/test/projects/my-app',
     onSetSessionStage: () => {},
     onSetup: () => {},

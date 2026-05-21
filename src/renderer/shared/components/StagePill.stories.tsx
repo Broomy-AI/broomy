@@ -11,7 +11,7 @@ type Story = StoryObj<typeof StagePill>
 export const Default: Story = {
   args: {
     currentStage: 'planning',
-    allStages: ['new', 'building', 'planning', 'verifying'],
+    allStages: ['planning', 'implementing', 'verifying'],
     onSelect: () => undefined,
   },
 }

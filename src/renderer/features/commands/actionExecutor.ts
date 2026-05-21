@@ -8,6 +8,7 @@
  * After a successful run, applies `setStage` to the active session.
  */
 import type { ActionDefinition } from './commandsConfig'
+import { DEFAULT_STAGE } from './commandsConfig'
 import type { ArgValue, SubContext } from './templateSubstitute'
 import { substituteTemplate } from './templateSubstitute'
 import { sendAgentPrompt } from '../../shared/utils/focusHelpers'
@@ -39,7 +40,7 @@ function applySetStage(action: ActionDefinition): void {
   if (action.setStage === undefined) return
   const { activeSessionId, setSessionStage } = useSessionStore.getState()
   if (!activeSessionId) return
-  const stage = action.setStage ?? 'new'
+  const stage = action.setStage ?? DEFAULT_STAGE
   setSessionStage(activeSessionId, stage)
 }
 

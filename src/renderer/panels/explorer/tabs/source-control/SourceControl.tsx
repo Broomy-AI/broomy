@@ -16,6 +16,7 @@ import { SCWorkingView } from './SCWorkingView'
 import { CommandsSetupDialog } from './CommandsSetupDialog'
 import { useCommandsConfig } from '../../../../features/commands/hooks/useCommandsConfig'
 import { computeConditionState } from '../../../../features/commands/conditionState'
+import { DEFAULT_STAGE } from '../../../../features/commands/commandsConfig'
 import { useSessionStore } from '../../../../store/sessions'
 
 interface SourceControlProps {
@@ -75,7 +76,7 @@ export function SourceControl({
   const commandsExists = userExists || projectExists
 
   // Session stage state
-  const stage = useSessionStore(s => s.sessions.find(x => x.id === s.activeSessionId)?.stage ?? 'new')
+  const stage = useSessionStore(s => s.sessions.find(x => x.id === s.activeSessionId)?.stage ?? DEFAULT_STAGE)
   const setSessionStage = useSessionStore(s => s.setSessionStage)
   const activeSessionId = useSessionStore(s => s.activeSessionId)
 

@@ -11,6 +11,7 @@ import {
   loadConfigFromPath,
   projectCommandsConfigPath,
   CURRENT_CONFIG_VERSION,
+  DEFAULT_STAGE,
   discoverStages,
 } from '../../features/commands/commandsConfig'
 import { getUserCommandsConfigPath, userCommandsDir } from '../../features/commands/userConfigPath'
@@ -93,7 +94,7 @@ export function CommandsEditor({ directory, onClose }: CommandsEditorProps) {
   const dirty = tab === 'user' ? userDirty : projectDirty
 
   const selected = useMemo(() => actions?.find(a => a.id === selectedId) ?? null, [actions, selectedId])
-  const stageOptions = useMemo(() => discoverStages(actions ?? [], 'new'), [actions])
+  const stageOptions = useMemo(() => discoverStages(actions ?? [], DEFAULT_STAGE), [actions])
 
   function updateSelected(patch: Partial<ActionDefinition>) {
     if (!selected || !actions) return
@@ -436,8 +437,8 @@ function Detail({
           className="w-full px-2 py-1.5 text-sm rounded border border-border bg-bg-secondary"
         >
           <option value="__none">(no change)</option>
-          <option value="__null">reset to &quot;new&quot;</option>
-          {stageOptions.filter(s => s !== 'new').map(s => (
+          <option value="__null">reset to &quot;{DEFAULT_STAGE}&quot;</option>
+          {stageOptions.filter(s => s !== DEFAULT_STAGE).map(s => (
             <option key={s} value={s}>{s}</option>
           ))}
         </select>

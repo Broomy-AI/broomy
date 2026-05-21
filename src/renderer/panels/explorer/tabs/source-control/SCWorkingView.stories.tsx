@@ -55,7 +55,7 @@ const meta: Meta<typeof SCWorkingView> = {
     actions: null,
     conditionState: defaultConditionState,
     templateVars: { main: 'main', branch: 'feature/test', directory: '/Users/test/projects/my-app', issueNumber: '' },
-    currentStage: 'new',
+    currentStage: 'planning',
     onSetSessionStage: () => {},
     onSetup: () => {},
   },

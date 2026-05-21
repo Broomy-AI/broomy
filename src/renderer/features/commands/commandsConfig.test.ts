@@ -412,47 +412,47 @@ describe('isVisible', () => {
   } as any
 
   it('is true when no filters specified', () => {
-    expect(isVisible({ id: 'a', label: 'A', template: 't' }, baseState, 'new', 'source-control')).toBe(true)
+    expect(isVisible({ id: 'a', label: 'A', template: 't' }, baseState, 'planning', 'source-control')).toBe(true)
   })
 
   it('honors showWhen', () => {
-    expect(isVisible({ id: 'a', label: 'A', template: 't', showWhen: ['has-changes'] }, baseState, 'new', 'source-control')).toBe(false)
-    expect(isVisible({ id: 'a', label: 'A', template: 't', showWhen: ['clean'] }, baseState, 'new', 'source-control')).toBe(true)
+    expect(isVisible({ id: 'a', label: 'A', template: 't', showWhen: ['has-changes'] }, baseState, 'planning', 'source-control')).toBe(false)
+    expect(isVisible({ id: 'a', label: 'A', template: 't', showWhen: ['clean'] }, baseState, 'planning', 'source-control')).toBe(true)
   })
 
   it('honors stages list', () => {
-    expect(isVisible({ id: 'a', label: 'A', template: 't', stages: ['planning'] }, baseState, 'new', 'source-control')).toBe(false)
-    expect(isVisible({ id: 'a', label: 'A', template: 't', stages: ['new', 'planning'] }, baseState, 'new', 'source-control')).toBe(true)
+    expect(isVisible({ id: 'a', label: 'A', template: 't', stages: ['verifying'] }, baseState, 'planning', 'source-control')).toBe(false)
+    expect(isVisible({ id: 'a', label: 'A', template: 't', stages: ['planning', 'verifying'] }, baseState, 'planning', 'source-control')).toBe(true)
   })
 
   it('honors surface filter', () => {
-    expect(isVisible({ id: 'a', label: 'A', template: 't', surface: 'review' }, baseState, 'new', 'source-control')).toBe(false)
-    expect(isVisible({ id: 'a', label: 'A', template: 't', surface: ['review', 'source-control'] }, baseState, 'new', 'source-control')).toBe(true)
+    expect(isVisible({ id: 'a', label: 'A', template: 't', surface: 'review' }, baseState, 'planning', 'source-control')).toBe(false)
+    expect(isVisible({ id: 'a', label: 'A', template: 't', surface: ['review', 'source-control'] }, baseState, 'planning', 'source-control')).toBe(true)
   })
 })
 
 describe('discoverStages', () => {
-  it('always includes "new" pinned first', () => {
-    expect(discoverStages([], 'new')).toEqual(['new'])
+  it('always includes the default stage pinned first', () => {
+    expect(discoverStages([], 'planning')).toEqual(['planning'])
   })
 
-  it('unions stages and setStage across actions, sorts non-"new" alphabetically', () => {
+  it('unions stages and setStage across actions; sorts non-default alphabetically', () => {
     const stages = discoverStages([
-      { id: 'a', label: 'A', template: 't', setStage: 'planning' },
-      { id: 'b', label: 'B', template: 't', stages: ['planning', 'building'] },
+      { id: 'a', label: 'A', template: 't', setStage: 'implementing' },
+      { id: 'b', label: 'B', template: 't', stages: ['implementing', 'building'] },
       { id: 'c', label: 'C', template: 't', stages: ['verifying'] },
-    ], 'new')
-    expect(stages).toEqual(['new', 'building', 'planning', 'verifying'])
+    ], 'planning')
+    expect(stages).toEqual(['planning', 'building', 'implementing', 'verifying'])
   })
 
-  it('includes current stage even if no command references it', () => {
-    expect(discoverStages([], 'mystage')).toEqual(['new', 'mystage'])
+  it('includes the current stage even if no command references it', () => {
+    expect(discoverStages([], 'mystage')).toEqual(['planning', 'mystage'])
   })
 
   it('ignores setStage: null', () => {
     expect(discoverStages([
       { id: 'a', label: 'A', template: 't', setStage: null },
-    ], 'new')).toEqual(['new'])
+    ], 'planning')).toEqual(['planning'])
   })
 })
 
