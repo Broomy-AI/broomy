@@ -150,8 +150,9 @@
     {
       "id": "screenshot-walkthrough",
       "label": "Screenshot walkthrough",
-      "description": "Build a screenshot-driven walkthrough of what's been created on this branch.",
+      "description": "Verify the work did the right thing by capturing a screenshot tour of what was built.",
       "template": "Create a screenshot-based walkthrough that demonstrates what has been built on this branch.\n\n1. Identify the key UI states or completed features that show what the work accomplishes. Look at the changes on this branch (`git diff origin/{main}...HEAD`) to decide what to show.\n2. For each, capture a screenshot and write a short caption explaining what the user should notice.\n3. Assemble the result as a markdown document at `.broomy/output/walkthrough.md`. Embed screenshot images stored alongside in `.broomy/output/walkthrough/` (e.g. `walkthrough/01-initial.png`).\n4. If you don't have a screenshot tool available in this environment, tell me what would be needed (e.g. Playwright, a running dev server) and stop — don't fake the screenshots.",
+      "stages": ["verifying"],
       "style": "secondary"
     },
     {
