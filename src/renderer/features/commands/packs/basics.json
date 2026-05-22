@@ -90,9 +90,9 @@
     {
       "id": "sync",
       "label": "Sync changes",
-      "description": "Pull the latest from main, resolve conflicts, validate, and push.",
-      "template": "Sync this branch with {main}:\n\n1. Commit any uncommitted work (skip secrets).\n2. `git fetch origin {main}`. Stop if already up to date.\n3. Summarise PRs merged into {main} since the merge base via `gh pr list --state merged --base {main} --search \"merged:>$(git log -1 --format=%ci <merge-base>)\" --limit 20` for conflict context.\n4. `git merge origin/{main}`. For each conflict, check `git log HEAD...MERGE_HEAD -- <file>` and the PR context; ask for non-obvious resolutions.\n5. Check for semantic conflicts (renamed APIs, removed features) via `git diff origin/{main}...HEAD` cross-referenced with `git diff $(git merge-base HEAD origin/{main})...origin/{main}`.\n6. Run lint/typecheck/tests. Fix everything.\n7. `git commit --no-edit` if conflicted, then push (set tracking if needed).",
-      "showWhen": ["behind-main", "!on-main", "!merging"],
+      "description": "Pull the latest from main and fix any merge conflicts.",
+      "template": "Pull the latest from {main} and fix any merge conflicts (semantic as well as syntactic). For cases where the right merge isn't obvious, ask my opinion. Finish with a report saying what conflict-resolution decisions you made.",
+      "showWhen": ["behind-main", "!on-main", "!merging", "clean"],
       "style": "primary"
     },
     {
