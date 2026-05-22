@@ -124,8 +124,8 @@ describe('CommandExpandedEditor', () => {
 
 describe('ArgsTable', () => {
   const parsedArgs = [
-    { name: 'topic', optional: false },
-    { name: 'depth', optional: true },
+    { name: 'topic', optional: false, flag: null },
+    { name: 'depth', optional: true, flag: '--depth' },
   ]
 
   it('renders a row per detected arg with name', () => {
@@ -149,7 +149,7 @@ describe('ArgsTable', () => {
 
   it('typing in description input calls updateArgMeta with description', () => {
     const updateArgMeta = vi.fn()
-    render(<ArgsTable parsedArgs={[{ name: 'topic', optional: false }]} argsMeta={[]} updateArgMeta={updateArgMeta} />)
+    render(<ArgsTable parsedArgs={[{ name: 'topic', optional: false, flag: null }]} argsMeta={[]} updateArgMeta={updateArgMeta} />)
     const inputs = screen.getAllByRole('textbox')
     fireEvent.change(inputs[0], { target: { value: 'The topic to plan' } })
     expect(updateArgMeta).toHaveBeenCalledWith('topic', { description: 'The topic to plan' })
@@ -158,7 +158,7 @@ describe('ArgsTable', () => {
   it('shows existing meta description and checked state', () => {
     render(
       <ArgsTable
-        parsedArgs={[{ name: 'topic', optional: false }]}
+        parsedArgs={[{ name: 'topic', optional: false, flag: null }]}
         argsMeta={[{ name: 'topic', description: 'existing desc', multiline: true }]}
         updateArgMeta={vi.fn()}
       />
