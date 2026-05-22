@@ -14,6 +14,23 @@ import { useMonacoComments } from '../hooks/useMonacoComments'
 // Configure Monaco to use locally bundled version instead of CDN
 loader.config({ monaco: monacoEditor })
 
+// Boost diff highlight opacity over vs-dark defaults. Monaco's defaults are
+// ~20% alpha, which on the dark navy background renders side-by-side diffs as
+// near-plain-text. Inline mode is fine because its view zones use stronger
+// styling; only side-by-side needs the help.
+const BROOMY_DARK_THEME_NAME = 'broomy-dark'
+monacoEditor.editor.defineTheme(BROOMY_DARK_THEME_NAME, {
+  base: 'vs-dark',
+  inherit: true,
+  rules: [],
+  colors: {
+    'diffEditor.insertedLineBackground': '#3b8c2a55',
+    'diffEditor.removedLineBackground': '#c43c3c55',
+    'diffEditor.insertedTextBackground': '#9ccc2c80',
+    'diffEditor.removedTextBackground': '#ff000080',
+  },
+})
+
 interface MonacoDiffViewerProps {
   filePath: string
   originalContent: string
@@ -109,16 +126,6 @@ export default function MonacoDiffViewer({
     diffEditorRef.current = editor
     const modifiedEditor = editor.getModifiedEditor()
     modifiedEditorRef.current = modifiedEditor
-
-    // Monaco's diff editor internally sets wordWrapOverride1: 'off' on the
-    // original editor, which takes precedence over wordWrap: 'on'.
-    // Use wordWrapOverride2 to override that internal override.
-    // Only needed in side-by-side mode; in inline mode the original editor
-    // is hidden and forcing wrap on it creates oversized hatched zones.
-    if (sideBySide) {
-      editor.getOriginalEditor().updateOptions({ wordWrapOverride2: 'on' })
-    }
-
     // Enable glyph margin for comment clicks when review context is present
     if (reviewContext) {
       modifiedEditor.updateOptions({ glyphMargin: true })
@@ -215,14 +222,24 @@ export default function MonacoDiffViewer({
           language={detectedLanguage}
           original={originalContent}
           modified={modifiedContent}
-          theme="vs-dark"
+          theme={BROOMY_DARK_THEME_NAME}
           onMount={handleDiffEditorMount}
           keepCurrentOriginalModel={false}
           keepCurrentModifiedModel={false}
           options={{
             readOnly: true,
             wordWrap: 'on',
+            // diffWordWrap drives wordWrapOverride1 on both inner editors via
+            // Monaco's reactive autorun, so it survives diff recomputations.
+            diffWordWrap: 'on',
             renderSideBySide: sideBySide,
+            // Honor our explicit sideBySide choice at any width. Otherwise
+            // Monaco silently flips to inline mode when the editor is narrower
+            // than renderSideBySideInlineBreakpoint (default 900px), and that
+            // inline path sets wordWrapOverride2: 'off' on the original editor
+            // — which sticks even after the layout grows back, leaving the
+            // left pane permanently un-wrapped.
+            useInlineViewWhenSpaceIsLimited: false,
             minimap: { enabled: false },
             fontSize: 13,
             fontFamily: 'Menlo, Monaco, "Courier New", monospace',
