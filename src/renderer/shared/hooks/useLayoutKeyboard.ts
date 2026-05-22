@@ -53,6 +53,11 @@ function isInsideModalDialog(): boolean {
   return !!document.activeElement?.closest('[role="dialog"][aria-modal="true"]')
 }
 
+/** Check if focus is inside a Monaco editor, which has its own keybindings (e.g. Cmd+/ for toggle comment). */
+function isInsideMonaco(): boolean {
+  return !!document.activeElement?.closest('.monaco-editor')
+}
+
 /** Check if focus is in a context that should pass through arrow keys. */
 function isArrowPassthrough(el: Element): boolean {
   if (el.closest('.xterm')) return true
@@ -293,6 +298,9 @@ export function useLayoutKeyboard({
       const key = shortcutKey(e)
       const appAction = appWideShortcuts.get(key)
       if (appAction) {
+        // Cmd+/ is Monaco's toggle-line-comment binding. When focus is in a
+        // Monaco editor, let Monaco handle it instead of opening the shortcuts modal.
+        if (key === 'mod:/' && isInsideMonaco()) return
         e.preventDefault()
         e.stopImmediatePropagation()
         appAction()
