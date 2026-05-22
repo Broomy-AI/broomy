@@ -41,6 +41,10 @@ export function StageChips({
   function toggle(s: string) {
     onChange(selected.includes(s) ? selected.filter(x => x !== s) : [...selected, s])
   }
+  function addNew() {
+    const name = (window.prompt('New stage name') ?? '').trim()
+    if (name && !selected.includes(name)) onChange([...selected, name])
+  }
   return (
     <div className="flex flex-wrap gap-1">
       {options.map(s => {
@@ -56,6 +60,14 @@ export function StageChips({
           </button>
         )
       })}
+      <button
+        type="button"
+        onClick={addNew}
+        className="px-2 py-0.5 text-xs rounded-full border border-dashed border-border text-text-tertiary hover:text-text-primary"
+        data-testid="add-new-stage"
+      >
+        + New stage…
+      </button>
     </div>
   )
 }

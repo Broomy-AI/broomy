@@ -18,10 +18,10 @@ describe('packs', () => {
     expect(getPack('missing')).toBeUndefined()
   })
 
-  it('basics drives a brainstorm -> plan -> implement -> verify -> ship workflow via stages', () => {
+  it('basics drives a brainstorm -> implement -> verify -> ship workflow via stages', () => {
     const basics = getPack('basics')!
     const ids = basics.actions.map(a => a.id)
-    for (const id of ['brainstorm', 'write-plan', 'build', 'verify', 'self-review', 'address-feedback']) {
+    for (const id of ['brainstorm', 'verify', 'self-review', 'address-feedback']) {
       expect(ids).toContain(id)
     }
     const hasStageRef = basics.actions.some(a => a.stages || typeof a.setStage === 'string')

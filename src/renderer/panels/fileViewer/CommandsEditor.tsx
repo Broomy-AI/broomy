@@ -405,9 +405,14 @@ function Detail({
           value={selected.setStage === null ? '__null' : (selected.setStage ?? '__none')}
           onChange={e => {
             const v = e.target.value
-            if (v === '__none') onUpdate({ setStage: undefined })
-            else if (v === '__null') onUpdate({ setStage: null })
-            else onUpdate({ setStage: v })
+            if (v === '__none') { onUpdate({ setStage: undefined }); return }
+            if (v === '__null') { onUpdate({ setStage: null }); return }
+            if (v === '__new') {
+              const name = (window.prompt('New stage name') ?? '').trim()
+              if (name) onUpdate({ setStage: name })
+              return
+            }
+            onUpdate({ setStage: v })
           }}
           className="w-full px-2 py-1.5 text-sm rounded border border-border bg-bg-secondary"
         >
@@ -416,6 +421,7 @@ function Detail({
           {stageOptions.filter(s => s !== DEFAULT_STAGE).map(s => (
             <option key={s} value={s}>{s}</option>
           ))}
+          <option value="__new">+ New stage…</option>
         </select>
       </Field>
 
