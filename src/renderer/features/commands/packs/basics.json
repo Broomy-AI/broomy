@@ -17,23 +17,7 @@
         }
       ],
       "stages": ["planning"],
-      "style": "primary"
-    },
-    {
-      "id": "write-plan",
-      "label": "Write plan",
-      "description": "Turn the design into a step-by-step implementation plan.",
-      "template": "We have a design. Write a step-by-step implementation plan to docs/plan.md that an engineer without project context could follow — exact file paths, complete code snippets, verification steps. Don't write the implementation yet.",
-      "stages": ["planning"],
       "setStage": "implementing",
-      "style": "primary"
-    },
-    {
-      "id": "build",
-      "label": "Build (TDD)",
-      "description": "Implement the next task with test-driven development.",
-      "template": "Implement the next task from the plan using test-driven development: write the failing test first, run it to confirm it fails, then write the minimum code to make it pass. Commit at each step.",
-      "stages": ["implementing"],
       "style": "primary"
     },
     {

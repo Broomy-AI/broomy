@@ -18,7 +18,7 @@ import { getUserCommandsConfigPath, userCommandsDir } from '../../features/comma
 import { parseTemplate } from '../../features/commands/templateParser'
 import { ShowWhenPicker } from '../../shared/components/ShowWhenPicker'
 import { DialogErrorBanner } from '../../shared/components/ErrorBanner'
-import { Field, StageChips, EmptyPane, DeleteButton, UnsavedChangesModal } from './CommandsEditorParts'
+import { Field, StageChips, EmptyPane, DeleteButton, UnsavedChangesModal, CommandExpandedEditor, ArgsTable } from './CommandsEditorParts'
 
 type Tab = 'user' | 'project'
 
@@ -310,6 +310,7 @@ function Detail({
   const parsed = parseTemplate(selected.template)
   const argsMeta = selected.args ?? []
   const mode: 'one-line' | 'block' = selected.template.includes('\n') ? 'block' : 'one-line'
+  const [commandExpanded, setCommandExpanded] = useState(false)
 
   function updateArgMeta(name: string, patch: Partial<{ description: string; multiline: boolean }>) {
     const existing = argsMeta.find(a => a.name === name)
@@ -346,6 +347,17 @@ function Detail({
             ? 'Use {name} for args; --flag {name} makes the arg optional.'
             : 'Text-block mode.'
         }
+        action={
+          <button
+            type="button"
+            onClick={() => setCommandExpanded(true)}
+            className="text-[11px] text-text-tertiary hover:text-text-primary transition-colors"
+            title="Edit in a larger pane"
+            data-testid="expand-command"
+          >
+            ⤢ Expand
+          </button>
+        }
       >
         {mode === 'one-line' ? (
           <input
@@ -364,53 +376,16 @@ function Detail({
         )}
       </Field>
 
+      {commandExpanded && (
+        <CommandExpandedEditor
+          value={selected.template}
+          onChange={(v) => onUpdate({ template: v })}
+          onClose={() => setCommandExpanded(false)}
+        />
+      )}
+
       {parsed.args.length > 0 && (
-        <Field label={`Arguments (${parsed.args.length} detected)`}>
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-text-tertiary">
-                <th className="text-left pr-2 pb-1">Name</th>
-                <th className="text-left pr-2 pb-1">Description</th>
-                <th className="text-left pr-2 pb-1">Multi-line</th>
-                <th className="text-left pb-1"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {parsed.args.map(a => {
-                const meta = argsMeta.find(m => m.name === a.name)
-                return (
-                  <tr key={a.name}>
-                    <td className="pr-2 py-0.5 font-mono">{a.name}</td>
-                    <td className="pr-2 py-0.5">
-                      <input
-                        type="text"
-                        value={meta?.description ?? ''}
-                        onChange={e => updateArgMeta(a.name, { description: e.target.value })}
-                        className="w-full px-1 py-0.5 text-xs rounded border border-border bg-bg-primary text-text-primary"
-                      />
-                    </td>
-                    <td className="pr-2 py-0.5">
-                      <input
-                        type="checkbox"
-                        checked={meta?.multiline ?? false}
-                        onChange={e => updateArgMeta(a.name, { multiline: e.target.checked })}
-                        aria-label={`${a.name} multi-line`}
-                        className="accent-accent"
-                      />
-                    </td>
-                    <td className="py-0.5">
-                      {a.optional && (
-                        <span className="text-[10px] px-1 py-0.5 rounded bg-purple-500/20 text-purple-400">
-                          optional
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </Field>
+        <ArgsTable parsedArgs={parsed.args} argsMeta={argsMeta} updateArgMeta={updateArgMeta} />
       )}
 
       <Field label="Show when">

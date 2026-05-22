@@ -2,21 +2,27 @@
  * Small helper components for CommandsEditor, extracted to keep the main file within line limits.
  */
 import { useState } from 'react'
+import type { ArgSpec } from '../../features/commands/commandsConfig'
+import type { TemplateArg } from '../../features/commands/templateParser'
 
 type Tab = 'user' | 'project'
 
 // ---- Field wrapper ----
 
 export function Field({
-  label, hint, children,
+  label, hint, action, children,
 }: {
   label: string
   hint?: string
+  action?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
     <div className="space-y-1">
-      <label className="text-xs text-text-secondary">{label}</label>
+      <div className="flex items-center justify-between">
+        <label className="text-xs text-text-secondary">{label}</label>
+        {action}
+      </div>
       {children}
       {hint && <p className="text-[11px] text-text-tertiary">{hint}</p>}
     </div>
@@ -137,6 +143,112 @@ export function UnsavedChangesModal({
           >
             Save
           </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---- Args table (auto-derived from template placeholders) ----
+
+export function ArgsTable({
+  parsedArgs, argsMeta, updateArgMeta,
+}: {
+  parsedArgs: TemplateArg[]
+  argsMeta: ArgSpec[]
+  updateArgMeta: (name: string, patch: Partial<{ description: string; multiline: boolean }>) => void
+}) {
+  return (
+    <Field label={`Arguments (${parsedArgs.length} detected)`}>
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-text-tertiary">
+            <th className="text-left pr-2 pb-1">Name</th>
+            <th className="text-left pr-2 pb-1">Description</th>
+            <th className="text-left pr-2 pb-1">Multi-line</th>
+            <th className="text-left pb-1"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {parsedArgs.map(a => {
+            const meta = argsMeta.find(m => m.name === a.name)
+            return (
+              <tr key={a.name}>
+                <td className="pr-2 py-0.5 font-mono">{a.name}</td>
+                <td className="pr-2 py-0.5">
+                  <input
+                    type="text"
+                    value={meta?.description ?? ''}
+                    onChange={e => updateArgMeta(a.name, { description: e.target.value })}
+                    className="w-full px-1 py-0.5 text-xs rounded border border-border bg-bg-primary text-text-primary"
+                  />
+                </td>
+                <td className="pr-2 py-0.5">
+                  <input
+                    type="checkbox"
+                    checked={meta?.multiline ?? false}
+                    onChange={e => updateArgMeta(a.name, { multiline: e.target.checked })}
+                    aria-label={`${a.name} multi-line`}
+                    className="accent-accent"
+                  />
+                </td>
+                <td className="py-0.5">
+                  {a.optional && (
+                    <span className="text-[10px] px-1 py-0.5 rounded bg-purple-500/20 text-purple-400">
+                      optional
+                    </span>
+                  )}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </Field>
+  )
+}
+
+// ---- Command expanded editor (full-pane overlay) ----
+
+export function CommandExpandedEditor({
+  value, onChange, onClose,
+}: {
+  value: string
+  onChange: (v: string) => void
+  onClose: () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onClick={onClose}
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose() }}
+      role="dialog"
+    >
+      <div
+        className="bg-bg-secondary border border-border rounded-lg shadow-xl w-[min(900px,90vw)] h-[min(700px,85vh)] mx-4 flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-2 border-b border-border">
+          <h3 className="text-sm font-medium text-text-primary">Command</h3>
+          <button
+            onClick={onClose}
+            className="text-text-secondary hover:text-text-primary px-2"
+            title="Close"
+            data-testid="close-expanded-command"
+          >
+            ✕
+          </button>
+        </div>
+        <textarea
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          className="flex-1 w-full p-4 text-sm font-mono bg-bg-primary text-text-primary resize-none focus:outline-none"
+          autoFocus
+          spellCheck={false}
+          data-testid="expanded-command-textarea"
+        />
+        <div className="px-4 py-2 border-t border-border text-[11px] text-text-tertiary">
+          Use {'{name}'} for args; {'--flag {name}'} makes the arg optional. Changes save as you type.
         </div>
       </div>
     </div>

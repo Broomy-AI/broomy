@@ -132,7 +132,8 @@ describe('ActionButtons', () => {
         onSetSessionStage={vi.fn()}
       />
     )
-    fireEvent.click(screen.getByText('A'))
+    // The button label gets a trailing ellipsis when it will open a dialog.
+    fireEvent.click(screen.getByText('A…'))
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
@@ -165,12 +166,12 @@ describe('ActionButtons', () => {
       />
     )
     // First open — type a value and run
-    fireEvent.click(screen.getByText('A', { selector: 'span' }))
+    fireEvent.click(screen.getByText('A…', { selector: 'span' }))
     fireEvent.change(screen.getByLabelText(/topic/i), { target: { value: 'auth' } })
     fireEvent.click(screen.getByRole('button', { name: 'Run' }))
     // Second open — value should be pre-filled (dialog closes, button re-enabled)
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    fireEvent.click(screen.getByText('A', { selector: 'span' }))
+    fireEvent.click(screen.getByText('A…', { selector: 'span' }))
     expect(screen.getByLabelText(/topic/i)).toHaveValue('auth')
   })
 })
