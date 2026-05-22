@@ -17,8 +17,10 @@ import { useReviewData } from './useReviewData'
 import { useReviewActions } from './useReviewActions'
 import { useCommandsConfig } from '../../../../features/commands/hooks/useCommandsConfig'
 import { computeConditionState } from '../../../../features/commands/conditionState'
-import type { TemplateVars } from '../../../../features/commands/commandsConfig'
+import { DEFAULT_STAGE } from '../../../../features/commands/commandsConfig'
+import type { SubContext } from '../../../../features/commands/templateSubstitute'
 import { ActionButtons } from '../../../../shared/components/ActionButtons'
+import { useSessionStore } from '../../../../store/sessions'
 
 /** Split markdown into sections by `## ` headings (skipping headings inside fenced code blocks) */
 function splitMarkdownSections(markdown: string): { title: string; body: string }[] {
@@ -358,7 +360,12 @@ export default function ReviewPanel({ session, repo, onSelectFile, gitStatus, sy
   } = useReviewActions(session, repo, onSelectFile, state)
 
   // Load commands config for action buttons
-  const { config: commandsConfig } = useCommandsConfig(session.directory)
+  const { merged: commandsConfig, loading: commandsLoading } = useCommandsConfig(session.directory)
+
+  // Session stage state
+  const stage = useSessionStore(s => s.sessions.find(x => x.id === s.activeSessionId)?.stage ?? DEFAULT_STAGE)
+  const setSessionStage = useSessionStore(s => s.setSessionStage)
+  const activeSessionId = useSessionStore(s => s.activeSessionId)
 
   // Compute condition state for action button visibility
   const conditionState = useMemo(() =>
@@ -376,11 +383,12 @@ export default function ReviewPanel({ session, repo, onSelectFile, gitStatus, sy
     [gitStatus, syncStatus, branchStatus, session.prNumber, session.issueNumber]
   )
 
-  const templateVars: TemplateVars = useMemo(() => ({
+  const templateVars: SubContext = useMemo(() => ({
     main: session.prBaseBranch || 'main',
     branch: syncStatus?.current ?? '',
     directory: session.directory,
-  }), [session.prBaseBranch, syncStatus?.current, session.directory])
+    issueNumber: session.issueNumber ? String(session.issueNumber) : '',
+  }), [session.prBaseBranch, syncStatus?.current, session.directory, session.issueNumber])
 
   const showEmptyState = !reviewMarkdown && (fetching || waitingForAgent)
 
@@ -404,8 +412,12 @@ export default function ReviewPanel({ session, repo, onSelectFile, gitStatus, sy
       {/* Action buttons from commands.json filtered by surface='review' */}
       <ActionButtons
         actions={commandsConfig?.actions ?? null}
+        loading={commandsLoading}
         conditionState={conditionState}
         templateVars={templateVars}
+        currentStage={stage}
+        onSetSessionStage={(next) => activeSessionId && setSessionStage(activeSessionId, next)}
+        onSetup={() => undefined}
         directory={session.directory}
         agentPtyId={session.agentPtyId}
         agentId={session.agentId}

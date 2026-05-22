@@ -214,6 +214,8 @@ export type SessionData = {
   searchHistory?: string[]
   // Archive state
   isArchived?: boolean
+  // Workflow stage
+  stage?: string
   // Agent SDK session ID for resume
   sdkSessionId?: string
 }

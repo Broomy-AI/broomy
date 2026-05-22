@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import '../../../test/react-setup'
 
 vi.mock('../../features/commands/actionExecutor', () => ({
@@ -8,129 +8,170 @@ vi.mock('../../features/commands/actionExecutor', () => ({
 }))
 
 import { ActionButtons } from './ActionButtons'
-import { executeAction } from '../../features/commands/actionExecutor'
-import type { ActionDefinition, ConditionState, TemplateVars } from '../../features/commands/commandsConfig'
 
-beforeEach(() => { vi.clearAllMocks() })
-afterEach(() => { cleanup() })
+const condState = {
+  'has-changes': true, 'clean': false, 'merging': false, 'conflicts': false,
+  'no-tracking': false, 'ahead': false, 'behind': false, 'behind-main': false,
+  'on-main': false, 'in-progress': false, 'pushed': false, 'empty': false,
+  'open': false, 'merged': false, 'closed': false, 'no-pr': true,
+  'has-write-access': true, 'allow-approve-and-merge': true,
+  'checks-passed': true, 'has-issue': false, 'no-devcontainer': false, 'review': false,
+} as any
 
-const BASE_STATE: ConditionState = {
-  'has-changes': true, clean: false, merging: false, conflicts: false,
-  'no-tracking': false, ahead: false, behind: false, 'behind-main': false,
-  'on-main': false, 'in-progress': true, pushed: false, empty: false,
-  open: false, merged: false, closed: false, 'no-pr': true,
-  'has-write-access': true, 'allow-approve-and-merge': false, 'checks-passed': false, 'has-issue': false, 'no-devcontainer': false, review: false,
-}
-const VARS: TemplateVars = { main: 'main', branch: 'feature/test', directory: '/repo' }
+const ctx = { main: 'main', branch: 'b', directory: '/r', issueNumber: '' }
 
-const ACTIONS: ActionDefinition[] = [
-  { id: 'commit', label: 'Commit', type: 'agent', prompt: 'commit', showWhen: ['has-changes'] },
-  { id: 'push', label: 'Push to {main}', type: 'shell', command: 'git push', showWhen: ['clean'] },
-]
+afterEach(() => {
+  cleanup()
+})
 
 describe('ActionButtons', () => {
-  it('renders visible actions based on showWhen', () => {
+  it('renders the Setup CTA when actions is null/empty', () => {
     render(
-      <ActionButtons actions={ACTIONS} conditionState={BASE_STATE} templateVars={VARS}
-        directory="/repo" agentPtyId="pty-1" />
+      <ActionButtons
+        actions={[]}
+        conditionState={condState}
+        templateVars={ctx}
+        currentStage="new"
+        directory="/r"
+        onSetup={vi.fn()}
+        onSetSessionStage={vi.fn()}
+      />
     )
-    expect(screen.getByText('Commit')).toBeTruthy()
-    expect(screen.queryByText('Push to main')).toBeNull() // clean is false
+    expect(screen.getByRole('button', { name: /set up commands/i })).toBeInTheDocument()
   })
 
-  it('resolves template vars in labels', () => {
+  it('renders a button with two-line content (label + slash subtitle)', () => {
     render(
-      <ActionButtons actions={ACTIONS} conditionState={{ ...BASE_STATE, clean: true }} templateVars={VARS}
-        directory="/repo" agentPtyId="pty-1" />
+      <ActionButtons
+        actions={[{ id: 'plan', label: 'Plan', template: '/plan' }]}
+        conditionState={condState}
+        templateVars={ctx}
+        currentStage="new"
+        directory="/r"
+        onSetup={vi.fn()}
+        onSetSessionStage={vi.fn()}
+      />
     )
-    expect(screen.getByText('Push to main')).toBeTruthy()
+    expect(screen.getByText('Plan')).toBeInTheDocument()
+    expect(screen.getByText('/plan')).toBeInTheDocument()
   })
 
-  it('returns null when no actions are visible', () => {
-    const { container } = render(
-      <ActionButtons actions={ACTIONS} conditionState={{ ...BASE_STATE, 'has-changes': false }} templateVars={VARS}
-        directory="/repo" agentPtyId="pty-1" />
+  it('omits subtitle when template does not start with /', () => {
+    render(
+      <ActionButtons
+        actions={[{ id: 'c', label: 'Commit', template: 'Commit this' }]}
+        conditionState={condState}
+        templateVars={ctx}
+        currentStage="new"
+        directory="/r"
+        onSetup={vi.fn()}
+        onSetSessionStage={vi.fn()}
+      />
     )
-    expect(container.firstChild).toBeNull()
+    expect(screen.queryByText('/Commit')).toBeNull()
   })
 
-  it('disables agent buttons when no agentPtyId', () => {
+  it('hides the stage pill when no action references stages or setStage', () => {
     render(
-      <ActionButtons actions={ACTIONS} conditionState={BASE_STATE} templateVars={VARS}
-        directory="/repo" />
+      <ActionButtons
+        actions={[{ id: 'a', label: 'A', template: '/x' }]}
+        conditionState={condState}
+        templateVars={ctx}
+        currentStage="new"
+        directory="/r"
+        onSetup={vi.fn()}
+        onSetSessionStage={vi.fn()}
+      />
     )
-    const btn = screen.getByText('Commit')
-    expect(btn.hasAttribute('disabled')).toBe(true)
+    expect(screen.queryByRole('button', { name: /stage:/i })).toBeNull()
   })
 
-  it('calls executeAction on click', async () => {
+  it('shows the stage pill when any action references stages', () => {
     render(
-      <ActionButtons actions={ACTIONS} conditionState={BASE_STATE} templateVars={VARS}
-        directory="/repo" agentPtyId="pty-1" />
+      <ActionButtons
+        actions={[{ id: 'a', label: 'A', template: '/x', stages: ['planning'] }]}
+        conditionState={condState}
+        templateVars={ctx}
+        currentStage="new"
+        directory="/r"
+        onSetup={vi.fn()}
+        onSetSessionStage={vi.fn()}
+      />
     )
-    await act(async () => {
-      fireEvent.click(screen.getByText('Commit'))
-    })
+    expect(screen.getByRole('button', { name: /stage:/i })).toBeInTheDocument()
+  })
+
+  it('runs action directly when template has no user args', async () => {
+    const { executeAction } = await import('../../features/commands/actionExecutor')
+    render(
+      <ActionButtons
+        actions={[{ id: 'a', label: 'A', template: '/x' }]}
+        conditionState={condState}
+        templateVars={ctx}
+        currentStage="new"
+        directory="/r"
+        agentPtyId="pty-1"
+        onSetup={vi.fn()}
+        onSetSessionStage={vi.fn()}
+      />
+    )
+    fireEvent.click(screen.getByText('A'))
     expect(executeAction).toHaveBeenCalled()
   })
 
-  it('shows error when action fails', async () => {
-    vi.mocked(executeAction).mockResolvedValueOnce({ success: false, error: 'Something failed' })
+  it('opens ArgDialog when template has user args', async () => {
     render(
-      <ActionButtons actions={ACTIONS} conditionState={BASE_STATE} templateVars={VARS}
-        directory="/repo" agentPtyId="pty-1" />
+      <ActionButtons
+        actions={[{ id: 'a', label: 'A', template: '/x {topic}' }]}
+        conditionState={condState}
+        templateVars={ctx}
+        currentStage="new"
+        directory="/r"
+        agentPtyId="pty-1"
+        onSetup={vi.fn()}
+        onSetSessionStage={vi.fn()}
+      />
     )
-    await act(async () => {
-      fireEvent.click(screen.getByText('Commit'))
-    })
-    expect(screen.getByText('Commit failed: Something failed')).toBeTruthy()
+    // The button label gets a trailing ellipsis when it will open a dialog.
+    fireEvent.click(screen.getByText('A…'))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
-  it('uses default actions when actions is null', () => {
+  it('shows stage pill when any action has setStage: null', () => {
     render(
-      <ActionButtons actions={null} conditionState={BASE_STATE} templateVars={VARS}
-        directory="/repo" agentPtyId="pty-1" />
+      <ActionButtons
+        actions={[{ id: 'a', label: 'A', template: '/x', setStage: null }]}
+        conditionState={condState}
+        templateVars={ctx}
+        currentStage="new"
+        directory="/r"
+        onSetup={vi.fn()}
+        onSetSessionStage={vi.fn()}
+      />
     )
-    // Default config has a "Commit with AI" action for has-changes
-    expect(screen.getByText('Commit with AI')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /stage:/i })).toBeInTheDocument()
   })
 
-  it('filters actions by surface', () => {
-    const actions: ActionDefinition[] = [
-      { id: 'commit', label: 'Commit', type: 'agent', prompt: 'commit', showWhen: ['has-changes'] },
-      { id: 'review', label: 'Review', type: 'agent', prompt: 'review', showWhen: ['has-changes'], surface: 'review' },
-      { id: 'both', label: 'Both', type: 'agent', prompt: 'both', showWhen: ['has-changes'], surface: ['source-control', 'review'] },
-    ]
+  it('pre-fills last-used arg values when reopening ArgDialog', async () => {
     render(
-      <ActionButtons actions={actions} conditionState={BASE_STATE} templateVars={VARS}
-        directory="/repo" agentPtyId="pty-1" surface="source-control" />
+      <ActionButtons
+        actions={[{ id: 'a', label: 'A', template: '/x {topic}' }]}
+        conditionState={condState}
+        templateVars={ctx}
+        currentStage="new"
+        directory="/r"
+        agentPtyId="pty-1"
+        onSetup={vi.fn()}
+        onSetSessionStage={vi.fn()}
+      />
     )
-    expect(screen.getByText('Commit')).toBeTruthy()
-    expect(screen.queryByText('Review')).toBeNull()
-    expect(screen.getByText('Both')).toBeTruthy()
-
-    cleanup()
-    render(
-      <ActionButtons actions={actions} conditionState={BASE_STATE} templateVars={VARS}
-        directory="/repo" agentPtyId="pty-1" surface="review" />
-    )
-    expect(screen.queryByText('Commit')).toBeNull()
-    expect(screen.getByText('Review')).toBeTruthy()
-    expect(screen.getByText('Both')).toBeTruthy()
-  })
-
-  it('calls onSwitchTab when action has switchTab', async () => {
-    const onSwitchTab = vi.fn()
-    const actions: ActionDefinition[] = [
-      { id: 'review', label: 'Review', type: 'agent', prompt: 'review', showWhen: ['has-changes'], switchTab: 'review' },
-    ]
-    render(
-      <ActionButtons actions={actions} conditionState={BASE_STATE} templateVars={VARS}
-        directory="/repo" agentPtyId="pty-1" onSwitchTab={onSwitchTab} />
-    )
-    await act(async () => {
-      fireEvent.click(screen.getByText('Review'))
-    })
-    expect(onSwitchTab).toHaveBeenCalledWith('review')
+    // First open — type a value and run
+    fireEvent.click(screen.getByText('A…', { selector: 'span' }))
+    fireEvent.change(screen.getByLabelText(/topic/i), { target: { value: 'auth' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }))
+    // Second open — value should be pre-filled (dialog closes, button re-enabled)
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    fireEvent.click(screen.getByText('A…', { selector: 'span' }))
+    expect(screen.getByLabelText(/topic/i)).toHaveValue('auth')
   })
 })

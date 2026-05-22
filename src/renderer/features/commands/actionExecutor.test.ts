@@ -1,273 +1,274 @@
-// @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import '../../../test/react-setup'
 
 vi.mock('../../shared/utils/focusHelpers', () => ({
   sendAgentPrompt: vi.fn().mockResolvedValue(undefined),
-  focusAgentTerminal: vi.fn(),
 }))
 
-vi.mock('../../store/agents', () => ({
-  useAgentStore: {
-    getState: () => ({
-      agents: [
-        { id: 'agent-1', name: 'Claude', command: 'claude' },
-        { id: 'agent-2', name: 'Aider', command: 'aider --model gpt-4' },
-      ],
-    }),
+vi.mock('../../store/sessions', () => ({
+  useSessionStore: {
+    getState: () => ({ setSessionStage: vi.fn(), activeSessionId: 'sess', sessions: [] }),
   },
 }))
 
-import { executeAction } from './actionExecutor'
-import type { ActionExecutionContext } from './actionExecutor'
-import type { ActionDefinition } from './commandsConfig'
+vi.mock('../../store/agentChat', () => ({ useAgentChatStore: { getState: () => ({ addMessage: vi.fn(), setState: vi.fn() }) } }))
+vi.mock('../../store/agents', () => ({ useAgentStore: { getState: () => ({ agents: [] }) } }))
+vi.mock('../../store/repos', () => ({ useRepoStore: { getState: () => ({ repos: [] }) } }))
+vi.mock('../../../shared/featureFlags', () => ({ ENABLE_AGENT_SDK: false }))
 
 beforeEach(() => {
   vi.clearAllMocks()
+  ;(globalThis as any).window = {
+    fs: { mkdir: vi.fn().mockResolvedValue(undefined), writeFile: vi.fn().mockResolvedValue(undefined) },
+    shell: { exec: vi.fn().mockResolvedValue({ success: true, stdout: '', stderr: '', exitCode: 0 }) },
+    agentSdk: { send: vi.fn().mockResolvedValue(undefined) },
+  }
 })
 
-function makeCtx(overrides: Partial<ActionExecutionContext> = {}): ActionExecutionContext {
-  return {
-    directory: '/repo',
-    agentPtyId: 'pty-1',
-    agentId: 'agent-1',
-    templateVars: { main: 'main', branch: 'feature/test', directory: '/repo' },
-    ...overrides,
-  }
-}
-
-describe('executeAction - shell', () => {
-  it('executes a shell command', async () => {
-    vi.mocked(window.shell.exec).mockResolvedValue({ success: true, stdout: '', stderr: '', exitCode: 0 })
-    const onRefresh = vi.fn()
-
-    const action: ActionDefinition = {
-      id: 'sync', label: 'Sync', type: 'shell',
-      command: 'git pull && git push', showWhen: [],
-    }
-
-    const result = await executeAction(action, makeCtx({ onGitStatusRefresh: onRefresh }))
-
+describe('executeAction', () => {
+  it('runs shell action when template starts with !', async () => {
+    const { executeAction } = await import('./actionExecutor')
+    const result = await executeAction(
+      { id: 'a', label: 'Push', template: '!git push' },
+      {
+        directory: '/repo',
+        agentPtyId: 'pty-1',
+        templateVars: { main: 'main', branch: 'b', directory: '/repo', issueNumber: '' },
+        argValues: {},
+      },
+    )
     expect(result.success).toBe(true)
-    expect(window.shell.exec).toHaveBeenCalledWith('git pull && git push', '/repo')
-    expect(onRefresh).toHaveBeenCalled()
+    expect((window.shell.exec as any)).toHaveBeenCalledWith('git push', '/repo')
   })
 
-  it('returns error when command fails', async () => {
-    vi.mocked(window.shell.exec).mockResolvedValue({ success: false, stdout: '', stderr: 'fatal error', exitCode: 1 })
+  it('substitutes context vars in shell template', async () => {
+    const { executeAction } = await import('./actionExecutor')
+    await executeAction(
+      { id: 'a', label: 'X', template: '!echo {branch}' },
+      { directory: '/r', templateVars: { main: 'main', branch: 'feat', directory: '/r', issueNumber: '' }, argValues: {} },
+    )
+    expect((window.shell.exec as any)).toHaveBeenCalledWith('echo feat', '/r')
+  })
 
-    const action: ActionDefinition = {
-      id: 'sync', label: 'Sync', type: 'shell',
-      command: 'git push', showWhen: [],
-    }
+  it('sends agent prompt when template lacks ! prefix', async () => {
+    const { executeAction } = await import('./actionExecutor')
+    const { sendAgentPrompt } = await import('../../shared/utils/focusHelpers')
+    await executeAction(
+      { id: 'a', label: 'Plan', template: '/plan {topic}' },
+      {
+        directory: '/r',
+        agentPtyId: 'pty-1',
+        templateVars: { main: 'main', branch: 'b', directory: '/r', issueNumber: '' },
+        argValues: { topic: { value: 'auth' } },
+      },
+    )
+    expect(sendAgentPrompt).toHaveBeenCalledWith('pty-1', '/plan auth')
+  })
 
-    const result = await executeAction(action, makeCtx())
+  it('strips disabled optional flag-groups', async () => {
+    const { executeAction } = await import('./actionExecutor')
+    const { sendAgentPrompt } = await import('../../shared/utils/focusHelpers')
+    await executeAction(
+      { id: 'a', label: 'Plan', template: '/plan {topic} --depth {depth}' },
+      {
+        directory: '/r',
+        agentPtyId: 'pty-1',
+        templateVars: { main: 'main', branch: 'b', directory: '/r', issueNumber: '' },
+        argValues: { topic: { value: 'auth' }, depth: { value: '', enabled: false } },
+      },
+    )
+    expect(sendAgentPrompt).toHaveBeenCalledWith('pty-1', '/plan auth')
+  })
+
+  it('calls setSessionStage after successful shell exec', async () => {
+    const setStage = vi.fn()
+    const useSessionStore = (await import('../../store/sessions')).useSessionStore
+    ;(useSessionStore.getState as any) = () => ({ setSessionStage: setStage, activeSessionId: 'sess', sessions: [] })
+
+    const { executeAction } = await import('./actionExecutor')
+    await executeAction(
+      { id: 'a', label: 'Push', template: '!git push', setStage: 'pushed' },
+      { directory: '/r', templateVars: { main: 'main', branch: 'b', directory: '/r', issueNumber: '' }, argValues: {} },
+    )
+    expect(setStage).toHaveBeenCalledWith('sess', 'pushed')
+  })
+
+  it('setStage: null writes the default stage', async () => {
+    const setStage = vi.fn()
+    const useSessionStore = (await import('../../store/sessions')).useSessionStore
+    ;(useSessionStore.getState as any) = () => ({ setSessionStage: setStage, activeSessionId: 'sess', sessions: [] })
+
+    const { executeAction } = await import('./actionExecutor')
+    await executeAction(
+      { id: 'a', label: 'Finish', template: '/finish', setStage: null },
+      { directory: '/r', agentPtyId: 'pty-1', templateVars: { main: 'main', branch: 'b', directory: '/r', issueNumber: '' }, argValues: {} },
+    )
+    expect(setStage).toHaveBeenCalledWith('sess', 'planning')
+  })
+
+  it('shell exec returning success: false returns failure with stderr', async () => {
+    ;(window.shell.exec as any).mockResolvedValue({ success: false, stdout: '', stderr: 'push failed', exitCode: 1 })
+    const { executeAction } = await import('./actionExecutor')
+    const result = await executeAction(
+      { id: 'a', label: 'Push', template: '!git push' },
+      { directory: '/r', templateVars: { main: 'main', branch: 'b', directory: '/r', issueNumber: '' }, argValues: {} },
+    )
     expect(result.success).toBe(false)
-    expect(result.error).toBe('fatal error')
+    expect(result.error).toBe('push failed')
   })
 
-  it('returns error when no command specified', async () => {
-    const action: ActionDefinition = {
-      id: 'test', label: 'Test', type: 'shell', showWhen: [],
-    }
-
-    const result = await executeAction(action, makeCtx())
-    expect(result.success).toBe(false)
-    expect(result.error).toBe('No command specified')
-  })
-
-  it('treats merge conflicts as success', async () => {
-    vi.mocked(window.shell.exec).mockResolvedValue({
-      success: false,
-      stdout: 'Auto-merging src/index.ts\nCONFLICT (content): Merge conflict in src/index.ts',
-      stderr: "Automatic merge failed; fix conflicts and then commit the result.",
-      exitCode: 1,
-    })
-    const onRefresh = vi.fn()
-
-    const action: ActionDefinition = {
-      id: 'sync-main', label: 'Get latest', type: 'shell',
-      command: 'git fetch origin main && git merge origin/main', showWhen: [],
-    }
-
-    const result = await executeAction(action, makeCtx({ onGitStatusRefresh: onRefresh }))
+  it('shell exec failure with CONFLICT in output is treated as success', async () => {
+    ;(window.shell.exec as any).mockResolvedValue({ success: false, stdout: 'CONFLICT (content): Merge conflict in foo.ts', stderr: '', exitCode: 1 })
+    const onGitStatusRefresh = vi.fn()
+    const { executeAction } = await import('./actionExecutor')
+    const result = await executeAction(
+      { id: 'a', label: 'Merge', template: '!git merge main' },
+      { directory: '/r', templateVars: { main: 'main', branch: 'b', directory: '/r', issueNumber: '' }, argValues: {}, onGitStatusRefresh },
+    )
     expect(result.success).toBe(true)
-    expect(onRefresh).toHaveBeenCalled()
+    expect(onGitStatusRefresh).toHaveBeenCalled()
   })
 
-  it('handles thrown errors', async () => {
-    vi.mocked(window.shell.exec).mockRejectedValue(new Error('network error'))
+  it('shell exec failure with "Merge conflict" in stderr is treated as success', async () => {
+    ;(window.shell.exec as any).mockResolvedValue({ success: false, stdout: '', stderr: 'Merge conflict in bar.ts', exitCode: 1 })
+    const { executeAction } = await import('./actionExecutor')
+    const result = await executeAction(
+      { id: 'a', label: 'Merge', template: '!git merge main' },
+      { directory: '/r', templateVars: { main: 'main', branch: 'b', directory: '/r', issueNumber: '' }, argValues: {} },
+    )
+    expect(result.success).toBe(true)
+  })
 
-    const action: ActionDefinition = {
-      id: 'sync', label: 'Sync', type: 'shell',
-      command: 'git push', showWhen: [],
-    }
+  it('shell exec success fires onGitStatusRefresh', async () => {
+    const onGitStatusRefresh = vi.fn()
+    const { executeAction } = await import('./actionExecutor')
+    await executeAction(
+      { id: 'a', label: 'Push', template: '!git push' },
+      { directory: '/r', templateVars: { main: 'main', branch: 'b', directory: '/r', issueNumber: '' }, argValues: {}, onGitStatusRefresh },
+    )
+    expect(onGitStatusRefresh).toHaveBeenCalled()
+  })
 
-    const result = await executeAction(action, makeCtx())
+  it('shell exec throwing returns failure with error message', async () => {
+    ;(window.shell.exec as any).mockRejectedValue(new Error('network error'))
+    const { executeAction } = await import('./actionExecutor')
+    const result = await executeAction(
+      { id: 'a', label: 'Push', template: '!git push' },
+      { directory: '/r', templateVars: { main: 'main', branch: 'b', directory: '/r', issueNumber: '' }, argValues: {} },
+    )
     expect(result.success).toBe(false)
     expect(result.error).toBe('network error')
   })
 
-  it('resolves template vars in command', async () => {
-    vi.mocked(window.shell.exec).mockResolvedValue({ success: true, stdout: '', stderr: '', exitCode: 0 })
-
-    const action: ActionDefinition = {
-      id: 'push', label: 'Push', type: 'shell',
-      command: 'git push origin HEAD:{main}', showWhen: [],
-    }
-
-    await executeAction(action, makeCtx())
-    expect(window.shell.exec).toHaveBeenCalledWith('git push origin HEAD:main', '/repo')
-  })
-})
-
-describe('executeAction - agent', () => {
-  it('sends prompt to agent terminal', async () => {
-    const { sendAgentPrompt } = await import('../../shared/utils/focusHelpers')
-
-    const action: ActionDefinition = {
-      id: 'commit', label: 'Commit', type: 'agent',
-      prompt: 'Make a commit', showWhen: [],
-    }
-
-    const result = await executeAction(action, makeCtx())
-    expect(result.success).toBe(true)
-    expect(sendAgentPrompt).toHaveBeenCalledWith('pty-1', 'Make a commit')
-  })
-
-  it('returns error when no agent terminal', async () => {
-    const action: ActionDefinition = {
-      id: 'commit', label: 'Commit', type: 'agent',
-      prompt: 'Make a commit', showWhen: [],
-    }
-
-    const result = await executeAction(action, makeCtx({ agentPtyId: undefined }))
+  it('agent path: no agentPtyId and not in API mode returns error', async () => {
+    const { executeAction } = await import('./actionExecutor')
+    const result = await executeAction(
+      { id: 'a', label: 'Plan', template: '/plan' },
+      { directory: '/r', templateVars: { main: 'main', branch: 'b', directory: '/r', issueNumber: '' }, argValues: {} },
+    )
     expect(result.success).toBe(false)
     expect(result.error).toBe('No agent terminal available')
   })
 
-  it('writes context.json with template vars before agent action', async () => {
-    vi.mocked(window.fs.mkdir).mockResolvedValue({ success: true })
-
-    const action: ActionDefinition = {
-      id: 'push', label: 'Push', type: 'agent',
-      prompt: 'Push it', showWhen: [],
-    }
-
-    await executeAction(action, makeCtx())
-
-    expect(window.fs.mkdir).toHaveBeenCalledWith('/repo/.broomy')
-    expect(window.fs.mkdir).toHaveBeenCalledWith('/repo/.broomy/output')
-    expect(window.fs.writeFile).toHaveBeenCalledWith(
-      '/repo/.broomy/output/context.json',
-      expect.stringContaining('"main"')
+  it('agent path: fs.mkdir throwing returns failure', async () => {
+    ;(window.fs.mkdir as any).mockRejectedValue(new Error('disk full'))
+    const { executeAction } = await import('./actionExecutor')
+    const result = await executeAction(
+      { id: 'a', label: 'Plan', template: '/plan' },
+      { directory: '/r', agentPtyId: 'pty-1', templateVars: { main: 'main', branch: 'b', directory: '/r', issueNumber: '' }, argValues: {} },
     )
-  })
-
-  it('uses agent-specific prompt override', async () => {
-    const { sendAgentPrompt } = await import('../../shared/utils/focusHelpers')
-
-    const action: ActionDefinition = {
-      id: 'commit', label: 'Commit', type: 'agent',
-      prompt: 'default prompt', showWhen: [],
-      agents: { claude: { prompt: 'claude-specific prompt' } },
-    }
-
-    await executeAction(action, makeCtx({ agentId: 'agent-1' }))
-    expect(sendAgentPrompt).toHaveBeenCalledWith('pty-1', 'claude-specific prompt')
-  })
-
-  it('falls back to default prompt when agent type has no override', async () => {
-    const { sendAgentPrompt } = await import('../../shared/utils/focusHelpers')
-
-    const action: ActionDefinition = {
-      id: 'commit', label: 'Commit', type: 'agent',
-      prompt: 'default prompt', showWhen: [],
-      agents: { aider: { prompt: 'aider-specific' } },
-    }
-
-    // agent-1 is claude, override is for aider only
-    await executeAction(action, makeCtx({ agentId: 'agent-1' }))
-    expect(sendAgentPrompt).toHaveBeenCalledWith('pty-1', 'default prompt')
-  })
-
-  it('falls back to label when no prompt is set', async () => {
-    const { sendAgentPrompt } = await import('../../shared/utils/focusHelpers')
-
-    const action: ActionDefinition = {
-      id: 'commit', label: 'Commit', type: 'agent', showWhen: [],
-    }
-
-    await executeAction(action, makeCtx())
-    expect(sendAgentPrompt).toHaveBeenCalledWith('pty-1', 'Run the "Commit" action')
-  })
-
-  it('uses aider override when current agent is aider', async () => {
-    const { sendAgentPrompt } = await import('../../shared/utils/focusHelpers')
-
-    const action: ActionDefinition = {
-      id: 'commit', label: 'Commit', type: 'agent',
-      prompt: 'default prompt', showWhen: [],
-      agents: {
-        claude: { prompt: 'claude prompt' },
-        aider: { prompt: 'aider prompt' },
-      },
-    }
-
-    // agent-2 is aider
-    await executeAction(action, makeCtx({ agentId: 'agent-2' }))
-    expect(sendAgentPrompt).toHaveBeenCalledWith('pty-1', 'aider prompt')
-  })
-
-  it('falls back to base prompt when override prompt is empty', async () => {
-    const { sendAgentPrompt } = await import('../../shared/utils/focusHelpers')
-
-    const action: ActionDefinition = {
-      id: 'commit', label: 'Commit', type: 'agent',
-      prompt: 'base prompt', showWhen: [],
-      agents: { claude: { prompt: '' } },
-    }
-
-    await executeAction(action, makeCtx({ agentId: 'agent-1' }))
-    expect(sendAgentPrompt).toHaveBeenCalledWith('pty-1', 'base prompt')
-  })
-
-  it('resolves template vars in agent override prompt', async () => {
-    const { sendAgentPrompt } = await import('../../shared/utils/focusHelpers')
-
-    const action: ActionDefinition = {
-      id: 'pr', label: 'Create PR', type: 'agent',
-      prompt: 'default', showWhen: [],
-      agents: { claude: { prompt: 'Create PR against {main} on {branch}' } },
-    }
-
-    await executeAction(action, makeCtx({ agentId: 'agent-1' }))
-    expect(sendAgentPrompt).toHaveBeenCalledWith('pty-1', 'Create PR against main on feature/test')
-  })
-
-  it('uses base prompt when agentId is null', async () => {
-    const { sendAgentPrompt } = await import('../../shared/utils/focusHelpers')
-
-    const action: ActionDefinition = {
-      id: 'commit', label: 'Commit', type: 'agent',
-      prompt: 'base prompt', showWhen: [],
-      agents: { claude: { prompt: 'claude prompt' } },
-    }
-
-    await executeAction(action, makeCtx({ agentId: null }))
-    expect(sendAgentPrompt).toHaveBeenCalledWith('pty-1', 'base prompt')
-  })
-
-  it('handles errors during execution', async () => {
-    vi.mocked(window.fs.mkdir).mockRejectedValue(new Error('mkdir failed'))
-
-    const action: ActionDefinition = {
-      id: 'push', label: 'Push', type: 'agent',
-      prompt: 'Push', showWhen: [],
-    }
-
-    const result = await executeAction(action, makeCtx())
     expect(result.success).toBe(false)
-    expect(result.error).toBe('mkdir failed')
+    expect(result.error).toBe('disk full')
+  })
+
+  it('applySetStage: no-op when setStage is undefined', async () => {
+    const setStage = vi.fn()
+    const useSessionStore = (await import('../../store/sessions')).useSessionStore
+    ;(useSessionStore.getState as any) = () => ({ setSessionStage: setStage, activeSessionId: 'sess', sessions: [] })
+
+    const { executeAction } = await import('./actionExecutor')
+    await executeAction(
+      { id: 'a', label: 'Push', template: '!git push' },
+      { directory: '/r', templateVars: { main: 'main', branch: 'b', directory: '/r', issueNumber: '' }, argValues: {} },
+    )
+    // setStage should NOT have been called because action.setStage is undefined
+    expect(setStage).not.toHaveBeenCalled()
+  })
+
+  it('applySetStage: no-op when there is no activeSessionId', async () => {
+    const setStage = vi.fn()
+    const useSessionStore = (await import('../../store/sessions')).useSessionStore
+    ;(useSessionStore.getState as any) = () => ({ setSessionStage: setStage, activeSessionId: null, sessions: [] })
+
+    const { executeAction } = await import('./actionExecutor')
+    await executeAction(
+      { id: 'a', label: 'Push', template: '!git push', setStage: 'done' },
+      { directory: '/r', templateVars: { main: 'main', branch: 'b', directory: '/r', issueNumber: '' }, argValues: {} },
+    )
+    expect(setStage).not.toHaveBeenCalled()
+  })
+})
+
+describe('executeAction (API mode)', () => {
+  beforeEach(async () => {
+    vi.resetModules()
+    // Re-mock with ENABLE_AGENT_SDK = true
+    vi.doMock('../../../shared/featureFlags', () => ({ ENABLE_AGENT_SDK: true }))
+    vi.doMock('../../shared/utils/focusHelpers', () => ({ sendAgentPrompt: vi.fn().mockResolvedValue(undefined) }))
+
+    const addMessage = vi.fn()
+    const setState = vi.fn()
+    vi.doMock('../../store/agentChat', () => ({ useAgentChatStore: { getState: () => ({ addMessage, setState }) } }))
+
+    vi.doMock('../../store/agents', () => ({
+      useAgentStore: {
+        getState: () => ({
+          agents: [{ id: 'agent-api', connectionMode: 'api', env: undefined }],
+        }),
+      },
+    }))
+
+    vi.doMock('../../store/sessions', () => ({
+      useSessionStore: {
+        getState: () => ({
+          activeSessionId: 'sess-api',
+          setSessionStage: vi.fn(),
+          sessions: [{ id: 'sess-api', repoId: 'repo-1', sdkSessionId: undefined }],
+          updateAgentMonitor: vi.fn(),
+        }),
+      },
+    }))
+
+    vi.doMock('../../store/repos', () => ({
+      useRepoStore: {
+        getState: () => ({
+          repos: [{ id: 'repo-1', rootDir: '/r', skipApproval: false }],
+        }),
+      },
+    }))
+
+    ;(globalThis as any).window = {
+      fs: { mkdir: vi.fn().mockResolvedValue(undefined), writeFile: vi.fn().mockResolvedValue(undefined) },
+      shell: { exec: vi.fn().mockResolvedValue({ success: true, stdout: '', stderr: '', exitCode: 0 }) },
+      agentSdk: { send: vi.fn().mockResolvedValue(undefined) },
+    }
+  })
+
+  it('sends via agentSdk.send when agent connectionMode is api', async () => {
+    const { executeAction } = await import('./actionExecutor')
+    const result = await executeAction(
+      { id: 'a', label: 'Plan', template: '/plan' },
+      {
+        directory: '/r',
+        agentId: 'agent-api',
+        templateVars: { main: 'main', branch: 'b', directory: '/r', issueNumber: '' },
+        argValues: {},
+      },
+    )
+    expect(result.success).toBe(true)
+    expect((window.agentSdk.send as any)).toHaveBeenCalledWith(
+      'sess-api',
+      '/plan',
+      expect.objectContaining({ cwd: '/r' }),
+    )
   })
 })

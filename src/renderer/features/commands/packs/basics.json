@@ -1,0 +1,149 @@
+{
+  "id": "basics",
+  "name": "Basics",
+  "description": "A guided AI workflow: brainstorm → build → verify → ship. Plus the full git workflow, issue planning, and documentation actions.",
+  "version": 2,
+  "actions": [
+    {
+      "id": "brainstorm",
+      "label": "Brainstorm",
+      "description": "Refine the idea before any code.",
+      "template": "Brainstorm with me: {goal}. Push back on assumptions, suggest 2–3 approaches with tradeoffs, ask follow-ups. No code yet — we're refining the design.",
+      "args": [
+        {
+          "name": "goal",
+          "description": "What you want to build or solve. Dump as much context as you have — pain points, who it's for, anything you've already tried.",
+          "multiline": true
+        }
+      ],
+      "stages": ["planning"],
+      "setStage": "implementing",
+      "style": "primary"
+    },
+    {
+      "id": "debug",
+      "label": "Debug",
+      "description": "Systematic root-cause investigation.",
+      "template": "Debug: {symptom}. Reproduce, hypothesise, test. Find the root cause before changing anything — don't guess.",
+      "args": [
+        {
+          "name": "symptom",
+          "description": "What's going wrong. Paste error messages, stack traces, what you tried, what you expected vs got.",
+          "multiline": true
+        }
+      ],
+      "stages": ["implementing", "verifying"],
+      "style": "secondary"
+    },
+    {
+      "id": "verify",
+      "label": "Verify",
+      "description": "Run all the project's checks and fix failures.",
+      "template": "Run the project's checks (lint, typecheck, tests — whatever the README or CLAUDE.md mentions). Fix every failure. Don't claim done until everything passes.",
+      "stages": ["implementing", "verifying"],
+      "setStage": "verifying",
+      "style": "primary"
+    },
+    {
+      "id": "self-review",
+      "label": "Self-review",
+      "description": "Run the agent's built-in /review on your own work before asking anyone else to.",
+      "template": "/review",
+      "stages": ["verifying"],
+      "style": "secondary"
+    },
+    {
+      "id": "triage-pr-comments",
+      "label": "Triage PR comments",
+      "description": "Read PR review comments and propose what to do about each, written to .broomy/output/feedback.md.",
+      "template": "Read the PR's review comments (`gh pr view --json reviews,comments` + `gh api repos/:owner/:repo/pulls/<n>/comments`). For each comment, propose a response with technical rigor — never blindly agree:\n- Agree and implement (sketch the change)\n- Disagree because … (cite code or constraints)\n- Need clarification (name the question)\n- Already addressed in <commit/file:line>\n\nGroup by file and write to `.broomy/output/feedback.md`. Don't change any code — 'Address feedback' implements next.",
+      "showWhen": ["open"],
+      "stages": ["verifying"],
+      "setStage": "feedback-triaged",
+      "style": "secondary"
+    },
+    {
+      "id": "address-feedback",
+      "label": "Address feedback",
+      "description": "Implement the triage plan written by 'Triage PR comments'.",
+      "template": "Read `.broomy/output/feedback.md` — the triaged plan for each PR comment. Implement 'Agree' items; skip 'Disagree' / 'Already addressed'; ask before 'Need clarification'. Apply technical judgment — don't blindly follow the triage if you spot a problem. Reply to disagreements via `gh api` POST to the review-comment reply endpoint.",
+      "stages": ["feedback-triaged"],
+      "setStage": "implementing",
+      "style": "secondary"
+    },
+    {
+      "id": "commit",
+      "label": "Commit",
+      "description": "Commit current changes with an AI-written message.",
+      "template": "Stage relevant files and commit with a clear message that says what changed and why. Don't commit secrets or credentials.",
+      "showWhen": ["has-changes", "!merging"],
+      "style": "primary"
+    },
+    {
+      "id": "resolve-conflicts",
+      "label": "Resolve conflicts",
+      "description": "Resolve merge conflicts cleanly, integrating both sides where appropriate.",
+      "template": "Resolve merge conflicts from {main}. For each conflict, examine `git log --oneline HEAD...MERGE_HEAD -- <file>` to understand both sides; ask if ambiguous. Integrate both — never silently discard. Run lint/typecheck/tests, then `git commit --no-edit`.",
+      "showWhen": ["conflicts"],
+      "style": "danger"
+    },
+    {
+      "id": "sync",
+      "label": "Sync changes",
+      "description": "Pull the latest from main and fix any merge conflicts.",
+      "template": "Pull the latest from {main} and fix any merge conflicts (semantic as well as syntactic). For cases where the right merge isn't obvious, ask my opinion. Finish with a report saying what conflict-resolution decisions you made.",
+      "showWhen": ["behind-main", "!on-main", "!merging", "clean"],
+      "style": "primary"
+    },
+    {
+      "id": "push-branch",
+      "label": "Push branch",
+      "description": "Push this branch to the remote, fixing any pre-push hook failures.",
+      "template": "Push this branch (`git push -u origin HEAD` if no tracking yet). If a pre-push hook rejects it, fix the underlying issue, commit, push again. Repeat until it succeeds. Never bypass with --no-verify.",
+      "showWhen": ["clean", "no-tracking", "!on-main"],
+      "style": "primary"
+    },
+    {
+      "id": "create-pr",
+      "label": "Create PR",
+      "description": "Prepare the branch, open a PR, and watch CI until it's green.",
+      "template": "Create a PR for this branch against {main}:\n\n1. Commit any uncommitted work. Pull/merge {main} and resolve conflicts. Run lint/typecheck/tests. Push (`git push -u origin HEAD` if needed).\n2. Check `git diff origin/{main}...HEAD` and `git log origin/{main}..HEAD --oneline`. Check `.github/PULL_REQUEST_TEMPLATE.md`; follow it if present, else write: Background, Design Decisions, Proposed Changes (grouped), Testing. If linked to issue {issueNumber}, FIRST line is `Fixes #{issueNumber}`. Title under 70 chars; check `gh pr list --state merged --limit 5` for style.\n3. `gh pr create --title ... --body ...`.\n4. Wait for CI (`gh pr checks <n> --watch`). If any check fails: `gh run view <id> --log-failed`, fix, commit, push. Up to 3 fix attempts.",
+      "showWhen": ["no-pr", "!on-main", "!empty", "!conflicts"],
+      "setStage": "planning",
+      "style": "primary"
+    },
+    {
+      "id": "review",
+      "label": "Review",
+      "description": "Code review the current branch and write the result to .broomy/output/review.md.",
+      "template": "Review the changes on the current branch against {main}.\n\n1. Run `git fetch origin {main}` to ensure the base branch ref is up to date\n2. Run `git diff origin/{main}...HEAD` to see all changes\n3. Run `git log origin/{main}..HEAD --oneline` for commit history\n4. Run `gh pr view --json number,body` to get the PR number and description.\n5. Use the PR number from step 4 to fetch review comments: `gh api repos/:owner/:repo/pulls/<PR_NUMBER>/comments`. Also get your username with `gh api user --jq .login`. If you find previous review comments by you, focus your review on what has changed since your last review (i.e. your most recent review, not anyone else's) and whether your suggested changes were addressed. Pay particular attention to whether comments and requested changes by you (the current user) have been addressed — these are the highest priority.\n6. Review the code for: correctness, potential bugs, security issues, performance concerns, and code quality.\n\nIMPORTANT: Every time you reference code in your review, you MUST include a markdown link using the repo-relative file path. Format: `[src/file.tsx:12-45](src/file.tsx#L12-L45)` for a range, or `[src/file.tsx:12](src/file.tsx#L12)` for a single line. Never use GitHub URLs — the UI renders these as clickable links that open an internal diff viewer.\n\n7. Write your review to `.broomy/output/review.md` as a markdown document with these sections:\n   - **Change Summary**: Group all changes into logical groups of related changes. For each group, write a short summary of what those changes accomplish and include links to every code change that belongs to that group.\n   - **Issues Found**\n   - **Suggestions**\n   - **Overall Assessment**\n   - **Changes Since Your Last Review** (only if you have previously reviewed this PR)",
+      "showWhen": ["clean", "pushed|open"],
+      "style": "accent",
+      "surface": ["source-control", "review"],
+      "switchTab": "review"
+    },
+    {
+      "id": "plan-issue",
+      "label": "Plan issue",
+      "description": "Read the linked GitHub issue, clarify, then write a plan to .broomy/output/plan.md.",
+      "template": "Read the issue with `gh issue view {issueNumber}`. Ask any clarifying questions first, then write a plan to `.broomy/output/plan.md`.",
+      "showWhen": ["has-issue"],
+      "style": "secondary"
+    },
+    {
+      "id": "screenshot-walkthrough",
+      "label": "Screenshot walkthrough",
+      "description": "Verify the work did the right thing by capturing a screenshot tour of what was built.",
+      "template": "Build a screenshot walkthrough of what this branch added. Look at `git diff origin/{main}...HEAD`, pick the key UI states / features, capture a screenshot + caption for each, assemble into `.broomy/output/walkthrough.md` with images in `.broomy/output/walkthrough/`. If you can't take screenshots here, say what's needed and stop — don't fake them.",
+      "stages": ["verifying"],
+      "style": "secondary"
+    },
+    {
+      "id": "document-progress",
+      "label": "Document progress",
+      "description": "Summarise progress made since the last progress document.",
+      "template": "Update `.broomy/output/progress.md`. If it exists, read the most recent dated entry to find your last checkpoint; summarise what's happened since (new commits via `git log`, features, bug fixes, decisions, blockers, open items — reference files/PRs/issues). Write a new dated section at the TOP, keep older entries below. If the file doesn't exist, create it with everything on this branch so far.",
+      "style": "secondary"
+    }
+  ]
+}

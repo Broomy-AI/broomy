@@ -431,7 +431,7 @@ describe('useTerminalSetup', () => {
           explorerFilter: 'files' as const, lastMessage: null, lastMessageTime: null,
           isUnread: false, workingStartTime: null, recentFiles: [], searchHistory: [],
           terminalTabs: { tabs: [], activeTabId: '__agent__' },
-          branchStatus: 'in-progress' as const, hasFeedback: false, checksStatus: 'none' as const, statusChip: 'in-progress' as StatusChip, isArchived: false, isRestored: false,
+          branchStatus: 'in-progress' as const, hasFeedback: false, checksStatus: 'none' as const, statusChip: 'in-progress' as StatusChip, isArchived: false, stage: 'planning', isRestored: false,
         }],
       })
       const config = makeConfig()
@@ -673,7 +673,7 @@ describe('useTerminalSetup', () => {
           explorerFilter: 'files' as const, lastMessage: null, lastMessageTime: null,
           isUnread: false, workingStartTime: null, recentFiles: [], searchHistory: [],
           terminalTabs: { tabs: [], activeTabId: '__agent__' },
-          branchStatus: 'in-progress' as const, hasFeedback: false, checksStatus: 'none' as const, statusChip: 'in-progress' as StatusChip, isArchived: false, isRestored: false,
+          branchStatus: 'in-progress' as const, hasFeedback: false, checksStatus: 'none' as const, statusChip: 'in-progress' as StatusChip, isArchived: false, stage: 'planning', isRestored: false,
         }],
       } as never)
 

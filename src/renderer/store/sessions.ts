@@ -110,6 +110,8 @@ export interface Session {
   lastKnownPrUrl?: string
   // Archive state (persisted)
   isArchived: boolean
+  // Stage state machine — drives command visibility (persisted)
+  stage: string
   // Agent SDK session ID for resume (persisted)
   sdkSessionId?: string
   // Whether this session was loaded from config (runtime only, not persisted)
@@ -184,6 +186,8 @@ interface SessionStore {
   updateReviewStatus: (sessionId: string, reviewStatus: 'pending' | 'reviewed') => void
   updateFeedbackStatus: (sessionId: string, hasFeedback: boolean) => void
   updateChecksStatus: (sessionId: string, checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
+  // Stage state machine
+  setSessionStage: (sessionId: string, stage: string) => void
   // Search history actions
   addSearchHistory: (sessionId: string, query: string) => void
   removeSearchHistoryItem: (sessionId: string, query: string) => void
@@ -348,6 +352,13 @@ export const useSessionStore = create<SessionStore>((set, get) => {
       s.id === sessionId ? { ...s, sdkSessionId } : s
     )
     set({ sessions: updatedSessions })
+    debouncedSave()
+  },
+
+  setSessionStage: (sessionId: string, stage: string) => {
+    const { sessions } = get()
+    const updated = sessions.map(s => s.id === sessionId ? { ...s, stage } : s)
+    set({ sessions: updated })
     debouncedSave()
   },
 

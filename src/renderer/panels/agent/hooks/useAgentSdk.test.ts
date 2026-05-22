@@ -27,7 +27,7 @@ function makeSession(id: string, sdkSessionId?: string) {
     terminalTabs: { tabs: [], activeTabId: '__agent__' },
     branchStatus: 'in-progress' as const, hasFeedback: false,
     checksStatus: 'none' as const, statusChip: 'in-progress' as StatusChip,
-    isArchived: false, isRestored: false,
+    isArchived: false, stage: 'planning', isRestored: false,
     sdkSessionId,
   }
 }

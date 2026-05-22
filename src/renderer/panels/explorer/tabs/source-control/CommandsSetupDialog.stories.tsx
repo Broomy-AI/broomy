@@ -5,9 +5,8 @@ const meta: Meta<typeof CommandsSetupDialog> = {
   title: 'Explorer/CommandsSetupDialog',
   component: CommandsSetupDialog,
   args: {
-    directory: '/Users/test/projects/my-app',
     onClose: () => {},
-    onCreated: () => {},
+    onInstalled: () => {},
   },
 }
 export default meta
