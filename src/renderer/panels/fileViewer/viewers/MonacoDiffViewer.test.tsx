@@ -14,7 +14,9 @@ vi.mock('@monaco-editor/react', () => ({
 }))
 
 vi.mock('monaco-editor', () => ({
-  editor: {},
+  editor: {
+    defineTheme: vi.fn(),
+  },
 }))
 
 import MonacoDiffViewer from './MonacoDiffViewer'
@@ -50,7 +52,7 @@ describe('MonacoDiffViewer', () => {
     expect(mockDiffEditor).toHaveBeenCalledWith(
       expect.objectContaining({
         language: 'typescript',
-        theme: 'vs-dark',
+        theme: 'broomy-dark',
       })
     )
   })
@@ -130,6 +132,28 @@ describe('MonacoDiffViewer', () => {
       expect.objectContaining({
         options: expect.objectContaining({
           renderSideBySide: false,
+        }),
+      })
+    )
+  })
+
+  it('enables word wrap on both diff panes', () => {
+    render(
+      <MonacoDiffViewer
+        filePath="/test/file.ts"
+        originalContent=""
+        modifiedContent=""
+      />
+    )
+    expect(mockDiffEditor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          wordWrap: 'on',
+          diffWordWrap: 'on',
+          // Prevents Monaco from silently flipping to inline mode below 900px,
+          // which would set wordWrapOverride2: 'off' on the original editor
+          // and leave the left pane un-wrapped.
+          useInlineViewWhenSpaceIsLimited: false,
         }),
       })
     )
