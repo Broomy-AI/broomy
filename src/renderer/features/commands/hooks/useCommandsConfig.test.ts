@@ -1,70 +1,61 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook, act } from '@testing-library/react'
-import '../../../../test/react-setup'
-
-vi.mock('../commandsConfig', () => ({
-  loadCommandsConfig: vi.fn(),
-}))
-
-import { useCommandsConfig } from './useCommandsConfig'
-import { loadCommandsConfig } from '../commandsConfig'
+import { renderHook, waitFor } from '@testing-library/react'
+import { _resetUserCommandsCacheForTest } from '../userConfigPath'
 
 beforeEach(() => {
   vi.clearAllMocks()
+  _resetUserCommandsCacheForTest()
+  vi.mocked(window.app.homedir).mockResolvedValue('/Users/test')
   vi.mocked(window.fs.watch).mockResolvedValue({ success: true })
-  vi.mocked(window.fs.unwatch).mockResolvedValue(undefined as never)
-  vi.mocked(window.fs.onChange).mockReturnValue(() => {})
+  vi.mocked(window.fs.unwatch).mockResolvedValue({ success: true })
+  vi.mocked(window.fs.onChange).mockReturnValue(() => undefined)
 })
 
 describe('useCommandsConfig', () => {
-  it('returns null config when directory is undefined', () => {
-    const { result } = renderHook(() => useCommandsConfig(undefined))
-    expect(result.current.config).toBeNull()
-    expect(result.current.loading).toBe(false)
-    expect(result.current.exists).toBe(false)
+  it('returns null/null when neither file exists', async () => {
+    vi.mocked(window.fs.exists).mockResolvedValue(false)
+    const { useCommandsConfig } = await import('./useCommandsConfig')
+    const { result } = renderHook(() => useCommandsConfig('/repo'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.user).toBeNull()
+    expect(result.current.project).toBeNull()
+    expect(result.current.merged).toBeNull()
   })
 
-  it('loads config when directory is provided', async () => {
-    const mockConfig = { version: 1, actions: [] }
-    vi.mocked(loadCommandsConfig).mockResolvedValue({ ok: true, config: mockConfig })
-
+  it('loads user-only when only ~/.broomy/commands.json exists', async () => {
+    vi.mocked(window.fs.exists).mockImplementation(async (p: string) => p === '/Users/test/.broomy/commands.json')
+    vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify({
+      version: 2, actions: [{ id: 'u', label: 'User', template: 't' }],
+    }))
+    const { useCommandsConfig } = await import('./useCommandsConfig')
     const { result } = renderHook(() => useCommandsConfig('/repo'))
-
-    await act(async () => {
-      await new Promise(r => setTimeout(r, 10))
-    })
-
-    expect(result.current.config).toEqual(mockConfig)
-    expect(result.current.exists).toBe(true)
-    expect(result.current.error).toBeNull()
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.user?.actions[0].id).toBe('u')
+    expect(result.current.project).toBeNull()
+    expect(result.current.merged?.actions.map(a => a.id)).toEqual(['u'])
   })
 
-  it('sets error when config is invalid', async () => {
-    vi.mocked(loadCommandsConfig).mockResolvedValue({ ok: false, error: 'bad json' })
-
-    const { result } = renderHook(() => useCommandsConfig('/repo'))
-
-    await act(async () => {
-      await new Promise(r => setTimeout(r, 10))
+  it('concatenates user + project actions', async () => {
+    vi.mocked(window.fs.exists).mockResolvedValue(true)
+    vi.mocked(window.fs.readFile).mockImplementation(async (p: string) => {
+      if (p === '/Users/test/.broomy/commands.json') {
+        return JSON.stringify({ version: 2, actions: [{ id: 'u', label: 'U', template: 't' }] })
+      }
+      return JSON.stringify({ version: 2, actions: [{ id: 'p', label: 'P', template: 't' }] })
     })
-
-    expect(result.current.config).toBeNull()
-    expect(result.current.exists).toBe(true)
-    expect(result.current.error).toBe('bad json')
+    const { useCommandsConfig } = await import('./useCommandsConfig')
+    const { result } = renderHook(() => useCommandsConfig('/repo'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.merged?.actions.map(a => a.id)).toEqual(['u', 'p'])
   })
 
-  it('sets exists to false when no commands.json found', async () => {
-    vi.mocked(loadCommandsConfig).mockResolvedValue(null)
-
+  it('surfaces errors when a file fails validation', async () => {
+    vi.mocked(window.fs.exists).mockImplementation(async (p: string) => p === '/Users/test/.broomy/commands.json')
+    vi.mocked(window.fs.readFile).mockResolvedValue('not json')
+    const { useCommandsConfig } = await import('./useCommandsConfig')
     const { result } = renderHook(() => useCommandsConfig('/repo'))
-
-    await act(async () => {
-      await new Promise(r => setTimeout(r, 10))
-    })
-
-    expect(result.current.config).toBeNull()
-    expect(result.current.exists).toBe(false)
-    expect(result.current.error).toBeNull()
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.userError).toMatch(/Invalid JSON/)
   })
 })

@@ -327,7 +327,9 @@ describe('useSourceControlData', () => {
   it('returns initial behind-main state', () => {
     const { result } = renderHook(() => useSourceControlData(defaultProps))
     expect(result.current.behindMainCount).toBe(0)
-    expect(result.current.isFetchingBehindMain).toBe(false)
+    // Fetch fires on mount in the working view; isFetchingBehindMain flips true
+    // until isBehindMain resolves. Behaviour: count starts at 0 and is replaced
+    // asynchronously.
     expect(result.current.agentMergeMessage).toBeNull()
   })
 
@@ -359,7 +361,8 @@ describe('useSourceControlData', () => {
     expect(result.current.behindMainCount).toBe(3)
   })
 
-  it('does not fetch behind-main when branch is in-progress', async () => {
+  it('fetches behind-main even when branch is in-progress', async () => {
+    vi.mocked(window.git.isBehindMain).mockResolvedValue({ behind: 7, defaultBranch: 'main' })
     const { result } = renderHook(() =>
       useSourceControlData({ ...defaultProps, branchStatus: 'in-progress', gitStatus: [] })
     )
@@ -368,13 +371,14 @@ describe('useSourceControlData', () => {
       await new Promise(r => setTimeout(r, 10))
     })
 
-    expect(window.git.isBehindMain).not.toHaveBeenCalled()
-    expect(result.current.behindMainCount).toBe(0)
+    expect(window.git.isBehindMain).toHaveBeenCalled()
+    expect(result.current.behindMainCount).toBe(7)
   })
 
-  it('does not fetch behind-main when there are changes', async () => {
+  it('fetches behind-main even when there are uncommitted changes', async () => {
+    vi.mocked(window.git.isBehindMain).mockResolvedValue({ behind: 4, defaultBranch: 'main' })
     const gitStatus = [{ path: 'file.ts', status: 'modified' as const, staged: false, indexStatus: ' ', workingDirStatus: 'M' }]
-    renderHook(() =>
+    const { result } = renderHook(() =>
       useSourceControlData({ ...defaultProps, branchStatus: 'pushed', gitStatus })
     )
 
@@ -382,7 +386,8 @@ describe('useSourceControlData', () => {
       await new Promise(r => setTimeout(r, 10))
     })
 
-    expect(window.git.isBehindMain).not.toHaveBeenCalled()
+    expect(window.git.isBehindMain).toHaveBeenCalled()
+    expect(result.current.behindMainCount).toBe(4)
   })
 
   it('handles behind-main fetch error gracefully', async () => {

@@ -21,7 +21,6 @@ Renders as an overlay that replaces the center content area. Contains two main s
 - `AuthTerminal.tsx` -- Embedded terminal for auth flows
 - `GitIdentitySetup.tsx` -- Git user.name/email configuration
 - `ShowWhenPicker.tsx` -- Condition picker for command visibility
-- `PromptVariants.tsx` -- Agent-specific prompt variant editor
 
 ## Store dependencies
 

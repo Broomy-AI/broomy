@@ -197,14 +197,13 @@ export function useSourceControlData({
     setLoadingCommitFiles(new Set())
   }, [directory])
 
-  // Check if main has new commits when branch is pushed/empty with no changes
+  // Check if main has new commits. Always run when looking at the working view —
+  // the Sync action's prompt handles "commit uncommitted work first" itself, and
+  // local commits / branch-status don't change the fact that main has moved on.
+  // Re-runs on gitStatus / branchStatus changes so a recent commit or push
+  // refreshes the count.
   useEffect(() => {
-    if (scView !== 'working' || !directory || gitStatus.length > 0) {
-      setBehindMainCount(0)
-      setHasBehindMainLoadedOnce(true)
-      return
-    }
-    if (branchStatus !== 'pushed' && branchStatus !== 'empty' && branchStatus !== 'open') {
+    if (scView !== 'working' || !directory) {
       setBehindMainCount(0)
       setHasBehindMainLoadedOnce(true)
       return

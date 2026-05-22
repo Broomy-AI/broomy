@@ -5,15 +5,13 @@ import {
   resolveTemplateVars,
   evaluateShowWhen,
   commandsConfigPath,
-  loadCommandsConfig,
-  detectAgentType,
-  getAgentTypes,
-  getDefaultCommandsConfig,
   ensureOutputGitignore,
   matchesSurface,
   checkLegacyBroomyGitignore,
   removeLegacyBroomyGitignore,
   validateCommandsConfig,
+  CURRENT_CONFIG_VERSION,
+  migrateConfig,
 } from './commandsConfig'
 import type { ActionDefinition } from './commandsConfig'
 import type { ConditionState, TemplateVars } from './commandsConfig'
@@ -84,247 +82,8 @@ describe('commandsConfigPath', () => {
   })
 })
 
-describe('loadCommandsConfig', () => {
-  it('returns null when file does not exist', async () => {
-    vi.mocked(window.fs.exists).mockResolvedValue(false)
-    const result = await loadCommandsConfig('/repo')
-    expect(result).toBeNull()
-  })
-
-  it('loads valid config', async () => {
-    const config = { version: 1, actions: [{ id: 'test', label: 'Test', type: 'agent', showWhen: [] }] }
-    vi.mocked(window.fs.exists).mockResolvedValue(true)
-    vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify(config))
-
-    const result = await loadCommandsConfig('/repo')
-    expect(result).toEqual({ ok: true, config })
-  })
-
-  it('returns error for invalid config (missing version)', async () => {
-    vi.mocked(window.fs.exists).mockResolvedValue(true)
-    vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify({ actions: [] }))
-
-    const result = await loadCommandsConfig('/repo')
-    expect(result).not.toBeNull()
-    expect(result!.ok).toBe(false)
-    if (!result!.ok) expect(result!.error).toContain('"version"')
-  })
-
-  it('returns error for invalid config (missing actions array)', async () => {
-    vi.mocked(window.fs.exists).mockResolvedValue(true)
-    vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify({ version: 1 }))
-
-    const result = await loadCommandsConfig('/repo')
-    expect(result).not.toBeNull()
-    expect(result!.ok).toBe(false)
-    if (!result!.ok) expect(result!.error).toContain('"actions"')
-  })
-
-  it('returns error for invalid JSON', async () => {
-    vi.mocked(window.fs.exists).mockResolvedValue(true)
-    vi.mocked(window.fs.readFile).mockResolvedValue('not valid json {{{')
-
-    const result = await loadCommandsConfig('/repo')
-    expect(result).not.toBeNull()
-    expect(result!.ok).toBe(false)
-    if (!result!.ok) expect(result!.error).toContain('Invalid JSON')
-  })
-
-  it('strips agent overrides with no prompt (legacy skill-only entries)', async () => {
-    const config = {
-      version: 1,
-      actions: [
-        {
-          id: 'commit', label: 'Commit', type: 'agent', showWhen: [],
-          prompt: 'default prompt',
-          agents: { claude: { skill: 'broomy-action-commit' }, aider: { prompt: 'aider prompt' } },
-        },
-      ],
-    }
-    vi.mocked(window.fs.exists).mockResolvedValue(true)
-    vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify(config))
-
-    const result = await loadCommandsConfig('/repo')
-    expect(result!.ok).toBe(true)
-    if (result!.ok) {
-      // claude override (skill-only, no prompt) should be stripped
-      expect(result!.config.actions[0].agents).toEqual({ aider: { prompt: 'aider prompt' } })
-    }
-  })
-
-  it('removes agents field entirely when all overrides are skill-only', async () => {
-    const config = {
-      version: 1,
-      actions: [
-        {
-          id: 'commit', label: 'Commit', type: 'agent', showWhen: [],
-          agents: { claude: { skill: 'broomy-action-commit' } },
-        },
-      ],
-    }
-    vi.mocked(window.fs.exists).mockResolvedValue(true)
-    vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify(config))
-
-    const result = await loadCommandsConfig('/repo')
-    expect(result!.ok).toBe(true)
-    if (result!.ok) {
-      expect(result!.config.actions[0].agents).toBeUndefined()
-    }
-  })
-
-  it('returns null on read error', async () => {
-    vi.mocked(window.fs.exists).mockResolvedValue(true)
-    vi.mocked(window.fs.readFile).mockRejectedValue(new Error('read error'))
-
-    const result = await loadCommandsConfig('/repo')
-    expect(result).toBeNull()
-  })
-})
-
-describe('detectAgentType', () => {
-  it('detects claude', () => {
-    expect(detectAgentType('claude')).toBe('claude')
-    expect(detectAgentType('/usr/bin/claude --flag')).toBe('claude')
-  })
-
-  it('detects aider', () => {
-    expect(detectAgentType('aider')).toBe('aider')
-  })
-
-  it('detects cursor', () => {
-    expect(detectAgentType('cursor')).toBe('cursor')
-  })
-
-  it('detects codex', () => {
-    expect(detectAgentType('codex')).toBe('codex')
-    expect(detectAgentType('/usr/local/bin/codex --flag')).toBe('codex')
-  })
-
-  it('detects gemini', () => {
-    expect(detectAgentType('gemini')).toBe('gemini')
-  })
-
-  it('returns null for unknown agent', () => {
-    expect(detectAgentType('unknown-agent')).toBeNull()
-    expect(detectAgentType('vim')).toBeNull()
-  })
-})
-
-describe('getAgentTypes', () => {
-  it('returns unique sorted agent types', () => {
-    const agents = [
-      { command: 'claude' },
-      { command: 'aider --model gpt-4' },
-      { command: 'claude --flag' },
-    ]
-    expect(getAgentTypes(agents)).toEqual(['aider', 'claude'])
-  })
-
-  it('returns empty array when no recognized agents', () => {
-    expect(getAgentTypes([{ command: 'vim' }])).toEqual([])
-  })
-
-  it('returns empty array for empty input', () => {
-    expect(getAgentTypes([])).toEqual([])
-  })
-
-  it('includes codex and gemini', () => {
-    const agents = [
-      { command: 'codex' },
-      { command: 'gemini' },
-      { command: 'claude' },
-    ]
-    expect(getAgentTypes(agents)).toEqual(['claude', 'codex', 'gemini'])
-  })
-})
-
-describe('getDefaultCommandsConfig', () => {
-  it('returns a valid config with actions', () => {
-    const config = getDefaultCommandsConfig()
-    expect(config.version).toBe(1)
-    expect(config.actions.length).toBeGreaterThan(0)
-    expect(config.actions.every(a => a.id && a.label && a.type)).toBe(true)
-  })
-})
-
-describe('validateCommandsConfig', () => {
-  it('returns empty array for valid config', () => {
-    expect(validateCommandsConfig({
-      version: 1,
-      actions: [{ id: 'test', label: 'Test', type: 'agent', showWhen: [] }],
-    })).toEqual([])
-  })
-
-  it('catches missing version', () => {
-    const errors = validateCommandsConfig({ actions: [] })
-    expect(errors.some(e => e.includes('"version"'))).toBe(true)
-  })
-
-  it('catches missing actions', () => {
-    const errors = validateCommandsConfig({ version: 1 })
-    expect(errors.some(e => e.includes('"actions"'))).toBe(true)
-  })
-
-  it('catches non-object config', () => {
-    expect(validateCommandsConfig('string').length).toBeGreaterThan(0)
-    expect(validateCommandsConfig(null).length).toBeGreaterThan(0)
-    expect(validateCommandsConfig([]).length).toBeGreaterThan(0)
-  })
-
-  it('catches invalid action type', () => {
-    const errors = validateCommandsConfig({
-      version: 1,
-      actions: [{ id: 'test', label: 'Test', type: 'invalid', showWhen: [] }],
-    })
-    expect(errors.some(e => e.includes('"type"'))).toBe(true)
-  })
-
-  it('catches invalid style', () => {
-    const errors = validateCommandsConfig({
-      version: 1,
-      actions: [{ id: 'test', label: 'Test', type: 'agent', showWhen: [], style: 'nope' }],
-    })
-    expect(errors.some(e => e.includes('"style"'))).toBe(true)
-  })
-
-  it('catches invalid surface type', () => {
-    const errors = validateCommandsConfig({
-      version: 1,
-      actions: [{ id: 'test', label: 'Test', type: 'agent', showWhen: [], surface: 123 }],
-    })
-    expect(errors.some(e => e.includes('"surface"'))).toBe(true)
-  })
-
-  it('accepts valid surface as string or array', () => {
-    expect(validateCommandsConfig({
-      version: 1,
-      actions: [{ id: 'test', label: 'Test', type: 'agent', showWhen: [], surface: 'review' }],
-    })).toEqual([])
-    expect(validateCommandsConfig({
-      version: 1,
-      actions: [{ id: 'test', label: 'Test', type: 'agent', showWhen: [], surface: ['source-control', 'review'] }],
-    })).toEqual([])
-  })
-
-  it('catches missing action id', () => {
-    const errors = validateCommandsConfig({
-      version: 1,
-      actions: [{ label: 'Test', type: 'agent', showWhen: [] }],
-    })
-    expect(errors.some(e => e.includes('"id"'))).toBe(true)
-  })
-
-  it('catches non-array showWhen', () => {
-    const errors = validateCommandsConfig({
-      version: 1,
-      actions: [{ id: 'test', label: 'Test', type: 'agent', showWhen: 'oops' }],
-    })
-    expect(errors.some(e => e.includes('"showWhen"'))).toBe(true)
-  })
-})
-
 describe('matchesSurface', () => {
-  const base: ActionDefinition = { id: 'test', label: 'Test', type: 'agent', showWhen: [] }
+  const base: ActionDefinition = { id: 'test', label: 'Test', template: '/test' }
 
   it('defaults to source-control when no surface specified', () => {
     expect(matchesSurface(base, 'source-control')).toBe(true)
@@ -474,5 +233,286 @@ describe('ensureOutputGitignore', () => {
 
     // Should not throw
     await ensureOutputGitignore('/repo')
+  })
+})
+
+describe('migrateConfig', () => {
+  it('passes v2 configs through unchanged', () => {
+    const v2 = {
+      version: 2,
+      actions: [{ id: 'a', label: 'A', template: '/x' }],
+    }
+    expect(migrateConfig(v2)).toEqual(v2)
+  })
+
+  it('migrates v1 agent prompt to template', () => {
+    const v1 = {
+      version: 1,
+      actions: [{
+        id: 'commit',
+        label: 'Commit',
+        type: 'agent',
+        prompt: 'Commit changes',
+        showWhen: ['has-changes'],
+        style: 'primary',
+      }],
+    }
+    const v2 = migrateConfig(v1)
+    expect(v2.version).toBe(2)
+    expect(v2.actions[0]).toEqual({
+      id: 'commit',
+      label: 'Commit',
+      template: 'Commit changes',
+      showWhen: ['has-changes'],
+      style: 'primary',
+    })
+  })
+
+  it('migrates v1 shell command to template with ! prefix', () => {
+    const v1 = {
+      version: 1,
+      actions: [{ id: 'push', label: 'Push', type: 'shell', command: 'git push' }],
+    }
+    expect(migrateConfig(v1).actions[0]).toEqual({
+      id: 'push',
+      label: 'Push',
+      template: '!git push',
+    })
+  })
+
+  it('drops agents overrides silently', () => {
+    const v1 = {
+      version: 1,
+      actions: [{
+        id: 'x',
+        label: 'X',
+        type: 'agent',
+        prompt: 'base',
+        agents: { claude: { prompt: 'claude prompt' } },
+      }],
+    }
+    const out = migrateConfig(v1).actions[0]
+    expect(out.template).toBe('base')
+    expect('agents' in out).toBe(false)
+  })
+
+  it('preserves surface and switchTab through migration', () => {
+    const v1 = {
+      version: 1,
+      actions: [{
+        id: 'r', label: 'R', type: 'agent', prompt: 'p',
+        surface: ['source-control', 'review'], switchTab: 'review',
+      }],
+    }
+    const out = migrateConfig(v1).actions[0]
+    expect(out.surface).toEqual(['source-control', 'review'])
+    expect(out.switchTab).toBe('review')
+  })
+
+  it('preserves empty showWhen', () => {
+    const v1 = {
+      version: 1,
+      actions: [{ id: 'a', label: 'A', type: 'agent', prompt: 'p', showWhen: [] }],
+    }
+    expect(migrateConfig(v1).actions[0].showWhen).toEqual([])
+  })
+})
+
+import { loadConfigFromPath, mergeConfigs, isVisible, discoverStages } from './commandsConfig'
+
+describe('loadConfigFromPath', () => {
+  beforeEach(() => {
+    ;(globalThis as any).window = {
+      fs: {
+        exists: vi.fn(),
+        readFile: vi.fn(),
+      },
+    }
+  })
+
+  it('returns null when file missing', async () => {
+    ;(window.fs.exists as any).mockResolvedValue(false)
+    expect(await loadConfigFromPath('/x')).toBeNull()
+  })
+
+  it('returns ok with migrated config for valid v2', async () => {
+    ;(window.fs.exists as any).mockResolvedValue(true)
+    ;(window.fs.readFile as any).mockResolvedValue(JSON.stringify({
+      version: 2, actions: [{ id: 'a', label: 'A', template: 't' }],
+    }))
+    const r = await loadConfigFromPath('/x')
+    expect(r).toEqual({ ok: true, config: { version: 2, actions: [{ id: 'a', label: 'A', template: 't' }] } })
+  })
+
+  it('returns ok after v1 migration', async () => {
+    ;(window.fs.exists as any).mockResolvedValue(true)
+    ;(window.fs.readFile as any).mockResolvedValue(JSON.stringify({
+      version: 1, actions: [{ id: 'a', label: 'A', type: 'agent', prompt: 'p' }],
+    }))
+    const r = await loadConfigFromPath('/x')
+    expect(r).toMatchObject({ ok: true })
+    if (r?.ok) {
+      expect(r.config.actions[0].template).toBe('p')
+    }
+  })
+
+  it('returns error for invalid JSON', async () => {
+    ;(window.fs.exists as any).mockResolvedValue(true)
+    ;(window.fs.readFile as any).mockResolvedValue('{ not json')
+    const r = await loadConfigFromPath('/x')
+    expect(r?.ok).toBe(false)
+  })
+
+  it('returns error for schema-invalid config (post-migration)', async () => {
+    ;(window.fs.exists as any).mockResolvedValue(true)
+    ;(window.fs.readFile as any).mockResolvedValue(JSON.stringify({
+      version: 2, actions: [{ id: 'a', label: 'A' }], // missing template
+    }))
+    const r = await loadConfigFromPath('/x')
+    expect(r?.ok).toBe(false)
+  })
+})
+
+describe('mergeConfigs', () => {
+  it('returns null when both inputs null', () => {
+    expect(mergeConfigs(null, null)).toBeNull()
+  })
+
+  it('returns user actions when project null', () => {
+    expect(mergeConfigs(
+      { version: 2, actions: [{ id: 'a', label: 'A', template: 't' }] },
+      null,
+    )?.actions.map(a => a.id)).toEqual(['a'])
+  })
+
+  it('returns project actions when user null', () => {
+    expect(mergeConfigs(
+      null,
+      { version: 2, actions: [{ id: 'b', label: 'B', template: 't' }] },
+    )?.actions.map(a => a.id)).toEqual(['b'])
+  })
+
+  it('concatenates user then project, keeping duplicate ids', () => {
+    const merged = mergeConfigs(
+      { version: 2, actions: [{ id: 'a', label: 'User A', template: 't' }] },
+      { version: 2, actions: [{ id: 'a', label: 'Project A', template: 't' }, { id: 'b', label: 'B', template: 't' }] },
+    )
+    expect(merged?.actions.map(a => a.label)).toEqual(['User A', 'Project A', 'B'])
+  })
+})
+
+describe('isVisible', () => {
+  const baseState = {
+    'has-changes': false, 'clean': true, 'merging': false, 'conflicts': false,
+    'no-tracking': false, 'ahead': false, 'behind': false, 'behind-main': false,
+    'on-main': false, 'in-progress': false, 'pushed': false, 'empty': false,
+    'open': false, 'merged': false, 'closed': false, 'no-pr': true,
+    'has-write-access': true, 'allow-approve-and-merge': true,
+    'checks-passed': true, 'has-issue': false, 'no-devcontainer': false, 'review': false,
+  } as any
+
+  it('is true when no filters specified', () => {
+    expect(isVisible({ id: 'a', label: 'A', template: 't' }, baseState, 'planning', 'source-control')).toBe(true)
+  })
+
+  it('honors showWhen', () => {
+    expect(isVisible({ id: 'a', label: 'A', template: 't', showWhen: ['has-changes'] }, baseState, 'planning', 'source-control')).toBe(false)
+    expect(isVisible({ id: 'a', label: 'A', template: 't', showWhen: ['clean'] }, baseState, 'planning', 'source-control')).toBe(true)
+  })
+
+  it('honors stages list', () => {
+    expect(isVisible({ id: 'a', label: 'A', template: 't', stages: ['verifying'] }, baseState, 'planning', 'source-control')).toBe(false)
+    expect(isVisible({ id: 'a', label: 'A', template: 't', stages: ['planning', 'verifying'] }, baseState, 'planning', 'source-control')).toBe(true)
+  })
+
+  it('honors surface filter', () => {
+    expect(isVisible({ id: 'a', label: 'A', template: 't', surface: 'review' }, baseState, 'planning', 'source-control')).toBe(false)
+    expect(isVisible({ id: 'a', label: 'A', template: 't', surface: ['review', 'source-control'] }, baseState, 'planning', 'source-control')).toBe(true)
+  })
+})
+
+describe('discoverStages', () => {
+  it('always includes the default stage pinned first', () => {
+    expect(discoverStages([], 'planning')).toEqual(['planning'])
+  })
+
+  it('unions stages and setStage across actions; sorts non-default alphabetically', () => {
+    const stages = discoverStages([
+      { id: 'a', label: 'A', template: 't', setStage: 'implementing' },
+      { id: 'b', label: 'B', template: 't', stages: ['implementing', 'building'] },
+      { id: 'c', label: 'C', template: 't', stages: ['verifying'] },
+    ], 'planning')
+    expect(stages).toEqual(['planning', 'building', 'implementing', 'verifying'])
+  })
+
+  it('includes the current stage even if no command references it', () => {
+    expect(discoverStages([], 'mystage')).toEqual(['planning', 'mystage'])
+  })
+
+  it('ignores setStage: null', () => {
+    expect(discoverStages([
+      { id: 'a', label: 'A', template: 't', setStage: null },
+    ], 'planning')).toEqual(['planning'])
+  })
+})
+
+describe('v2 schema', () => {
+  it('CURRENT_CONFIG_VERSION is 2', () => {
+    expect(CURRENT_CONFIG_VERSION).toBe(2)
+  })
+
+  it('accepts a minimal v2 config', () => {
+    const config = {
+      version: 2,
+      actions: [
+        { id: 'a', label: 'A', template: '/foo {x}' },
+      ],
+    }
+    expect(validateCommandsConfig(config)).toEqual([])
+  })
+
+  it('accepts stages, setStage, args, description', () => {
+    const config = {
+      version: 2,
+      actions: [
+        {
+          id: 'a',
+          label: 'A',
+          description: 'hover help',
+          template: '/foo {x}',
+          showWhen: ['has-changes'],
+          stages: ['planning', 'building'],
+          setStage: 'verifying',
+          args: [{ name: 'x', description: 'd' }],
+          style: 'primary',
+          surface: 'source-control',
+          switchTab: 'review',
+        },
+      ],
+    }
+    expect(validateCommandsConfig(config)).toEqual([])
+  })
+
+  it('rejects missing template', () => {
+    const errs = validateCommandsConfig({
+      version: 2,
+      actions: [{ id: 'a', label: 'A' }],
+    })
+    expect(errs.some(e => e.includes('template'))).toBe(true)
+  })
+
+  it('rejects non-string setStage when not null', () => {
+    const errs = validateCommandsConfig({
+      version: 2,
+      actions: [{ id: 'a', label: 'A', template: 't', setStage: 42 }],
+    })
+    expect(errs.some(e => e.includes('setStage'))).toBe(true)
+  })
+
+  it('accepts setStage: null', () => {
+    expect(validateCommandsConfig({
+      version: 2,
+      actions: [{ id: 'a', label: 'A', template: 't', setStage: null }],
+    })).toEqual([])
   })
 })
