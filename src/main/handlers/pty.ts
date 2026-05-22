@@ -236,9 +236,11 @@ function createDevcontainerPty(
       })
     }
 
-    // Start docker exec PTY using devcontainer's remote user
+    // Start docker exec PTY using devcontainer's remote user.
+    // Default CLAUDE_CODE_NO_FLICKER=1 first so per-session env can override
+    // it (see standard PTY path for rationale).
     const containerHome = remoteUser === 'root' ? '/root' : `/home/${remoteUser}`
-    const dockerEnv: Record<string, string> = {}
+    const dockerEnv: Record<string, string> = { CLAUDE_CODE_NO_FLICKER: '1' }
     if (options.env) {
       for (const [key, value] of Object.entries(options.env)) {
         if (value.startsWith('~/')) {
@@ -368,7 +370,17 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     // Build environment — extend PATH with common bin dirs so agents in
     // ~/.local/bin, /opt/homebrew/bin, etc. are reachable even if the
     // login shell profile doesn't add them or resolveShellEnv() failed.
-    const baseEnv = { ...process.env, PATH: enhancedPath(process.env.PATH) } as Record<string, string>
+    //
+    // CLAUDE_CODE_NO_FLICKER=1 opts Claude Code into alt-screen rendering,
+    // which avoids the duplicate-content / scroll-yank bugs that arise when
+    // its synchronized full-screen redraws are written to the main buffer.
+    // See xtermjs/xterm.js#5784 and #5801. Per-session env (agentEnv) is
+    // merged after this, so users can override with CLAUDE_CODE_NO_FLICKER=0.
+    const baseEnv = {
+      ...process.env,
+      PATH: enhancedPath(process.env.PATH),
+      CLAUDE_CODE_NO_FLICKER: '1',
+    } as Record<string, string>
     delete baseEnv.CLAUDE_CONFIG_DIR
 
     const expandHome = (value: string) => {

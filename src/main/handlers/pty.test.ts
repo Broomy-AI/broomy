@@ -493,6 +493,43 @@ describe('pty handlers', () => {
       expect(spawnEnv.CLAUDE_CONFIG_DIR).toContain('.claude-custom')
     })
 
+    it('defaults CLAUDE_CODE_NO_FLICKER=1 to opt Claude into alt-screen', async () => {
+      const { register } = await import('./pty')
+      const ctx = createCtx()
+      register(mockIpcMain as never, ctx)
+
+      const mockProcess = createMockPtyProcess()
+      mockPtySpawn.mockReturnValue(mockProcess)
+      mockBrowserWindowFromWebContents.mockReturnValue(mockSenderWindow)
+
+      await handlers['pty:create'](mockEvent, {
+        id: 'env-no-flicker-default',
+        cwd: '/tmp',
+      })
+
+      const spawnEnv = mockPtySpawn.mock.calls[0][2].env
+      expect(spawnEnv.CLAUDE_CODE_NO_FLICKER).toBe('1')
+    })
+
+    it('lets per-session env override CLAUDE_CODE_NO_FLICKER', async () => {
+      const { register } = await import('./pty')
+      const ctx = createCtx()
+      register(mockIpcMain as never, ctx)
+
+      const mockProcess = createMockPtyProcess()
+      mockPtySpawn.mockReturnValue(mockProcess)
+      mockBrowserWindowFromWebContents.mockReturnValue(mockSenderWindow)
+
+      await handlers['pty:create'](mockEvent, {
+        id: 'env-no-flicker-override',
+        cwd: '/tmp',
+        env: { CLAUDE_CODE_NO_FLICKER: '0' },
+      })
+
+      const spawnEnv = mockPtySpawn.mock.calls[0][2].env
+      expect(spawnEnv.CLAUDE_CODE_NO_FLICKER).toBe('0')
+    })
+
     it('does not set owner window when sender window not found', async () => {
       const { register } = await import('./pty')
       const ctx = createCtx()
