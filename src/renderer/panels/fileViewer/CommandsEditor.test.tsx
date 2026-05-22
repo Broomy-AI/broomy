@@ -140,4 +140,125 @@ describe('CommandsEditor', () => {
     expect(savedArgs).toHaveLength(1)
     expect(savedArgs[0].name).toBe('topic')
   })
+
+  it('Expand link opens CommandExpandedEditor; typing updates the template', async () => {
+    vi.mocked(window.fs.exists).mockImplementation(async (p: string) => p === '/Users/test/.broomy/commands.json')
+    vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify({
+      version: 2, actions: [{ id: 'u', label: 'Cmd', template: '/do {thing}' }],
+    }))
+    render(<CommandsEditor directory="/repo" onClose={vi.fn()} />)
+    fireEvent.click(await screen.findByText('Cmd'))
+    // Click the Expand button
+    fireEvent.click(screen.getByTestId('expand-command'))
+    // The expanded editor should appear
+    const textarea = screen.getByTestId('expanded-command-textarea')
+    expect(textarea).toHaveValue('/do {thing}')
+    // Type a new value in the expanded editor
+    fireEvent.change(textarea, { target: { value: '/do {thing} --extra' } })
+    // The expanded textarea itself should have the new value
+    expect(textarea).toHaveValue('/do {thing} --extra')
+    // Close the expanded editor, then the main input reflects the updated template
+    fireEvent.click(screen.getByTestId('close-expanded-command'))
+    expect(screen.getByDisplayValue('/do {thing} --extra')).toBeInTheDocument()
+  })
+
+  it('Set-stage dropdown: picking "(no change)" writes setStage: undefined', async () => {
+    vi.mocked(window.fs.exists).mockImplementation(async (p: string) => p === '/Users/test/.broomy/commands.json')
+    vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify({
+      version: 2, actions: [{ id: 'u', label: 'A', template: '/x', setStage: 'done' }],
+    }))
+    render(<CommandsEditor directory="/repo" onClose={vi.fn()} />)
+    fireEvent.click(await screen.findByText('A'))
+    // Pick "(no change)"
+    const setStageSelect = screen.getAllByRole('combobox').find(s => {
+      const opt = s.querySelector('option[value="__none"]')
+      return opt !== null
+    })!
+    fireEvent.change(setStageSelect, { target: { value: '__none' } })
+    // Save and verify setStage is not present
+    fireEvent.change(screen.getByDisplayValue('A'), { target: { value: 'B' } }) // make dirty if not already
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    await waitFor(() => expect(vi.mocked(window.fs.writeFile)).toHaveBeenCalled())
+    const written = JSON.parse(vi.mocked(window.fs.writeFile).mock.calls[0][1])
+    expect(written.actions[0].setStage).toBeUndefined()
+  })
+
+  it('Set-stage dropdown: picking "reset to planning" writes setStage: null', async () => {
+    vi.mocked(window.fs.exists).mockImplementation(async (p: string) => p === '/Users/test/.broomy/commands.json')
+    vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify({
+      version: 2, actions: [{ id: 'u', label: 'A', template: '/x', setStage: 'done' }],
+    }))
+    render(<CommandsEditor directory="/repo" onClose={vi.fn()} />)
+    fireEvent.click(await screen.findByText('A'))
+    const setStageSelect = screen.getAllByRole('combobox').find(s => {
+      const opt = s.querySelector('option[value="__null"]')
+      return opt !== null
+    })!
+    fireEvent.change(setStageSelect, { target: { value: '__null' } })
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    await waitFor(() => expect(vi.mocked(window.fs.writeFile)).toHaveBeenCalled())
+    const written = JSON.parse(vi.mocked(window.fs.writeFile).mock.calls[0][1])
+    expect(written.actions[0].setStage).toBeNull()
+  })
+
+  it('Set-stage dropdown: picking "+ New stage…" opens NewStageModal; submitting writes new stage', async () => {
+    vi.mocked(window.fs.exists).mockImplementation(async (p: string) => p === '/Users/test/.broomy/commands.json')
+    vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify({
+      version: 2, actions: [{ id: 'u', label: 'A', template: '/x' }],
+    }))
+    render(<CommandsEditor directory="/repo" onClose={vi.fn()} />)
+    fireEvent.click(await screen.findByText('A'))
+    const setStageSelect = screen.getAllByRole('combobox').find(s => {
+      const opt = s.querySelector('option[value="__new"]')
+      return opt !== null
+    })!
+    fireEvent.change(setStageSelect, { target: { value: '__new' } })
+    // NewStageModal should appear
+    expect(screen.getByTestId('new-stage-input')).toBeInTheDocument()
+    fireEvent.change(screen.getByTestId('new-stage-input'), { target: { value: 'shipped' } })
+    fireEvent.click(screen.getByTestId('new-stage-submit'))
+    // Modal closes and value is set
+    expect(screen.queryByTestId('new-stage-input')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    await waitFor(() => expect(vi.mocked(window.fs.writeFile)).toHaveBeenCalled())
+    const written = JSON.parse(vi.mocked(window.fs.writeFile).mock.calls[0][1])
+    expect(written.actions[0].setStage).toBe('shipped')
+  })
+
+  it('surface checkboxes toggle correctly (add/remove from surface list)', async () => {
+    vi.mocked(window.fs.exists).mockImplementation(async (p: string) => p === '/Users/test/.broomy/commands.json')
+    vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify({
+      version: 2, actions: [{ id: 'u', label: 'A', template: '/x', surface: 'source-control' }],
+    }))
+    render(<CommandsEditor directory="/repo" onClose={vi.fn()} />)
+    fireEvent.click(await screen.findByText('A'))
+    // Find "Review" checkbox and check it to add
+    const reviewCheckbox = screen.getByRole('checkbox', { name: /review/i })
+    fireEvent.click(reviewCheckbox)
+    // Now save
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    await waitFor(() => expect(vi.mocked(window.fs.writeFile)).toHaveBeenCalled())
+    const written = JSON.parse(vi.mocked(window.fs.writeFile).mock.calls[0][1])
+    const surface = written.actions[0].surface
+    expect(surface).toContain('review')
+    expect(surface).toContain('source-control')
+  })
+
+  it('Switch tab dropdown sets switchTab value', async () => {
+    vi.mocked(window.fs.exists).mockImplementation(async (p: string) => p === '/Users/test/.broomy/commands.json')
+    vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify({
+      version: 2, actions: [{ id: 'u', label: 'A', template: '/x' }],
+    }))
+    render(<CommandsEditor directory="/repo" onClose={vi.fn()} />)
+    fireEvent.click(await screen.findByText('A'))
+    const switchTabSelect = screen.getAllByRole('combobox').find(s => {
+      const opt = s.querySelector('option[value="review"]')
+      return opt !== null
+    })!
+    fireEvent.change(switchTabSelect, { target: { value: 'review' } })
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    await waitFor(() => expect(vi.mocked(window.fs.writeFile)).toHaveBeenCalled())
+    const written = JSON.parse(vi.mocked(window.fs.writeFile).mock.calls[0][1])
+    expect(written.actions[0].switchTab).toBe('review')
+  })
 })
