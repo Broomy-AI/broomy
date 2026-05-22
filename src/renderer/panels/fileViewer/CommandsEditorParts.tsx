@@ -38,36 +38,95 @@ export function StageChips({
   options: string[]
   onChange: (v: string[]) => void
 }) {
+  const [adding, setAdding] = useState(false)
   function toggle(s: string) {
     onChange(selected.includes(s) ? selected.filter(x => x !== s) : [...selected, s])
   }
-  function addNew() {
-    const name = (window.prompt('New stage name') ?? '').trim()
-    if (name && !selected.includes(name)) onChange([...selected, name])
+  function commitNew(name: string) {
+    const trimmed = name.trim()
+    if (trimmed && !selected.includes(trimmed)) onChange([...selected, trimmed])
+    setAdding(false)
   }
   return (
-    <div className="flex flex-wrap gap-1">
-      {options.map(s => {
-        const on = selected.includes(s)
-        return (
-          <button
-            key={s}
-            type="button"
-            onClick={() => toggle(s)}
-            className={`px-2 py-0.5 text-xs rounded-full border ${on ? 'bg-accent text-white border-accent' : 'bg-bg-primary border-border text-text-secondary'}`}
-          >
-            {s}
-          </button>
-        )
-      })}
-      <button
-        type="button"
-        onClick={addNew}
-        className="px-2 py-0.5 text-xs rounded-full border border-dashed border-border text-text-tertiary hover:text-text-primary"
-        data-testid="add-new-stage"
+    <>
+      <div className="flex flex-wrap gap-1">
+        {options.map(s => {
+          const on = selected.includes(s)
+          return (
+            <button
+              key={s}
+              type="button"
+              onClick={() => toggle(s)}
+              className={`px-2 py-0.5 text-xs rounded-full border ${on ? 'bg-accent text-white border-accent' : 'bg-bg-primary border-border text-text-secondary'}`}
+            >
+              {s}
+            </button>
+          )
+        })}
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="px-2 py-0.5 text-xs rounded-full border border-dashed border-border text-text-tertiary hover:text-text-primary"
+          data-testid="add-new-stage"
+        >
+          + New stage…
+        </button>
+      </div>
+      {adding && (
+        <NewStageModal title="New stage" onCancel={() => setAdding(false)} onSubmit={commitNew} />
+      )}
+    </>
+  )
+}
+
+// ---- New stage modal (used by StageChips and Set-stage dropdown) ----
+
+export function NewStageModal({
+  title, onCancel, onSubmit,
+}: {
+  title: string
+  onCancel: () => void
+  onSubmit: (name: string) => void
+}) {
+  const [value, setValue] = useState('')
+  const ok = value.trim().length > 0
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={onCancel}
+      role="dialog"
+    >
+      <div
+        className="bg-bg-secondary border border-border rounded-lg shadow-xl w-full max-w-sm mx-4 p-4 space-y-3"
+        onClick={e => e.stopPropagation()}
       >
-        + New stage…
-      </button>
+        <h3 className="text-sm font-medium text-text-primary">{title}</h3>
+        <input
+          type="text"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && ok) onSubmit(value)
+            if (e.key === 'Escape') onCancel()
+          }}
+          placeholder="e.g. brainstormed, designed, ready-to-ship"
+          autoFocus
+          spellCheck={false}
+          data-testid="new-stage-input"
+          className="w-full px-2 py-1.5 text-sm font-mono rounded border border-border bg-bg-primary text-text-primary focus:outline-none focus:border-accent"
+        />
+        <div className="flex justify-end gap-2">
+          <button onClick={onCancel} className="px-3 py-1.5 text-sm text-text-secondary hover:text-text-primary">Cancel</button>
+          <button
+            onClick={() => onSubmit(value)}
+            disabled={!ok}
+            className="px-3 py-1.5 text-sm rounded bg-accent text-white hover:bg-accent/80 disabled:opacity-50"
+            data-testid="new-stage-submit"
+          >
+            Add
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

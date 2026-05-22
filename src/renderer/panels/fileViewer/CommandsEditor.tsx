@@ -18,7 +18,7 @@ import { getUserCommandsConfigPath, userCommandsDir } from '../../features/comma
 import { parseTemplate } from '../../features/commands/templateParser'
 import { ShowWhenPicker } from '../../shared/components/ShowWhenPicker'
 import { DialogErrorBanner } from '../../shared/components/ErrorBanner'
-import { Field, StageChips, EmptyPane, DeleteButton, UnsavedChangesModal, CommandExpandedEditor, ArgsTable } from './CommandsEditorParts'
+import { Field, StageChips, EmptyPane, DeleteButton, UnsavedChangesModal, CommandExpandedEditor, ArgsTable, NewStageModal } from './CommandsEditorParts'
 
 type Tab = 'user' | 'project'
 
@@ -311,6 +311,7 @@ function Detail({
   const argsMeta = selected.args ?? []
   const mode: 'one-line' | 'block' = selected.template.includes('\n') ? 'block' : 'one-line'
   const [commandExpanded, setCommandExpanded] = useState(false)
+  const [addingSetStage, setAddingSetStage] = useState(false)
 
   function updateArgMeta(name: string, patch: Partial<{ description: string; multiline: boolean }>) {
     const existing = argsMeta.find(a => a.name === name)
@@ -407,11 +408,7 @@ function Detail({
             const v = e.target.value
             if (v === '__none') { onUpdate({ setStage: undefined }); return }
             if (v === '__null') { onUpdate({ setStage: null }); return }
-            if (v === '__new') {
-              const name = (window.prompt('New stage name') ?? '').trim()
-              if (name) onUpdate({ setStage: name })
-              return
-            }
+            if (v === '__new') { setAddingSetStage(true); return }
             onUpdate({ setStage: v })
           }}
           className="w-full px-2 py-1.5 text-sm rounded border border-border bg-bg-secondary"
@@ -424,6 +421,14 @@ function Detail({
           <option value="__new">+ New stage…</option>
         </select>
       </Field>
+
+      {addingSetStage && (
+        <NewStageModal
+          title="New stage for setStage"
+          onCancel={() => setAddingSetStage(false)}
+          onSubmit={(name) => { onUpdate({ setStage: name.trim() }); setAddingSetStage(false) }}
+        />
+      )}
 
       <Field label="Style">
         <select
