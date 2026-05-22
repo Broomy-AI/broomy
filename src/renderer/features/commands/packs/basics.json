@@ -47,8 +47,8 @@
     {
       "id": "self-review",
       "label": "Self-review",
-      "description": "Read your own changes carefully before asking anyone else to.",
-      "template": "Self-review this branch. Read every modified file, compare against the plan, list anything missing / redundant / sub-par with file:line refs. Then fix it.",
+      "description": "Run the agent's built-in /review on your own work before asking anyone else to.",
+      "template": "/review",
       "stages": ["verifying"],
       "style": "secondary"
     },
@@ -115,11 +115,12 @@
     {
       "id": "review",
       "label": "Review",
-      "description": "Run the agent's built-in /review on this branch.",
-      "template": "/review",
+      "description": "Code review the current branch and write the result to .broomy/output/review.md.",
+      "template": "Review this branch against {main}.\n\n1. `git fetch origin {main}`. Check `git diff origin/{main}...HEAD`, `git log origin/{main}..HEAD --oneline`, and `gh pr view --json number,body` (if a PR exists).\n2. If you've reviewed this PR before (look at `gh api repos/:owner/:repo/pulls/<n>/comments` + `gh api user --jq .login`), focus on changes since your last review and whether your prior asks were addressed.\n3. Look for correctness, bugs, security, performance, code quality.\n\nEVERY code reference MUST be a markdown link with a repo-relative path: `[src/file.tsx:12-45](src/file.tsx#L12-L45)` — never GitHub URLs.\n\nWrite to `.broomy/output/review.md` with sections: Change Summary (grouped, with links), Issues Found, Suggestions, Overall Assessment, Changes Since Your Last Review (only if applicable).",
       "showWhen": ["clean", "pushed|open"],
       "style": "accent",
-      "surface": ["source-control", "review"]
+      "surface": ["source-control", "review"],
+      "switchTab": "review"
     },
     {
       "id": "plan-issue",
