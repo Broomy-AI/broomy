@@ -115,12 +115,11 @@
     {
       "id": "review",
       "label": "Review",
-      "description": "Code review the current branch and write the result to .broomy/output/review.md.",
-      "template": "Review this branch against {main}.\n\n1. `git fetch origin {main}`. Check `git diff origin/{main}...HEAD`, `git log origin/{main}..HEAD --oneline`, and `gh pr view --json number,body` (if a PR exists).\n2. If you've reviewed this PR before (look at `gh api repos/:owner/:repo/pulls/<n>/comments` + `gh api user --jq .login`), focus on changes since your last review and whether your prior asks were addressed.\n3. Look for correctness, bugs, security, performance, code quality.\n\nEVERY code reference MUST be a markdown link with a repo-relative path: `[src/file.tsx:12-45](src/file.tsx#L12-L45)` — never GitHub URLs.\n\nWrite to `.broomy/output/review.md` with sections: Change Summary (grouped, with links), Issues Found, Suggestions, Overall Assessment, Changes Since Your Last Review (only if applicable).",
+      "description": "Run the agent's built-in /review on this branch.",
+      "template": "/review",
       "showWhen": ["clean", "pushed|open"],
       "style": "accent",
-      "surface": ["source-control", "review"],
-      "switchTab": "review"
+      "surface": ["source-control", "review"]
     },
     {
       "id": "plan-issue",
