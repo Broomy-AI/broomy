@@ -35,6 +35,16 @@ const config: StorybookConfig = {
     }
     config.plugins = config.plugins || []
     config.plugins.push(processShimPlugin())
+    // Build-time constants are injected by electron.vite.config.ts in the real
+    // app (and vitest config in unit tests). Storybook builds the renderer with
+    // its own Vite config, so define them here too — otherwise any story that
+    // reads them (e.g. the DEV badge) throws "__BUILD_COMMIT__ is not defined"
+    // at render time. Fixed values keep screenshots deterministic.
+    config.define = {
+      ...config.define,
+      __BUILD_COMMIT__: JSON.stringify('storybook'),
+      __BUILD_TIME__: JSON.stringify('1970-01-01T00:00:00.000Z'),
+    }
     config.css = config.css || {}
     config.css.postcss = {
       plugins: [
