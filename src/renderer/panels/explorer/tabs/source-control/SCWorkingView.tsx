@@ -29,6 +29,7 @@ export interface SCWorkingViewProps {
   onStageAll: () => void
   onUnstage: (filePath: string) => void
   onFileSelect?: (target: NavigationTarget) => void
+  selectedFilePath?: string | null
   onSwitchTab?: (tab: string) => void
   onGitStatusRefresh?: () => void
   // Modular actions
@@ -122,10 +123,11 @@ function MergeCommitArea({ hasConflicts, isCommitting, onCommitMerge }: {
   )
 }
 
-const FileListItem = memo(function FileListItem({ file, directory, type, onFileSelect, onAction }: {
+const FileListItem = memo(function FileListItem({ file, directory, type, isSelected, onFileSelect, onAction }: {
   file: GitFileStatus
   directory: string
   type: 'staged' | 'unstaged'
+  isSelected: boolean
   onFileSelect?: (target: NavigationTarget) => void
   onAction: (filePath: string) => void
 }) {
@@ -140,7 +142,7 @@ const FileListItem = memo(function FileListItem({ file, directory, type, onFileS
 
   return (
     <div
-      className="flex items-center gap-2 px-3 py-1 hover:bg-bg-tertiary cursor-pointer group"
+      className={`flex items-center gap-2 px-3 py-1 cursor-pointer group ${isSelected ? 'bg-accent/20 ring-1 ring-accent/50' : 'hover:bg-bg-tertiary'}`}
       title={`${file.path} — ${statusLabel(file.status)}${type === 'staged' ? ' (staged)' : ''}`}
       onClick={handleClick}
     >
@@ -155,7 +157,7 @@ const FileListItem = memo(function FileListItem({ file, directory, type, onFileS
   )
 })
 
-function FileList({ directory, stagedFiles, unstagedFiles, onStage, onStageAll, onUnstage, onFileSelect }: {
+function FileList({ directory, stagedFiles, unstagedFiles, onStage, onStageAll, onUnstage, onFileSelect, selectedFilePath }: {
   directory: string
   stagedFiles: GitFileStatus[]
   unstagedFiles: GitFileStatus[]
@@ -163,7 +165,11 @@ function FileList({ directory, stagedFiles, unstagedFiles, onStage, onStageAll, 
   onStageAll: () => void
   onUnstage: (filePath: string) => void
   onFileSelect?: (target: NavigationTarget) => void
+  selectedFilePath?: string | null
 }) {
+  const isRowSelected = (path: string) =>
+    selectedFilePath != null && `${directory}/${path}` === selectedFilePath
+
   return (
     <div className="flex-1 overflow-y-auto text-sm">
       <div className="px-3 py-1.5 text-xs font-medium text-text-secondary uppercase tracking-wide bg-bg-secondary">
@@ -178,6 +184,7 @@ function FileList({ directory, stagedFiles, unstagedFiles, onStage, onStageAll, 
             file={file}
             directory={directory}
             type="staged"
+            isSelected={isRowSelected(file.path)}
             onFileSelect={onFileSelect}
             onAction={onUnstage}
           />
@@ -204,6 +211,7 @@ function FileList({ directory, stagedFiles, unstagedFiles, onStage, onStageAll, 
             file={file}
             directory={directory}
             type="unstaged"
+            isSelected={isRowSelected(file.path)}
             onFileSelect={onFileSelect}
             onAction={onStage}
           />
@@ -228,6 +236,7 @@ export function SCWorkingView({
   onStageAll,
   onUnstage,
   onFileSelect,
+  selectedFilePath,
   onSwitchTab,
   onGitStatusRefresh,
   actions,
@@ -284,6 +293,7 @@ export function SCWorkingView({
           onStageAll={onStageAll}
           onUnstage={onUnstage}
           onFileSelect={onFileSelect}
+          selectedFilePath={selectedFilePath}
         />
       )}
     </>
