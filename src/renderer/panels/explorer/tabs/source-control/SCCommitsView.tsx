@@ -16,6 +16,7 @@ interface SCCommitsViewProps {
   loadingCommitFiles: Set<string>
   onToggleCommit: (commitHash: string) => void
   onFileSelect?: (target: NavigationTarget) => void
+  selectedFilePath?: string | null
 }
 
 function CommitRow({
@@ -27,6 +28,7 @@ function CommitRow({
   muted,
   onToggleCommit,
   onFileSelect,
+  selectedFilePath,
 }: {
   key?: string | number | bigint | null
   commit: GitCommitInfo
@@ -37,6 +39,7 @@ function CommitRow({
   muted: boolean
   onToggleCommit: (hash: string) => void
   onFileSelect?: (target: NavigationTarget) => void
+  selectedFilePath?: string | null
 }) {
   return (
     <div key={commit.hash}>
@@ -56,29 +59,32 @@ function CommitRow({
           {isLoadingFiles ? (
             <div className="px-3 py-1 pl-8 text-xs text-text-secondary">Loading files...</div>
           ) : files && files.length > 0 ? (
-            files.map((file) => (
-              <div
-                key={`${commit.hash}-${file.path}`}
-                className="flex items-center gap-2 px-3 py-1 pl-8 hover:bg-bg-tertiary cursor-pointer"
-                title={`${file.path} — ${statusLabel(file.status)}`}
-                onClick={() => {
-                  if (onFileSelect) {
-                    onFileSelect({
-                      filePath: `${directory}/${file.path}`,
-                      openInDiffMode: true,
-                      diffBaseRef: `${commit.hash}~1`,
-                      diffCurrentRef: commit.hash,
-                      diffLabel: `${commit.shortHash}: ${commit.message}`,
-                    })
-                  }
-                }}
-              >
-                <span className={`truncate flex-1 text-xs ${getStatusColor(file.status)}`}>
-                  {file.path}
-                </span>
-                <StatusBadge status={file.status} />
-              </div>
-            ))
+            files.map((file) => {
+              const isSelected = selectedFilePath != null && `${directory}/${file.path}` === selectedFilePath
+              return (
+                <div
+                  key={`${commit.hash}-${file.path}`}
+                  className={`flex items-center gap-2 px-3 py-1 pl-8 cursor-pointer ${isSelected ? 'bg-accent/20 ring-1 ring-accent/50' : 'hover:bg-bg-tertiary'}`}
+                  title={`${file.path} — ${statusLabel(file.status)}`}
+                  onClick={() => {
+                    if (onFileSelect) {
+                      onFileSelect({
+                        filePath: `${directory}/${file.path}`,
+                        openInDiffMode: true,
+                        diffBaseRef: `${commit.hash}~1`,
+                        diffCurrentRef: commit.hash,
+                        diffLabel: `${commit.shortHash}: ${commit.message}`,
+                      })
+                    }
+                  }}
+                >
+                  <span className={`truncate flex-1 text-xs ${getStatusColor(file.status)}`}>
+                    {file.path}
+                  </span>
+                  <StatusBadge status={file.status} />
+                </div>
+              )
+            })
           ) : (
             <div className="px-3 py-1 pl-8 text-xs text-text-secondary">No files changed</div>
           )}
@@ -98,6 +104,7 @@ export function SCCommitsView({
   loadingCommitFiles,
   onToggleCommit,
   onFileSelect,
+  selectedFilePath,
 }: SCCommitsViewProps) {
   if (isCommitsLoading) {
     return (
@@ -129,6 +136,7 @@ export function SCCommitsView({
       muted={muted}
       onToggleCommit={onToggleCommit}
       onFileSelect={onFileSelect}
+      selectedFilePath={selectedFilePath}
     />
   )
 
