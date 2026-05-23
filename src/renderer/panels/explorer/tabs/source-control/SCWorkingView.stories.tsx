@@ -131,3 +131,13 @@ export const Behind: Story = {
     conditionState: { ...defaultConditionState, 'behind': true },
   },
 }
+
+export const WithSelectedFile: Story = {
+  args: {
+    gitStatus: [stagedFile, stagedAdded, unstagedFile, untrackedFile],
+    stagedFiles: [stagedFile, stagedAdded],
+    unstagedFiles: [unstagedFile, untrackedFile],
+    conditionState: { ...defaultConditionState, 'has-changes': true, 'clean': false },
+    selectedFilePath: '/Users/test/projects/my-app/src/App.tsx',
+  },
+}
