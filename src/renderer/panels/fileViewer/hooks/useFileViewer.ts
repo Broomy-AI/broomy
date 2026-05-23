@@ -42,7 +42,9 @@ export function useFileViewer({
   const [editedContent, setEditedContent] = useState<string>('')
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<ViewMode>('latest')
+  const [viewMode, setViewMode] = useState<ViewMode>(() =>
+    initialViewMode === 'diff' ? 'diff' : 'latest',
+  )
   const [pendingViewMode, setPendingViewMode] = useState<ViewMode | null>(null)
   const [diffSideBySide, setDiffSideBySide] = useState(true)
   const [editorActions, setEditorActions] = useState<EditorActions | null>(null)
@@ -100,16 +102,26 @@ export function useFileViewer({
   }, [scrollToLine, selectedViewerId, availableViewers])
 
   // Reset view mode when file changes or initialViewMode changes (e.g. clicking same file from source control)
-  // Only reset isDirty when the file itself changes, not on view mode changes
+  // Only reset isDirty when the file itself changes, not on view mode changes.
+  // The setViewMode reset must only fire when filePath/initialViewMode actually
+  // change — not on every dep churn (e.g. inline onDirtyStateChange callbacks
+  // get fresh refs on parent re-render), or it would clobber a user-switched
+  // viewMode and snap back to diff while the user is reading the preview.
   const prevFilePathRef = useRef(filePath)
+  const prevInitialViewModeRef = useRef(initialViewMode)
   useEffect(() => {
-    if (prevFilePathRef.current !== filePath) {
+    const filePathChanged = prevFilePathRef.current !== filePath
+    const initialViewModeChanged = prevInitialViewModeRef.current !== initialViewMode
+    if (filePathChanged) {
       setIsDirty(false)
       onDirtyStateChange?.(false)
       prevFilePathRef.current = filePath
     }
-    const shouldUseDiffMode = canShowDiff && (fileStatus === 'deleted' || initialViewMode === 'diff')
-    setViewMode(shouldUseDiffMode ? 'diff' : 'latest')
+    if (filePathChanged || initialViewModeChanged) {
+      const shouldUseDiffMode = canShowDiff && (fileStatus === 'deleted' || initialViewMode === 'diff')
+      setViewMode(shouldUseDiffMode ? 'diff' : 'latest')
+      prevInitialViewModeRef.current = initialViewMode
+    }
   }, [filePath, initialViewMode, canShowDiff, fileStatus, onDirtyStateChange])
 
   // Safety guard: viewMode must never be 'diff' when diffs are unavailable.

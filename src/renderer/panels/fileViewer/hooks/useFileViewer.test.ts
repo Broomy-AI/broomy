@@ -638,4 +638,52 @@ describe('useFileViewer', () => {
       expect(result.current.editorActions).toBeNull()
     })
   })
+
+  describe('viewMode persistence across re-renders', () => {
+    it('preserves user-switched viewMode when parent re-renders with new callback refs (regression)', () => {
+      // Repro: opening a markdown diff (initialViewMode='diff'), switching to
+      // preview (viewMode='latest'), then any incidental parent re-render
+      // (e.g. inline onDirtyStateChange gets a fresh ref) used to flip
+      // viewMode back to 'diff' because the init effect ran unconditionally.
+      const { result, rerender } = renderHook(
+        ({ onDirtyStateChange }) =>
+          useFileViewer({
+            filePath: '/test/file.md',
+            fileStatus: 'modified',
+            initialViewMode: 'diff',
+            onDirtyStateChange,
+          }),
+        { initialProps: { onDirtyStateChange: vi.fn() } },
+      )
+
+      expect(result.current.viewMode).toBe('diff')
+
+      act(() => {
+        result.current.setViewMode('latest')
+      })
+      expect(result.current.viewMode).toBe('latest')
+
+      // Parent re-renders with a fresh inline callback reference.
+      rerender({ onDirtyStateChange: vi.fn() })
+
+      expect(result.current.viewMode).toBe('latest')
+    })
+
+    it('still respects a new initialViewMode prop (e.g. re-opening from source control)', () => {
+      const { result, rerender } = renderHook(
+        ({ initialViewMode }) =>
+          useFileViewer({
+            filePath: '/test/file.md',
+            fileStatus: 'modified',
+            initialViewMode,
+          }),
+        { initialProps: { initialViewMode: 'latest' as 'latest' | 'diff' } },
+      )
+
+      expect(result.current.viewMode).toBe('latest')
+
+      rerender({ initialViewMode: 'diff' })
+      expect(result.current.viewMode).toBe('diff')
+    })
+  })
 })
