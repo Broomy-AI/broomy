@@ -128,6 +128,24 @@ export function installElectronMocks() {
     isInstalled: resolved(true),
   }
 
+  w.agentSdk = {
+    start: resolved({ id: '' }),
+    send: noopResolved,
+    inject: noopResolved,
+    stop: noopResolved,
+    respondToPermission: noopResolved,
+    onMessage: unsubscribe,
+    onDone: unsubscribe,
+    onError: unsubscribe,
+    onPermissionRequest: unsubscribe,
+    onHistoryMeta: unsubscribe,
+    loadHistory: noopResolved,
+    login: noopResolved,
+    status: noopResolved,
+    commands: resolved([]),
+    models: resolved([]),
+  }
+
   w.help = {
     onHelpMenu: unsubscribe,
   }

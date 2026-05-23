@@ -65,15 +65,35 @@ function startStaticServer(dir, port) {
   })
 }
 
+// Console/page errors that are not story render failures and would otherwise
+// cause false positives (e.g. a missing static asset returning 404).
+function isIgnorableError(text) {
+  return /Failed to load resource/i.test(text)
+}
+
 async function captureStory(page, storyId, baseUrl, outDir) {
+  // Reset the per-page error buffer (pages are reused across stories).
+  page._storyErrors = []
   const url = `${baseUrl}/iframe.html?id=${storyId}&viewMode=story`
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10000 })
-  // Wait for story to render and fonts to load in a single check — no fixed delays
+  // Wait for story to render and fonts to load in a single check — no fixed delays.
+  // A story that throws during render leaves #storybook-root empty (Storybook
+  // paints its error overlay elsewhere), so this times out — long enough for the
+  // render error to have been reported to the console.
   await page.waitForFunction(
     () => document.querySelector('#storybook-root > *') !== null && document.fonts.ready.then(() => true),
     { timeout: 5000 }
   ).catch(() => {})
   await page.screenshot({ path: join(outDir, `${storyId}.png`) })
+  // A story counts as a render failure only if it errored AND produced no DOM.
+  // This distinguishes a story that crashed (empty root) from one that
+  // deliberately renders an error state, e.g. an error-boundary demo, which
+  // catches the error and renders fallback content into the root.
+  const rootEmpty = await page
+    .evaluate(() => (document.querySelector('#storybook-root')?.childElementCount ?? 0) === 0)
+    .catch(() => false)
+  const errors = page._storyErrors.filter(e => !isIgnorableError(e))
+  return rootEmpty ? errors : []
 }
 
 async function main() {
@@ -112,11 +132,19 @@ async function main() {
     mkdirSync(SCREENSHOTS_DIR, { recursive: true })
     const browser = await chromium.launch({ headless: true })
 
-    // Create a pool of pages
+    // Create a pool of pages. Each page collects uncaught exceptions and
+    // console errors into a buffer that captureStory resets per story — a story
+    // that errors during render is a test failure even if its pixels match.
     const pages = await Promise.all(
       Array.from({ length: WORKERS }, async () => {
         const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } })
-        return ctx.newPage()
+        const page = await ctx.newPage()
+        page._storyErrors = []
+        page.on('pageerror', err => page._storyErrors.push(err.message))
+        page.on('console', msg => {
+          if (msg.type() === 'error') page._storyErrors.push(msg.text())
+        })
+        return page
       })
     )
 
@@ -126,20 +154,25 @@ async function main() {
     ))
 
     const captureErrors = []
+    const renderErrorsByStory = new Map()
     let completed = 0
 
     // Worker function: pull story IDs from the shared queue
     const queue = [...storyIds]
-    const workerResults = []
 
     async function worker(page) {
       while (queue.length > 0) {
         const storyId = queue.shift()
         if (!storyId) break
         try {
-          await captureStory(page, storyId, baseUrl, SCREENSHOTS_DIR)
+          const renderErrors = await captureStory(page, storyId, baseUrl, SCREENSHOTS_DIR)
           completed++
-          console.log(`  [${completed}/${storyIds.length}] ✓ ${storyId}`)
+          if (renderErrors.length > 0) {
+            renderErrorsByStory.set(storyId, renderErrors)
+            console.log(`  [${completed}/${storyIds.length}] ✗ ${storyId} — render error: ${renderErrors[0].split('\n')[0]}`)
+          } else {
+            console.log(`  [${completed}/${storyIds.length}] ✓ ${storyId}`)
+          }
         } catch (err) {
           completed++
           captureErrors.push(storyId)
@@ -170,10 +203,20 @@ async function main() {
       } else {
         result = pixelDiff(currentPath, referencePath, diffPath, storyId)
       }
+
+      // A story that errored during render is always a failure — even if its
+      // pixels happen to match the reference (e.g. an error overlay that was
+      // accepted as the baseline). This catches errors the pixel diff cannot.
+      const renderErrors = renderErrorsByStory.get(storyId)
+      if (renderErrors) {
+        result = { ...result, status: 'fail', renderErrors }
+      }
       results.push(result)
 
       const prefix = `  [${i + 1}/${storyIds.length}]`
-      if (result.status === 'pass') {
+      if (renderErrors) {
+        console.log(`${prefix} ✗ ${storyId} (render error: ${renderErrors[0].split('\n')[0]})`)
+      } else if (result.status === 'pass') {
         console.log(`${prefix} ✓ ${storyId}`)
       } else if (result.status === 'new') {
         console.log(`${prefix} ● ${storyId} (new — no reference)`)
@@ -198,10 +241,18 @@ async function main() {
     if (failed > 0) {
       console.error('\nFailed stories:')
       for (const r of results.filter(r => r.status === 'fail')) {
-        console.error(`  ✗ ${r.storyId} — ${r.diffPercent.toFixed(2)}% pixels changed (${r.diffPixels} px)`)
+        if (r.renderErrors) {
+          console.error(`  ✗ ${r.storyId} — render error: ${r.renderErrors[0].split('\n')[0]}`)
+        } else {
+          console.error(`  ✗ ${r.storyId} — ${r.diffPercent.toFixed(2)}% pixels changed (${r.diffPixels} px)`)
+        }
       }
+      const hasRenderErrors = results.some(r => r.renderErrors)
       console.error('\nVisual regression test FAILED')
-      console.error('Run "pnpm storybook:update-refs" to accept these changes as the new baseline.')
+      if (hasRenderErrors) {
+        console.error('Stories with render errors must be fixed — they cannot be accepted as a baseline.')
+      }
+      console.error('Run "pnpm storybook:update-refs" to accept pixel changes as the new baseline.')
       process.exit(1)
     }
   } finally {
