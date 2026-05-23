@@ -52,7 +52,7 @@ describe('MonacoDiffViewer', () => {
     expect(mockDiffEditor).toHaveBeenCalledWith(
       expect.objectContaining({
         language: 'typescript',
-        theme: 'broomy-dark',
+        theme: 'vs-dark',
       })
     )
   })

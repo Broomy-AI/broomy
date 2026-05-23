@@ -14,23 +14,6 @@ import { useMonacoComments } from '../hooks/useMonacoComments'
 // Configure Monaco to use locally bundled version instead of CDN
 loader.config({ monaco: monacoEditor })
 
-// Boost diff highlight opacity over vs-dark defaults. Monaco's defaults are
-// ~20% alpha, which on the dark navy background renders side-by-side diffs as
-// near-plain-text. Inline mode is fine because its view zones use stronger
-// styling; only side-by-side needs the help.
-const BROOMY_DARK_THEME_NAME = 'broomy-dark'
-monacoEditor.editor.defineTheme(BROOMY_DARK_THEME_NAME, {
-  base: 'vs-dark',
-  inherit: true,
-  rules: [],
-  colors: {
-    'diffEditor.insertedLineBackground': '#3b8c2a55',
-    'diffEditor.removedLineBackground': '#c43c3c55',
-    'diffEditor.insertedTextBackground': '#9ccc2c80',
-    'diffEditor.removedTextBackground': '#ff000080',
-  },
-})
-
 interface MonacoDiffViewerProps {
   filePath: string
   originalContent: string
@@ -222,7 +205,7 @@ export default function MonacoDiffViewer({
           language={detectedLanguage}
           original={originalContent}
           modified={modifiedContent}
-          theme={BROOMY_DARK_THEME_NAME}
+          theme="vs-dark"
           onMount={handleDiffEditorMount}
           keepCurrentOriginalModel={false}
           keepCurrentModifiedModel={false}
