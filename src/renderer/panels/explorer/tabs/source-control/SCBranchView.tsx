@@ -44,7 +44,7 @@ export function SCBranchView({
         Changes vs {branchBaseName} ({branchChanges.length})
       </div>
       {branchChanges.map((file) => {
-        const isSelected = selectedFilePath != null && `${directory}/${file.path}` === selectedFilePath
+        const isSelected = !!selectedFilePath && `${directory}/${file.path}` === selectedFilePath
         return (
           <div
             key={`branch-${file.path}`}

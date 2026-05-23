@@ -60,7 +60,7 @@ function CommitRow({
             <div className="px-3 py-1 pl-8 text-xs text-text-secondary">Loading files...</div>
           ) : files && files.length > 0 ? (
             files.map((file) => {
-              const isSelected = selectedFilePath != null && `${directory}/${file.path}` === selectedFilePath
+              const isSelected = !!selectedFilePath && `${directory}/${file.path}` === selectedFilePath
               return (
                 <div
                   key={`${commit.hash}-${file.path}`}

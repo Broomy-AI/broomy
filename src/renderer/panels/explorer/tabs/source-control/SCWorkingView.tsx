@@ -168,7 +168,7 @@ function FileList({ directory, stagedFiles, unstagedFiles, onStage, onStageAll, 
   selectedFilePath?: string | null
 }) {
   const isRowSelected = (path: string) =>
-    selectedFilePath != null && `${directory}/${path}` === selectedFilePath
+    !!selectedFilePath && `${directory}/${path}` === selectedFilePath
 
   return (
     <div className="flex-1 overflow-y-auto text-sm">

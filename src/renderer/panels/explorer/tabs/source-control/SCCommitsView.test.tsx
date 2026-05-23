@@ -193,8 +193,8 @@ describe('SCCommitsView', () => {
           selectedFilePath="/repos/project/src/bar.ts"
         />
       )
-      const fooRow = screen.getByText('src/foo.ts').closest('div[class*="cursor-pointer"]') as HTMLElement
-      const barRow = screen.getByText('src/bar.ts').closest('div[class*="cursor-pointer"]') as HTMLElement
+      const fooRow = screen.getByText('src/foo.ts').closest('div[class*="cursor-pointer"]')!
+      const barRow = screen.getByText('src/bar.ts').closest('div[class*="cursor-pointer"]')!
       expect(barRow.className).toContain('bg-accent/20')
       expect(barRow.className).toContain('ring-accent/50')
       expect(fooRow.className).not.toContain('bg-accent/20')
@@ -211,7 +211,7 @@ describe('SCCommitsView', () => {
           selectedFilePath={null}
         />
       )
-      const fooRow = screen.getByText('src/foo.ts').closest('div[class*="cursor-pointer"]') as HTMLElement
+      const fooRow = screen.getByText('src/foo.ts').closest('div[class*="cursor-pointer"]')!
       expect(fooRow.className).not.toContain('bg-accent/20')
     })
   })
