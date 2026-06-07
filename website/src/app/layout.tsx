@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://broomy.org'),
   title: 'Broomy — Command center for AI coding agents',
   description:
-    'Manage multiple AI coding sessions across repositories. Open source desktop app with agent status detection, file explorer, git integration, and code review. Download for macOS.',
+    'Manage multiple AI coding sessions across repositories. Open source desktop app with agent status detection, file explorer, git integration, and code review. Download for macOS, Windows, and Linux.',
   icons: {
     icon: '/favicon.png',
     apple: '/favicon.png',
