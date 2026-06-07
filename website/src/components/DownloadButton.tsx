@@ -7,7 +7,7 @@ export function DownloadButtons({ compact }: { compact?: boolean }) {
         href={RELEASE_URL}
         className="rounded-lg bg-text-primary px-4 py-2 text-sm font-semibold text-bg-page transition-transform hover:scale-[1.02]"
       >
-        Download for Mac
+        Download
       </a>
     )
   }
@@ -15,15 +15,10 @@ export function DownloadButtons({ compact }: { compact?: boolean }) {
   return (
     <a
       href={RELEASE_URL}
-      className="inline-flex flex-col items-center rounded-lg border border-border-hover px-8 py-4 text-lg font-semibold text-text-primary transition-all hover:scale-[1.02] hover:border-text-muted"
+      className="inline-flex items-center gap-2 rounded-lg border border-border-hover px-8 py-4 text-lg font-semibold text-text-primary transition-all hover:scale-[1.02] hover:border-text-muted"
     >
-      <span className="flex items-center gap-2">
-        <DownloadIcon />
-        Download for Mac
-      </span>
-      <span className="mt-1 text-xs font-normal text-text-muted">
-        Mac only (Windows, Linux coming soon)
-      </span>
+      <DownloadIcon />
+      Download
     </a>
   )
 }

@@ -34,7 +34,9 @@ export default function GetStarted() {
 
         {/* Secondary: download pre-built */}
         <div className="mt-12">
-          <p className="mb-4 text-sm text-text-muted">Or download a pre-built release:</p>
+          <p className="mb-4 text-sm text-text-muted">
+            Or download a pre-built release for Mac, Windows, or Linux:
+          </p>
           <DownloadButton />
         </div>
       </div>
