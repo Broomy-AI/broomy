@@ -55,15 +55,31 @@ vi.mock('../platform', () => ({
 }))
 
 // Mock treeKill — every PTY teardown path goes through it now
-const mockTreeKill = vi.fn(async (_pid: number) => {})
+const mockTreeKill = vi.fn(async (_pid: number, _graceMs?: number, _extra?: Iterable<{ pid: number; startTime: string }>) => {})
 vi.mock('../treeKill', () => ({
-  treeKill: (pid: number) => mockTreeKill(pid),
+  treeKill: (pid: number, graceMs?: number, extra?: Iterable<{ pid: number; startTime: string }>) => mockTreeKill(pid, graceMs, extra),
+  parsePsSnapshot: vi.fn(() => [] as { pid: number; ppid: number; pgid: number }[]),
+  collectDescendants: vi.fn(() => new Set<number>()),
+}))
+
+// Mock child_process so killOrphans's execFileSync doesn't actually run ps
+vi.mock('child_process', () => ({
+  execFileSync: vi.fn(() => ''),
+  execFile: vi.fn((_cmd: string, _args: string[], _opts: unknown, cb: () => void) => { cb() }),
 }))
 
 // Mock marker file I/O so tests don't touch ~/.broomy/pids
 vi.mock('../ptyMarkers', () => ({
   recordPtyMarker: vi.fn(),
   removePtyMarker: vi.fn(),
+}))
+
+// Mock the descendants tracker — pty.ts calls trackPty/untrackPty/etc.
+vi.mock('../descendantsTracker', () => ({
+  trackPty: vi.fn(),
+  untrackPty: vi.fn(),
+  getHistoricalDescendants: vi.fn(() => [] as { pid: number; startTime: string }[]),
+  getAllStats: vi.fn(() => ({})),
 }))
 
 let nextMockPid = 1000
@@ -566,7 +582,7 @@ describe('pty handlers', () => {
         cwd: '/tmp',
       })
 
-      expect(mockTreeKill).toHaveBeenCalledWith(existingProcess.pid)
+      expect(mockTreeKill).toHaveBeenCalledWith(existingProcess.pid, undefined, expect.anything())
       expect(ctx.ptyProcesses.get('dup-id')).toBe(newProcess)
     })
   })
@@ -841,7 +857,7 @@ describe('pty handlers', () => {
       ctx.ptyProcesses.set('kill-1', mockProcess as never)
 
       await handlers['pty:kill'](mockEvent, 'kill-1')
-      expect(mockTreeKill).toHaveBeenCalledWith(mockProcess.pid)
+      expect(mockTreeKill).toHaveBeenCalledWith(mockProcess.pid, undefined, expect.anything())
       expect(ctx.ptyProcesses.has('kill-1')).toBe(false)
     })
 
@@ -876,6 +892,117 @@ describe('pty handlers', () => {
       await handlers['pty:kill'](mockEvent, 'dispose-1')
       expect(dataDispose).toHaveBeenCalled()
       expect(exitDispose).toHaveBeenCalled()
+    })
+  })
+
+  describe('pty:killForSession', () => {
+    it('kills every PTY whose ID starts with the session prefix', async () => {
+      const { register } = await import('./pty')
+      const ctx = createCtx()
+      register(mockIpcMain as never, ctx)
+
+      const sessionId = 'session-123'
+      const agentProc = createMockPtyProcess()
+      const userProc = createMockPtyProcess()
+      const servicesProc = createMockPtyProcess()
+      const otherProc = createMockPtyProcess()
+      ctx.ptyProcesses.set(`${sessionId}-111`, agentProc as never)
+      ctx.ptyProcesses.set(`user-${sessionId}-tab-aaa-222`, userProc as never)
+      ctx.ptyProcesses.set(`services-${sessionId}-333`, servicesProc as never)
+      ctx.ptyProcesses.set('session-other-444', otherProc as never)
+
+      const count = await handlers['pty:killForSession'](mockEvent, sessionId)
+
+      expect(count).toBe(3)
+      expect(mockTreeKill).toHaveBeenCalledWith(agentProc.pid, undefined, expect.anything())
+      expect(mockTreeKill).toHaveBeenCalledWith(userProc.pid, undefined, expect.anything())
+      expect(mockTreeKill).toHaveBeenCalledWith(servicesProc.pid, undefined, expect.anything())
+      expect(mockTreeKill).not.toHaveBeenCalledWith(otherProc.pid, undefined, expect.anything())
+      expect(ctx.ptyProcesses.has('session-other-444')).toBe(true)
+    })
+
+    it('returns 0 when no sessionId is given', async () => {
+      const { register } = await import('./pty')
+      const ctx = createCtx()
+      register(mockIpcMain as never, ctx)
+      const count = await handlers['pty:killForSession'](mockEvent, '')
+      expect(count).toBe(0)
+    })
+
+    it('returns 0 when no PTYs match', async () => {
+      const { register } = await import('./pty')
+      const ctx = createCtx()
+      register(mockIpcMain as never, ctx)
+      const count = await handlers['pty:killForSession'](mockEvent, 'session-missing')
+      expect(count).toBe(0)
+      expect(mockTreeKill).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('pty:getStats', () => {
+    it('aggregates per-PTY stats into per-session stats', async () => {
+      const tracker = await import('../descendantsTracker')
+      vi.mocked(tracker.getAllStats).mockReturnValue({
+        'sess-A-111': { shellPid: 101, rssMb: 100, cpuPct: 1.5, liveCount: 2 },
+        'user-sess-A-tab-x-222': { shellPid: 102, rssMb: 50, cpuPct: 0.5, liveCount: 1 },
+        'sess-B-333': { shellPid: 103, rssMb: 200, cpuPct: 5.0, liveCount: 3 },
+      })
+
+      const { register } = await import('./pty')
+      const ctx = createCtx()
+      register(mockIpcMain as never, ctx)
+      const stats = await handlers['pty:getStats']()
+
+      expect(stats['sess-A']).toEqual({ rssMb: 150, cpuPct: 2.0, ptyCount: 2 })
+      expect(stats['sess-B']).toEqual({ rssMb: 200, cpuPct: 5.0, ptyCount: 1 })
+    })
+  })
+
+  describe('pty:killOrphans', () => {
+    it('passes verified extraPids (with start times) into treeKill', async () => {
+      const tracker = await import('../descendantsTracker')
+      // PTY 'foo' has shell pid 100, with historical descendants 100, 200, 300.
+      vi.mocked(tracker.getHistoricalDescendants).mockReturnValueOnce([
+        { pid: 100, startTime: 'Mon Jan  1 00:00:01 2024' },
+        { pid: 200, startTime: 'Mon Jan  1 00:00:02 2024' },
+        { pid: 300, startTime: 'Mon Jan  1 00:00:03 2024' },
+      ])
+
+      // ps says 200 and 300 are alive but only 100 (the shell) is still
+      // reachable from the live tree (200/300 reparented to init).
+      const treeKillMod = await import('../treeKill')
+      vi.mocked(treeKillMod.parsePsSnapshot).mockReturnValueOnce([
+        { pid: 100, ppid: 1, pgid: 100 },
+        { pid: 200, ppid: 1, pgid: 999 }, // detached, different pgid
+        { pid: 300, ppid: 1, pgid: 999 }, // detached, different pgid
+      ])
+      vi.mocked(treeKillMod.collectDescendants).mockReturnValueOnce(new Set<number>([100]))
+
+      const { register } = await import('./pty')
+      const ctx = createCtx()
+      const proc = createMockPtyProcess()
+      ctx.ptyProcesses.set('foo', proc as never)
+      register(mockIpcMain as never, ctx)
+
+      const count = await handlers['pty:killOrphans']()
+      expect(count).toBe(2)
+      // treeKill receives the structured extras carrying the recorded start times.
+      const lastCall = mockTreeKill.mock.calls[mockTreeKill.mock.calls.length - 1]
+      const extras = [...(lastCall[2] as Iterable<{ pid: number; startTime: string }>)]
+        .slice()
+        .sort((a, b) => a.pid - b.pid)
+      expect(extras).toEqual([
+        { pid: 200, startTime: 'Mon Jan  1 00:00:02 2024' },
+        { pid: 300, startTime: 'Mon Jan  1 00:00:03 2024' },
+      ])
+    })
+
+    it('returns 0 when there are no orphans', async () => {
+      const { register } = await import('./pty')
+      const ctx = createCtx()
+      register(mockIpcMain as never, ctx)
+      const count = await handlers['pty:killOrphans']()
+      expect(count).toBe(0)
     })
   })
 })

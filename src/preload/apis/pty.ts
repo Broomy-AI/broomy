@@ -10,11 +10,23 @@ export type DevcontainerReadyEvent = {
   remoteUser: string
 }
 
+export type SessionUsageStats = {
+  rssMb: number
+  cpuPct: number
+  ptyCount: number
+}
+
 export type PtyApi = {
   create: (options: { id: string; cwd: string; command?: string; sessionId?: string; env?: Record<string, string>; shell?: string; isolated?: boolean; repoRootDir?: string }) => Promise<{ id: string }>
   write: (id: string, data: string) => Promise<void>
   resize: (id: string, cols: number, rows: number) => Promise<void>
   kill: (id: string) => Promise<void>
+  /** Kill every PTY associated with a session ID. Returns the count killed. */
+  killForSession: (sessionId: string) => Promise<number>
+  /** Snapshot of memory/CPU per session, derived from the descendants tracker. */
+  getStats: () => Promise<Record<string, SessionUsageStats>>
+  /** Reap detached daemons no longer reachable from any tracked PTY. */
+  killOrphans: () => Promise<number>
   onData: (id: string, callback: (data: string) => void) => () => void
   onExit: (id: string, callback: (exitCode: number) => void) => () => void
   onDevcontainerReady: (callback: (event: DevcontainerReadyEvent) => void) => () => void
@@ -26,6 +38,9 @@ export const ptyApi: PtyApi = {
   write: (id, data) => ipcRenderer.invoke('pty:write', id, data),
   resize: (id, cols, rows) => ipcRenderer.invoke('pty:resize', id, cols, rows),
   kill: (id) => ipcRenderer.invoke('pty:kill', id),
+  killForSession: (sessionId) => ipcRenderer.invoke('pty:killForSession', sessionId),
+  getStats: () => ipcRenderer.invoke('pty:getStats'),
+  killOrphans: () => ipcRenderer.invoke('pty:killOrphans'),
   onData: (id, callback) => {
     const handler = (_event: Electron.IpcRendererEvent, data: string) => callback(data)
     ipcRenderer.on(`pty:data:${id}`, handler)

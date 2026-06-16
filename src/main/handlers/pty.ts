@@ -14,8 +14,10 @@ import { HandlerContext } from './types'
 import { getScenarioData } from './scenarios'
 import { isDockerAvailable, dockerSetupMessage, ensureAgentInstalled, acquireSetupLock } from '../containerUtils'
 import { isDevcontainerCliAvailable, hasDevcontainerConfig, devcontainerUp, buildDevcontainerExecArgs, devcontainerSetupMessage } from '../devcontainer'
-import { treeKill } from '../treeKill'
+import { treeKill, parsePsSnapshot, collectDescendants, type ExtraPid } from '../treeKill'
 import { recordPtyMarker, removePtyMarker } from '../ptyMarkers'
+import { trackPty, untrackPty, getHistoricalDescendants, getAllStats } from '../descendantsTracker'
+import { execFileSync } from 'child_process'
 
 /**
  * Resolve the base command to its full path so agents installed outside
@@ -65,8 +67,11 @@ function disposePtyListeners(id: string) {
 function wirePtyEvents(ctx: HandlerContext, ptyProcess: IPty, id: string, senderWindow: BrowserWindow | null) {
   ctx.ptyProcesses.set(id, ptyProcess)
   if (senderWindow) ctx.ptyOwnerWindows.set(id, senderWindow)
-  // Drop a marker so a future Broomy startup can sweep this shell if we crash
+  // Drop a marker so a future Broomy startup can sweep this shell if we crash.
+  // The periodic tracker will overwrite this with the descendant list (and
+  // backfilled startTime) as it discovers children.
   recordPtyMarker(id, ptyProcess.pid)
+  trackPty(id, ptyProcess.pid)
 
   const dataDisposable = ptyProcess.onData((data) => {
     try {
@@ -88,9 +93,18 @@ function wirePtyEvents(ctx: HandlerContext, ptyProcess: IPty, id: string, sender
     } catch {
       // Swallow errors to prevent native crash from NAPI callback propagation
     }
+    // The shell exited on its own — claude crashed, user typed `exit`, etc.
+    // Any descendants that detached (MCP servers, dev servers, jest workers)
+    // are now orphans of init and would survive forever unless we sweep them.
+    // Pass the historical descendant list so detached daemons are reached.
+    const historical = getHistoricalDescendants(id)
+    if (historical.length > 0) {
+      void treeKill(ptyProcess.pid, undefined, historical)
+    }
     disposePtyListeners(id)
     ctx.ptyProcesses.delete(id)
     ctx.ptyOwnerWindows.delete(id)
+    untrackPty(id)
     removePtyMarker(id)
   })
 
@@ -339,6 +353,103 @@ function resolveShellConfig(
 /** Track in-flight async PTY setups so pty:kill can cancel them. */
 const pendingSetups = new Set<string>()
 
+/** Map PTY ID prefix → session ID (renderer-derived) for stats aggregation. */
+function sessionIdFromPtyId(ptyId: string): string | null {
+  // Conventions used by the renderer (TabbedTerminal + useTerminalSetup):
+  //   `${sessionId}-${ts}`                         (agent terminal)
+  //   `user-${sessionId}-${tabId}-${ts}`           (user tab)
+  //   `services-${sessionId}-${ts}`                (services terminal)
+  if (ptyId.startsWith('user-')) {
+    const rest = ptyId.slice('user-'.length)
+    const tabIdx = rest.indexOf('-tab-')
+    if (tabIdx > 0) return rest.slice(0, tabIdx)
+  }
+  if (ptyId.startsWith('services-')) {
+    const rest = ptyId.slice('services-'.length)
+    const dash = rest.lastIndexOf('-')
+    return dash > 0 ? rest.slice(0, dash) : rest
+  }
+  const dash = ptyId.lastIndexOf('-')
+  return dash > 0 ? ptyId.slice(0, dash) : ptyId
+}
+
+/** Per-session usage stats returned to the renderer for the sidebar. */
+export interface SessionUsageStats {
+  rssMb: number
+  cpuPct: number
+  ptyCount: number
+}
+
+/** Build a sessionId → usage stats map from the tracker. */
+function ptyStatsForRenderer(): Record<string, SessionUsageStats> {
+  const perPty = getAllStats()
+  const out: Record<string, SessionUsageStats> = {}
+  for (const [ptyId, stats] of Object.entries(perPty)) {
+    const sessionId = sessionIdFromPtyId(ptyId)
+    if (!sessionId) continue
+    const acc = out[sessionId] ?? { rssMb: 0, cpuPct: 0, ptyCount: 0 }
+    acc.rssMb += stats.rssMb
+    acc.cpuPct += stats.cpuPct
+    acc.ptyCount += 1
+    out[sessionId] = acc
+  }
+  // Round once at the end to avoid drift across additions
+  for (const sessionId of Object.keys(out)) {
+    out[sessionId].rssMb = Math.round(out[sessionId].rssMb)
+    out[sessionId].cpuPct = Math.round(out[sessionId].cpuPct * 10) / 10
+  }
+  return out
+}
+
+/**
+ * Find every PID we've ever seen as a descendant of an active PTY that is no
+ * longer reachable from its shell's live tree, and SIGKILL it. Catches
+ * detached daemons (next dev, MCP servers, expo, jest workers, …) whose
+ * parent has exited or who called `setpgid()` + got reparented to init.
+ *
+ * Each candidate carries the `startTime` we observed when first tracked, so
+ * treeKill can verify identity and skip PIDs that have rolled over to
+ * unrelated processes.
+ */
+async function killOrphans(ctx: HandlerContext): Promise<number> {
+  // Snapshot the process table once so we can ask "is this PID still in any
+  // tracked PTY's live tree?" without re-running ps for every check.
+  let snapshot: ReturnType<typeof parsePsSnapshot> = []
+  try {
+    const stdout = execFileSync('ps', ['-axo', 'pid=,ppid=,pgid='], { encoding: 'utf-8', timeout: 5000 })
+    snapshot = parsePsSnapshot(stdout)
+  } catch {
+    return 0
+  }
+  const livePids = new Set(snapshot.map((r) => r.pid))
+
+  // Union: every PID currently reachable from any tracked shell.
+  const reachable = new Set<number>()
+  for (const id of ctx.ptyProcesses.keys()) {
+    const ptyProcess = ctx.ptyProcesses.get(id)
+    if (!ptyProcess) continue
+    for (const pid of collectDescendants(snapshot, ptyProcess.pid)) {
+      reachable.add(pid)
+    }
+  }
+
+  // Candidates: known historical descendants that are alive but unreachable.
+  // Dedupe by PID — a PID could appear in multiple PTYs' histories.
+  const orphans = new Map<number, ExtraPid>()
+  for (const id of ctx.ptyProcesses.keys()) {
+    for (const entry of getHistoricalDescendants(id)) {
+      if (entry.pid <= 1) continue
+      if (!livePids.has(entry.pid)) continue
+      if (reachable.has(entry.pid)) continue
+      if (!orphans.has(entry.pid)) orphans.set(entry.pid, entry)
+    }
+  }
+
+  if (orphans.size === 0) return 0
+  await treeKill(NaN, undefined, [...orphans.values()])
+  return orphans.size
+}
+
 export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   ipcMain.handle('pty:create', async (_event, options: { id: string; cwd: string; command?: string; sessionId?: string; env?: Record<string, string>; shell?: string; isolated?: boolean; repoRootDir?: string }) => {
     // Kill any existing PTY with the same ID (e.g. React strict mode double-mount)
@@ -347,7 +458,9 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
       disposePtyListeners(options.id)
       ctx.ptyProcesses.delete(options.id)
       ctx.ptyOwnerWindows.delete(options.id)
-      await treeKill(existing.pid)
+      const historical = getHistoricalDescendants(options.id)
+      await treeKill(existing.pid, undefined, historical)
+      untrackPty(options.id)
       removePtyMarker(options.id)
     }
 
@@ -451,8 +564,65 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
       disposePtyListeners(id)
       ctx.ptyProcesses.delete(id)
       ctx.ptyOwnerWindows.delete(id)
-      await treeKill(ptyProcess.pid)
+      const historical = getHistoricalDescendants(id)
+      await treeKill(ptyProcess.pid, undefined, historical)
+      untrackPty(id)
       removePtyMarker(id)
     }
+  })
+
+  /**
+   * Kill every PTY associated with a session (agent shell + user tabs + services).
+   * Used as a defensive backstop from the renderer's archive/remove session
+   * actions so we don't rely solely on React-driven unmount cleanup.
+   *
+   * Matches by ID prefix because the renderer composes PTY IDs as
+   *   `${sessionId}-…`, `user-${sessionId}-…`, `services-${sessionId}-…`
+   * (see TabbedTerminal / useTerminalSetup).
+   */
+  ipcMain.handle('pty:killForSession', async (_event, sessionId: string) => {
+    if (!sessionId) return 0
+    const prefixes = [`${sessionId}-`, `user-${sessionId}-`, `services-${sessionId}-`]
+    const matches: string[] = []
+    for (const id of ctx.ptyProcesses.keys()) {
+      if (prefixes.some((p) => id.startsWith(p))) matches.push(id)
+    }
+    // Also cancel any container setups still in flight for this session
+    for (const id of pendingSetups) {
+      if (prefixes.some((p) => id.startsWith(p))) pendingSetups.delete(id)
+    }
+    const killOps: Promise<void>[] = []
+    for (const id of matches) {
+      const proc = ctx.ptyProcesses.get(id)
+      if (!proc) continue
+      disposePtyListeners(id)
+      ctx.ptyProcesses.delete(id)
+      ctx.ptyOwnerWindows.delete(id)
+      const historical = getHistoricalDescendants(id)
+      killOps.push(treeKill(proc.pid, undefined, historical).then(() => {
+        untrackPty(id)
+        removePtyMarker(id)
+      }))
+    }
+    await Promise.all(killOps)
+    return matches.length
+  })
+
+  /**
+   * Snapshot of memory/CPU per tracked PTY. The renderer aggregates these by
+   * session ID for the sidebar usage display.
+   */
+  ipcMain.handle('pty:getStats', () => {
+    return ptyStatsForRenderer()
+  })
+
+  /**
+   * Sweep "orphan" processes: any PID recorded in the historical-descendant
+   * list of a tracked PTY that is no longer reachable from the live process
+   * tree of its shell. These are detached daemons left behind by `claude`,
+   * `next dev`, jest workers, etc. Returns the number of PIDs SIGKILLed.
+   */
+  ipcMain.handle('pty:killOrphans', async () => {
+    return killOrphans(ctx)
   })
 }

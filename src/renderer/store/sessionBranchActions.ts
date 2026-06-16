@@ -133,6 +133,11 @@ export function createBranchActions(get: StoreGet, set: StoreSet) {
         newActiveId = nextActive?.id ?? null
       }
       set({ sessions: updatedSessions, activeSessionId: newActiveId })
+      // Belt-and-suspenders: React unmount cleanup will normally fire pty.kill
+      // for each tab, but call killForSession explicitly so we don't leak when
+      // the unmount path is skipped (e.g. window already closed, error boundary
+      // ate the tree). The main process treats this as a no-op for unknown IDs.
+      void window.pty.killForSession(sessionId)
       debouncedSave()
     },
 
