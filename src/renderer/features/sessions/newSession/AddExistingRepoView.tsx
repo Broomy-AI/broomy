@@ -226,8 +226,8 @@ export function AddExistingRepoView({
 
         {validated && worktrees.length > 0 && (
           <>
-            <div className="rounded border border-green-500/30 bg-green-500/5 px-3 py-2">
-              <div className="text-xs font-medium text-green-400 mb-1">Found {worktrees.length} worktree{worktrees.length !== 1 ? 's' : ''}</div>
+            <div className="rounded border border-success-base/30 bg-success-base/5 px-3 py-2">
+              <div className="text-xs font-medium text-success-fg mb-1">Found {worktrees.length} worktree{worktrees.length !== 1 ? 's' : ''}</div>
               <div className="text-xs text-text-secondary space-y-0.5">
                 {worktrees.slice(0, 5).map(wt => (
                   <div key={wt.path} className="font-mono truncate">

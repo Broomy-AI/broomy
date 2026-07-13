@@ -52,11 +52,11 @@ export default function UpdateBanner() {
 
   // status === 'ready'
   return (
-    <div className="mx-2 mt-2 px-2.5 py-1.5 rounded bg-green-500/10 border border-green-500/20 flex items-center gap-2">
+    <div className="mx-2 mt-2 px-2.5 py-1.5 rounded bg-success-base/10 border border-success-base/20 flex items-center gap-2">
       <span className="text-xs text-text-primary flex-1">Ready to install</span>
       <button
         onClick={() => setPopoverOpen(true)}
-        className="text-3xs font-medium px-1.5 py-0.5 rounded bg-green-600 text-white hover:bg-green-600/80 transition-colors flex-shrink-0"
+        className="text-3xs font-medium px-1.5 py-0.5 rounded bg-success-solid text-white hover:bg-success-solid/80 transition-colors flex-shrink-0"
       >
         Restart
       </button>

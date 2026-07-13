@@ -103,7 +103,7 @@ export function ArgDialog({ title, description, template, argsMeta, context, ini
           }
           return (
             <div key={arg.name} className="space-y-1">
-              <label className="text-xs text-text-secondary">{arg.name} <span className="text-red-400">*</span></label>
+              <label className="text-xs text-text-secondary">{arg.name} <span className="text-danger-fg">*</span></label>
               {multiline ? (
                 <textarea
                   aria-label={arg.name}

@@ -128,7 +128,7 @@ function PrStatusContent({
     return (
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-purple-500/20 text-purple-400">MERGED</span>
+          <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-review-base/20 text-review-fg">MERGED</span>
           <span className="text-xs text-text-secondary">Branch merged to {branchBaseName}</span>
         </div>
         {refresh}
@@ -184,13 +184,13 @@ export function SCPrBanner({
 
       {/* Agent merge info banner */}
       {agentMergeMessage && (
-        <div className="px-3 py-2 border-b border-blue-500/30 bg-blue-500/10 flex items-center gap-2">
-          <span className="flex-1 text-xs text-blue-400">
+        <div className="px-3 py-2 border-b border-info-base/30 bg-info-base/10 flex items-center gap-2">
+          <span className="flex-1 text-xs text-info-fg">
             {agentMergeMessage}
           </span>
           <button
             onClick={onDismissAgentMerge}
-            className="text-blue-400 hover:text-blue-300 text-xs shrink-0 px-1"
+            className="text-info-fg hover:text-info-soft text-xs shrink-0 px-1"
             title="Dismiss"
           >
             &times;

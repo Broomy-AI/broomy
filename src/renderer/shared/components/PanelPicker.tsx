@@ -113,7 +113,7 @@ function ToolbarPanelRow({
       {/* Remove button */}
       <button
         onClick={(e) => { e.stopPropagation(); onRemove() }}
-        className="p-0.5 text-text-secondary hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+        className="p-0.5 text-text-secondary hover:text-danger-fg opacity-0 group-hover:opacity-100 transition-opacity"
         title="Remove from toolbar"
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -287,7 +287,7 @@ export default function PanelPicker({
 
                     {/* Add button */}
                     <button
-                      className="p-0.5 text-text-secondary hover:text-green-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="p-0.5 text-text-secondary hover:text-success-fg opacity-0 group-hover:opacity-100 transition-opacity"
                       title="Add to toolbar"
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

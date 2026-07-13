@@ -32,22 +32,60 @@
 :root {
   --app-text-scale: 1;
 
-  --color-bg-primary: 26 26 26;        /* #1a1a1a */
-  --color-bg-secondary: 37 37 37;      /* #252525 */
-  --color-bg-tertiary: 45 45 45;       /* #2d2d2d */
-  --color-border: 58 58 58;            /* #3a3a3a */
-  --color-border-strong: 74 74 74;     /* #4a4a4a */
-  --color-text-primary: 224 224 224;   /* #e0e0e0 */
-  --color-text-secondary: 160 160 160; /* #a0a0a0 */
-  --color-text-tertiary: 148 148 148;  /* #949494 */
-  --color-accent: 74 158 255;          /* #4a9eff */
-  --color-on-accent: 255 255 255;
-  --color-status-working: 74 222 128;  /* #4ade80 */
-  --color-status-waiting: 250 204 21;  /* #facc15 */
-  --color-status-idle: 107 114 128;    /* #6b7280 */
-  --color-status-error: 248 113 113;   /* #f87171 */
-  --color-focus-ring: 59 130 246;      /* #3b82f6 */
-  --color-search-highlight: 255 213 0; /* #ffd500 */
+  --color-bg-primary: 26 26 26;         /* #1a1a1a */
+  --color-bg-secondary: 37 37 37;       /* #252525 */
+  --color-bg-tertiary: 45 45 45;        /* #2d2d2d */
+  --color-border: 58 58 58;             /* #3a3a3a */
+  --color-border-strong: 74 74 74;      /* #4a4a4a — the raw hex in Divider.tsx */
+  --color-text-primary: 224 224 224;    /* #e0e0e0 */
+  --color-text-secondary: 160 160 160;  /* #a0a0a0 */
+  --color-text-tertiary: 148 148 148;   /* #949494 */
+  --color-accent: 74 158 255;           /* #4a9eff */
+  --color-on-accent: 255 255 255;       /* label on a saturated fill */
+  --color-status-working: 74 222 128;   /* #4ade80 */
+  --color-status-waiting: 250 204 21;   /* #facc15 */
+  --color-status-idle: 107 114 128;     /* #6b7280 */
+  --color-status-error: 248 113 113;    /* #f87171 */
+  --color-danger-soft: 252 165 165;     /* #fca5a5 (red-300) */
+  --color-danger-fg: 248 113 113;       /* #f87171 (red-400) */
+  --color-danger-base: 239 68 68;       /* #ef4444 (red-500) */
+  --color-danger-solid: 220 38 38;      /* #dc2626 (red-600) */
+  --color-danger-deeper: 153 27 27;     /* #991b1b (red-800) */
+  --color-danger-deep: 127 29 29;       /* #7f1d1d (red-900) */
+  --color-warning-subtle: 254 240 138;  /* #fef08a (yellow-200) */
+  --color-warning-soft: 253 224 71;     /* #fde047 (yellow-300) */
+  --color-warning-fg: 250 204 21;       /* #facc15 (yellow-400) */
+  --color-warning-base: 234 179 8;      /* #eab308 (yellow-500) */
+  --color-warning-solid: 202 138 4;     /* #ca8a04 (yellow-600) */
+  --color-warning-strong: 161 98 7;     /* #a16207 (yellow-700) */
+  --color-warning-deep: 113 63 18;      /* #713f12 (yellow-900) */
+  --color-success-soft: 134 239 172;    /* #86efac (green-300) */
+  --color-success-fg: 74 222 128;       /* #4ade80 (green-400) */
+  --color-success-base: 34 197 94;      /* #22c55e (green-500) */
+  --color-success-solid: 22 163 74;     /* #16a34a (green-600) */
+  --color-success-deep: 20 83 45;       /* #14532d (green-900) */
+  --color-info-subtle: 191 219 254;     /* #bfdbfe (blue-200) */
+  --color-info-soft: 147 197 253;       /* #93c5fd (blue-300) */
+  --color-info-fg: 96 165 250;          /* #60a5fa (blue-400) */
+  --color-info-base: 59 130 246;        /* #3b82f6 (blue-500) */
+  --color-info-solid: 37 99 235;        /* #2563eb (blue-600) */
+  --color-info-strong: 29 78 216;       /* #1d4ed8 (blue-700) */
+  --color-info-deep: 30 58 138;         /* #1e3a8a (blue-900) */
+  --color-review-fg: 192 132 252;       /* #c084fc (purple-400) */
+  --color-review-base: 168 85 247;      /* #a855f7 (purple-500) */
+  --color-review-solid: 147 51 234;     /* #9333ea (purple-600) */
+  --color-review-strong: 126 34 206;    /* #7e22ce (purple-700) */
+  --color-review-deep: 88 28 135;       /* #581c87 (purple-900) */
+  --color-attention-fg: 251 146 60;     /* #fb923c (orange-400) */
+  --color-attention-base: 249 115 22;   /* #f97316 (orange-500) */
+  --color-attention-solid: 234 88 12;   /* #ea580c (orange-600) */
+  --color-note-fg: 34 211 238;          /* #22d3ee (cyan-400) */
+  --color-note-base: 6 182 212;         /* #06b6d4 (cyan-500) */
+  --color-muted: 107 114 128;           /* #6b7280 (gray-500) — grey chips and dots */
+  --color-surface-hover: 64 64 64;      /* #404040 (neutral-700) — neutral hover fill */
+  --color-overlay: 0 0 0;               /* the modal scrim; stays dark in every theme */
+  --color-focus-ring: 59 130 246;       /* #3b82f6 — used at 0.4 alpha today */
+  --color-search-highlight: 255 213 0;  /* #ffd500 */
 
   --scrollbar-thumb: rgb(255 255 255 / 0.2);
 }

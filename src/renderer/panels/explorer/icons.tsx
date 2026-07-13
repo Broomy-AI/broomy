@@ -52,7 +52,7 @@ export function BranchStatusCard({ status }: { status: BranchStatus }) {
   const config: Partial<Record<BranchStatus, { label: string; chipClasses: string; description: string }>> = {
     pushed: {
       label: 'PUSHED',
-      chipClasses: 'bg-blue-500/20 text-blue-400',
+      chipClasses: 'bg-info-base/20 text-info-fg',
       description: 'Changes pushed to remote.',
     },
     empty: {
@@ -62,17 +62,17 @@ export function BranchStatusCard({ status }: { status: BranchStatus }) {
     },
     open: {
       label: 'PR OPEN',
-      chipClasses: 'bg-green-500/20 text-green-400',
+      chipClasses: 'bg-success-base/20 text-success-fg',
       description: 'Pull request is open.',
     },
     merged: {
       label: 'MERGED',
-      chipClasses: 'bg-purple-500/20 text-purple-400',
+      chipClasses: 'bg-review-base/20 text-review-fg',
       description: 'Merged into main.',
     },
     closed: {
       label: 'CLOSED',
-      chipClasses: 'bg-red-500/20 text-red-400',
+      chipClasses: 'bg-danger-base/20 text-danger-fg',
       description: 'PR was closed.',
     },
   }

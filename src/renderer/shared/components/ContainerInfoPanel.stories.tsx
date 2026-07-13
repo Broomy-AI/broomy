@@ -11,7 +11,7 @@ function ContainerInfoRunning() {
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <span className="text-zinc-500">Status:</span>
-          <span className="font-medium text-green-400">running</span>
+          <span className="font-medium text-success-fg">running</span>
         </div>
         <div>
           <span className="text-zinc-500">Container ID: </span>
@@ -29,7 +29,7 @@ function ContainerInfoRunning() {
           <button className="px-3 py-1 text-xs bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors">
             Refresh
           </button>
-          <button className="px-3 py-1 text-xs bg-red-900/50 hover:bg-red-900/80 rounded text-red-300 transition-colors">
+          <button className="px-3 py-1 text-xs bg-danger-deep/50 hover:bg-danger-deep/80 rounded text-danger-soft transition-colors">
             Rebuild Container
           </button>
         </div>

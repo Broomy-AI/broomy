@@ -159,7 +159,7 @@ export function DeleteButton({ id, onDelete }: { id: string; onDelete: () => voi
       {pendingDelete === id ? (
         <div className="flex items-center gap-2">
           <span className="text-xs text-text-secondary">Delete this command?</span>
-          <button onClick={onDelete} className="text-xs text-red-400 hover:text-red-300">
+          <button onClick={onDelete} className="text-xs text-danger-fg hover:text-danger-soft">
             Confirm delete
           </button>
           <button onClick={() => setPendingDelete(null)} className="text-xs text-text-secondary hover:text-text-primary">
@@ -167,7 +167,7 @@ export function DeleteButton({ id, onDelete }: { id: string; onDelete: () => voi
           </button>
         </div>
       ) : (
-        <button onClick={() => setPendingDelete(id)} className="text-xs text-red-400 hover:text-red-300">
+        <button onClick={() => setPendingDelete(id)} className="text-xs text-danger-fg hover:text-danger-soft">
           Delete command
         </button>
       )}
@@ -265,7 +265,7 @@ export function ArgsTable({
                 </td>
                 <td className="py-0.5">
                   {a.optional && (
-                    <span className="text-3xs px-1 py-0.5 rounded bg-purple-500/20 text-purple-400">
+                    <span className="text-3xs px-1 py-0.5 rounded bg-review-base/20 text-review-fg">
                       optional
                     </span>
                   )}

@@ -32,8 +32,8 @@ export default function ContainerInfoPanel({ repoDir }: ContainerInfoPanelProps)
     setInfo(null)
   }, [repoDir])
 
-  const statusColor = info?.status === 'running' ? 'text-green-400' :
-    info?.status === 'starting' ? 'text-yellow-400' : 'text-zinc-500'
+  const statusColor = info?.status === 'running' ? 'text-success-fg' :
+    info?.status === 'starting' ? 'text-warning-fg' : 'text-zinc-500'
 
   return (
     <div className="h-full overflow-auto p-4 text-sm text-zinc-300 bg-zinc-900">
@@ -76,7 +76,7 @@ export default function ContainerInfoPanel({ repoDir }: ContainerInfoPanelProps)
             </button>
             <button
               onClick={handleReset}
-              className="px-3 py-1 text-xs bg-red-900/50 hover:bg-red-900/80 rounded text-red-300 transition-colors"
+              className="px-3 py-1 text-xs bg-danger-deep/50 hover:bg-danger-deep/80 rounded text-danger-soft transition-colors"
             >
               Rebuild Container
             </button>

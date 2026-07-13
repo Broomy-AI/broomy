@@ -137,7 +137,7 @@ export const WithTopBanner: Story = {
   args: {
     ...Default.args,
     topBanner: (
-      <div className="px-4 py-2 bg-yellow-500/10 border-b border-yellow-500/30 text-xs text-yellow-300">
+      <div className="px-4 py-2 bg-warning-base/10 border-b border-warning-base/30 text-xs text-warning-soft">
         Update available: v2.0.0. Restart to apply.
       </div>
     ),

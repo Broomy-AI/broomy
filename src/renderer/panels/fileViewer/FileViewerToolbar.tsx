@@ -127,7 +127,7 @@ export default function FileViewerToolbar({
         )}
         <span className="text-xs text-text-secondary truncate">{relativePath}</span>
         {fileStatus === 'deleted' && (
-          <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 shrink-0">
+          <span className="text-xs px-1.5 py-0.5 rounded bg-danger-base/20 text-danger-fg shrink-0">
             Deleted
           </span>
         )}

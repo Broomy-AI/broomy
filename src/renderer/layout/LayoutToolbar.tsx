@@ -55,7 +55,7 @@ export default function LayoutToolbar({
         <span className="text-sm font-medium text-text-primary" style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>{title || 'Broomy'}</span>
         {isDev && (
           <span
-            className="px-1.5 py-0.5 text-3xs font-semibold rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
+            className="px-1.5 py-0.5 text-3xs font-semibold rounded bg-warning-base/20 text-warning-fg border border-warning-base/30"
             title={`Build: ${__BUILD_COMMIT__} (${__BUILD_TIME__})`}
           >
             DEV {__BUILD_COMMIT__}
@@ -157,7 +157,7 @@ export default function LayoutToolbar({
             </button>
             <button
               onClick={() => window.windowControls.close()}
-              className="p-1.5 rounded transition-colors text-text-secondary hover:text-text-primary hover:bg-red-500/20"
+              className="p-1.5 rounded transition-colors text-text-secondary hover:text-text-primary hover:bg-danger-base/20"
               title="Close"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">

@@ -124,7 +124,7 @@ function CollapsibleContent({ children, maxCollapsedHeight = 200 }: { children?:
       {needsExpand && (
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="mt-1 text-xs text-blue-400 hover:text-blue-300"
+          className="mt-1 text-xs text-info-fg hover:text-info-soft"
         >
           {isExpanded ? 'Show less' : 'Show more'}
         </button>
@@ -143,12 +143,12 @@ function EditDiffBlock({ msg, cwd, onOpenFile }: { msg: AgentSdkMessage; cwd?: s
   return (
     <div className="my-1 rounded border border-neutral-700 bg-neutral-800/50">
       <div className="flex items-center gap-2 px-3 py-1.5 text-xs">
-        <span className="rounded bg-yellow-900/50 px-1.5 py-0.5 font-mono text-yellow-300">Edit</span>
+        <span className="rounded bg-warning-deep/50 px-1.5 py-0.5 font-mono text-warning-soft">Edit</span>
         <span className="truncate font-mono text-neutral-400">{relativePath(filePath, cwd)}</span>
         {onOpenFile && filePath && (
           <button
             onClick={() => onOpenFile(filePath)}
-            className="ml-auto flex-shrink-0 text-blue-400 hover:text-blue-300"
+            className="ml-auto flex-shrink-0 text-info-fg hover:text-info-soft"
             title="Open in file panel"
           >
             Open
@@ -160,8 +160,8 @@ function EditDiffBlock({ msg, cwd, onOpenFile }: { msg: AgentSdkMessage; cwd?: s
           {oldStr && (
             <div className="mb-1">
               {oldStr.split('\n').map((line, i) => (
-                <div key={`old-${String(i)}`} className="bg-red-900/20 text-red-300">
-                  <span className="mr-2 inline-block w-4 text-right text-red-500/50">-</span>
+                <div key={`old-${String(i)}`} className="bg-danger-deep/20 text-danger-soft">
+                  <span className="mr-2 inline-block w-4 text-right text-danger-base/50">-</span>
                   {line}
                 </div>
               ))}
@@ -170,8 +170,8 @@ function EditDiffBlock({ msg, cwd, onOpenFile }: { msg: AgentSdkMessage; cwd?: s
           {newStr && (
             <div>
               {newStr.split('\n').map((line, i) => (
-                <div key={`new-${String(i)}`} className="bg-green-900/20 text-green-300">
-                  <span className="mr-2 inline-block w-4 text-right text-green-500/50">+</span>
+                <div key={`new-${String(i)}`} className="bg-success-deep/20 text-success-soft">
+                  <span className="mr-2 inline-block w-4 text-right text-success-base/50">+</span>
                   {line}
                 </div>
               ))}
@@ -191,12 +191,12 @@ function WriteBlock({ msg, cwd, onOpenFile }: { msg: AgentSdkMessage; cwd?: stri
   return (
     <div className="my-1 rounded border border-neutral-700 bg-neutral-800/50">
       <div className="flex items-center gap-2 px-3 py-1.5 text-xs">
-        <span className="rounded bg-green-900/50 px-1.5 py-0.5 font-mono text-green-300">Write</span>
+        <span className="rounded bg-success-deep/50 px-1.5 py-0.5 font-mono text-success-soft">Write</span>
         <span className="truncate font-mono text-neutral-400">{relativePath(filePath, cwd)}</span>
         {onOpenFile && filePath && (
           <button
             onClick={() => onOpenFile(filePath)}
-            className="ml-auto flex-shrink-0 text-blue-400 hover:text-blue-300"
+            className="ml-auto flex-shrink-0 text-info-fg hover:text-info-soft"
             title="Open in file panel"
           >
             Open
@@ -221,9 +221,9 @@ function PlanBlock({ msg, isLast, onApprovePlan, onOpenFile }: { msg: AgentSdkMe
   const markdownContent = getToolMarkdownContent(toolName, input)
   if (!markdownContent) return null
   return (
-    <div className="my-2 rounded border border-blue-700/30 bg-neutral-800/50">
-      <div className="flex items-center gap-2 border-b border-blue-700/30 px-3 py-1.5 text-xs">
-        <span className="rounded bg-blue-900/50 px-1.5 py-0.5 font-mono text-blue-300">
+    <div className="my-2 rounded border border-info-strong/30 bg-neutral-800/50">
+      <div className="flex items-center gap-2 border-b border-info-strong/30 px-3 py-1.5 text-xs">
+        <span className="rounded bg-info-deep/50 px-1.5 py-0.5 font-mono text-info-soft">
           {toolName === 'ExitPlanMode' ? 'Plan' : toolName}
         </span>
         {typeof input.planFilePath === 'string' && (
@@ -232,7 +232,7 @@ function PlanBlock({ msg, isLast, onApprovePlan, onOpenFile }: { msg: AgentSdkMe
         {onOpenFile && typeof input.planFilePath === 'string' && (
           <button
             onClick={() => onOpenFile(input.planFilePath as string)}
-            className="ml-auto flex-shrink-0 text-blue-400 hover:text-blue-300"
+            className="ml-auto flex-shrink-0 text-info-fg hover:text-info-soft"
           >
             Open
           </button>
@@ -246,11 +246,11 @@ function PlanBlock({ msg, isLast, onApprovePlan, onOpenFile }: { msg: AgentSdkMe
         </div>
       </CollapsibleContent>
       {isLast && toolName === 'ExitPlanMode' && onApprovePlan && (
-        <div className="border-t border-blue-700/30 px-4 py-2.5">
+        <div className="border-t border-info-strong/30 px-4 py-2.5">
           <div className="flex items-center gap-3">
             <button
               onClick={onApprovePlan}
-              className="rounded bg-green-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-green-500"
+              className="rounded bg-success-solid px-4 py-1.5 text-xs font-medium text-white hover:bg-success-base"
             >
               Approve Plan
             </button>
@@ -276,7 +276,7 @@ function TodoBlock({ input }: { input: Record<string, unknown> }) {
         const status = str(todo.status)
         const content = str(todo.content)
         const icon = status === 'completed' ? '✓' : status === 'in_progress' ? '◐' : '○'
-        const color = status === 'completed' ? 'text-green-400' : status === 'in_progress' ? 'text-blue-400' : 'text-neutral-500'
+        const color = status === 'completed' ? 'text-success-fg' : status === 'in_progress' ? 'text-info-fg' : 'text-neutral-500'
         return (
           <div key={str(todo.id) || content} className="flex items-start gap-2 py-0.5 text-xs">
             <span className={`flex-shrink-0 ${color}`}>{icon}</span>
@@ -303,13 +303,13 @@ function ToolUseBlock({ msg, toolResult, isLast, onApprovePlan, cwd, onOpenFile 
 
   // Generic tool — collapsible chip
   return (
-    <div className={`my-1 rounded border ${hasError ? 'border-red-800/50' : 'border-neutral-700'} bg-neutral-800/50`}>
+    <div className={`my-1 rounded border ${hasError ? 'border-danger-deeper/50' : 'border-neutral-700'} bg-neutral-800/50`}>
       <button
         className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-neutral-700/30"
         onClick={() => setExpanded(!expanded)}
       >
         <span className="text-neutral-400">{expanded ? '▼' : '▶'}</span>
-        <span className={`rounded px-1.5 py-0.5 font-mono ${hasError ? 'bg-red-900/50 text-red-300' : 'bg-blue-900/50 text-blue-300'}`}>
+        <span className={`rounded px-1.5 py-0.5 font-mono ${hasError ? 'bg-danger-deep/50 text-danger-soft' : 'bg-info-deep/50 text-info-soft'}`}>
           {toolName}
         </span>
         {summary && (
@@ -325,10 +325,10 @@ function ToolUseBlock({ msg, toolResult, isLast, onApprovePlan, cwd, onOpenFile 
           </pre>
           {resultText && (
             <>
-              <div className={`border-t ${hasError ? 'border-red-800/50' : 'border-neutral-700'} px-3 py-1.5 text-3xs font-medium uppercase tracking-wider ${hasError ? 'text-red-400' : 'text-neutral-500'}`}>
+              <div className={`border-t ${hasError ? 'border-danger-deeper/50' : 'border-neutral-700'} px-3 py-1.5 text-3xs font-medium uppercase tracking-wider ${hasError ? 'text-danger-fg' : 'text-neutral-500'}`}>
                 {hasError ? 'Error' : 'Output'}
               </div>
-              <pre className={`max-h-60 overflow-auto px-3 pb-2 text-xs whitespace-pre-wrap ${hasError ? 'text-red-300' : 'text-neutral-300'}`}>
+              <pre className={`max-h-60 overflow-auto px-3 pb-2 text-xs whitespace-pre-wrap ${hasError ? 'text-danger-soft' : 'text-neutral-300'}`}>
                 {resultText.length > 3000 ? `${resultText.slice(0, 3000)}\n... (truncated)` : resultText}
               </pre>
             </>
@@ -345,7 +345,7 @@ function AgentChatMessageInner({ msg, isUserMessage, toolResult, isLast, onAppro
       return (
         <div className="my-2 flex justify-end">
           <div className="max-w-[85%]">
-            <div className="rounded-lg bg-blue-600/20 border border-blue-700/30 px-3 py-2 text-sm text-neutral-200 whitespace-pre-wrap">
+            <div className="rounded-lg bg-info-solid/20 border border-info-strong/30 px-3 py-2 text-sm text-neutral-200 whitespace-pre-wrap">
               {msg.text}
             </div>
             {msg.queued && (
@@ -405,7 +405,7 @@ function AgentChatMessageInner({ msg, isUserMessage, toolResult, isLast, onAppro
 
   // error type
   return (
-    <div className="my-2 rounded border border-red-800 bg-red-900/20 px-3 py-2 text-sm text-red-300">
+    <div className="my-2 rounded border border-danger-deeper bg-danger-deep/20 px-3 py-2 text-sm text-danger-soft">
       {msg.text}
     </div>
   )
@@ -437,7 +437,7 @@ export function ToolGroupBlock({ items }: {
     .join(', ')
 
   return (
-    <div className={`my-1 rounded border ${hasAnyError ? 'border-red-800/50' : 'border-neutral-700'} bg-neutral-800/50`}>
+    <div className={`my-1 rounded border ${hasAnyError ? 'border-danger-deeper/50' : 'border-neutral-700'} bg-neutral-800/50`}>
       <button
         className="flex w-full items-center gap-2 overflow-hidden whitespace-nowrap px-3 py-1.5 text-left text-xs hover:bg-neutral-700/30"
         onClick={() => setExpanded(!expanded)}

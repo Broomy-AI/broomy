@@ -64,7 +64,7 @@ function StatusIndicator({ status, isUnread }: { status: SessionStatus; isUnread
   // idle
   if (isUnread) {
     return (
-      <span className="w-3 h-3 rounded-full bg-green-400 shadow-[0_0_6px_1px_rgba(74,222,128,0.5)]" />
+      <span className="w-3 h-3 rounded-full bg-success-fg shadow-[0_0_6px_1px_rgba(74,222,128,0.5)]" />
     )
   }
   return <span className="w-2 h-2 rounded-full bg-status-idle" />
@@ -221,7 +221,7 @@ export default memo(function SessionCard({
           <StatusChipBadge status={session.statusChip} />
         )}
         {(session.prNumber || session.lastKnownPrNumber) && (
-          <span className="text-purple-400 flex-shrink-0">PR #{session.prNumber || session.lastKnownPrNumber}</span>
+          <span className="text-review-fg flex-shrink-0">PR #{session.prNumber || session.lastKnownPrNumber}</span>
         )}
       </div>
       {session.initError ? (

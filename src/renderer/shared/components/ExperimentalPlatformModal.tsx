@@ -28,7 +28,7 @@ export default function ExperimentalPlatformModal() {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div role="dialog" className="bg-bg-secondary border border-border rounded-lg shadow-xl p-5 max-w-md mx-4">
         <div className="flex items-center gap-2 mb-3">
-          <span className="px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wider rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+          <span className="px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wider rounded bg-warning-base/20 text-warning-fg border border-warning-base/30">
             Experimental
           </span>
           <h3 className="text-sm font-medium text-text-primary">

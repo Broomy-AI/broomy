@@ -27,13 +27,13 @@ export default function DeleteSessionDialog({ session, repos, deleteWorktree, se
           </label>
         )}
         {isManagedWorktree && deleteWorktree && !isSafeToDelete && (
-          <div className="text-xs text-yellow-400 bg-yellow-400/10 rounded px-3 py-2 mb-3">
+          <div className="text-xs text-warning-fg bg-warning-fg/10 rounded px-3 py-2 mb-3">
             This session has work in progress. The worktree folder and local branch will be permanently deleted.
           </div>
         )}
         <div className="flex gap-2 justify-end">
           <button onClick={onCancel} className="px-3 py-1.5 text-xs rounded bg-bg-tertiary text-text-secondary hover:text-text-primary transition-colors">Cancel</button>
-          <button onClick={onConfirm} className="px-3 py-1.5 text-xs rounded bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors">Delete</button>
+          <button onClick={onConfirm} className="px-3 py-1.5 text-xs rounded bg-danger-solid/20 text-danger-fg hover:bg-danger-solid/30 transition-colors">Delete</button>
         </div>
       </div>
     </div>

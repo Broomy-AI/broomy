@@ -209,7 +209,7 @@ export default function Layout({
             {errorMessage && (
               <div className="flex-1 flex items-center justify-center bg-bg-primary text-text-secondary">
                 <div className="text-center">
-                  <p className="text-red-400">{errorMessage}</p>
+                  <p className="text-danger-fg">{errorMessage}</p>
                 </div>
               </div>
             )}

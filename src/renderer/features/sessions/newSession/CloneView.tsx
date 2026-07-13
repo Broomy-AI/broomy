@@ -13,8 +13,8 @@ import { useLocationStatus, type LocationStatus } from './useLocationStatus'
 
 function NoWriteAccessBanner({ onContinue }: { onContinue?: () => void }) {
   return (
-    <div className="rounded border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm text-text-primary">
-      <div className="font-medium text-yellow-400">No write access</div>
+    <div className="rounded border border-warning-base/30 bg-warning-base/10 px-3 py-2 text-sm text-text-primary">
+      <div className="font-medium text-warning-fg">No write access</div>
       <p className="text-xs text-text-secondary mt-1">
         You don't have push access to this repository. You won't be able to create branches or push changes.
         Consider forking the repo on GitHub and cloning your fork instead.
@@ -22,7 +22,7 @@ function NoWriteAccessBanner({ onContinue }: { onContinue?: () => void }) {
       {onContinue && (
         <button
           onClick={onContinue}
-          className="mt-2 px-3 py-1.5 text-xs rounded border border-yellow-500/30 bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30 transition-colors"
+          className="mt-2 px-3 py-1.5 text-xs rounded border border-warning-base/30 bg-warning-base/20 text-warning-soft hover:bg-warning-base/30 transition-colors"
         >
           Continue anyway (read-only)
         </button>
@@ -57,7 +57,7 @@ function UrlField({
         autoFocus
       />
       {url.trim() && parsed.error ? (
-        <p className="text-xs text-red-400 mt-1">{parsed.error}</p>
+        <p className="text-xs text-danger-fg mt-1">{parsed.error}</p>
       ) : (
         <p className="text-xs text-text-secondary mt-1">HTTPS (https://github.com/...), SSH (git@github.com:...), or owner/repo</p>
       )}
@@ -93,11 +93,11 @@ function LocationField({
       </div>
       {status.kind === 'will-create' && (
         <p className="text-xs text-text-secondary mt-1">
-          <span className="text-yellow-400">⚠</span> This folder doesn't exist yet — it will be created.
+          <span className="text-warning-fg">⚠</span> This folder doesn't exist yet — it will be created.
         </p>
       )}
       {status.kind === 'target-exists' && (
-        <p className="text-xs text-red-400 mt-1">
+        <p className="text-xs text-danger-fg mt-1">
           A folder named "{repoName}" already exists here. Pick a different location or remove the existing folder.
         </p>
       )}

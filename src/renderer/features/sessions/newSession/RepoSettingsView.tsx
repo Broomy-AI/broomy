@@ -181,7 +181,7 @@ export function RepoSettingsView({
             <div className="pt-2 border-t border-border">
               <button
                 onClick={handleDelete}
-                className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                className="text-xs text-danger-fg hover:text-danger-soft transition-colors"
               >
                 Remove repository from Broomy
               </button>

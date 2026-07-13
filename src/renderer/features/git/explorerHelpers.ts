@@ -26,11 +26,11 @@ export function statusLabel(status: string): string {
  */
 export function getStatusColor(status?: string): string {
   switch (status) {
-    case 'modified': return 'text-yellow-400'
-    case 'added': return 'text-green-400'
-    case 'deleted': return 'text-red-400'
+    case 'modified': return 'text-warning-fg'
+    case 'added': return 'text-success-fg'
+    case 'deleted': return 'text-danger-fg'
     case 'untracked': return 'text-gray-400'
-    case 'renamed': return 'text-blue-400'
+    case 'renamed': return 'text-info-fg'
     default: return 'text-text-primary'
   }
 }
@@ -47,11 +47,11 @@ export function statusBadgeLetter(status: string): string {
  */
 export function statusBadgeColor(status: string): string {
   switch (status) {
-    case 'modified': return 'text-yellow-400'
-    case 'added': return 'text-green-400'
-    case 'deleted': return 'text-red-400'
+    case 'modified': return 'text-warning-fg'
+    case 'added': return 'text-success-fg'
+    case 'deleted': return 'text-danger-fg'
     case 'untracked': return 'text-gray-400'
-    case 'renamed': return 'text-blue-400'
+    case 'renamed': return 'text-info-fg'
     default: return 'text-text-secondary'
   }
 }
@@ -86,9 +86,9 @@ export function isPrOpen(prState?: string): boolean {
  */
 export function prStateBadgeClass(state: string): string {
   switch (state) {
-    case 'OPEN': return 'bg-green-500/20 text-green-400'
-    case 'MERGED': return 'bg-purple-500/20 text-purple-400'
-    default: return 'bg-red-500/20 text-red-400'
+    case 'OPEN': return 'bg-success-base/20 text-success-fg'
+    case 'MERGED': return 'bg-review-base/20 text-review-fg'
+    default: return 'bg-danger-base/20 text-danger-fg'
   }
 }
 
@@ -98,13 +98,13 @@ export function prStateBadgeClass(state: string): string {
  * always display the same text and color for a given status.
  */
 export const branchStatusBadge: Record<string, { label: string; classes: string }> = {
-  pushed: { label: 'PUSHED', classes: 'bg-blue-500/20 text-blue-400' },
+  pushed: { label: 'PUSHED', classes: 'bg-info-base/20 text-info-fg' },
   empty: { label: 'EMPTY', classes: 'bg-gray-500/20 text-gray-400' },
-  open: { label: 'PR OPEN', classes: 'bg-green-500/20 text-green-400' },
-  feedback: { label: 'FEEDBACK', classes: 'bg-orange-500/20 text-orange-400' },
-  failed: { label: 'FAILED', classes: 'bg-red-500/20 text-red-400' },
-  merged: { label: 'MERGED', classes: 'bg-purple-500/20 text-purple-400' },
-  closed: { label: 'CLOSED', classes: 'bg-red-500/20 text-red-400' },
+  open: { label: 'PR OPEN', classes: 'bg-success-base/20 text-success-fg' },
+  feedback: { label: 'FEEDBACK', classes: 'bg-attention-base/20 text-attention-fg' },
+  failed: { label: 'FAILED', classes: 'bg-danger-base/20 text-danger-fg' },
+  merged: { label: 'MERGED', classes: 'bg-review-base/20 text-review-fg' },
+  closed: { label: 'CLOSED', classes: 'bg-danger-base/20 text-danger-fg' },
 }
 
 /**
@@ -114,7 +114,7 @@ export const branchStatusBadge: Record<string, { label: string; classes: string 
  * reports the PR).
  */
 export const prStateBadge: Record<'OPEN' | 'MERGED' | 'CLOSED', { label: string; classes: string }> = {
-  OPEN: { label: 'PR OPEN', classes: 'bg-green-500/20 text-green-400' },
-  MERGED: { label: 'MERGED', classes: 'bg-purple-500/20 text-purple-400' },
-  CLOSED: { label: 'CLOSED', classes: 'bg-red-500/20 text-red-400' },
+  OPEN: { label: 'PR OPEN', classes: 'bg-success-base/20 text-success-fg' },
+  MERGED: { label: 'MERGED', classes: 'bg-review-base/20 text-review-fg' },
+  CLOSED: { label: 'CLOSED', classes: 'bg-danger-base/20 text-danger-fg' },
 }

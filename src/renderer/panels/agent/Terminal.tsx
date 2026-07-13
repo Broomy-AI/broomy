@@ -53,15 +53,15 @@ function ExitErrorBanner({ exitInfo, onDismiss }: { exitInfo: ExitInfo; onDismis
   }
 
   return (
-    <div className="mx-2 mt-2 px-3 py-2 rounded bg-red-500/10 border border-red-500/30 text-xs text-red-400 shrink-0 flex items-center justify-between">
+    <div className="mx-2 mt-2 px-3 py-2 rounded bg-danger-base/10 border border-danger-base/30 text-xs text-danger-fg shrink-0 flex items-center justify-between">
       <button
         onClick={handleClick}
-        className={`flex-1 text-left ${exitInfo.detail ? 'cursor-pointer hover:text-red-300' : 'cursor-default'}`}
+        className={`flex-1 text-left ${exitInfo.detail ? 'cursor-pointer hover:text-danger-soft' : 'cursor-default'}`}
         title={exitInfo.detail ? 'Click for details' : undefined}
       >
         {exitInfo.message}
       </button>
-      <button className="ml-2 hover:text-red-300" onClick={onDismiss} aria-label="Dismiss">
+      <button className="ml-2 hover:text-danger-soft" onClick={onDismiss} aria-label="Dismiss">
         &times;
       </button>
     </div>
@@ -70,10 +70,10 @@ function ExitErrorBanner({ exitInfo, onDismiss }: { exitInfo: ExitInfo; onDismis
 
 function AgentExitBanner({ exitInfo, onRestart }: { exitInfo: ExitInfo; onRestart: () => void }) {
   return (
-    <div className="mx-2 mt-2 px-3 py-2 rounded bg-yellow-500/10 border border-yellow-500/30 text-xs text-yellow-300 shrink-0 flex items-center justify-between">
+    <div className="mx-2 mt-2 px-3 py-2 rounded bg-warning-base/10 border border-warning-base/30 text-xs text-warning-soft shrink-0 flex items-center justify-between">
       <span>{exitInfo.message}</span>
       <button
-        className="ml-3 px-2 py-0.5 rounded bg-yellow-500/20 hover:bg-yellow-500/30 font-medium transition-colors"
+        className="ml-3 px-2 py-0.5 rounded bg-warning-base/20 hover:bg-warning-base/30 font-medium transition-colors"
         onClick={onRestart}
       >
         Restart Agent
@@ -188,7 +188,7 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
   return (
     <div className="h-full w-full flex flex-col" onContextMenu={handleContextMenu}>
       {agentNotInstalled && command && (
-        <div className="mx-2 mt-2 px-3 py-2 rounded bg-yellow-500/10 border border-yellow-500/30 text-xs text-yellow-300 shrink-0">
+        <div className="mx-2 mt-2 px-3 py-2 rounded bg-warning-base/10 border border-warning-base/30 text-xs text-warning-soft shrink-0">
           <span className="font-medium">&ldquo;{command}&rdquo;</span> is not installed.
           {(() => {
             const url = getAgentInstallUrl(command)
@@ -196,7 +196,7 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
               <>
                 {' '}
                 <button
-                  className="underline hover:text-yellow-200 font-medium"
+                  className="underline hover:text-warning-subtle font-medium"
                   onClick={() => window.shell.openExternal(url)}
                 >
                   Install &rarr;

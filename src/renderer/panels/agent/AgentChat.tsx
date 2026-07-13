@@ -238,7 +238,7 @@ function AgentChatInner({ sessionId, cwd, sdkSessionId, skipApproval, env, model
         {/* Loading indicator */}
         {isRunning && (
           <div className="my-2 flex items-center gap-2 text-xs text-neutral-400">
-            <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400" />
+            <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-info-fg" />
             {agentStatusLabel(messages, state)}
             {elapsedSeconds > 0 && (
               <span className="text-neutral-500">{formatElapsedTime(elapsedSeconds)}</span>

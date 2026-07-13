@@ -83,7 +83,7 @@ export function AgentPickerView({
                   <div className="font-medium text-sm text-text-primary flex items-center gap-2">
                     {agent.name}
                     {!isInstalled && (
-                      <span className="text-3xs px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 font-normal">
+                      <span className="text-3xs px-1.5 py-0.5 rounded bg-warning-base/20 text-warning-fg font-normal">
                         not installed
                       </span>
                     )}
@@ -92,7 +92,7 @@ export function AgentPickerView({
                 </div>
               </button>
               {showWarning && (
-                <div className="mt-1 ml-6 p-2 rounded bg-yellow-500/10 border border-yellow-500/30 text-xs text-yellow-300">
+                <div className="mt-1 ml-6 p-2 rounded bg-warning-base/10 border border-warning-base/30 text-xs text-warning-soft">
                   <span className="font-medium">{agent.command}</span> was not found on your PATH.
                   {(() => {
                     const installUrl = getAgentInstallUrl(agent.command)
@@ -104,7 +104,7 @@ export function AgentPickerView({
                             e.stopPropagation()
                             void window.shell.openExternal(installUrl)
                           }}
-                          className="underline hover:text-yellow-200 transition-colors"
+                          className="underline hover:text-warning-subtle transition-colors"
                         >
                           Install {agent.name}
                         </button>

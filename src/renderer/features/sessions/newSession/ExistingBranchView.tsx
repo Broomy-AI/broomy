@@ -281,9 +281,9 @@ export function ExistingBranchView({
                   <div className="text-sm font-mono text-text-primary truncate">{branch.name}</div>
                   <div className="text-xs text-text-secondary">
                     {branch.hasWorktree ? (
-                      <span className="text-green-400">Has worktree</span>
+                      <span className="text-success-fg">Has worktree</span>
                     ) : (
-                      <span className="text-yellow-400">Remote only - will create worktree</span>
+                      <span className="text-warning-fg">Remote only - will create worktree</span>
                     )}
                   </div>
                 </div>

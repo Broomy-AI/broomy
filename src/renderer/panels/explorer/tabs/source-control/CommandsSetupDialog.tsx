@@ -119,7 +119,7 @@ export function CommandsSetupDialog({ onClose, onInstalled }: CommandsSetupDialo
         <p className="text-xs text-text-tertiary">Installs to <code className="font-mono">~/.broomy/commands.json</code></p>
 
         {confirmReplace && (
-          <div className="p-2 rounded border border-yellow-500/30 bg-yellow-500/10 text-sm text-yellow-300">
+          <div className="p-2 rounded border border-warning-base/30 bg-warning-base/10 text-sm text-warning-soft">
             Replace existing user commands?
             <div className="flex gap-2 mt-2">
               <button onClick={() => { setConfirmReplace(false); void doInstall() }} className="px-3 py-1 text-xs rounded bg-accent text-white">Replace</button>

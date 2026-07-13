@@ -126,7 +126,7 @@ export function RepoSettingsEditor({
           <span className="text-xs text-text-secondary">Allow "Merge PR" button</span>
         </label>
         {writeAccessError && (
-          <div className="text-xs text-red-400 pl-6">{writeAccessError}</div>
+          <div className="text-xs text-danger-fg pl-6">{writeAccessError}</div>
         )}
       </div>
 

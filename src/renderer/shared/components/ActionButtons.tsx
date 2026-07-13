@@ -32,8 +32,8 @@ interface ActionButtonsProps {
 const STYLE_CLASSES: Record<string, string> = {
   primary: 'bg-accent text-white hover:bg-accent/80',
   secondary: 'bg-bg-tertiary text-text-primary hover:bg-bg-secondary',
-  accent: 'bg-purple-600 text-white hover:bg-purple-500',
-  danger: 'bg-orange-600 text-white hover:bg-orange-500',
+  accent: 'bg-review-solid text-white hover:bg-review-base',
+  danger: 'bg-attention-solid text-white hover:bg-attention-base',
 }
 
 function slashSubtitle(template: string): string | null {
