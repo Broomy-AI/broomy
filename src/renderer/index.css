@@ -91,6 +91,198 @@
   --scrollbar-thumb: rgb(var(--color-elevate) / 0.2);
 }
 
+/* Light. Warm off-white base, deliberately not #ffffff — pure white's specular
+ * glare is itself a source of low-vision eye strain. Note the role tiers INVERT:
+ * deep/deeper/strong are dark banner grounds on dark, and must become PALE grounds
+ * here or every banner turns into a black box. Ratios asserted in
+ * src/shared/theme.contrast.test.ts. */
+[data-theme='light'] {
+  --color-bg-primary: 251 251 250;      /* #fbfbfa */
+  --color-bg-secondary: 242 242 240;    /* #f2f2f0 */
+  --color-bg-tertiary: 230 230 227;     /* #e6e6e3 — "raised" is DARKER on light */
+  --color-border: 194 194 187;          /* #c2c2bb */
+  --color-border-strong: 143 143 136;   /* #8f8f88 — clears WCAG 1.4.11 (3:1) */
+  --color-text-primary: 28 28 26;       /* #1c1c1a — 16.5:1 */
+  --color-text-secondary: 82 82 73;     /* #525249 —  7.6:1 (the most-used text class) */
+  --color-text-tertiary: 97 97 90;      /* #61615a —  6.0:1 */
+  --color-accent: 14 79 174;            /* #0e4fae —  7.4:1 (dark accent is 2.66:1 here) */
+  --color-on-accent: 255 255 255;       
+  --color-status-working: 22 101 52;    /* green-800 */
+  --color-status-waiting: 133 77 14;    /* yellow-800 — yellow-700 was 4.39:1 on bg-secondary */
+  --color-status-idle: 87 83 78;        /* #57534e */
+  --color-status-error: 185 28 28;      /* #b91c1c */
+  --color-danger-soft: 153 27 27;       /* red-800 */
+  --color-danger-fg: 185 28 28;         /* red-700 */
+  --color-danger-base: 220 38 38;       /* red-600 */
+  --color-danger-solid: 185 28 28;      /* red-700 — dark enough to carry a white label */
+  --color-danger-deeper: 254 202 202;   /* red-200  <- inverted: a pale border */
+  --color-danger-deep: 254 226 226;     /* red-100  <- inverted: a pale ground */
+  --color-warning-subtle: 133 77 14;    /* yellow-800 */
+  --color-warning-soft: 146 64 14;      /* amber-800 */
+  --color-warning-fg: 133 77 14;        /* yellow-800 — 6.2:1 */
+  --color-warning-base: 202 138 4;      /* yellow-600 */
+  --color-warning-solid: 133 77 14;     /* yellow-800 */
+  --color-warning-strong: 253 224 71;   /* yellow-300 <- inverted: a pale border */
+  --color-warning-deep: 254 249 195;    /* yellow-100 <- inverted: a pale ground */
+  --color-success-soft: 22 101 52;      /* green-800 */
+  --color-success-fg: 22 101 52;        /* green-800 — 6.1:1 (green-700 was 4.47:1 on bg-secondary) */
+  --color-success-base: 22 163 74;      /* green-600 */
+  --color-success-solid: 21 128 61;     /* green-700 */
+  --color-success-deep: 220 252 231;    /* green-100 <- inverted */
+  --color-info-subtle: 30 64 175;       /* blue-800 */
+  --color-info-soft: 29 78 216;         /* blue-700 */
+  --color-info-fg: 29 78 216;           /* blue-700 — 6.5:1 */
+  --color-info-base: 37 99 235;         /* blue-600 */
+  --color-info-solid: 29 78 216;        /* blue-700 */
+  --color-info-strong: 147 197 253;     /* blue-300 <- inverted: a pale border */
+  --color-info-deep: 219 234 254;       /* blue-100 <- inverted: a pale ground */
+  --color-review-fg: 126 34 206;        /* purple-700 — 6.9:1 */
+  --color-review-base: 147 51 234;      /* purple-600 */
+  --color-review-solid: 126 34 206;     /* purple-700 */
+  --color-review-strong: 216 180 254;   /* purple-300 <- inverted */
+  --color-review-deep: 243 232 255;     /* purple-100 <- inverted */
+  --color-attention-fg: 154 52 18;      /* orange-800 — orange-700 was 4.14:1 on bg-tertiary */
+  --color-attention-base: 234 88 12;    /* orange-600 */
+  --color-attention-solid: 194 65 12;   /* orange-700 */
+  --color-note-fg: 21 94 117;           /* cyan-800 — cyan-700 was 4.28:1 on bg-tertiary */
+  --color-note-base: 8 145 178;         /* cyan-600 */
+  --color-muted: 91 98 112;             /* #5b6270 — 5.9:1 */
+  --color-surface-hover: 226 226 222;   /* #e2e2de */
+  --color-overlay: 28 28 26;            /* scrim stays DARK — a pale scrim reads as nothing */
+  --color-elevate: 0 0 0;               /* a wash OVER a surface: black on light, white on dark */
+  --color-focus-ring: 14 79 174;        /* #0e4fae — 7.4:1 */
+  --color-search-highlight: 202 138 4;  /* #ca8a04 — #ffd500 is invisible on white */
+  color-scheme: light;
+}
+
+/* High contrast (dark). The defining move is HIERARCHY COLLAPSE: text-secondary
+ * stops being a dimmer tier and resolves to primary. ~400 elements here are
+ * deliberately greyed below body text, and magnifying grey does not make it
+ * legible — only removing the dimming does.
+ *
+ * Note white-on-black MAXIMISES halation. For astigmatism, hc-light is the one to
+ * reach for; this exists for users whose need is the opposite. */
+[data-theme='hc'] {
+  --color-bg-primary: 0 0 0;            
+  --color-bg-secondary: 10 10 10;       
+  --color-bg-tertiary: 26 26 26;        
+  --color-border: 118 118 118;          /* 3:1 minimum for non-text */
+  --color-border-strong: 176 176 176;   
+  --color-text-primary: 255 255 255;    /* 21:1 */
+  --color-text-secondary: 255 255 255;  /* <- COLLAPSED. No dimmer tier. */
+  --color-text-tertiary: 224 224 224;   /* one step off, ~17:1 */
+  --color-accent: 124 196 255;          
+  --color-on-accent: 0 0 0;             /* dark label on a bright fill */
+  --color-status-working: 94 255 159;   
+  --color-status-waiting: 255 225 77;   
+  --color-status-idle: 176 176 176;     
+  --color-status-error: 255 128 128;    
+  --color-danger-soft: 255 179 179;     
+  --color-danger-fg: 255 138 138;       
+  --color-danger-base: 255 107 107;     
+  --color-danger-solid: 255 107 107;    
+  --color-danger-deeper: 255 179 179;   
+  --color-danger-deep: 61 0 0;          
+  --color-warning-subtle: 255 240 138;  
+  --color-warning-soft: 255 225 77;     
+  --color-warning-fg: 255 225 77;       
+  --color-warning-base: 255 208 0;      
+  --color-warning-solid: 255 208 0;     
+  --color-warning-strong: 255 240 138;  
+  --color-warning-deep: 61 46 0;        
+  --color-success-soft: 147 255 192;    
+  --color-success-fg: 94 255 159;       
+  --color-success-base: 52 235 130;     
+  --color-success-solid: 52 235 130;    
+  --color-success-deep: 0 51 20;        
+  --color-info-subtle: 188 223 255;     
+  --color-info-soft: 142 203 255;       
+  --color-info-fg: 142 203 255;         
+  --color-info-base: 108 186 255;       
+  --color-info-solid: 108 186 255;      
+  --color-info-strong: 188 223 255;     
+  --color-info-deep: 0 31 61;           
+  --color-review-fg: 234 160 255;       
+  --color-review-base: 221 122 255;     
+  --color-review-solid: 221 122 255;    
+  --color-review-strong: 242 194 255;   
+  --color-review-deep: 46 0 61;         
+  --color-attention-fg: 255 176 102;    
+  --color-attention-base: 255 149 51;   
+  --color-attention-solid: 255 149 51;  
+  --color-note-fg: 127 230 245;         
+  --color-note-base: 77 214 235;        
+  --color-muted: 176 176 176;           
+  --color-surface-hover: 51 51 51;      
+  --color-overlay: 0 0 0;               
+  --color-elevate: 255 255 255;         
+  --color-focus-ring: 255 255 0;        /* maximum-visibility yellow */
+  --color-search-highlight: 255 255 0;  
+  color-scheme: dark;
+}
+
+/* High contrast (light). Same hierarchy collapse on a light ground. This is the
+ * mode for astigmatism/halation: dark text on light is the low-halation
+ * configuration, and the greys stop hiding. */
+[data-theme='hc-light'] {
+  --color-bg-primary: 255 255 255;      
+  --color-bg-secondary: 245 245 245;    
+  --color-bg-tertiary: 232 232 232;     
+  --color-border: 89 89 89;             
+  --color-border-strong: 51 51 51;      
+  --color-text-primary: 0 0 0;          /* 21:1 */
+  --color-text-secondary: 0 0 0;        /* <- COLLAPSED */
+  --color-text-tertiary: 26 26 26;      
+  --color-accent: 0 61 153;             
+  --color-on-accent: 255 255 255;       
+  --color-status-working: 0 102 34;     
+  --color-status-waiting: 122 74 0;     
+  --color-status-idle: 61 61 61;        
+  --color-status-error: 160 0 0;        
+  --color-danger-soft: 128 0 0;         
+  --color-danger-fg: 160 0 0;           
+  --color-danger-base: 178 10 39;       
+  --color-danger-solid: 160 0 0;        
+  --color-danger-deeper: 255 205 205;   
+  --color-danger-deep: 255 235 235;     
+  --color-warning-subtle: 92 56 0;      
+  --color-warning-soft: 92 56 0;        
+  --color-warning-fg: 92 56 0;          
+  --color-warning-base: 122 74 0;       
+  --color-warning-solid: 92 56 0;       
+  --color-warning-strong: 250 224 130;  
+  --color-warning-deep: 255 248 219;    
+  --color-success-soft: 0 77 25;        
+  --color-success-fg: 0 102 34;         
+  --color-success-base: 0 102 34;       
+  --color-success-solid: 0 102 34;      
+  --color-success-deep: 223 250 231;    
+  --color-info-subtle: 0 45 115;        
+  --color-info-soft: 0 45 115;          
+  --color-info-fg: 0 61 153;            
+  --color-info-base: 0 61 153;          
+  --color-info-solid: 0 61 153;         
+  --color-info-strong: 176 205 245;     
+  --color-info-deep: 228 238 252;       
+  --color-review-fg: 82 11 143;         
+  --color-review-base: 82 11 143;       
+  --color-review-solid: 82 11 143;      
+  --color-review-strong: 221 190 246;   
+  --color-review-deep: 245 235 253;     
+  --color-attention-fg: 148 50 0;       
+  --color-attention-base: 148 50 0;     
+  --color-attention-solid: 148 50 0;    
+  --color-note-fg: 0 82 94;             
+  --color-note-base: 0 82 94;           
+  --color-muted: 61 61 61;              
+  --color-surface-hover: 224 224 224;   
+  --color-overlay: 0 0 0;               
+  --color-elevate: 0 0 0;               
+  --color-focus-ring: 0 61 153;         
+  --color-search-highlight: 122 74 0;   
+  color-scheme: light;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
