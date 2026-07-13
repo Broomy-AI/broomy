@@ -137,7 +137,53 @@ style={{
 import styles from './ProfileChip.module.css'
 ```
 
-The project uses a custom color palette defined in `tailwind.config.js` with semantic names like `bg-bg-primary`, `text-text-secondary`, `border-border`.
+### Colors: use the tokens, never a raw Tailwind color
+
+Colors resolve through CSS custom properties declared in `src/renderer/index.css`, mirrored by `PALETTE` in `src/shared/theme.ts` (the renderer needs channel triplets; main and preload need real hex for the window background, xterm and Monaco). `scripts/check-colors.cjs` runs in `pnpm check:all` and fails the build on any raw Tailwind color, arbitrary hex, or arbitrary `text-[Npx]` in `src/renderer`.
+
+A raw `text-red-400` is hardcoded for a dark background and cannot follow a theme. That is the whole reason the tokens exist.
+
+| Group | Tokens |
+|---|---|
+| Surfaces | `bg-primary` `bg-secondary` `bg-tertiary` `surface-hover` |
+| Lines | `border` `border-strong` |
+| Text | `text-primary` `text-secondary` `text-tertiary` |
+| Brand | `accent` `on-accent` (the label that sits *on* a saturated fill) |
+| Status | `status-working` `status-waiting` `status-idle` `status-error` |
+| Roles | `danger-*` `warning-*` `success-*` `info-*` `review-*` `attention-*` `note-*` |
+| Neutral roles | `muted` `overlay` (modal scrim, dark in every theme) `elevate` (a wash *over* a surface) |
+
+Each role is a small scale, because the app uses several steps of a hue for different jobs:
+
+| Tier | Job |
+|---|---|
+| `subtle` / `soft` | quiet text |
+| `fg` | the role's default text |
+| `base` | tints and borders, used with an alpha modifier (`bg-danger-base/20`) |
+| `solid` | button fill, pairs with `on-accent` |
+| `strong` / `deeper` / `deep` | strong borders, and the dark grounds of banners |
+
+```tsx
+// Good
+<span className="text-danger-fg">Failed</span>
+<div className="bg-warning-base/20 border border-warning-base/30" />
+<button className="bg-accent text-on-accent hover:bg-accent/80" />
+
+// Bad — cannot follow a theme, and check:all will fail
+<span className="text-red-400">Failed</span>
+<div className="bg-[#1a1a1a]" />
+```
+
+Two rules the Tailwind config itself must keep:
+
+1. Colors use the `rgb(var(--x) / <alpha-value>)` **function** form. A bare `var(--x)` holding a hex makes Tailwind emit **nothing** for every alpha-modifier utility (`bg-accent/80`, `border-border/50`).
+2. The palette stays under `theme.extend.colors`. Under `theme.colors` it would drop Tailwind's gray scale, which is what Preflight's `borderColor.DEFAULT` resolves to — every bare `border` would repaint.
+
+Font sizes multiply through `--app-text-scale`, so use `text-micro` / `text-3xs` / `text-2xs` rather than `text-[10px]`; an arbitrary px size cannot scale. Note those three tokens set font-size **only** — an arbitrary value sets no line-height, so giving them one would make those elements taller and shift every row beneath them.
+
+**Never** express a theme with `@media (prefers-color-scheme: ...)`. The headless Chromium in `scripts/storybook-screenshot-test.mjs` reports `light` by default, so such a rule repaints every story and blows all 264 reference screenshots at once. Themes attach as `[data-theme='...']` on top of the `:root` default.
+
+Agent and profile colors (`style={{ backgroundColor: agent.color }}`) are user data, not theme, and are deliberately exempt.
 
 ## File Organization
 

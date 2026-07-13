@@ -16,7 +16,7 @@ const css = readFileSync(join(__dirname, 'index.css'), 'utf-8')
 
 /** Pull `--color-x: a b c;` declarations out of a selector's block. */
 function readVars(selector: string): Record<string, string> {
-  const start = css.indexOf(selector + ' {')
+  const start = css.indexOf(`${selector} {`)
   expect(start, `selector "${selector}" not found in index.css`).toBeGreaterThan(-1)
   const block = css.slice(start, css.indexOf('}', start))
   const out: Record<string, string> = {}
@@ -59,7 +59,7 @@ describe('hexFromTriplet', () => {
   it('round-trips the palette', () => {
     expect(hexFromTriplet(PALETTE.dark['bg-primary'])).toBe('#1a1a1a')
     expect(hexFromTriplet(PALETTE.dark['text-primary'])).toBe('#e0e0e0')
-    expect(hexFromTriplet(PALETTE.dark['accent'])).toBe('#4a9eff')
+    expect(hexFromTriplet(PALETTE.dark.accent)).toBe('#4a9eff')
   })
 
   it('rejects malformed input rather than emitting a broken colour', () => {

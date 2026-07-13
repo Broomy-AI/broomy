@@ -141,5 +141,5 @@ export function hexFromTriplet(triplet: string): string {
   if (parts.length !== 3 || parts.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) {
     throw new Error(`Invalid colour triplet: "${triplet}"`)
   }
-  return '#' + parts.map((n) => n.toString(16).padStart(2, '0')).join('')
+  return `#${parts.map((n) => n.toString(16).padStart(2, '0')).join('')}`
 }
