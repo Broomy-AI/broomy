@@ -83,11 +83,12 @@
   --color-note-base: 6 182 212;         /* #06b6d4 (cyan-500) */
   --color-muted: 107 114 128;           /* #6b7280 (gray-500) — grey chips and dots */
   --color-surface-hover: 64 64 64;      /* #404040 (neutral-700) — neutral hover fill */
-  --color-overlay: 0 0 0;               /* the modal scrim; stays dark in every theme */
+  --color-overlay: 0 0 0;               /* modal scrim; dark in every theme */
+  --color-elevate: 255 255 255;         /* #ffffff — a wash over a surface */
   --color-focus-ring: 59 130 246;       /* #3b82f6 — used at 0.4 alpha today */
   --color-search-highlight: 255 213 0;  /* #ffd500 */
 
-  --scrollbar-thumb: rgb(255 255 255 / 0.2);
+  --scrollbar-thumb: rgb(var(--color-elevate) / 0.2);
 }
 
 * {

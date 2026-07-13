@@ -62,6 +62,72 @@ export const FAMILIES = {
 
 const PROPS = ['bg', 'text', 'border', 'ring', 'fill', 'stroke', 'divide', 'placeholder', 'from', 'to', 'via']
 
+/**
+ * Neutrals cannot be mapped by shade the way the hues can: the app reaches for
+ * `neutral`, `zinc` AND `gray` at overlapping steps, so several near-identical
+ * greys are doing the same job. These are listed explicitly rather than generated.
+ *
+ * `exact` entries have the same value as the token they map to, so they cannot
+ * move a pixel. `unify` entries deliberately collapse near-duplicate greys onto
+ * one semantic token, which DOES move pixels — that is the point, and it is
+ * committed separately with its reference screenshots.
+ */
+export const NEUTRALS = {
+  exact: [
+    // #ffffff === on-accent. These are labels sitting on a saturated fill.
+    ['text-white', 'text-on-accent'],
+    // #000000 === overlay. The modal scrim, which stays dark in every theme.
+    ['bg-black', 'bg-overlay'],
+    // #ffffff === elevate. A white wash over a dark surface — in a light theme
+    // this must become a black wash, which is exactly what the token buys.
+    ['bg-white', 'bg-elevate'],
+    // #404040 === surface-hover, exactly.
+    ['bg-neutral-700', 'bg-surface-hover'],
+  ],
+  unify: [
+    // Near-white text -> text-primary (#e0e0e0)
+    ['text-neutral-100', 'text-text-primary'],
+    ['text-neutral-200', 'text-text-primary'],
+    ['text-neutral-300', 'text-text-primary'],
+    ['text-zinc-300', 'text-text-primary'],
+    // Mid grey text -> text-secondary (#a0a0a0)
+    ['text-neutral-400', 'text-text-secondary'],
+    ['text-zinc-400', 'text-text-secondary'],
+    ['text-gray-400', 'text-text-secondary'],
+    // Dim grey text -> text-tertiary (#949494). These were #737373/#71717a, only
+    // 3.35:1 on bg-primary — an existing WCAG AA failure. The token is 5.74:1, so
+    // this both unifies the vocabulary and fixes the contrast.
+    ['text-neutral-500', 'text-text-tertiary'],
+    ['text-zinc-500', 'text-text-tertiary'],
+    ['text-neutral-600', 'text-text-tertiary'],
+    ['placeholder-neutral-500', 'placeholder-text-tertiary'],
+    // Surfaces
+    ['bg-neutral-900', 'bg-bg-primary'],
+    ['bg-zinc-900', 'bg-bg-primary'],
+    ['bg-neutral-800', 'bg-bg-secondary'],
+    ['bg-zinc-800', 'bg-bg-secondary'],
+    ['bg-zinc-700', 'bg-surface-hover'],
+    ['bg-neutral-600', 'bg-muted'],
+    ['bg-neutral-500', 'bg-muted'],
+    ['bg-zinc-500', 'bg-muted'],
+    ['bg-gray-500', 'bg-muted'],
+    // Lines
+    ['border-neutral-700', 'border-border'],
+    ['border-zinc-800', 'border-border'],
+    ['border-neutral-600', 'border-border-strong'],
+    ['border-neutral-500', 'border-border-strong'],
+  ],
+}
+
+export function neutralRules(kind) {
+  // \b won't do: these classes carry alpha modifiers (bg-black/50) and variants
+  // (hover:bg-neutral-700), so anchor on the class boundary instead.
+  return NEUTRALS[kind].map(([from, to]) => [
+    new RegExp(`(?<![\\w-])${from}(?![\\w-])`, 'g'),
+    to,
+  ])
+}
+
 /** Every rewrite this family performs, as [pattern, replacement] pairs. */
 export function rulesFor(family) {
   const { hue, tiers } = FAMILIES[family]
@@ -81,12 +147,17 @@ export function rulesFor(family) {
 function main() {
   const family = (process.argv.find((a) => a.startsWith('--family=')) || '').split('=')[1]
   const dry = process.argv.includes('--dry')
-  if (!FAMILIES[family]) {
-    console.error(`Usage: node scripts/migrate-colors.mjs --family=<${Object.keys(FAMILIES).join('|')}> [--dry]`)
+  const isNeutral = family === 'neutral-exact' || family === 'neutral-unify'
+  if (!FAMILIES[family] && !isNeutral) {
+    console.error(
+      `Usage: node scripts/migrate-colors.mjs --family=<${Object.keys(FAMILIES).join('|')}|neutral-exact|neutral-unify> [--dry]`
+    )
     process.exit(1)
   }
 
-  const rules = rulesFor(family)
+  const rules = isNeutral
+    ? neutralRules(family === 'neutral-exact' ? 'exact' : 'unify')
+    : rulesFor(family)
   const files = execSync('rg -l --glob "*.tsx" --glob "*.ts" "" src/renderer', { encoding: 'utf8' })
     .trim().split('\n').filter(Boolean)
 

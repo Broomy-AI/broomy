@@ -112,7 +112,7 @@ function MergeCommitArea({ hasConflicts, isCommitting, onCommitMerge }: {
           <button
             onClick={onCommitMerge}
             disabled={isCommitting}
-            className="w-full px-2 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-2 py-1.5 text-xs rounded bg-accent text-on-accent hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isCommitting ? 'Committing...' : 'Commit Merge'}
           </button>

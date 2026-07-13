@@ -139,7 +139,7 @@ function AgentChatInner({ sessionId, cwd, sdkSessionId, skipApproval, env, model
         {historyMeta && (
           <button
             onClick={loadFullHistory}
-            className="mb-2 w-full rounded border border-neutral-700 bg-neutral-800/50 px-3 py-1.5 text-xs text-neutral-400 hover:bg-neutral-700/50 hover:text-neutral-300"
+            className="mb-2 w-full rounded border border-neutral-700 bg-neutral-800/50 px-3 py-1.5 text-xs text-neutral-400 hover:bg-surface-hover/50 hover:text-neutral-300"
           >
             Load {historyMeta.total - historyMeta.loaded} earlier messages
           </button>
@@ -258,7 +258,7 @@ function AgentChatInner({ sessionId, cwd, sdkSessionId, skipApproval, env, model
         {showScrollButton && (
           <button
             onClick={handleScrollToBottom}
-            className="sticky bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 text-xs font-medium rounded-full bg-accent text-white hover:bg-accent/80 shadow-lg transition-colors z-10"
+            className="sticky bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 text-xs font-medium rounded-full bg-accent text-on-accent hover:bg-accent/80 shadow-lg transition-colors z-10"
           >
             Go to End &#x2193;
           </button>

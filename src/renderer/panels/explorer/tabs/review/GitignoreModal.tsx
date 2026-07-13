@@ -11,7 +11,7 @@ export function GitignoreModal({
   onCancel: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onCancel}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/50" onClick={onCancel}>
       <div
         role="dialog"
         className="bg-bg-secondary rounded-lg shadow-xl border border-border w-full max-w-md mx-4 p-4"
@@ -38,7 +38,7 @@ export function GitignoreModal({
           </button>
           <button
             onClick={onAddToGitignore}
-            className="px-3 py-1.5 text-sm rounded bg-accent text-white hover:bg-accent/80 transition-colors"
+            className="px-3 py-1.5 text-sm rounded bg-accent text-on-accent hover:bg-accent/80 transition-colors"
           >
             Create .gitignore
           </button>

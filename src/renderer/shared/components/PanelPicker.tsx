@@ -216,7 +216,7 @@ export default function PanelPicker({
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-end pt-12 pr-4">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute inset-0 bg-overlay/30" onClick={onClose} />
 
       {/* Menu */}
       <div

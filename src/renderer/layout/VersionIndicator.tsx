@@ -42,7 +42,7 @@ export default function VersionIndicator() {
                 </button>
                 <button
                   onClick={() => void handleDownload()}
-                  className="w-full px-3 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/80 transition-colors"
+                  className="w-full px-3 py-1.5 text-xs rounded bg-accent text-on-accent hover:bg-accent/80 transition-colors"
                 >
                   Download Update
                 </button>
@@ -69,7 +69,7 @@ export default function VersionIndicator() {
                 <div className="text-xs text-text-secondary mb-2">Update downloaded. Restart to apply.</div>
                 <button
                   onClick={handleInstall}
-                  className="w-full px-3 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/80 transition-colors"
+                  className="w-full px-3 py-1.5 text-xs rounded bg-accent text-on-accent hover:bg-accent/80 transition-colors"
                 >
                   Restart to Update
                 </button>

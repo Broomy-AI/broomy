@@ -54,7 +54,7 @@ export function CommandsSetupDialog({ onClose, onInstalled }: CommandsSetupDialo
   const installDisabled = installing || (requiresPlugin !== undefined && !pluginConfirmed)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/50" onClick={onClose}>
       <div role="dialog" className="bg-bg-secondary border border-border rounded-lg shadow-xl w-full max-w-2xl mx-4 p-4 space-y-3" onClick={e => e.stopPropagation()}>
         <h3 className="text-lg font-medium text-text-primary">Set up commands</h3>
         <p className="text-sm text-text-secondary">Pick a starter set. You can edit anything afterwards.</p>
@@ -122,7 +122,7 @@ export function CommandsSetupDialog({ onClose, onInstalled }: CommandsSetupDialo
           <div className="p-2 rounded border border-warning-base/30 bg-warning-base/10 text-sm text-warning-soft">
             Replace existing user commands?
             <div className="flex gap-2 mt-2">
-              <button onClick={() => { setConfirmReplace(false); void doInstall() }} className="px-3 py-1 text-xs rounded bg-accent text-white">Replace</button>
+              <button onClick={() => { setConfirmReplace(false); void doInstall() }} className="px-3 py-1 text-xs rounded bg-accent text-on-accent">Replace</button>
               <button onClick={() => setConfirmReplace(false)} className="px-3 py-1 text-xs">Cancel</button>
             </div>
           </div>
@@ -133,7 +133,7 @@ export function CommandsSetupDialog({ onClose, onInstalled }: CommandsSetupDialo
           <button
             onClick={() => void onInstallClick()}
             disabled={installDisabled}
-            className="px-3 py-1.5 text-sm rounded bg-accent text-white hover:bg-accent/80 disabled:opacity-50"
+            className="px-3 py-1.5 text-sm rounded bg-accent text-on-accent hover:bg-accent/80 disabled:opacity-50"
           >
             {installing ? 'Installing…' : 'Install'}
           </button>

@@ -281,7 +281,7 @@ function EditorHeader({
         <button
           onClick={() => void onSave()}
           disabled={!dirty || saving}
-          className="px-3 py-1 text-sm rounded bg-accent text-white hover:bg-accent/80 disabled:opacity-50"
+          className="px-3 py-1 text-sm rounded bg-accent text-on-accent hover:bg-accent/80 disabled:opacity-50"
         >
           {saving ? 'Saving…' : 'Save'}
         </button>

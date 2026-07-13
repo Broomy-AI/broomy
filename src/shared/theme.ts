@@ -60,6 +60,9 @@ export const TOKENS = [
   'muted',
   'surface-hover',
   'overlay',
+  // A wash applied OVER a surface to lift it. White on a dark ground; in a light
+  // theme it must become black, which a raw `bg-white/10` can never do.
+  'elevate',
   // one-off consumers that are not Tailwind utilities
   'focus-ring',
   'search-highlight',
@@ -125,6 +128,7 @@ export const PALETTE: Record<ThemeName, Record<Token, string>> = {
     'muted': '107 114 128',            // #6b7280 (gray-500) — grey chips and dots
     'surface-hover': '64 64 64',       // #404040 (neutral-700) — neutral hover fill
     'overlay': '0 0 0',                // the modal scrim; stays dark in every theme
+    'elevate': '255 255 255',          // #ffffff — was bg-white/10
 
     'focus-ring': '59 130 246',        // #3b82f6 — used at 0.4 alpha today
     'search-highlight': '255 213 0',   // #ffd500

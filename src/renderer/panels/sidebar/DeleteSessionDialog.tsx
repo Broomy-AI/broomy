@@ -14,7 +14,7 @@ export default function DeleteSessionDialog({ session, repos, deleteWorktree, se
   const isSafeToDelete = ['closed', 'merged', 'empty'].includes(session.branchStatus) || session.sessionType === 'review'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/50">
       <div role="dialog" className="bg-bg-secondary border border-border rounded-lg shadow-xl p-4 max-w-sm mx-4">
         <h3 className="text-sm font-medium text-text-primary mb-2">Delete Session</h3>
         <p className="text-xs text-text-secondary mb-3">

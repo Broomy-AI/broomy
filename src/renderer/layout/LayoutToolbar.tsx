@@ -75,7 +75,7 @@ export default function LayoutToolbar({
               onClick={() => onToggle(panel.id)}
               className={`${isIconOnly ? 'p-1.5' : 'px-3 py-1 text-xs'} rounded transition-colors ${
                 panel.isVisible
-                  ? 'bg-accent text-white'
+                  ? 'bg-accent text-on-accent'
                   : 'bg-bg-tertiary text-text-secondary hover:text-text-primary'
               }`}
               title={`${panel.name}${panel.shortcutKey ? ` (${formatShortcut(panel.shortcutKey)})` : ''}`}

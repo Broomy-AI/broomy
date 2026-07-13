@@ -69,7 +69,7 @@ export function NewSessionDialog({ onComplete, onCancel, onStartBranch, onStartE
   }, [])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/50">
       <div
         ref={dialogRef}
         role="dialog"

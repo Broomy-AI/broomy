@@ -99,7 +99,7 @@ export function GitIdentitySetup({
         </span>
         <button
           onClick={onRetry}
-          className="px-3 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/80 transition-colors"
+          className="px-3 py-1.5 text-xs rounded bg-accent text-on-accent hover:bg-accent/80 transition-colors"
         >
           {retryLabel}
         </button>

@@ -165,7 +165,7 @@ function PrConfirmation({ repo, pr, agents, error, creating, onBack, onCreate, o
         <button
           onClick={onCreate}
           disabled={creating}
-          className="px-4 py-2 text-sm rounded bg-review-solid text-white hover:bg-review-base disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="px-4 py-2 text-sm rounded bg-review-solid text-on-accent hover:bg-review-base disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {creating ? 'Setting up...' : 'Start Review'}
         </button>

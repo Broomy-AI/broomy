@@ -161,7 +161,7 @@ export function RepoSettingsEditor({
         <button
           onClick={handleSave}
           disabled={saving}
-          className="px-3 py-1.5 bg-accent text-white text-sm rounded hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="px-3 py-1.5 bg-accent text-on-accent text-sm rounded hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {saving ? 'Saving...' : 'Save'}
         </button>

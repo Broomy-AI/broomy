@@ -187,7 +187,7 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
       </div>
 
       {viewer.pendingViewMode && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/50">
           <div role="dialog" className="bg-bg-secondary border border-border rounded-lg shadow-xl p-4 max-w-sm mx-4">
             <h3 className="text-sm font-medium text-text-primary mb-2">Unsaved Changes</h3>
             <p className="text-xs text-text-secondary mb-4">
@@ -196,7 +196,7 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
             <div className="flex gap-2 justify-end">
               <button onClick={viewer.handleViewModeCancel} className="px-3 py-1.5 text-xs rounded bg-bg-tertiary text-text-secondary hover:text-text-primary transition-colors">Cancel</button>
               <button onClick={viewer.handleViewModeDiscard} className="px-3 py-1.5 text-xs rounded bg-danger-solid/20 text-danger-fg hover:bg-danger-solid/30 transition-colors">Discard</button>
-              <button onClick={viewer.handleViewModeSave} className="px-3 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/80 transition-colors">Save</button>
+              <button onClick={viewer.handleViewModeSave} className="px-3 py-1.5 text-xs rounded bg-accent text-on-accent hover:bg-accent/80 transition-colors">Save</button>
             </div>
           </div>
         </div>

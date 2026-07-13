@@ -151,7 +151,7 @@ export default function ProfileDropdown({
           </div>
           <div className="flex gap-1">
             <button
-              className="flex-1 px-2 py-1 text-xs bg-info-solid text-white rounded hover:bg-info-base"
+              className="flex-1 px-2 py-1 text-xs bg-info-solid text-on-accent rounded hover:bg-info-base"
               onClick={onSaveEdit}
             >
               Save
@@ -214,7 +214,7 @@ export default function ProfileDropdown({
           </div>
           <div className="flex gap-1">
             <button
-              className="flex-1 px-2 py-1 text-xs bg-info-solid text-white rounded hover:bg-info-base"
+              className="flex-1 px-2 py-1 text-xs bg-info-solid text-on-accent rounded hover:bg-info-base"
               onClick={onCreateProfile}
             >
               Create

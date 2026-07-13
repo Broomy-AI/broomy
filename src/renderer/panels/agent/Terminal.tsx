@@ -232,7 +232,7 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
         {showScrollButton && (
         <button
           onClick={handleScrollToBottom}
-          className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 text-xs font-medium rounded-full bg-accent text-white hover:bg-accent/80 shadow-lg transition-colors z-10"
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 text-xs font-medium rounded-full bg-accent text-on-accent hover:bg-accent/80 shadow-lg transition-colors z-10"
         >
           Go to End &#x2193;
         </button>

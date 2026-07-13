@@ -250,7 +250,7 @@ function PlanBlock({ msg, isLast, onApprovePlan, onOpenFile }: { msg: AgentSdkMe
           <div className="flex items-center gap-3">
             <button
               onClick={onApprovePlan}
-              className="rounded bg-success-solid px-4 py-1.5 text-xs font-medium text-white hover:bg-success-base"
+              className="rounded bg-success-solid px-4 py-1.5 text-xs font-medium text-on-accent hover:bg-success-base"
             >
               Approve Plan
             </button>
@@ -305,7 +305,7 @@ function ToolUseBlock({ msg, toolResult, isLast, onApprovePlan, cwd, onOpenFile 
   return (
     <div className={`my-1 rounded border ${hasError ? 'border-danger-deeper/50' : 'border-neutral-700'} bg-neutral-800/50`}>
       <button
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-neutral-700/30"
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-surface-hover/30"
         onClick={() => setExpanded(!expanded)}
       >
         <span className="text-neutral-400">{expanded ? '▼' : '▶'}</span>
@@ -439,11 +439,11 @@ export function ToolGroupBlock({ items }: {
   return (
     <div className={`my-1 rounded border ${hasAnyError ? 'border-danger-deeper/50' : 'border-neutral-700'} bg-neutral-800/50`}>
       <button
-        className="flex w-full items-center gap-2 overflow-hidden whitespace-nowrap px-3 py-1.5 text-left text-xs hover:bg-neutral-700/30"
+        className="flex w-full items-center gap-2 overflow-hidden whitespace-nowrap px-3 py-1.5 text-left text-xs hover:bg-surface-hover/30"
         onClick={() => setExpanded(!expanded)}
       >
         <span className="flex-shrink-0 text-neutral-400">{expanded ? '▼' : '▶'}</span>
-        <span className="flex-shrink-0 rounded bg-neutral-700 px-1.5 py-0.5 text-neutral-300">
+        <span className="flex-shrink-0 rounded bg-surface-hover px-1.5 py-0.5 text-neutral-300">
           {`${String(items.length)} tool uses`}
         </span>
         <span className="flex-shrink-0 text-neutral-500">{countSummary}</span>

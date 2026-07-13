@@ -15,7 +15,7 @@ export function SCViewToggle({ scView, setScView }: SCViewToggleProps) {
       <button
         onClick={() => setScView('working')}
         className={`px-2 py-1 text-xs rounded transition-colors ${
-          scView === 'working' ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
+          scView === 'working' ? 'bg-accent text-on-accent' : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
         }`}
       >
         Uncommitted
@@ -23,7 +23,7 @@ export function SCViewToggle({ scView, setScView }: SCViewToggleProps) {
       <button
         onClick={() => setScView('branch')}
         className={`px-2 py-1 text-xs rounded transition-colors ${
-          scView === 'branch' ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
+          scView === 'branch' ? 'bg-accent text-on-accent' : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
         }`}
       >
         Branch
@@ -31,7 +31,7 @@ export function SCViewToggle({ scView, setScView }: SCViewToggleProps) {
       <button
         onClick={() => setScView('commits')}
         className={`px-2 py-1 text-xs rounded transition-colors ${
-          scView === 'commits' ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
+          scView === 'commits' ? 'bg-accent text-on-accent' : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
         }`}
       >
         Commits

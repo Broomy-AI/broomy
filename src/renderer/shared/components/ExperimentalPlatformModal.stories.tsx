@@ -7,7 +7,7 @@ import type { Meta, StoryObj } from '@storybook/react'
  */
 function ExperimentalPlatformModalStatic({ platformName }: { platformName: string }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/50">
       <div className="bg-bg-secondary border border-border rounded-lg shadow-xl p-5 max-w-md mx-4">
         <div className="flex items-center gap-2 mb-3">
           <span className="px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wider rounded bg-warning-base/20 text-warning-fg border border-warning-base/30">
@@ -26,7 +26,7 @@ function ExperimentalPlatformModalStatic({ platformName }: { platformName: strin
           <button className="text-xs text-accent hover:underline">
             Report an issue
           </button>
-          <button className="px-3 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/80 transition-colors">
+          <button className="px-3 py-1.5 text-xs rounded bg-accent text-on-accent hover:bg-accent/80 transition-colors">
             Got it
           </button>
         </div>

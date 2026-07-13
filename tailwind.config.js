@@ -84,6 +84,7 @@ export default {
         'muted': token('muted'),
         'surface-hover': token('surface-hover'),
         'overlay': token('overlay'),
+        'elevate': token('elevate'),
         'focus-ring': token('focus-ring'),
         'search-highlight': token('search-highlight'),
         // Alias, not a rename: GitignoreChip uses `status-warning`, everything

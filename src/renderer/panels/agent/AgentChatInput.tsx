@@ -147,7 +147,7 @@ export function AgentChatInput({ onSubmit, onStop, isRunning, sessionId, availab
             <button
               key={`${cmd.name}-${String(i)}`}
               className={`flex w-full items-baseline gap-2 px-3 py-1.5 text-left text-xs ${
-                i === selectedIndex ? 'bg-info-solid/30 text-neutral-100' : 'text-neutral-300 hover:bg-neutral-700/50'
+                i === selectedIndex ? 'bg-info-solid/30 text-neutral-100' : 'text-neutral-300 hover:bg-surface-hover/50'
               }`}
               onMouseDown={(e) => { e.preventDefault(); selectCommand(cmd.name) }}
               onMouseEnter={() => setSelectedIndex(i)}
@@ -173,13 +173,13 @@ export function AgentChatInput({ onSubmit, onStop, isRunning, sessionId, availab
             <button
               onClick={handleSubmit}
               disabled={!value.trim()}
-              className="rounded bg-info-solid px-3 py-2 text-sm font-medium text-white hover:bg-info-base disabled:opacity-50 disabled:hover:bg-info-solid"
+              className="rounded bg-info-solid px-3 py-2 text-sm font-medium text-on-accent hover:bg-info-base disabled:opacity-50 disabled:hover:bg-info-solid"
             >
               Queue
             </button>
             <button
               onClick={onStop}
-              className="rounded bg-danger-solid px-3 py-2 text-sm font-medium text-white hover:bg-danger-base"
+              className="rounded bg-danger-solid px-3 py-2 text-sm font-medium text-on-accent hover:bg-danger-base"
             >
               Stop
             </button>
@@ -188,7 +188,7 @@ export function AgentChatInput({ onSubmit, onStop, isRunning, sessionId, availab
           <button
             onClick={handleSubmit}
             disabled={!value.trim()}
-            className="rounded bg-info-solid px-3 py-2 text-sm font-medium text-white hover:bg-info-base disabled:opacity-50 disabled:hover:bg-info-solid"
+            className="rounded bg-info-solid px-3 py-2 text-sm font-medium text-on-accent hover:bg-info-base disabled:opacity-50 disabled:hover:bg-info-solid"
           >
             Send
           </button>

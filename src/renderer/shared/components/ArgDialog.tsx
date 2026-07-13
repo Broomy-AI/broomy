@@ -47,7 +47,7 @@ export function ArgDialog({ title, description, template, argsMeta, context, ini
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/50"
       onClick={onCancel}
       onKeyDown={onKeyDown}
       role="dialog"
@@ -138,7 +138,7 @@ export function ArgDialog({ title, description, template, argsMeta, context, ini
           <button
             disabled={!requiredOk}
             onClick={() => onRun(values)}
-            className="px-3 py-1.5 text-sm rounded bg-accent text-white hover:bg-accent/80 transition-colors disabled:opacity-50"
+            className="px-3 py-1.5 text-sm rounded bg-accent text-on-accent hover:bg-accent/80 transition-colors disabled:opacity-50"
           >
             Run
           </button>

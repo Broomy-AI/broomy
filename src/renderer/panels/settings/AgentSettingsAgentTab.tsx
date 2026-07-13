@@ -193,7 +193,7 @@ export function AgentSettingsAgentTab({
             <button
               onClick={onAdd}
               disabled={!name.trim() || !command.trim()}
-              className="px-3 py-1.5 bg-accent text-white text-sm rounded hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-3 py-1.5 bg-accent text-on-accent text-sm rounded hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               Add Agent
             </button>
@@ -333,7 +333,7 @@ function AgentEditForm({
         <button
           onClick={onSave}
           disabled={!name.trim() || !command.trim()}
-          className="px-3 py-1.5 bg-accent text-white text-sm rounded hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="px-3 py-1.5 bg-accent text-on-accent text-sm rounded hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           Save
         </button>
