@@ -12,6 +12,7 @@
  */
 import { app, BrowserWindow, ipcMain, Menu, shell, dialog, nativeTheme } from 'electron'
 import { chromeFor, getAppearance, getResolvedTheme, initSettings } from './settings'
+import { zoomMenuItems } from './handlers/settings'
 import { themeIsLight } from '../shared/appearance'
 import pkg from 'electron-updater'
 const { autoUpdater } = pkg
@@ -374,9 +375,8 @@ function buildAppMenu() {
               { type: 'separator' as const },
             ]
           : []),
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
+        // Persisted, not Electron's stateless zoom roles — see zoomMenuItems().
+        ...zoomMenuItems(context),
         { type: 'separator' },
         { role: 'togglefullscreen' },
       ],

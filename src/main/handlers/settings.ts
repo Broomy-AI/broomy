@@ -8,7 +8,7 @@
  * is what makes those follow, and it is process-global, which is the main reason
  * appearance is a global setting rather than a per-profile one.
  */
-import { BrowserWindow, IpcMain, nativeTheme } from 'electron'
+import { BrowserWindow, IpcMain, nativeTheme, type MenuItemConstructorOptions } from 'electron'
 import { HandlerContext } from './types'
 import {
   chromeFor,
@@ -96,6 +96,27 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     applyChromeToAllWindows(ctx)
     broadcast()
   })
+}
+
+/**
+ * The View menu's zoom items.
+ *
+ * Electron's `zoomIn`/`zoomOut`/`resetZoom` ROLES apply a zoom that is forgotten on
+ * restart — which is issue #135's complaint about them, verbatim. Replacing them
+ * with handlers that write through the settings store is what makes Cmd +/- persist.
+ *
+ * A role also supplies its label and accelerator for free; a custom item inherits
+ * neither, so both are spelled out here. `Cmd+=` is registered as a hidden item
+ * because the built-in role binds it too, and on most keyboards it is what `Cmd+Plus`
+ * actually requires you to press.
+ */
+export function zoomMenuItems(ctx: HandlerContext): MenuItemConstructorOptions[] {
+  return [
+    { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: () => stepInterfaceScale(ctx, 0) },
+    { label: 'Zoom In', accelerator: 'CmdOrCtrl+Plus', click: () => stepInterfaceScale(ctx, 1) },
+    { label: 'Zoom In', accelerator: 'CmdOrCtrl+=', visible: false, click: () => stepInterfaceScale(ctx, 1) },
+    { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: () => stepInterfaceScale(ctx, -1) },
+  ]
 }
 
 /** Nudge the interface scale, from the View menu. Keeps the menu and Settings in step. */
