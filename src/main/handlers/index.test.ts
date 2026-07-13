@@ -10,6 +10,10 @@ vi.mock('./pty', () => ({
   register: vi.fn(),
 }))
 
+vi.mock('./settings', () => ({
+  register: vi.fn(),
+}))
+
 vi.mock('./config', () => ({
   register: vi.fn(),
 }))

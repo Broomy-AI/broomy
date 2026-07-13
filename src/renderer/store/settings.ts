@@ -24,10 +24,16 @@ interface SettingsState {
   reset: () => void
 }
 
-const initial: AppearanceSnapshot =
-  typeof window !== 'undefined' && window.settings?.getInitial
-    ? window.settings.getInitial()
-    : { appearance: DEFAULT_APPEARANCE, systemIsDark: true, resolvedTheme: 'dark' }
+/** Node-env unit tests have no preload bridge; fall back rather than throw at import. */
+function readInitialSnapshot(): AppearanceSnapshot {
+  try {
+    return window.settings.getInitial()
+  } catch {
+    return { appearance: DEFAULT_APPEARANCE, systemIsDark: true, resolvedTheme: 'dark' }
+  }
+}
+
+const initial: AppearanceSnapshot = readInitialSnapshot()
 
 // A theme change is a discrete choice, not typing — there is nothing to coalesce,
 // and main is the single writer. A short debounce only exists to absorb someone

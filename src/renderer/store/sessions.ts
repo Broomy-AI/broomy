@@ -151,13 +151,13 @@ interface SessionStore {
   setToolbarPanels: (panels: string[]) => void
   // UI state actions (backwards compat aliases)
   toggleSidebar: () => void
-  setSidebarWidth: (width: number) => void
+  setSidebarWidth: (width: number, options?: { persist?: boolean }) => void
   toggleExplorer: (id: string) => void
   toggleFileViewer: (id: string) => void
   setPlanFile: (id: string, path: string | null) => void
   selectFile: (id: string, filePath: string, openInDiffMode?: boolean) => void
   setFileViewerPosition: (id: string, position: FileViewerPosition) => void
-  updateLayoutSize: (id: string, key: keyof LayoutSizes, value: number) => void
+  updateLayoutSize: (id: string, key: keyof LayoutSizes, value: number, options?: { persist?: boolean }) => void
   setExplorerFilter: (id: string, filter: ExplorerFilter) => void
   // Agent monitoring actions
   updateAgentMonitor: (id: string, update: { status?: SessionStatus; lastMessage?: string }) => void
@@ -263,13 +263,18 @@ export const useSessionStore = create<SessionStore>((set, get) => {
     debouncedSave()
   },
 
-  updateLayoutSize: (id: string, key: keyof LayoutSizes, value: number) => {
+  updateLayoutSize: (id: string, key: keyof LayoutSizes, value: number, options?: { persist?: boolean }) => {
     const { sessions } = get()
     const updatedSessions = sessions.map((s) =>
       s.id === id ? { ...s, layoutSizes: { ...s.layoutSizes, [key]: value } } : s
     )
     set({ sessions: updatedSessions })
-    debouncedSave()
+    // The layout clamp passes persist:false. It shrinks panels to keep the agent
+    // terminal usable when the viewport gets tight — but that is a RENDERING
+    // response, not something the user asked for, and writing it to disk destroys a
+    // layout they deliberately dragged. Zooming to 200% shrinks the logical viewport
+    // and fires the clamp; without this, zooming back to 100% would never restore it.
+    if (options?.persist !== false) debouncedSave()
   },
 
   setExplorerFilter: (id: string, filter: ExplorerFilter) => {

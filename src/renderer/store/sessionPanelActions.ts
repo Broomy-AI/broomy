@@ -87,9 +87,11 @@ export function createPanelActions(get: StoreGet, set: StoreSet) {
       store.toggleGlobalPanel(PANEL_IDS.SIDEBAR)
     },
 
-    setSidebarWidth: (width: number) => {
+    setSidebarWidth: (width: number, options?: { persist?: boolean }) => {
       set({ sidebarWidth: width })
-      debouncedSave()
+      // See updateLayoutSize: the layout clamp adjusts widths to fit the viewport and
+      // must not overwrite the width the user actually chose.
+      if (options?.persist !== false) debouncedSave()
     },
 
     toggleExplorer: (id: string) => {

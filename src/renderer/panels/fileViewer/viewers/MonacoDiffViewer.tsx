@@ -10,6 +10,8 @@ import { useEffect, useRef } from 'react'
 import { DiffEditor, loader } from '@monaco-editor/react'
 import * as monacoEditor from 'monaco-editor'
 import { useMonacoComments } from '../hooks/useMonacoComments'
+import { useSettingsStore } from '../../../store/settings'
+import { MONACO_THEMES } from '../../../shared/theme/monacoTheme'
 
 // Configure Monaco to use locally bundled version instead of CDN
 loader.config({ monaco: monacoEditor })
@@ -89,6 +91,8 @@ export default function MonacoDiffViewer({
   reviewContext,
   onEditorReady,
 }: MonacoDiffViewerProps) {
+  const resolvedTheme = useSettingsStore((s) => s.resolvedTheme)
+  const editorFontSize = useSettingsStore((s) => s.appearance.editorFontSize)
   const detectedLanguage = language || getLanguageFromPath(filePath)
   const diffEditorRef = useRef<monacoEditor.editor.IStandaloneDiffEditor | null>(null)
   const modifiedEditorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null)
@@ -205,7 +209,7 @@ export default function MonacoDiffViewer({
           language={detectedLanguage}
           original={originalContent}
           modified={modifiedContent}
-          theme="vs-dark"
+          theme={MONACO_THEMES[resolvedTheme]}
           onMount={handleDiffEditorMount}
           keepCurrentOriginalModel={false}
           keepCurrentModifiedModel={false}
@@ -224,7 +228,7 @@ export default function MonacoDiffViewer({
             // left pane permanently un-wrapped.
             useInlineViewWhenSpaceIsLimited: false,
             minimap: { enabled: false },
-            fontSize: 13,
+            fontSize: editorFontSize,
             fontFamily: 'Menlo, Monaco, "Courier New", monospace',
             lineNumbers: 'on',
             scrollBeyondLastLine: false,

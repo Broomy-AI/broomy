@@ -5,6 +5,8 @@
 import type { AgentConfig } from '../../store/agents'
 import type { ManagedRepo } from '../../../preload/index'
 import type { ShellOption } from '../../../preload/apis/types'
+import { useSettingsStore } from '../../store/settings'
+import { AppearanceSettings } from './AppearanceSettings'
 
 interface SettingsRootScreenProps {
   defaultCloneDir: string
@@ -29,10 +31,26 @@ export function SettingsRootScreen({
   onNavigateToAgents,
   onNavigateToRepo,
 }: SettingsRootScreenProps) {
+  const appearance = useSettingsStore((st) => st.appearance)
+  const resolvedTheme = useSettingsStore((st) => st.resolvedTheme)
+  const setAppearance = useSettingsStore((st) => st.set)
+  const resetAppearance = useSettingsStore((st) => st.reset)
+
   return (
     <div className="space-y-4">
+      {/* Appearance comes first: it is the accessibility panel, and someone who
+          cannot read the UI should not have to scroll past it to fix that. */}
+      <AppearanceSettings
+        appearance={appearance}
+        resolvedTheme={resolvedTheme}
+        onChange={setAppearance}
+        onReset={resetAppearance}
+      />
+
       {/* General section */}
-      <h3 className="text-sm font-medium text-text-primary mb-3">General</h3>
+      <div className="mt-6 border-t border-border pt-4">
+        <h3 className="text-sm font-medium text-text-primary mb-3">General</h3>
+      </div>
       <div className="space-y-2">
         <label className="text-xs text-text-secondary">Default Repo Folder</label>
         <div className="flex gap-2">

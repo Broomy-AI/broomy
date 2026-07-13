@@ -138,7 +138,41 @@ describe('useLayoutClamp', () => {
     resizeCallback?.()
 
     // Tutorial should be shrunk first
-    expect(onLayoutSizeChange).toHaveBeenCalledWith('tutorialPanelWidth', expect.any(Number))
+    expect(onLayoutSizeChange).toHaveBeenCalledWith('tutorialPanelWidth', expect.any(Number), { persist: false })
+  })
+
+  // Regression guard. The clamp shrinks panels so the agent terminal stays usable
+  // when the viewport gets tight — but that is a rendering response, not a layout the
+  // user asked for, and persisting it destroys a layout they deliberately dragged.
+  //
+  // The interface scale makes this load-bearing: zooming to 200% shrinks the LOGICAL
+  // viewport, which fires this clamp. If it wrote to disk, zooming back to 100% would
+  // leave the sidebar permanently narrower, with no way to know why.
+  it('never persists the widths it adjusts', () => {
+    const ref = makeRef(500)
+    const onLayoutSizeChange = vi.fn()
+    const onSidebarWidthChange = vi.fn()
+
+    renderHook(() =>
+      useLayoutClamp({
+        mainContentRef: ref,
+        showSidebar: true,
+        showExplorer: true,
+        showTutorial: true,
+        sidebarWidth: 300,
+        layoutSizes: defaultLayoutSizes,
+        onSidebarWidthChange,
+        onLayoutSizeChange,
+      }),
+    )
+
+    resizeCallback?.()
+
+    const calls = [...onSidebarWidthChange.mock.calls, ...onLayoutSizeChange.mock.calls]
+    expect(calls.length).toBeGreaterThan(0)
+    for (const call of calls) {
+      expect(call[call.length - 1]).toEqual({ persist: false })
+    }
   })
 
   it('shrinks explorer after tutorial is at minimum', () => {
@@ -163,7 +197,7 @@ describe('useLayoutClamp', () => {
 
     resizeCallback?.()
 
-    expect(onLayoutSizeChange).toHaveBeenCalledWith('explorerWidth', expect.any(Number))
+    expect(onLayoutSizeChange).toHaveBeenCalledWith('explorerWidth', expect.any(Number), { persist: false })
   })
 
   it('shrinks sidebar as last resort', () => {
@@ -197,7 +231,7 @@ describe('useLayoutClamp', () => {
 
     resizeCallback?.()
 
-    expect(onSidebarWidthChange).toHaveBeenCalledWith(250) // 300 - 50
+    expect(onSidebarWidthChange).toHaveBeenCalledWith(250, { persist: false }) // 300 - 50
   })
 
   it('does nothing when ref.current is null', () => {
@@ -263,7 +297,7 @@ describe('useLayoutClamp', () => {
 
     resizeCallback?.()
 
-    expect(onSidebarWidthChange).toHaveBeenCalledWith(SIDEBAR_MIN)
+    expect(onSidebarWidthChange).toHaveBeenCalledWith(SIDEBAR_MIN, { persist: false })
   })
 
   it('handles only explorer visible', () => {
@@ -287,7 +321,7 @@ describe('useLayoutClamp', () => {
 
     resizeCallback?.()
 
-    expect(onLayoutSizeChange).toHaveBeenCalledWith('explorerWidth', 200) // 250 - 50
+    expect(onLayoutSizeChange).toHaveBeenCalledWith('explorerWidth', 200, { persist: false }) // 250 - 50
   })
 
   it('does not shrink panels below their minimum', () => {

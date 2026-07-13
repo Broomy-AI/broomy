@@ -18,6 +18,8 @@ import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import type { FileViewerPlugin, FileViewerComponentProps } from './types'
 import { getFileExtension } from './types'
 import { useMonacoComments } from '../hooks/useMonacoComments'
+import { useSettingsStore } from '../../../store/settings'
+import { MONACO_THEMES } from '../../../shared/theme/monacoTheme'
 
 // Configure Monaco workers for Vite
 ;(window as unknown as { MonacoEnvironment: unknown }).MonacoEnvironment = {
@@ -183,6 +185,9 @@ function scrollAndHighlight(
 }
 
 function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrollToLine, searchHighlight, reviewContext, onEditorReady, onOpenFile }: FileViewerComponentProps) {
+  // One source for both editors: Monaco's setTheme is global, so they cannot disagree.
+  const resolvedTheme = useSettingsStore((s) => s.resolvedTheme)
+  const editorFontSize = useSettingsStore((s) => s.appearance.editorFontSize)
   const language = getLanguageFromPath(filePath)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const originalContentRef = useRef(content)
@@ -385,13 +390,13 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
           path={filePath}
           language={language}
           value={content}
-          theme="vs-dark"
+          theme={MONACO_THEMES[resolvedTheme]}
           onMount={handleEditorDidMount}
           onChange={handleEditorChange}
           options={{
             readOnly: !onSave,
             minimap: { enabled: false },
-            fontSize: 13,
+            fontSize: editorFontSize,
             fontFamily: 'Menlo, Monaco, "Courier New", monospace',
             lineNumbers: 'on',
             scrollBeyondLastLine: false,

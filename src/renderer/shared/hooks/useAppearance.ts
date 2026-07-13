@@ -43,10 +43,9 @@ export function useAppearance(): void {
 
   // Another profile window changed the theme, or the OS appearance flipped under a
   // `system` preference. Both arrive the same way.
-  useEffect(() => {
-    if (!window.settings?.onChanged) return
-    return window.settings.onChanged((snapshot) => {
+  useEffect(() =>
+    window.settings.onChanged((snapshot) => {
       useSettingsStore.getState().applyRemote(snapshot)
-    })
-  }, [])
+    }),
+  [])
 }

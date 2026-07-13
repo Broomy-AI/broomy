@@ -76,7 +76,8 @@ export function initSettings(isDev: boolean, isE2ETest: boolean, systemIsDark: b
 
   try {
     const raw: unknown = JSON.parse(readFileSync(file, 'utf-8'))
-    state.appearance = normalizeAppearance((raw as { appearance?: unknown })?.appearance ?? raw)
+    const parsed = raw as { appearance?: unknown }
+    state.appearance = normalizeAppearance(parsed.appearance ?? raw)
   } catch (error) {
     // Recoverable, but worth surfacing: a settings file that silently reverts is
     // maddening to debug. (src/test/console-guard.ts allows an expected warning.)
