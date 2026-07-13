@@ -39,7 +39,13 @@ export const TOKENS = [
   'text-tertiary',
   // brand
   'accent',
+  // The label on the USER-CHOSEN accent fill. Overridden at runtime — it flips
+  // white/black depending on how light the chosen accent turns out to be.
   'on-accent',
+  // The label on a SEMANTIC solid fill (danger, success, review, ...). Static per
+  // theme, and deliberately NOT tied to the accent: picking an amber accent must not
+  // put a black label on a red button.
+  'on-solid',
   // session/agent status
   'status-working',
   'status-waiting',
@@ -89,6 +95,7 @@ export const PALETTE: Record<ThemeName, Record<Token, string>> = {
     'text-tertiary': '148 148 148',    // #949494
     'accent': '74 158 255',            // #4a9eff
     'on-accent': '255 255 255',        // label on a saturated fill
+    'on-solid': '255 255 255',
     'status-working': '74 222 128',    // #4ade80
     'status-waiting': '250 204 21',    // #facc15
     'status-idle': '107 114 128',      // #6b7280
@@ -166,6 +173,7 @@ export const PALETTE: Record<ThemeName, Record<Token, string>> = {
     'text-tertiary': '97 97 90',       // #61615a —  6.0:1
     'accent': '14 79 174',             // #0e4fae —  7.4:1 (dark accent is 2.66:1 here)
     'on-accent': '255 255 255',
+    'on-solid': '255 255 255',
     'status-working': '22 101 52',     // green-800
     'status-waiting': '133 77 14',     // yellow-800 — yellow-700 was 4.39:1 on bg-secondary
     'status-idle': '87 83 78',         // #57534e
@@ -237,6 +245,7 @@ export const PALETTE: Record<ThemeName, Record<Token, string>> = {
     'text-tertiary': '224 224 224',    // one step off, ~17:1
     'accent': '124 196 255',
     'on-accent': '0 0 0',              // dark label on a bright fill
+    'on-solid': '0 0 0',
     'status-working': '94 255 159',
     'status-waiting': '255 225 77',
     'status-idle': '176 176 176',
@@ -302,6 +311,7 @@ export const PALETTE: Record<ThemeName, Record<Token, string>> = {
     'text-tertiary': '26 26 26',
     'accent': '0 61 153',
     'on-accent': '255 255 255',
+    'on-solid': '255 255 255',
     'status-working': '0 102 34',
     'status-waiting': '122 74 0',
     'status-idle': '61 61 61',

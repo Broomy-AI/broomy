@@ -188,7 +188,7 @@ export default function MonacoDiffViewer({
             <button
               onClick={handleAddComment}
               disabled={!commentText.trim()}
-              className="px-2 py-1 text-xs rounded bg-review-solid text-on-accent hover:bg-review-base disabled:opacity-50 transition-colors"
+              className="px-2 py-1 text-xs rounded bg-review-solid text-on-solid hover:bg-review-base disabled:opacity-50 transition-colors"
             >
               Add
             </button>

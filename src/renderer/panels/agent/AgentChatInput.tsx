@@ -173,13 +173,13 @@ export function AgentChatInput({ onSubmit, onStop, isRunning, sessionId, availab
             <button
               onClick={handleSubmit}
               disabled={!value.trim()}
-              className="rounded bg-info-solid px-3 py-2 text-sm font-medium text-on-accent hover:bg-info-base disabled:opacity-50 disabled:hover:bg-info-solid"
+              className="rounded bg-info-solid px-3 py-2 text-sm font-medium text-on-solid hover:bg-info-base disabled:opacity-50 disabled:hover:bg-info-solid"
             >
               Queue
             </button>
             <button
               onClick={onStop}
-              className="rounded bg-danger-solid px-3 py-2 text-sm font-medium text-on-accent hover:bg-danger-base"
+              className="rounded bg-danger-solid px-3 py-2 text-sm font-medium text-on-solid hover:bg-danger-base"
             >
               Stop
             </button>
@@ -188,7 +188,7 @@ export function AgentChatInput({ onSubmit, onStop, isRunning, sessionId, availab
           <button
             onClick={handleSubmit}
             disabled={!value.trim()}
-            className="rounded bg-info-solid px-3 py-2 text-sm font-medium text-on-accent hover:bg-info-base disabled:opacity-50 disabled:hover:bg-info-solid"
+            className="rounded bg-info-solid px-3 py-2 text-sm font-medium text-on-solid hover:bg-info-base disabled:opacity-50 disabled:hover:bg-info-solid"
           >
             Send
           </button>

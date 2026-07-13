@@ -13,6 +13,7 @@
 import { describe, expect, it } from 'vitest'
 import { PALETTE, TOKENS, type ThemeName, type Token } from './theme'
 import { composite, contrast, parseTriplet } from './color'
+import { ACCENT_PRESETS, deriveAccent } from './appearance'
 
 const THEME_NAMES = Object.keys(PALETTE) as ThemeName[]
 
@@ -48,9 +49,9 @@ const KNOWN_DARK_DEBT: Record<string, number> = {
   'status-idle on bg-secondary': 3.6,
   'status-idle on bg-tertiary': 3.6,
   'on-accent on accent': 2.75,              // white on #4a9eff — every primary button
-  'on-accent on warning-solid': 2.94,
-  'on-accent on success-solid': 3.3,
-  'on-accent on attention-solid': 3.56,
+  'on-solid on warning-solid': 2.94,        // white on yellow-600
+  'on-solid on success-solid': 3.3,         // white on green-600
+  'on-solid on attention-solid': 3.56,      // white on orange-600
   'border-strong on bg-primary': 1.96,      // #4a4a4a on #1a1a1a
 }
 
@@ -88,15 +89,20 @@ const TEXT_TOKENS: Token[] = [
   'muted',
 ]
 
-/** Fills that carry a label. The label is `on-accent` in every case. */
+/**
+ * Semantic fills that carry a label. Their label is `on-solid`, which is STATIC per
+ * theme — deliberately not `on-accent`, which follows the user's chosen accent and
+ * flips white/black with it. Tying these together would mean picking an amber accent
+ * puts a black label on a red button.
+ */
 const SOLIDS: Token[] = [
-  'accent',
   'danger-solid',
   'warning-solid',
   'success-solid',
   'info-solid',
   'review-solid',
   'attention-solid',
+  'muted',
 ]
 
 describe.each(THEME_NAMES)('%s', (theme) => {
@@ -109,7 +115,11 @@ describe.each(THEME_NAMES)('%s', (theme) => {
   })
 
   it.each(SOLIDS)('a label is readable on the %s fill', (token) => {
-    expectContrast(theme, 'on-accent', token, AA_TEXT)
+    expectContrast(theme, 'on-solid', token, AA_TEXT)
+  })
+
+  it('a label is readable on the default accent fill', () => {
+    expectContrast(theme, 'on-accent', 'accent', AA_TEXT)
   })
 
   // Session state is the most important signal in the sidebar. At their dark
@@ -160,5 +170,35 @@ describe('high contrast collapses the hierarchy', () => {
   it.each(['hc', 'hc-light'] as ThemeName[])('%s: body text is at or near maximum', (theme) => {
     const ratio = contrast(rgb(theme, 'text-primary'), rgb(theme, 'bg-primary'))
     expect(ratio).toBeGreaterThanOrEqual(15)
+  })
+})
+
+
+/**
+ * The accent is chosen at RUNTIME, so the static palette above cannot cover it. Every
+ * preset must stay legible in every theme after fitting — both as a fill under its
+ * label, and against the background.
+ *
+ * This is the test that would have caught the leak where the derived label (black,
+ * for a light accent) was also being applied to the red/green/purple semantic
+ * buttons.
+ */
+describe('user-chosen accents', () => {
+  const cases = THEME_NAMES.flatMap((theme) =>
+    ACCENT_PRESETS.map((preset) => ({ theme, preset }))
+  )
+
+  it.each(cases)('$preset.name stays legible in $theme', ({ theme, preset }) => {
+    const { accent, onAccent, contrastVsBg, contrastLabelOnFill } = deriveAccent(preset.hex, theme)
+    const min = theme === 'hc' || theme === 'hc-light' ? 7 : AA_TEXT
+
+    expect(contrastVsBg, `${preset.name} on ${theme} bg is ${contrastVsBg.toFixed(2)}:1`).toBeGreaterThanOrEqual(min)
+    expect(
+      contrastLabelOnFill,
+      `label on ${preset.name} fill is ${contrastLabelOnFill.toFixed(2)}:1`
+    ).toBeGreaterThanOrEqual(AA_TEXT)
+
+    // The fitted accent must still be a colour, not a clipped black or white.
+    expect(accent.some((c, i) => c !== onAccent[i])).toBe(true)
   })
 })

@@ -371,7 +371,7 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
             <button
               onClick={handleAddComment}
               disabled={!commentText.trim()}
-              className="px-2 py-1 text-xs rounded bg-review-solid text-on-accent hover:bg-review-base disabled:opacity-50 transition-colors"
+              className="px-2 py-1 text-xs rounded bg-review-solid text-on-solid hover:bg-review-base disabled:opacity-50 transition-colors"
             >
               Add
             </button>
@@ -411,7 +411,7 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
       {reviewContext && (
         <style>{`
           .review-comment-glyph {
-            background-color: #eab308;
+            background-color: rgb(var(--color-warning-base));
             border-radius: 50%;
             width: 8px !important;
             height: 8px !important;
@@ -419,7 +419,8 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
             margin-left: 4px;
           }
           .review-comment-line {
-            background-color: rgba(234, 179, 8, 0.05);
+            /* 0.05 is invisible on a light ground; the token carries the theme. */
+            background-color: rgb(var(--color-warning-base) / 0.12);
           }
           .margin-view-overlays .cgmr {
             cursor: pointer;

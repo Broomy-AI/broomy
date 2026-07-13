@@ -42,13 +42,13 @@ function PlanApproval({ permission, onRespond }: PermissionRequestProps) {
       <div className="mt-2 flex gap-2">
         <button
           onClick={() => onRespond(permission.toolUseId, true)}
-          className="rounded bg-success-solid px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-success-base"
+          className="rounded bg-success-solid px-3 py-1.5 text-xs font-medium text-on-solid hover:bg-success-base"
         >
           Approve Plan
         </button>
         <button
           onClick={() => onRespond(permission.toolUseId, false)}
-          className="rounded bg-muted px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-muted"
+          className="rounded bg-muted px-3 py-1.5 text-xs font-medium text-on-solid hover:bg-muted"
         >
           Reject
         </button>
@@ -114,13 +114,13 @@ function QuestionUI({ permission, onRespond }: PermissionRequestProps) {
         <button
           onClick={handleSubmit}
           disabled={!allAnswered}
-          className="rounded bg-review-solid px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-review-base disabled:opacity-50"
+          className="rounded bg-review-solid px-3 py-1.5 text-xs font-medium text-on-solid hover:bg-review-base disabled:opacity-50"
         >
           Submit
         </button>
         <button
           onClick={() => onRespond(permission.toolUseId, false)}
-          className="rounded bg-muted px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-muted"
+          className="rounded bg-muted px-3 py-1.5 text-xs font-medium text-on-solid hover:bg-muted"
         >
           Skip
         </button>
@@ -161,13 +161,13 @@ function GenericPermission({ permission, onRespond }: PermissionRequestProps) {
       <div className="mt-2 flex gap-2">
         <button
           onClick={() => onRespond(permission.toolUseId, true)}
-          className="rounded bg-success-solid px-3 py-1 text-xs font-medium text-on-accent hover:bg-success-base"
+          className="rounded bg-success-solid px-3 py-1 text-xs font-medium text-on-solid hover:bg-success-base"
         >
           Allow
         </button>
         <button
           onClick={() => onRespond(permission.toolUseId, false)}
-          className="rounded bg-danger-solid px-3 py-1 text-xs font-medium text-on-accent hover:bg-danger-base"
+          className="rounded bg-danger-solid px-3 py-1 text-xs font-medium text-on-solid hover:bg-danger-base"
         >
           Deny
         </button>

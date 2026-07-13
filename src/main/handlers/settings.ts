@@ -125,7 +125,19 @@ export function stepInterfaceScale(ctx: HandlerContext, delta: number): void {
   const interfaceScale = delta === 0
     ? 1
     : stepScale(current.interfaceScale, delta, INTERFACE_SCALES)
-  saveAppearance({ ...current, interfaceScale })
+
+  const result = saveAppearance({ ...current, interfaceScale })
+  // Apply regardless — the user asked for this, and refusing to show it because a
+  // file is unwritable would be worse. But do NOT let it fail silently: Cmd +/- is
+  // now a settings edit, and a scale that quietly reverts on restart is maddening.
+  // The Settings UI already surfaces this; the menu path must not be the exception.
   applyChromeToAllWindows(ctx)
   broadcast()
+
+  if (!result.success) {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (win.isDestroyed()) continue
+      win.webContents.send('settings:save-failed', result.error ?? 'Unknown error')
+    }
+  }
 }

@@ -42,6 +42,7 @@ export default {
         'text-tertiary': token('text-tertiary'),
         'accent': token('accent'),
         'on-accent': token('on-accent'),
+        'on-solid': token('on-solid'),
         'status-working': token('status-working'),
         'status-waiting': token('status-waiting'),
         'status-idle': token('status-idle'),

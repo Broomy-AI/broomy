@@ -27,8 +27,18 @@ export interface TerminalAppearanceRefs {
 
 export function useTerminalAppearance(refs: TerminalAppearanceRefs): void {
   const { terminalRef, fitAddonRef, ptyIdRef, scrollStateRef } = refs
+
   useEffect(() => {
-    return useSettingsStore.subscribe((state, prev) => {
+    let rafId: number | null = null
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+    const cancelPending = () => {
+      if (rafId !== null) cancelAnimationFrame(rafId)
+      if (timeoutId !== null) clearTimeout(timeoutId)
+      rafId = null
+      timeoutId = null
+    }
+
+    const unsubscribe = useSettingsStore.subscribe((state, prev) => {
       const term = terminalRef.current
       if (!term) return
 
@@ -58,7 +68,18 @@ export function useTerminalAppearance(refs: TerminalAppearanceRefs): void {
       // A font change does not resize the container, so the ResizeObserver never
       // fires. Without an explicit fit + pty.resize the remote side keeps its old
       // winsize and the agent's TUI wraps at the wrong column.
-      requestAnimationFrame(() => {
+      //
+      // Both callbacks below are deferred, and the terminal can be restarted or
+      // unmounted in the meantime. `term` is captured, but the refs are not: acting
+      // on them blindly could resize a BRAND NEW pty with the OLD terminal's
+      // dimensions, or call scrollToBottom() on a disposed xterm. So re-check that
+      // this is still the live terminal before touching anything, and cancel any
+      // deferred work on teardown.
+      cancelPending()
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        if (terminalRef.current !== term) return
+
         try {
           fitAddonRef.current?.fit()
         } catch {
@@ -67,13 +88,20 @@ export function useTerminalAppearance(refs: TerminalAppearanceRefs): void {
         if (ptyIdRef.current && term.cols > 0 && term.rows > 0) {
           void window.pty.resize(ptyIdRef.current, term.cols, term.rows)
         }
-        if (wasAtBottom) {
-          setTimeout(() => {
-            term.scrollToBottom()
-            scrollStateRef.current?.setAtBottom(true)
-          }, 20)
-        }
+        if (!wasAtBottom) return
+
+        timeoutId = setTimeout(() => {
+          timeoutId = null
+          if (terminalRef.current !== term) return
+          term.scrollToBottom()
+          scrollStateRef.current?.setAtBottom(true)
+        }, 20)
       })
     })
+
+    return () => {
+      cancelPending()
+      unsubscribe()
+    }
   }, [terminalRef, fitAddonRef, ptyIdRef, scrollStateRef])
 }
