@@ -1,14 +1,56 @@
 /**
  * Global styles for the renderer process.
  *
- * Imports Tailwind CSS base/components/utilities layers, then adds global resets
- * (box-sizing, zero margins), dark-theme scrollbar styling, a focus-within border
- * indicator for panel containers, Monaco search highlight decorations, and the
- * macOS-style draggable title bar region rules.
+ * Imports Tailwind CSS base/components/utilities layers, then declares the colour
+ * palette as CSS custom properties, and adds global resets (box-sizing, zero
+ * margins), themed scrollbar styling, a focus-within border indicator for panel
+ * containers, Monaco search highlight decorations, and the macOS-style draggable
+ * title bar region rules.
  */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ─── Palette ────────────────────────────────────────────────────────────────
+ *
+ * Mirrors PALETTE in src/shared/theme.ts — src/renderer/theme.css.test.ts fails
+ * if the two drift apart.
+ *
+ * Dark lives on plain `:root`, unconditionally. It must NOT be scoped to
+ * `[data-theme='dark']`: any document without that attribute (Storybook's <html>,
+ * for one) would then resolve every colour to nothing. Additional themes attach
+ * as `[data-theme='...']` overrides on top of this.
+ *
+ * NEVER express a theme with `@media (prefers-color-scheme: ...)`. The headless
+ * Chromium in scripts/storybook-screenshot-test.mjs reports `light` by default,
+ * so such a rule would repaint every story and blow all 264 reference
+ * screenshots at once.
+ *
+ * Values here are byte-identical to the hex literals they replace, so this is a
+ * no-op for rendering — which is exactly what `pnpm storybook:test` proves.
+ */
+:root {
+  --app-text-scale: 1;
+
+  --color-bg-primary: 26 26 26;        /* #1a1a1a */
+  --color-bg-secondary: 37 37 37;      /* #252525 */
+  --color-bg-tertiary: 45 45 45;       /* #2d2d2d */
+  --color-border: 58 58 58;            /* #3a3a3a */
+  --color-border-strong: 74 74 74;     /* #4a4a4a */
+  --color-text-primary: 224 224 224;   /* #e0e0e0 */
+  --color-text-secondary: 160 160 160; /* #a0a0a0 */
+  --color-text-tertiary: 148 148 148;  /* #949494 */
+  --color-accent: 74 158 255;          /* #4a9eff */
+  --color-on-accent: 255 255 255;
+  --color-status-working: 74 222 128;  /* #4ade80 */
+  --color-status-waiting: 250 204 21;  /* #facc15 */
+  --color-status-idle: 107 114 128;    /* #6b7280 */
+  --color-status-error: 248 113 113;   /* #f87171 */
+  --color-focus-ring: 59 130 246;      /* #3b82f6 */
+  --color-search-highlight: 255 213 0; /* #ffd500 */
+
+  --scrollbar-thumb: rgb(255 255 255 / 0.2);
+}
 
 * {
   box-sizing: border-box;
@@ -30,23 +72,23 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom scrollbar for dark theme */
+/* Themed scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #1a1a1a;
+  background: rgb(var(--color-bg-primary));
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3a3a3a;
+  background: rgb(var(--color-border));
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #4a4a4a;
+  background: rgb(var(--color-border-strong));
 }
 
 /* Focus indicator for panels — ::after overlay sits above panel content (including overflow).
@@ -63,13 +105,13 @@ body {
   z-index: 20;
 }
 [data-panel-id]:focus-within::after {
-  border-color: rgba(59, 130, 246, 0.4);
+  border-color: rgb(var(--color-focus-ring) / 0.4);
 }
 
 /* Search highlight in Monaco editor */
 .searchHighlight {
-  background-color: rgba(255, 213, 0, 0.3);
-  border: 1px solid rgba(255, 213, 0, 0.6);
+  background-color: rgb(var(--color-search-highlight) / 0.3);
+  border: 1px solid rgb(var(--color-search-highlight) / 0.6);
   border-radius: 2px;
 }
 
