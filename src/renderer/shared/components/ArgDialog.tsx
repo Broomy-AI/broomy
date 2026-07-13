@@ -95,7 +95,7 @@ export function ArgDialog({ title, description, template, argsMeta, context, ini
                         className={fieldClass}
                       />
                     )}
-                    {meta?.description && <p className="text-[11px] text-text-tertiary">{meta.description}</p>}
+                    {meta?.description && <p className="text-2xs text-text-tertiary">{meta.description}</p>}
                   </>
                 )}
               </div>
@@ -123,13 +123,13 @@ export function ArgDialog({ title, description, template, argsMeta, context, ini
                   className={fieldClass}
                 />
               )}
-              {meta?.description && <p className="text-[11px] text-text-tertiary">{meta.description}</p>}
+              {meta?.description && <p className="text-2xs text-text-tertiary">{meta.description}</p>}
             </div>
           )
         })}
 
         <div className="pt-2 border-t border-border">
-          <div className="text-[11px] text-text-tertiary">Resolved:</div>
+          <div className="text-2xs text-text-tertiary">Resolved:</div>
           <pre data-testid="resolved-preview" className="text-xs font-mono text-text-primary whitespace-pre-wrap break-words max-h-32 overflow-y-auto">{resolved}</pre>
         </div>
 

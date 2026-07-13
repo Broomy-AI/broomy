@@ -24,7 +24,7 @@ export function Field({
         {action}
       </div>
       {children}
-      {hint && <p className="text-[11px] text-text-tertiary">{hint}</p>}
+      {hint && <p className="text-2xs text-text-tertiary">{hint}</p>}
     </div>
   )
 }
@@ -265,7 +265,7 @@ export function ArgsTable({
                 </td>
                 <td className="py-0.5">
                   {a.optional && (
-                    <span className="text-[10px] px-1 py-0.5 rounded bg-purple-500/20 text-purple-400">
+                    <span className="text-3xs px-1 py-0.5 rounded bg-purple-500/20 text-purple-400">
                       optional
                     </span>
                   )}
@@ -318,7 +318,7 @@ export function CommandExpandedEditor({
           spellCheck={false}
           data-testid="expanded-command-textarea"
         />
-        <div className="px-4 py-2 border-t border-border text-[11px] text-text-tertiary">
+        <div className="px-4 py-2 border-t border-border text-2xs text-text-tertiary">
           Use {'{name}'} for args; {'--flag {name}'} makes the arg optional. Changes save as you type.
         </div>
       </div>

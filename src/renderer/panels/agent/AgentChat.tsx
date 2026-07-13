@@ -126,7 +126,7 @@ function AgentChatInner({ sessionId, cwd, sdkSessionId, skipApproval, env, model
   }, [])
 
   return (
-    <div className="flex h-full flex-col bg-[#1a1a1a]" onClick={handleContainerClick}>
+    <div className="flex h-full flex-col bg-bg-primary" onClick={handleContainerClick}>
       {/* Messages area */}
       <div
         ref={scrollContainerRef}

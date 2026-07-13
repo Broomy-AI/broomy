@@ -271,7 +271,7 @@ function TodoBlock({ input }: { input: Record<string, unknown> }) {
 
   return (
     <div className="my-1 rounded border border-neutral-700 bg-neutral-800/50 px-3 py-2">
-      <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-neutral-500">Tasks</div>
+      <div className="mb-1 text-3xs font-medium uppercase tracking-wider text-neutral-500">Tasks</div>
       {todos.map((todo) => {
         const status = str(todo.status)
         const content = str(todo.content)
@@ -325,7 +325,7 @@ function ToolUseBlock({ msg, toolResult, isLast, onApprovePlan, cwd, onOpenFile 
           </pre>
           {resultText && (
             <>
-              <div className={`border-t ${hasError ? 'border-red-800/50' : 'border-neutral-700'} px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider ${hasError ? 'text-red-400' : 'text-neutral-500'}`}>
+              <div className={`border-t ${hasError ? 'border-red-800/50' : 'border-neutral-700'} px-3 py-1.5 text-3xs font-medium uppercase tracking-wider ${hasError ? 'text-red-400' : 'text-neutral-500'}`}>
                 {hasError ? 'Error' : 'Output'}
               </div>
               <pre className={`max-h-60 overflow-auto px-3 pb-2 text-xs whitespace-pre-wrap ${hasError ? 'text-red-300' : 'text-neutral-300'}`}>

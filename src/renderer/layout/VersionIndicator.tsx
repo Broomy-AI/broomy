@@ -15,7 +15,7 @@ export default function VersionIndicator() {
     <div className="relative">
       <button
         onClick={() => setPopoverOpen(!popoverOpen)}
-        className="px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors bg-accent/20 text-accent border border-accent/30 hover:bg-accent/30"
+        className="px-1.5 py-0.5 text-3xs font-medium rounded transition-colors bg-accent/20 text-accent border border-accent/30 hover:bg-accent/30"
         title="Update available"
       >
         Update
@@ -58,7 +58,7 @@ export default function VersionIndicator() {
                     style={{ width: `${Math.round(updateState.percent)}%` }}
                   />
                 </div>
-                <div className="text-[10px] text-text-tertiary mt-1 text-right">
+                <div className="text-3xs text-text-tertiary mt-1 text-right">
                   {Math.round(updateState.percent)}%
                 </div>
               </>

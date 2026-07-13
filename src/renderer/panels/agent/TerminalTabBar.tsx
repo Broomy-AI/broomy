@@ -132,7 +132,7 @@ export default function TerminalTabBar({
               />
             ) : (
               <span className={`truncate max-w-32 flex items-center gap-1 ${tab.id === activeTabId ? 'border-b-2 border-accent pb-0.5' : ''}`}>
-                {tab.isolated && <span className="text-blue-400 text-[9px] font-medium">[C]</span>}
+                {tab.isolated && <span className="text-blue-400 text-micro font-medium">[C]</span>}
                 {tab.name}
               </span>
             )}

@@ -80,7 +80,7 @@ export default function TutorialPanel() {
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                   ) : (
-                    <span className="text-[10px] text-text-secondary font-medium">{index + 1}</span>
+                    <span className="text-3xs text-text-secondary font-medium">{index + 1}</span>
                   )}
                 </div>
 

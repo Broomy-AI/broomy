@@ -83,7 +83,7 @@ export function AgentPickerView({
                   <div className="font-medium text-sm text-text-primary flex items-center gap-2">
                     {agent.name}
                     {!isInstalled && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 font-normal">
+                      <span className="text-3xs px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 font-normal">
                         not installed
                       </span>
                     )}

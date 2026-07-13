@@ -79,7 +79,7 @@ function PrRow({ pr, hasSession, isFocused, onSelect, onMouseEnter }: { key?: st
         <div className="text-sm text-text-primary flex items-center gap-2">
           {pr.title}
           {hasSession && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 flex-shrink-0">
+            <span className="text-3xs px-1.5 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 flex-shrink-0">
               reviewing
             </span>
           )}

@@ -198,7 +198,7 @@ export function CommandsEditor({ directory, onClose }: CommandsEditorProps) {
                     className={`w-full text-left px-2 py-2 rounded ${selectedId === a.id ? 'bg-bg-tertiary border-l-2 border-accent' : 'hover:bg-bg-tertiary'}`}
                   >
                     <div className="text-sm text-text-primary truncate">{a.label}</div>
-                    <div className="text-[11px] text-text-tertiary font-mono truncate">
+                    <div className="text-2xs text-text-tertiary font-mono truncate">
                       {slashSubtitle(a.template) ?? (a.template.includes('\n') ? 'text block' : a.template)}
                     </div>
                   </button>
@@ -352,7 +352,7 @@ function Detail({
           <button
             type="button"
             onClick={() => setCommandExpanded(true)}
-            className="text-[11px] text-text-tertiary hover:text-text-primary transition-colors"
+            className="text-2xs text-text-tertiary hover:text-text-primary transition-colors"
             title="Edit in a larger pane"
             data-testid="expand-command"
           >

@@ -74,7 +74,7 @@ function StatusChipBadge({ status }: { status: StatusChip }) {
   if (status === 'in-progress') return null
   const { label, classes } = branchStatusBadge[status]
   return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium leading-none ${classes}`}>
+    <span className={`text-3xs px-1.5 py-0.5 rounded font-medium leading-none ${classes}`}>
       {label}
     </span>
   )

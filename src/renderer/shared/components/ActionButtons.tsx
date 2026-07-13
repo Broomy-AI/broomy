@@ -124,7 +124,7 @@ export function ActionButtons(props: ActionButtonsProps) {
               className={`w-full px-3 py-2 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-start ${style}`}
             >
               <span className="text-sm">{isLoading || opensDialog ? `${action.label}…` : action.label}</span>
-              {subtitle && <span className="text-[10px] opacity-70 font-mono">{subtitle}</span>}
+              {subtitle && <span className="text-3xs opacity-70 font-mono">{subtitle}</span>}
             </button>
             {err && (
               <div className="mt-1">

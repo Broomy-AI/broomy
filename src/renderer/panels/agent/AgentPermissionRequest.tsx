@@ -80,7 +80,7 @@ function QuestionUI({ permission, onRespond }: PermissionRequestProps) {
       {questionList.map((q) => (
         <div key={q.question} className="mb-3 last:mb-0">
           {q.header && (
-            <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-purple-400">
+            <div className="mb-1 text-3xs font-medium uppercase tracking-wider text-purple-400">
               {q.header}
             </div>
           )}

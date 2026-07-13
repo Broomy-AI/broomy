@@ -98,7 +98,7 @@ export default function ProfileChip({ onSwitchProfile }: ProfileChipProps) {
       <button
         ref={chipRef}
         onClick={handleChipClick}
-        className="px-2 py-0.5 text-[11px] font-semibold rounded border cursor-pointer transition-opacity hover:opacity-80"
+        className="px-2 py-0.5 text-2xs font-semibold rounded border cursor-pointer transition-opacity hover:opacity-80"
         style={{
           backgroundColor: `${currentProfile.color  }20`,
           color: currentProfile.color,

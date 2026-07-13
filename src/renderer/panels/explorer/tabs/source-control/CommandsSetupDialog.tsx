@@ -74,7 +74,7 @@ export function CommandsSetupDialog({ onClose, onInstalled }: CommandsSetupDialo
                 </div>
                 <div className="text-xs text-text-secondary mt-1">{p.description}</div>
                 {p.requiresPlugin && (
-                  <div className="text-[11px] text-text-tertiary mt-1">
+                  <div className="text-2xs text-text-tertiary mt-1">
                     Requires {p.requiresPlugin.name} —{' '}
                     <a
                       href={p.requiresPlugin.url}
@@ -88,7 +88,7 @@ export function CommandsSetupDialog({ onClose, onInstalled }: CommandsSetupDialo
                     </a>
                   </div>
                 )}
-                <div className="text-[11px] text-text-tertiary mt-2">{p.actions.length} commands</div>
+                <div className="text-2xs text-text-tertiary mt-2">{p.actions.length} commands</div>
               </button>
             )
           })}
