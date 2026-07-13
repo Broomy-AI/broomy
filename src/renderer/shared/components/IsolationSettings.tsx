@@ -46,8 +46,8 @@ export function IsolationSettings({ isolated, skipApproval, dockerStatus, devcon
               </div>
             )}
             {hasDevcontainerConfig !== null && (
-              <div className={`text-xs flex items-center gap-1.5 ${hasDevcontainerConfig ? 'text-success-fg' : 'text-zinc-500'}`}>
-                <span className={`w-2 h-2 rounded-full ${hasDevcontainerConfig ? 'bg-success-fg' : 'bg-zinc-500'}`} />
+              <div className={`text-xs flex items-center gap-1.5 ${hasDevcontainerConfig ? 'text-success-fg' : 'text-text-tertiary'}`}>
+                <span className={`w-2 h-2 rounded-full ${hasDevcontainerConfig ? 'bg-success-fg' : 'bg-muted'}`} />
                 {hasDevcontainerConfig
                   ? '.devcontainer/devcontainer.json found'
                   : (

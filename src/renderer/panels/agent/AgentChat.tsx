@@ -31,13 +31,13 @@ interface AgentChatProps {
 function EmptyState({ hasSdkSession }: { hasSdkSession: boolean }) {
   return (
     <div className="flex h-full items-center justify-center">
-      <div className="text-center text-neutral-500">
+      <div className="text-center text-text-tertiary">
         <p className="text-sm">
           {hasSdkSession
             ? 'Previous session will be resumed. Send a message to continue.'
             : 'Send a message to start working with Claude.'}
         </p>
-        <p className="mt-2 text-xs text-neutral-600">
+        <p className="mt-2 text-xs text-text-tertiary">
           Enter to send, Shift+Enter for newline
         </p>
       </div>
@@ -139,7 +139,7 @@ function AgentChatInner({ sessionId, cwd, sdkSessionId, skipApproval, env, model
         {historyMeta && (
           <button
             onClick={loadFullHistory}
-            className="mb-2 w-full rounded border border-neutral-700 bg-neutral-800/50 px-3 py-1.5 text-xs text-neutral-400 hover:bg-surface-hover/50 hover:text-neutral-300"
+            className="mb-2 w-full rounded border border-border bg-bg-secondary/50 px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-hover/50 hover:text-text-primary"
           >
             Load {historyMeta.total - historyMeta.loaded} earlier messages
           </button>
@@ -237,11 +237,11 @@ function AgentChatInner({ sessionId, cwd, sdkSessionId, skipApproval, env, model
 
         {/* Loading indicator */}
         {isRunning && (
-          <div className="my-2 flex items-center gap-2 text-xs text-neutral-400">
+          <div className="my-2 flex items-center gap-2 text-xs text-text-secondary">
             <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-info-fg" />
             {agentStatusLabel(messages, state)}
             {elapsedSeconds > 0 && (
-              <span className="text-neutral-500">{formatElapsedTime(elapsedSeconds)}</span>
+              <span className="text-text-tertiary">{formatElapsedTime(elapsedSeconds)}</span>
             )}
           </div>
         )}

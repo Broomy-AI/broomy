@@ -29,7 +29,7 @@ export function getStatusColor(status?: string): string {
     case 'modified': return 'text-warning-fg'
     case 'added': return 'text-success-fg'
     case 'deleted': return 'text-danger-fg'
-    case 'untracked': return 'text-gray-400'
+    case 'untracked': return 'text-text-secondary'
     case 'renamed': return 'text-info-fg'
     default: return 'text-text-primary'
   }
@@ -50,7 +50,7 @@ export function statusBadgeColor(status: string): string {
     case 'modified': return 'text-warning-fg'
     case 'added': return 'text-success-fg'
     case 'deleted': return 'text-danger-fg'
-    case 'untracked': return 'text-gray-400'
+    case 'untracked': return 'text-text-secondary'
     case 'renamed': return 'text-info-fg'
     default: return 'text-text-secondary'
   }
@@ -99,7 +99,7 @@ export function prStateBadgeClass(state: string): string {
  */
 export const branchStatusBadge: Record<string, { label: string; classes: string }> = {
   pushed: { label: 'PUSHED', classes: 'bg-info-base/20 text-info-fg' },
-  empty: { label: 'EMPTY', classes: 'bg-gray-500/20 text-gray-400' },
+  empty: { label: 'EMPTY', classes: 'bg-muted/20 text-text-secondary' },
   open: { label: 'PR OPEN', classes: 'bg-success-base/20 text-success-fg' },
   feedback: { label: 'FEEDBACK', classes: 'bg-attention-base/20 text-attention-fg' },
   failed: { label: 'FAILED', classes: 'bg-danger-base/20 text-danger-fg' },

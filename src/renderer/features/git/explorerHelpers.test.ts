@@ -51,7 +51,7 @@ describe('getStatusColor', () => {
   })
 
   it('returns gray for untracked', () => {
-    expect(getStatusColor('untracked')).toBe('text-gray-400')
+    expect(getStatusColor('untracked')).toBe('text-text-secondary')
   })
 
   it('returns blue for renamed', () => {
@@ -95,7 +95,7 @@ describe('statusBadgeColor', () => {
   })
 
   it('returns gray for untracked', () => {
-    expect(statusBadgeColor('untracked')).toBe('text-gray-400')
+    expect(statusBadgeColor('untracked')).toBe('text-text-secondary')
   })
 
   it('returns blue for renamed', () => {

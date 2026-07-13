@@ -57,7 +57,7 @@ export function BranchStatusCard({ status }: { status: BranchStatus }) {
     },
     empty: {
       label: 'EMPTY',
-      chipClasses: 'bg-gray-500/20 text-gray-400',
+      chipClasses: 'bg-muted/20 text-text-secondary',
       description: 'No changes on this branch.',
     },
     open: {

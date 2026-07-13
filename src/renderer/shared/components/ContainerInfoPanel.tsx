@@ -33,44 +33,44 @@ export default function ContainerInfoPanel({ repoDir }: ContainerInfoPanelProps)
   }, [repoDir])
 
   const statusColor = info?.status === 'running' ? 'text-success-fg' :
-    info?.status === 'starting' ? 'text-warning-fg' : 'text-zinc-500'
+    info?.status === 'starting' ? 'text-warning-fg' : 'text-text-tertiary'
 
   return (
-    <div className="h-full overflow-auto p-4 text-sm text-zinc-300 bg-zinc-900">
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-4">Dev Container Isolation</h3>
+    <div className="h-full overflow-auto p-4 text-sm text-text-primary bg-bg-primary">
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-text-tertiary mb-4">Dev Container Isolation</h3>
 
-      {loading && <p className="text-zinc-500">Loading...</p>}
+      {loading && <p className="text-text-tertiary">Loading...</p>}
 
       {!loading && !info && (
-        <p className="text-zinc-500">No container running for this session. The container will start when the agent terminal is opened.</p>
+        <p className="text-text-tertiary">No container running for this session. The container will start when the agent terminal is opened.</p>
       )}
 
       {!loading && info && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <span className="text-zinc-500">Status:</span>
+            <span className="text-text-tertiary">Status:</span>
             <span className={`font-medium ${statusColor}`}>{info.status}</span>
           </div>
 
           <div>
-            <span className="text-zinc-500">Container ID: </span>
-            <code className="text-zinc-400 font-mono text-xs">{info.containerId}</code>
+            <span className="text-text-tertiary">Container ID: </span>
+            <code className="text-text-secondary font-mono text-xs">{info.containerId}</code>
           </div>
 
           <div>
-            <span className="text-zinc-500">Repo: </span>
-            <code className="text-zinc-400 font-mono text-xs">{info.repoDir}</code>
+            <span className="text-text-tertiary">Repo: </span>
+            <code className="text-text-secondary font-mono text-xs">{info.repoDir}</code>
           </div>
 
           <div>
-            <span className="text-zinc-500">Mode: </span>
-            <span className="text-zinc-400 text-xs">Dev Container (.devcontainer/devcontainer.json)</span>
+            <span className="text-text-tertiary">Mode: </span>
+            <span className="text-text-secondary text-xs">Dev Container (.devcontainer/devcontainer.json)</span>
           </div>
 
-          <div className="border-t border-zinc-800 pt-3 flex gap-2">
+          <div className="border-t border-border pt-3 flex gap-2">
             <button
               onClick={refresh}
-              className="px-3 py-1 text-xs bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 transition-colors"
+              className="px-3 py-1 text-xs bg-bg-secondary hover:bg-surface-hover rounded text-text-primary transition-colors"
             >
               Refresh
             </button>
@@ -82,8 +82,8 @@ export default function ContainerInfoPanel({ repoDir }: ContainerInfoPanelProps)
             </button>
           </div>
 
-          <div className="border-t border-zinc-800 pt-3">
-            <p className="text-zinc-500 text-xs leading-relaxed">
+          <div className="border-t border-border pt-3">
+            <p className="text-text-tertiary text-xs leading-relaxed">
               This session runs inside a dev container defined by .devcontainer/devcontainer.json. Edit that file to customize the container environment.
             </p>
           </div>
