@@ -26,6 +26,7 @@ import { createPtyDataHandler } from './ptyDataHandler'
 import { ScrollLog, scrollLogRegistry } from '../utils/scrollLog'
 import type { ScrollSource } from '../utils/scrollLog'
 import { useSettingsStore } from '../../../store/settings'
+import { resolveTerminalContrast } from '../../../../shared/appearance'
 import { XTERM_THEMES } from '../../../shared/theme/xtermTheme'
 import { useTerminalAppearance } from './useTerminalAppearance'
 
@@ -396,7 +397,7 @@ export function useTerminalSetup(
       cursorBlink: !document.documentElement.classList.contains('e2e-stable'),
       cursorStyle: 'bar',
       scrollback: 5000,
-      minimumContrastRatio: appearance.terminalContrast,
+      minimumContrastRatio: resolveTerminalContrast(appearance.terminalContrast, resolvedTheme),
       macOptionIsMeta: true,
     })
 

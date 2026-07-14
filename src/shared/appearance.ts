@@ -30,8 +30,19 @@ export interface Appearance {
   editorFontSize: number
   /** xterm line spacing. Tight leading on a dense TUI is a low-vision problem. */
   terminalLineHeight: number
-  /** xterm's minimumContrastRatio. 21 forces maximum legibility. */
-  terminalContrast: number
+  /**
+   * xterm's minimumContrastRatio floor.
+   *
+   * 'auto' is theme-aware and is what you want: 7 on dark, 4.5 on light.
+   *
+   * A single fixed number cannot serve both. The DARK ANSI palette is bright
+   * pastels, where 7 is a useful safety net for tools that print colours tuned for
+   * some other background. But the LIGHT palette is designed to clear 4.5 natively
+   * (its slots land at 4.5-5.9:1), so a floor of 7 forces xterm to darken every
+   * single one of them until they hit 7 — cyan, yellow, blue, green and red all
+   * collapse into the same muddy brown, and the hues stop meaning anything.
+   */
+  terminalContrast: number | 'auto'
   /** The accent HUE. Fitted per theme — see deriveAccent. */
   accent: string
 }
@@ -45,7 +56,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   interfaceScale: 1,
   editorFontSize: 13,
   terminalLineHeight: 1.2,
-  terminalContrast: 7,
+  terminalContrast: 'auto',
   accent: '#4a9eff',
 }
 
@@ -65,7 +76,7 @@ export const INTERFACE_SCALES = [1, 1.1, 1.25, 1.5, 1.75, 2] as const
 
 export const EDITOR_FONT_SIZES = [11, 12, 13, 14, 16, 18, 20, 22, 24] as const
 export const TERMINAL_LINE_HEIGHTS = [1.2, 1.4, 1.6] as const
-export const TERMINAL_CONTRASTS = [4.5, 7, 21] as const
+export const TERMINAL_CONTRASTS = ['auto', 4.5, 7, 21] as const
 
 export const ACCENT_PRESETS: { name: string; hex: string }[] = [
   { name: 'Blue', hex: '#4a9eff' },
@@ -121,6 +132,20 @@ export function deriveAccent(accentHex: string, theme: ThemeName) {
 /** True when the resolved theme has a light base. Terminals and editors need this. */
 export const themeIsLight = (theme: ThemeName): boolean => IS_LIGHT[theme]
 
+/**
+ * The actual floor to hand xterm.
+ *
+ * On a light ground the palette already clears 4.5:1, so raising the floor to 7
+ * only destroys it. On dark, 7 remains the safety net it has always been.
+ */
+export function resolveTerminalContrast(
+  setting: number | 'auto',
+  theme: ThemeName
+): number {
+  if (setting !== 'auto') return setting
+  return themeIsLight(theme) ? 4.5 : 7
+}
+
 const clampToSteps = (value: unknown, steps: readonly number[], fallback: number): number => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
   return steps.reduce((best, s) => (Math.abs(s - value) < Math.abs(best - value) ? s : best), steps[0])
@@ -143,7 +168,10 @@ export function normalizeAppearance(raw: unknown): Appearance {
     interfaceScale: clampToSteps(r.interfaceScale, INTERFACE_SCALES, DEFAULT_APPEARANCE.interfaceScale),
     editorFontSize: clampToSteps(r.editorFontSize, EDITOR_FONT_SIZES, DEFAULT_APPEARANCE.editorFontSize),
     terminalLineHeight: clampToSteps(r.terminalLineHeight, TERMINAL_LINE_HEIGHTS, DEFAULT_APPEARANCE.terminalLineHeight),
-    terminalContrast: clampToSteps(r.terminalContrast, TERMINAL_CONTRASTS, DEFAULT_APPEARANCE.terminalContrast),
+    terminalContrast:
+      r.terminalContrast === 'auto'
+        ? 'auto'
+        : clampToSteps(r.terminalContrast, [4.5, 7, 21], 7),
     accent:
       typeof r.accent === 'string' && /^#[0-9a-fA-F]{6}$/.test(r.accent)
         ? r.accent

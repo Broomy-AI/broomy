@@ -11,6 +11,7 @@ import { useEffect } from 'react'
 import type { Terminal as XTerm } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
 import { useSettingsStore } from '../../../store/settings'
+import { resolveTerminalContrast } from '../../../../shared/appearance'
 import { XTERM_THEMES } from '../../../shared/theme/xtermTheme'
 
 interface ScrollStateLike {
@@ -45,11 +46,17 @@ export function useTerminalAppearance(refs: TerminalAppearanceRefs): void {
       const next = state.appearance
       const before = prev.appearance
 
-      if (state.resolvedTheme !== prev.resolvedTheme) {
+      const themeChanged = state.resolvedTheme !== prev.resolvedTheme
+      if (themeChanged) {
         term.options.theme = XTERM_THEMES[state.resolvedTheme]
       }
-      if (next.terminalContrast !== before.terminalContrast) {
-        term.options.minimumContrastRatio = next.terminalContrast
+      // Re-resolve on a THEME change too, not just a setting change: under 'auto'
+      // the floor itself depends on the theme (7 on dark, 4.5 on light).
+      if (themeChanged || next.terminalContrast !== before.terminalContrast) {
+        term.options.minimumContrastRatio = resolveTerminalContrast(
+          next.terminalContrast,
+          state.resolvedTheme
+        )
       }
 
       const metricsChanged =

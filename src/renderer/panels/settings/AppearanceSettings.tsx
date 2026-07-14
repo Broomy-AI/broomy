@@ -20,6 +20,7 @@ import {
   TERMINAL_CONTRASTS,
   TERMINAL_LINE_HEIGHTS,
   deriveAccent,
+  resolveTerminalContrast,
   type Appearance,
   type ThemePreference,
 } from '../../../shared/appearance'
@@ -166,18 +167,27 @@ export function AppearanceSettings({
           <select
             id="terminal-contrast"
             value={appearance.terminalContrast}
-            onChange={(e) => onChange({ terminalContrast: Number(e.target.value) })}
+            onChange={(e) =>
+              onChange({
+                terminalContrast: e.target.value === 'auto' ? 'auto' : Number(e.target.value),
+              })
+            }
             className="w-full px-3 py-2 text-sm rounded border border-border bg-bg-primary text-text-primary"
           >
             {TERMINAL_CONTRASTS.map((c) => (
               <option key={c} value={c}>
-                {c === 21 ? 'Maximum (21:1)' : `${c}:1`}
+                {c === 'auto'
+                  ? `Automatic (${resolveTerminalContrast('auto', resolvedTheme)}:1 for this theme)`
+                  : c === 21
+                    ? 'Maximum (21:1)'
+                    : `${c}:1`}
               </option>
             ))}
           </select>
           <p className="text-xs text-text-tertiary">
-            Forces agent output to stay legible even when a tool prints colours tuned for a
-            different background.
+            Forces agent output to stay legible when a tool prints colours tuned for a different
+            background. Automatic is theme-aware — the light palette is already legible, so raising
+            its floor only muddies the colours.
           </p>
         </div>
       </div>
