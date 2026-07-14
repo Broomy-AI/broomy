@@ -90,6 +90,12 @@
   --color-search-highlight: 255 213 0;  /* #ffd500 */
 
   --scrollbar-thumb: rgb(var(--color-elevate) / 0.2);
+  /* Spinner. unchanged — a bright colour on a dark ground reads fine at 75%.
+     At <100% the composited colour is NOT the colour the contrast tests verify,
+     so on light grounds the arc runs at full strength and the tested ratio is the
+     ratio that actually renders. */
+  --spinner-track-opacity: 0.25;
+  --spinner-arc-opacity: 0.75;
 }
 
 /* Light. Warm off-white base, deliberately not #ffffff — pure white's specular
@@ -155,6 +161,12 @@
   --color-focus-ring: 14 79 174;        /* #0e4fae — 7.4:1 */
   --color-search-highlight: 202 138 4;  /* #ca8a04 — #ffd500 is invisible on white */
   color-scheme: light;
+  /* Spinner. the arc is a DARK colour on a light ground; below 100% it washes out.
+     At <100% the composited colour is NOT the colour the contrast tests verify,
+     so on light grounds the arc runs at full strength and the tested ratio is the
+     ratio that actually renders. */
+  --spinner-track-opacity: 0.25;
+  --spinner-arc-opacity: 1;
 }
 
 /* High contrast (dark). The defining move is HIERARCHY COLLAPSE: text-secondary
@@ -222,6 +234,12 @@
   --color-focus-ring: 255 255 0;        /* maximum-visibility yellow */
   --color-search-highlight: 255 255 0;  
   color-scheme: dark;
+  /* Spinner. maximum legibility.
+     At <100% the composited colour is NOT the colour the contrast tests verify,
+     so on light grounds the arc runs at full strength and the tested ratio is the
+     ratio that actually renders. */
+  --spinner-track-opacity: 0.4;
+  --spinner-arc-opacity: 1;
 }
 
 /* High contrast (light). Same hierarchy collapse on a light ground. This is the
@@ -285,6 +303,12 @@
   --color-focus-ring: 0 61 153;         
   --color-search-highlight: 122 74 0;   
   color-scheme: light;
+  /* Spinner. maximum legibility.
+     At <100% the composited colour is NOT the colour the contrast tests verify,
+     so on light grounds the arc runs at full strength and the tested ratio is the
+     ratio that actually renders. */
+  --spinner-track-opacity: 0.3;
+  --spinner-arc-opacity: 1;
 }
 
 * {
