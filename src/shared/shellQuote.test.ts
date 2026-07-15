@@ -58,6 +58,11 @@ describe('posixQuote', () => {
   it('escapes embedded single quotes', () => {
     expect(posixQuote("/a/it's.txt")).toBe("'/a/it'\\''s.txt'")
   })
+
+  it('quotes ^ so zsh EXTENDED_GLOB cannot expand it', () => {
+    expect(posixQuote('/tmp/^name')).toBe("'/tmp/^name'")
+    expect(quoteForShell('/tmp/^name', 'posix')).toBe("'/tmp/^name'")
+  })
 })
 
 describe('fishQuote', () => {

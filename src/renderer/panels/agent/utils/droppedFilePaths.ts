@@ -10,8 +10,14 @@
 import { FILE_PATH_MIME } from '../../../../shared/dnd'
 import { quoteForShell, type ShellKind } from '../../../../shared/shellQuote'
 
-/** C0 controls + DEL — a newline/ESC/NUL in a path would be unsafe at the PTY. */
-const CONTROL_CHARS = /[\x00-\x1F\x7F]/
+/**
+ * Every Unicode control character (category Cc): C0 (incl. newline/CR/ESC/NUL),
+ * DEL, and C1 (U+0080–U+009F). A C0 newline/CR would submit the line and ESC
+ * would inject an escape sequence; the C1 range matters too because after PTY
+ * echo xterm can read e.g. U+009B/U+009D as CSI/OSC introducers, letting a
+ * crafted filename manipulate or spoof the display.
+ */
+const CONTROL_CHARS = /\p{Cc}/u
 
 /**
  * Pull file paths out of a DataTransfer. OS file drops win (there may be

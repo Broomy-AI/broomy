@@ -30,12 +30,23 @@ export function classifyShellKind(shell: string): ShellKind {
 }
 
 /**
- * POSIX single-quote. Byte-for-byte identical to the historical devcontainer
- * quoter (safe unquoted for a conservative character set, otherwise wrapped in
- * '…' with embedded quotes escaped as '\'').
+ * POSIX single-quote (bash/zsh/sh/dash/ksh). Leaves a conservative character
+ * set unquoted, otherwise wraps in '…' with embedded quotes escaped as '\''.
+ *
+ * `^` is deliberately NOT in the unquoted set even though bash treats it as
+ * ordinary: zsh with EXTENDED_GLOB makes `a^b` a negated glob, so an unquoted
+ * dropped path containing `^` could expand to other files. Every unquoted
+ * character here is inert for an ABSOLUTE path (which is all this handles) in
+ * bash and zsh; anything else is single-quoted, which is fully literal.
+ *
+ * Limitation: like every terminal file-drop, this cannot know the shell's
+ * current lexical state — inserting immediately after a bare `$` turns the
+ * opening quote into bash/zsh ANSI-C `$'…'` quoting. Safe insertion at an
+ * arbitrary cursor position needs shell integration (OSC 133) and is a
+ * follow-up; today the path is inserted the same way iTerm2/VS Code do.
  */
 export function posixQuote(s: string): string {
-  if (/^[a-zA-Z0-9_./:=@%^+,-]+$/.test(s)) return s
+  if (/^[a-zA-Z0-9_./:=@%+,-]+$/.test(s)) return s
   return `'${s.replace(/'/g, "'\\''")}'`
 }
 

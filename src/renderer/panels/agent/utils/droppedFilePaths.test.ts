@@ -41,6 +41,14 @@ describe('extractDroppedPaths', () => {
     expect(warn).toHaveBeenCalledTimes(1)
   })
 
+  it('drops paths containing C1 controls (U+009B CSI) that xterm could interpret', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // U+009B is the C1 CSI introducer; a filename could smuggle it past a C0-only filter.
+    const transfer = dt({ files: [{ path: '/ok.txt' }, { path: '/spoof\u009b2J.txt' }] })
+    expect(extractDroppedPaths(transfer)).toEqual(['/ok.txt'])
+    expect(warn).toHaveBeenCalledTimes(1)
+  })
+
   it('returns empty when nothing was dropped', () => {
     expect(extractDroppedPaths(dt({}))).toEqual([])
   })
