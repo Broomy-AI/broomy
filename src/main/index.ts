@@ -22,6 +22,7 @@ import { registerAllHandlers, HandlerContext, PROFILES_FILE } from './handlers'
 import { resolveShellEnv } from './shellEnv'
 import { writeCrashLog, appendErrorLog } from './crashLog'
 import { disposePtyListenersForWindow, disposeAllPtyListeners } from './handlers/pty'
+import { navigationAction } from './navigation'
 import { treeKill } from './treeKill'
 import { sweepOrphanedPtys, clearOwnMarkers } from './ptyMarkers'
 
@@ -221,12 +222,14 @@ function createWindow(profileId?: string): BrowserWindow {
     closeWatchersForWindow(window)
   })
 
-  // Prevent navigation to external URLs — open them in the default browser instead
+  // Navigation policy (see navigationAction): allow a genuine same-URL reload,
+  // block any other file:// nav so a file dropped anywhere can't replace the
+  // renderer, and open everything else in the default browser.
   window.webContents.on('will-navigate', (event, url) => {
-    // Allow reloading the app itself (file:// or devserver URLs)
-    if (url.startsWith('file://') || url.startsWith('http://localhost')) return
+    const action = navigationAction(window.webContents.getURL(), url)
+    if (action === 'allow') return
     event.preventDefault()
-    void shell.openExternal(url)
+    if (action === 'external') void shell.openExternal(url)
   })
 
   // Intercept window.open() calls and redirect to external browser

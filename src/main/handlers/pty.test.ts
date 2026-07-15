@@ -139,7 +139,7 @@ describe('pty handlers', () => {
         command: 'claude',
       })
 
-      expect(result).toEqual({ id: 'test-1' })
+      expect(result).toEqual({ id: 'test-1', shellKind: 'posix' })
       expect(mockPtySpawn).toHaveBeenCalledWith(
         '/bin/bash',
         [],
@@ -256,7 +256,7 @@ describe('pty handlers', () => {
         cwd: '/home/user',
       })
 
-      expect(result).toEqual({ id: 'normal-1' })
+      expect(result).toEqual({ id: 'normal-1', shellKind: 'posix' })
       expect(mockPtySpawn).toHaveBeenCalledWith(
         '/bin/zsh',
         [],
@@ -588,7 +588,7 @@ describe('pty handlers', () => {
       })
 
       // Returns id (falls through to standard PTY)
-      expect(result).toEqual({ id: 'dc-fallthrough' })
+      expect(result).toEqual({ id: 'dc-fallthrough', shellKind: 'posix' })
       // Should notify renderer about missing config
       expect(mockSenderWindow.webContents.send).toHaveBeenCalledWith(
         'pty:devcontainer-missing',
@@ -622,7 +622,25 @@ describe('pty handlers', () => {
         sessionId: 'sess-dc',
       })
 
-      expect(result).toEqual({ id: 'dc-sync' })
+      expect(result).toEqual({ id: 'dc-sync', shellKind: 'posix' })
+    })
+
+    it('returns shellKind on the spawn-failure branch', async () => {
+      const { register } = await import('./pty')
+      const ctx = createCtx()
+      register(mockIpcMain as never, ctx)
+
+      mockBrowserWindowFromWebContents.mockReturnValue(mockSenderWindow)
+      mockPtySpawn.mockImplementationOnce(() => { throw new Error('spawn boom') })
+
+      const result = await handlers['pty:create'](mockEvent, {
+        id: 'spawn-fail-1',
+        cwd: '/home/user',
+      })
+
+      // Even when the shell fails to spawn, the classified kind is returned so
+      // the renderer never leaves shellKindRef undefined.
+      expect(result).toEqual({ id: 'spawn-fail-1', shellKind: 'posix' })
     })
 
     it('displays error when devcontainer CLI is not available', async () => {

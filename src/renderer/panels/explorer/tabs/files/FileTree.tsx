@@ -9,6 +9,7 @@ import { StatusBadge } from '../../icons'
 import { statusLabel, getStatusColor } from '../../../../features/git/explorerHelpers'
 import { useFileTree, navigateTreeItem } from '../../hooks/useFileTree'
 import { useExplorerWatcher } from '../../hooks/useExplorerWatcher'
+import { FILE_PATH_MIME } from '../../../../../shared/dnd'
 import { DialogErrorBanner } from '../../../../shared/components/ErrorBanner'
 
 function handleTreeKeyDown(
@@ -372,7 +373,11 @@ export function FileTree({
   }, [handleFileClick])
 
   const handleNodeDragStart = useCallback((e: React.DragEvent, path: string) => {
-    e.dataTransfer.effectAllowed = 'move'
+    // 'copyMove' (not 'move') so a copy-effect target like the terminal accepts
+    // the drag; internal directory moves still use dropEffect='move'. The MIME
+    // lets the terminal read the path (internal moves keep using draggedPath).
+    e.dataTransfer.effectAllowed = 'copyMove'
+    e.dataTransfer.setData(FILE_PATH_MIME, path)
     startDrag(path)
   }, [startDrag])
 

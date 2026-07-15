@@ -15,6 +15,8 @@ import type { TerminalConfig, ExitInfo } from './hooks/useTerminalSetup'
 import { useErrorStore } from '../../store/errors'
 import { getAgentInstallUrl } from '../../shared/utils/agentInstallUrls'
 import { sendAgentPrompt } from '../../shared/utils/focusHelpers'
+import { FILE_PATH_MIME } from '../../../shared/dnd'
+import { extractDroppedPaths, formatPathsForShell } from './utils/droppedFilePaths'
 import '@xterm/xterm/css/xterm.css'
 import './terminal-scroll.css'
 
@@ -33,6 +35,11 @@ interface TerminalProps {
   storeSessionId?: string
   /** Tab ID within the session — for activation detection without re-rendering. */
   tabId?: string
+}
+
+/** True when a drag carries OS files or an explorer file-path (not a tab reorder, which is text/plain). */
+function isFileDrag(dt: DataTransfer): boolean {
+  return dt.types.includes('Files') || dt.types.includes(FILE_PATH_MIME)
 }
 
 function ExitErrorBanner({ exitInfo, onDismiss }: { exitInfo: ExitInfo; onDismiss: () => void }) {
@@ -117,7 +124,7 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
     tabId,
   }
 
-  const { terminalRef, ptyIdRef, isActiveRef, showScrollButton, handleScrollToBottom, exitInfo } = useTerminalSetup(config, containerRef)
+  const { terminalRef, ptyIdRef, shellKindRef, isActiveRef, showScrollButton, handleScrollToBottom, exitInfo } = useTerminalSetup(config, containerRef)
   const [exitDismissed, setExitDismissed] = useState(false)
 
   const handleRestart = useCallback(() => {
@@ -177,6 +184,26 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
     }
   }, [isAgentTerminal, terminalRef, ptyIdRef])
 
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (!isFileDrag(e.dataTransfer)) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    if (!isFileDrag(e.dataTransfer)) return
+    // preventDefault first: even when we ultimately write nothing, the webview
+    // must never navigate to / open the dropped file (data-loss guard).
+    e.preventDefault()
+    const paths = extractDroppedPaths(e.dataTransfer)
+    // No-op until the shell is known (create not yet resolved, or a restart is
+    // in flight) so a path is never mis-quoted — same accepted startup behavior
+    // as Paste. Also no-op if nothing survived quoting (e.g. all cmd %/! paths).
+    if (!ptyIdRef.current || !shellKindRef.current) return
+    const text = formatPathsForShell(paths, shellKindRef.current)
+    if (text) void window.pty.write(ptyIdRef.current, text)
+  }, [ptyIdRef, shellKindRef])
+
   if (!sessionId) {
     return (
       <div className="h-full flex items-center justify-center text-text-secondary">
@@ -186,7 +213,7 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
   }
 
   return (
-    <div className="h-full w-full flex flex-col" onContextMenu={handleContextMenu}>
+    <div className="h-full w-full flex flex-col" onContextMenu={handleContextMenu} onDragOver={handleDragOver} onDrop={handleDrop}>
       {agentNotInstalled && command && (
         <div className="mx-2 mt-2 px-3 py-2 rounded bg-yellow-500/10 border border-yellow-500/30 text-xs text-yellow-300 shrink-0">
           <span className="font-medium">&ldquo;{command}&rdquo;</span> is not installed.

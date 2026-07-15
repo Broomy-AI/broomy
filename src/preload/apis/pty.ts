@@ -2,6 +2,7 @@
  * Preload API for pseudo-terminal lifecycle management and data streaming.
  */
 import { ipcRenderer } from 'electron'
+import type { ShellKind } from '../../shared/shellQuote'
 
 export type DevcontainerReadyEvent = {
   sessionId: string
@@ -11,7 +12,7 @@ export type DevcontainerReadyEvent = {
 }
 
 export type PtyApi = {
-  create: (options: { id: string; cwd: string; command?: string; sessionId?: string; env?: Record<string, string>; shell?: string; isolated?: boolean; repoRootDir?: string }) => Promise<{ id: string }>
+  create: (options: { id: string; cwd: string; command?: string; sessionId?: string; env?: Record<string, string>; shell?: string; isolated?: boolean; repoRootDir?: string }) => Promise<{ id: string; shellKind: ShellKind }>
   write: (id: string, data: string) => Promise<void>
   resize: (id: string, cols: number, rows: number) => Promise<void>
   kill: (id: string) => Promise<void>
