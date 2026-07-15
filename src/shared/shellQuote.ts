@@ -5,7 +5,13 @@
  * there. Each shell *parser* needs its own literal encoding — a naïve single
  * quoter is an injection boundary on PowerShell/cmd/fish. `classifyShellKind`
  * maps a resolved shell executable to one of four parser families and
- * `quoteForShell` encodes a string as a safe literal argument for it.
+ * `quoteForShell` encodes a string as a literal argument for it.
+ *
+ * Scope of the guarantee: the output is a safe literal argument *at a token
+ * boundary* in a supported shell (POSIX-family bash/zsh/sh/dash/ksh, fish,
+ * PowerShell, cmd). It is NOT context-free — inserting mid-token or right after
+ * a bare `$` can change the surrounding lexical state (see posixQuote), and
+ * unknown/unsupported shells (see classifyShellKind) may parse it differently.
  *
  * Note: this handles per-parser *quoting* only. Host→container/WSL path
  * *translation* is a separate, deferred concern (see the drop-to-terminal
@@ -19,6 +25,11 @@ export type ShellKind = 'posix' | 'fish' | 'powershell' | 'cmd'
  * Normalizes separators, lowercases, and takes the basename so both
  * `C:\Program Files\Git\bin\bash.exe` and `/bin/zsh` classify correctly.
  * sh/bash/zsh/dash, git-bash and wsl all use the POSIX single-quote parser.
+ *
+ * Unrecognized shells fall back to `posix`, which is a safe literal for the
+ * POSIX family. Caveat: csh/tcsh are NOT explicitly supported and get this
+ * fallback, yet they perform `!` history expansion even inside single quotes,
+ * so a `!`-containing path is not fully literal there — a documented limitation.
  */
 export function classifyShellKind(shell: string): ShellKind {
   const base = shell.toLowerCase().split(/[\\/]/).pop() ?? ''

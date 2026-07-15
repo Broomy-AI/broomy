@@ -3,7 +3,8 @@
  *
  * Two drag sources: OS files (Finder etc., via File.path) and Broomy's own file
  * explorer (via FILE_PATH_MIME). Paths are quoted per the terminal's actual
- * shell so they land at the prompt as inert literal arguments, never executed.
+ * shell so they land at the prompt as literal arguments — inert at a normal
+ * token boundary (see shellQuote.ts for the lexical-context caveat), not run.
  * Paths containing control characters are dropped — a literal newline/ESC
  * written to the PTY would submit the line or inject an escape sequence.
  */

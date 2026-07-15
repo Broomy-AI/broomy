@@ -152,7 +152,7 @@ test.describe.serial('Feature: Drop a file onto the terminal', () => {
         'Dropping a file writes its absolute path to the terminal at the prompt, quoted for the ' +
         'running shell — single-quoted for bash/zsh when it contains spaces (e.g. ' +
         `${QUOTED_PATH}), and quoted for fish, PowerShell, or cmd otherwise — with a trailing ` +
-        'space. It is a safe literal argument, never executed. The drop is accepted here (the ' +
+        'space. At a normal prompt it is an inert literal argument (never run). The drop is accepted here (the ' +
         'webview will not open the file), and the exact per-shell quoting is covered by unit tests.',
     })
   })
