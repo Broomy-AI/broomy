@@ -45,9 +45,9 @@ const KNOWN_DARK_DEBT: Record<string, number> = {
   'muted on bg-primary': 3.6,               // #6b7280 — also backs status-idle
   'muted on bg-secondary': 3.6,
   'muted on bg-tertiary': 3.6,
-  'status-idle on bg-primary': 3.6,
-  'status-idle on bg-secondary': 3.6,
-  'status-idle on bg-tertiary': 3.6,
+  // The idle dot is a non-text indicator (3:1), but on the tertiary surface it is
+  // 2.85:1 — pre-existing, and it predates this work.
+  'status-idle on bg-tertiary': 2.85,
   'on-accent on accent': 2.75,              // white on #4a9eff — every primary button
   'on-solid on warning-solid': 2.94,        // white on yellow-600
   'on-solid on success-solid': 3.3,         // white on green-600
@@ -124,12 +124,24 @@ describe.each(THEME_NAMES)('%s', (theme) => {
 
   // Session state is the most important signal in the sidebar. At their dark
   // values on a light ground these are 1.48:1–2.67:1 — literally invisible.
-  it.each(['status-working', 'status-waiting', 'status-idle', 'status-error'] as Token[])(
-    '%s is visible on every surface',
+  //
+  // These are rendered as dots and a spinner — NON-TEXT indicators, WCAG floor 3:1.
+  // status-working is deliberately a vivid green rather than a dark forest one: a
+  // 12px spinner tuned to 4.5:1 (as if it were body text) comes out so dark it reads
+  // as "dark", not "green". The point of a status colour is to be recognisable at a
+  // glance, and green on white cannot be both vivid AND clear 4.5:1.
+  it.each(['status-working', 'status-waiting', 'status-idle'] as Token[])(
+    '%s is a visible non-text indicator on every surface',
     (token) => {
-      for (const surface of SURFACES) expectContrast(theme, token, surface, AA_TEXT)
+      for (const surface of SURFACES) expectContrast(theme, token, surface, AA_NON_TEXT)
     }
   )
+
+  // status-error is the exception: it is also rendered as TEXT (error messages,
+  // destructive-action hover), so it is held to the 4.5:1 text bar.
+  it('status-error is readable as text on every surface', () => {
+    for (const surface of SURFACES) expectContrast(theme, 'status-error', surface, AA_TEXT)
+  })
 
   it('the focus ring clears 3:1 — it is navigation, not decoration', () => {
     for (const surface of SURFACES) expectContrast(theme, 'focus-ring', surface, AA_NON_TEXT)

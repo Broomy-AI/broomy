@@ -174,7 +174,9 @@ export const PALETTE: Record<ThemeName, Record<Token, string>> = {
     'accent': '14 79 174',             // #0e4fae —  7.4:1 (dark accent is 2.66:1 here)
     'on-accent': '255 255 255',
     'on-solid': '255 255 255',
-    'status-working': '22 101 52',     // green-800
+    'status-working': '23 138 63',      // #178a3f — a vivid emerald. The spinner
+                                        // is a NON-TEXT indicator (WCAG 3:1), so it does
+                                        // not need 4.5:1; tuning it as text made it dark.
     'status-waiting': '133 77 14',     // yellow-800 — yellow-700 was 4.39:1 on bg-secondary
     'status-idle': '87 83 78',         // #57534e
     'status-error': '185 28 28',       // #b91c1c

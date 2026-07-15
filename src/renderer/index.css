@@ -115,7 +115,7 @@
   --color-accent: 14 79 174;            /* #0e4fae —  7.4:1 (dark accent is 2.66:1 here) */
   --color-on-accent: 255 255 255;       
   --color-on-solid: 255 255 255;        /* label on a SEMANTIC fill — never follows the accent */
-  --color-status-working: 22 101 52;    /* green-800 */
+  --color-status-working: 23 138 63;    /* #178a3f — vivid emerald; the working spinner is a non-text indicator (3:1) */
   --color-status-waiting: 133 77 14;    /* yellow-800 — yellow-700 was 4.39:1 on bg-secondary */
   --color-status-idle: 87 83 78;        /* #57534e */
   --color-status-error: 185 28 28;      /* #b91c1c */
