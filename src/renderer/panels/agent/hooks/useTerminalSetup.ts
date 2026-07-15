@@ -340,7 +340,7 @@ function useTerminalState(config: TerminalConfig) {
   const handleKeyEvent = useTerminalKeyboard(ptyIdRef)
   const processPlanDetection = usePlanDetection(sessionIdRef, setPlanFileRef)
 
-  const pendingUpdateRef = useRef<{ status?: 'working' | 'idle' | 'error'; lastMessage?: string } | null>(null)
+  const pendingUpdateRef = useRef<{ status?: 'working' | 'idle' | 'error'; lastMessage?: string; workingStartedAt?: number } | null>(null)
 
   const flushUpdate = useCallback(() => {
     if (pendingUpdateRef.current && sessionIdRef.current) {
@@ -349,7 +349,16 @@ function useTerminalState(config: TerminalConfig) {
     }
   }, [])
 
-  const scheduleUpdate = useCallback((update: { status?: 'working' | 'idle' | 'error'; lastMessage?: string }) => {
+  const scheduleUpdate = useCallback((update: { status?: 'working' | 'idle' | 'error'; lastMessage?: string; workingStartedAt?: number }) => {
+    // Preserve status EDGES: if this update flips the status away from one that's
+    // still pending, flush that first so the store observes BOTH transitions.
+    // Merging working+idle into one pending object would drop the working→idle
+    // edge (e.g. idle arriving within the debounce, or a fast process exit),
+    // suppressing the "check me" unread LED and the broomy:agent-finished event.
+    const pending = pendingUpdateRef.current
+    if (update.status !== undefined && pending?.status !== undefined && pending.status !== update.status) {
+      flushUpdate()
+    }
     pendingUpdateRef.current = { ...pendingUpdateRef.current, ...update }
     if (updateTimeoutRef.current) clearTimeout(updateTimeoutRef.current)
     const delay = update.status === 'working' ? 150 : 300

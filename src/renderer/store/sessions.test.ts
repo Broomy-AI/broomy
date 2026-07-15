@@ -535,6 +535,20 @@ describe('useSessionStore', () => {
       expect(useSessionStore.getState().sessions[0].isUnread).toBe(true)
     })
 
+    it('honors workingStartedAt (source timestamp) for the unread threshold', () => {
+      const s1 = createTestSession({ id: 's1' })
+      useSessionStore.setState({ sessions: [s1], isLoading: false })
+
+      const now = Date.now()
+      // The detector reports the working period began 4s ago, even though the
+      // store is only told now — so no timer advance is needed to cross 3s.
+      useSessionStore.getState().updateAgentMonitor('s1', { status: 'working', workingStartedAt: now - 4000 })
+      expect(useSessionStore.getState().sessions[0].workingStartTime).toBe(now - 4000)
+
+      useSessionStore.getState().updateAgentMonitor('s1', { status: 'idle' })
+      expect(useSessionStore.getState().sessions[0].isUnread).toBe(true)
+    })
+
     it('dispatches broomy:agent-finished event when agent finishes work', () => {
       const s1 = createTestSession({ id: 's1' })
       useSessionStore.setState({ sessions: [s1], isLoading: false })

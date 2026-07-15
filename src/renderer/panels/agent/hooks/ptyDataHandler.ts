@@ -20,7 +20,7 @@ interface TerminalStateForPtyData {
   lastInteractionRef: React.MutableRefObject<number>
   lastStatusRef: React.MutableRefObject<'working' | 'idle'>
   idleTimeoutRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>
-  scheduleUpdate: (update: { status?: 'working' | 'idle' | 'error'; lastMessage?: string }) => void
+  scheduleUpdate: (update: { status?: 'working' | 'idle' | 'error'; lastMessage?: string; workingStartedAt?: number }) => void
 }
 
 interface CreatePtyDataHandlerArgs {
@@ -160,6 +160,11 @@ export function createPtyDataHandler(args: CreatePtyDataHandlerArgs): PtyDataHan
   // Set once the PTY has exited or the terminal is torn down: stops all further
   // activity detection so a late sample can't revive a finished session.
   let closed = false
+  // Timestamp of the first output since the last sample ran. When a sample first
+  // proves the screen changed (idle→working), this is the *true* start of the
+  // working period — so workingStartTime isn't undercounted by the sample+debounce
+  // delay, and the >=3s "unread / check-me" threshold is measured accurately.
+  let firstOutputSinceSample: number | null = null
 
   // (Re)arm the working→idle timer for a working session. The deadline is the
   // earlier of true-silence and the stable-output cap, so a periodically
@@ -181,6 +186,10 @@ export function createPtyDataHandler(args: CreatePtyDataHandlerArgs): PtyDataHan
     sampleTimer = null
     if (closed) return
     const now = Date.now()
+    // Earliest output represented by this sample — the true work start if the
+    // screen turns out to have changed. Reset the window for the next sample.
+    const workStart = firstOutputSinceSample ?? now
+    firstOutputSinceSample = null
     const fingerprint = fingerprintScreen(terminal)
     const changed = fingerprint !== lastFingerprint
     lastFingerprint = fingerprint
@@ -192,7 +201,7 @@ export function createPtyDataHandler(args: CreatePtyDataHandlerArgs): PtyDataHan
     }, config)
     if (status === 'working' && state.lastStatusRef.current !== 'working') {
       state.lastStatusRef.current = 'working'
-      state.scheduleUpdate({ status: 'working' })
+      state.scheduleUpdate({ status: 'working', workingStartedAt: workStart })
     }
     armIdle(now)
   }
@@ -207,6 +216,7 @@ export function createPtyDataHandler(args: CreatePtyDataHandlerArgs): PtyDataHan
     state.processPlanDetection(data)
     const now = Date.now()
     lastRawOutputAt = now
+    if (firstOutputSinceSample === null) firstOutputSinceSample = now
     // Refresh the silence/stability deadline now (cheap); the throttled sample
     // (scheduled from the write callback below) decides whether this output
     // actually changed the screen.

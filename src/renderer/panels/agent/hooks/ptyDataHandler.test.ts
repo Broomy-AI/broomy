@@ -109,8 +109,20 @@ describe('createPtyDataHandler', () => {
       terminal.setScreen(['prompt>', 'thinking...'])
       handler.handleData('thinking...')
       vi.advanceTimersByTime(SAMPLE_MS)
-      expect(state.scheduleUpdate).toHaveBeenCalledWith({ status: 'working' })
+      expect(state.scheduleUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'working' }))
       expect(state.lastStatusRef.current).toBe('working')
+    })
+
+    it('reports the first-output time as workingStartedAt, not the later sample time', () => {
+      const handler = agentPastWarmup(['line 1'])
+      const firstOutput = Date.now()
+      terminal.setScreen(['line 1', 'work'])
+      handler.handleData('work')          // output arrives at firstOutput
+      vi.advanceTimersByTime(SAMPLE_MS)    // sample runs SAMPLE_MS later
+      // workingStartTime must be measured from the output, so the >=3s unread
+      // threshold isn't undercounted by the sampling/debounce delay.
+      expect(state.scheduleUpdate).toHaveBeenCalledWith({ status: 'working', workingStartedAt: firstOutput })
+      expect(firstOutput).toBeLessThan(Date.now())
     })
 
     it('never flips an idle session to working on an UNCHANGED repaint — the core fix', () => {
@@ -120,7 +132,7 @@ describe('createPtyDataHandler', () => {
         handler.handleData('\x1b[?2026h idle footer \x1b[?2026l')
         vi.advanceTimersByTime(SAMPLE_MS)
       }
-      expect(state.scheduleUpdate).not.toHaveBeenCalledWith({ status: 'working' })
+      expect(state.scheduleUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ status: 'working' }))
       expect(state.lastStatusRef.current).toBe('idle')
     })
 
@@ -183,7 +195,7 @@ describe('createPtyDataHandler', () => {
       terminal.setScreen(['a', 'b'])
       handler.handleData('b')
       vi.advanceTimersByTime(SAMPLE_MS)
-      expect(state.scheduleUpdate).not.toHaveBeenCalledWith({ status: 'working' })
+      expect(state.scheduleUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ status: 'working' }))
     })
 
     it('clearTimers cancels the pending idle and sample timers', () => {
@@ -207,12 +219,12 @@ describe('createPtyDataHandler', () => {
       handler.handleData('big burst still parsing...')
       vi.advanceTimersByTime(2000)
       // Parse not done → no sample scheduled → no premature transition.
-      expect(state.scheduleUpdate).not.toHaveBeenCalledWith({ status: 'working' })
+      expect(state.scheduleUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ status: 'working' }))
       // Parse completes with a changed screen → the post-parse sample catches it.
       terminal.setScreen(['line 1', 'big burst parsed'])
       parseComplete?.()
       vi.advanceTimersByTime(SAMPLE_MS)
-      expect(state.scheduleUpdate).toHaveBeenCalledWith({ status: 'working' })
+      expect(state.scheduleUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'working' }))
     })
 
     it('a sample pending at teardown cannot revive the session', () => {
@@ -222,7 +234,7 @@ describe('createPtyDataHandler', () => {
       handler.clearTimers()              // e.g. PTY exit / unmount before it runs
       state.scheduleUpdate.mockClear()
       vi.advanceTimersByTime(SAMPLE_MS + 5000)
-      expect(state.scheduleUpdate).not.toHaveBeenCalledWith({ status: 'working' })
+      expect(state.scheduleUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ status: 'working' }))
     })
   })
 
