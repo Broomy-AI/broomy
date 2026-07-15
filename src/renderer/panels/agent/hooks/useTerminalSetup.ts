@@ -526,6 +526,9 @@ export function useTerminalSetup(
         s.lastStatusRef.current = 'idle'
         s.scheduleUpdate({ status: 'idle' })
       }
+      // Stop activity detection so a screen sample still pending from output
+      // just before exit can't revive the finished session back to "working".
+      dataHandler.clearTimers()
     })
 
     s.cleanupRef.current = () => { isStale = true; dataHandler.clearTimers(); removeDataListener(); removeExitListener() }

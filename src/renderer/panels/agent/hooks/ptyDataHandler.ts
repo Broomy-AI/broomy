@@ -12,7 +12,7 @@
  * transaction boundary and scroll to bottom after the repaint completes.
  */
 import { Terminal as XTerm } from '@xterm/xterm'
-import { evaluateActivity } from '../utils/terminalActivityDetector'
+import { evaluateActivity, computeIdleDeadline, DEFAULT_CONFIG, type ActivityDetectorConfig } from '../utils/terminalActivityDetector'
 
 interface TerminalStateForPtyData {
   processPlanDetection: (data: string) => void
@@ -40,6 +40,33 @@ interface PtyDataHandlerController {
 // Maximum time (ms) between CSI 3 J and DEC mode 2026 reset to still count
 // as a repaint transaction. Matches Wave Terminal's constant.
 const MAX_REPAINT_TRANSACTION_MS = 2000
+
+// How often (ms) to sample the rendered screen for change detection. Throttling
+// coalesces output bursts; the delay also means any synchronized repaint
+// transaction has fully settled by the time we read the buffer, so we never
+// fingerprint the intermediate cleared state of a CSI 3 J repaint.
+const SAMPLE_INTERVAL_MS = 250
+
+/**
+ * Cheap djb2 fingerprint of the *live* (bottom) screen rows — what the agent is
+ * currently drawing, read from `baseY` so it is independent of the user's scroll
+ * position. Trailing whitespace is trimmed so cursor-only/padding repaints don't
+ * register as changes.
+ */
+function fingerprintScreen(terminal: XTerm): number {
+  const buffer = terminal.buffer.active
+  const base = buffer.baseY
+  const rows = terminal.rows
+  let hash = 5381
+  for (let i = 0; i < rows; i++) {
+    const text = buffer.getLine(base + i)?.translateToString(true) ?? ''
+    for (let j = 0; j < text.length; j++) {
+      hash = (Math.imul(hash, 33) + text.charCodeAt(j)) | 0
+    }
+    hash = (Math.imul(hash, 33) + 10) | 0 // row boundary
+  }
+  return hash >>> 0
+}
 
 /**
  * Registers CSI handlers on the terminal to detect Claude Code's
@@ -118,42 +145,91 @@ function setupRepaintDetection(terminal: XTerm, wasRecentlyAtBottom?: () => bool
 
 export function createPtyDataHandler(args: CreatePtyDataHandlerArgs): PtyDataHandlerController {
   const { terminal, isAgent, state, effectStartTime, wasRecentlyAtBottom } = args
+  const config: ActivityDetectorConfig = DEFAULT_CONFIG
 
   // Set up repaint transaction detection for agent terminals
   const repaintDetection = isAgent ? setupRepaintDetection(terminal, wasRecentlyAtBottom) : null
 
-  const processActivityDetection = (data: string) => {
-    if (!isAgent) return
+  // Activity-detection state (per PTY): raw output timing, the last time the
+  // rendered screen actually changed, the last screen fingerprint, and the
+  // throttled sample timer. The idle timer itself lives in state.idleTimeoutRef.
+  let lastRawOutputAt = effectStartTime
+  let lastRenderedChangeAt = effectStartTime
+  let lastFingerprint = isAgent ? fingerprintScreen(terminal) : 0
+  let sampleTimer: ReturnType<typeof setTimeout> | null = null
+  // Set once the PTY has exited or the terminal is torn down: stops all further
+  // activity detection so a late sample can't revive a finished session.
+  let closed = false
 
-    state.processPlanDetection(data)
+  // (Re)arm the working→idle timer for a working session. The deadline is the
+  // earlier of true-silence and the stable-output cap, so a periodically
+  // repainting idle TUI can no longer postpone idle forever.
+  const armIdle = (now: number) => {
+    if (state.lastStatusRef.current !== 'working') return
+    const deadline = computeIdleDeadline({ lastRawOutputAt, lastRenderedChangeAt }, config)
+    if (state.idleTimeoutRef.current) clearTimeout(state.idleTimeoutRef.current)
+    state.idleTimeoutRef.current = setTimeout(() => {
+      state.idleTimeoutRef.current = null
+      state.lastStatusRef.current = 'idle'
+      state.scheduleUpdate({ status: 'idle' })
+    }, Math.max(0, deadline - now))
+  }
+
+  // Sample the rendered screen (throttled). A change is real activity → working;
+  // an unchanged repaint is not, so it can never revive an idle session.
+  const runSample = () => {
+    sampleTimer = null
+    if (closed) return
     const now = Date.now()
-    const result = evaluateActivity(data.length, now, {
+    const fingerprint = fingerprintScreen(terminal)
+    const changed = fingerprint !== lastFingerprint
+    lastFingerprint = fingerprint
+    if (changed) lastRenderedChangeAt = now
+    const { status } = evaluateActivity(changed, now, {
       lastUserInput: state.lastUserInputRef.current,
       lastInteraction: state.lastInteractionRef.current,
-      lastStatus: state.lastStatusRef.current,
       startTime: effectStartTime,
-    })
-    if (result.status === 'working') {
-      if (state.idleTimeoutRef.current) clearTimeout(state.idleTimeoutRef.current)
+    }, config)
+    if (status === 'working' && state.lastStatusRef.current !== 'working') {
       state.lastStatusRef.current = 'working'
       state.scheduleUpdate({ status: 'working' })
     }
-    if (result.scheduleIdle) {
-      if (result.status !== 'working' && state.idleTimeoutRef.current) clearTimeout(state.idleTimeoutRef.current)
-      state.idleTimeoutRef.current = setTimeout(() => {
-        state.lastStatusRef.current = 'idle'
-        state.scheduleUpdate({ status: 'idle' })
-      }, 1000)
-    }
+    armIdle(now)
+  }
+
+  const scheduleSample = () => {
+    if (sampleTimer) return
+    sampleTimer = setTimeout(runSample, SAMPLE_INTERVAL_MS)
+  }
+
+  const processActivityDetection = (data: string) => {
+    if (!isAgent || closed) return
+    state.processPlanDetection(data)
+    const now = Date.now()
+    lastRawOutputAt = now
+    // Refresh the silence/stability deadline now (cheap); the throttled sample
+    // (scheduled from the write callback below) decides whether this output
+    // actually changed the screen.
+    armIdle(now)
   }
 
   const handleData = (data: string) => {
     processActivityDetection(data)
-    terminal.write(data)
+    // Sample the screen only AFTER xterm has parsed this chunk — the write
+    // callback fires post-parse — so a change is never missed (or an
+    // intermediate/cleared state fingerprinted) under a slow or large parse.
+    if (isAgent && !closed) {
+      terminal.write(data, scheduleSample)
+    } else {
+      terminal.write(data)
+    }
   }
 
   const clearTimers = () => {
+    closed = true
     repaintDetection?.cleanup()
+    if (sampleTimer) { clearTimeout(sampleTimer); sampleTimer = null }
+    if (state.idleTimeoutRef.current) { clearTimeout(state.idleTimeoutRef.current); state.idleTimeoutRef.current = null }
   }
 
   return { handleData, clearTimers }

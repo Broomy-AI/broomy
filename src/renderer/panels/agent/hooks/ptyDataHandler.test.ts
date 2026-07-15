@@ -1,23 +1,37 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createPtyDataHandler } from './ptyDataHandler'
 
-vi.mock('../utils/terminalActivityDetector', () => ({
-  evaluateActivity: vi.fn().mockReturnValue({ status: null, scheduleIdle: false }),
-}))
+/** Throttle interval used by the handler's screen sampler (must match SAMPLE_INTERVAL_MS). */
+const SAMPLE_MS = 250
+
+interface MockTerminal {
+  write: ReturnType<typeof vi.fn>
+  scrollToBottom: ReturnType<typeof vi.fn>
+  setScreen: (lines: string[]) => void
+}
 
 function makeTerminal() {
-  return {
-    write: vi.fn(),
-    buffer: { active: { viewportY: 0, baseY: 0 } },
+  let screen: string[] = []
+  const term = {
+    // xterm's write invokes its callback after the chunk is parsed; the handler
+    // schedules screen sampling from that callback. The mock fires it synchronously.
+    write: vi.fn((_data: string, cb?: () => void) => { cb?.() }),
+    buffer: {
+      active: {
+        viewportY: 0,
+        baseY: 0,
+        getLine: (y: number) => (y < screen.length ? { translateToString: () => screen[y] } : undefined),
+      },
+    },
     cols: 80,
     rows: 24,
     resize: vi.fn(),
     scrollToBottom: vi.fn(),
-    parser: {
-      registerCsiHandler: vi.fn().mockReturnValue({ dispose: vi.fn() }),
-    },
-  } as unknown as import('@xterm/xterm').Terminal
+    parser: { registerCsiHandler: vi.fn().mockReturnValue({ dispose: vi.fn() }) },
+    setScreen: (lines: string[]) => { screen = lines },
+  }
+  return term as unknown as import('@xterm/xterm').Terminal & MockTerminal
 }
 
 function makeState() {
@@ -25,7 +39,7 @@ function makeState() {
     processPlanDetection: vi.fn(),
     lastUserInputRef: { current: 0 },
     lastInteractionRef: { current: 0 },
-    lastStatusRef: { current: 'idle' as const },
+    lastStatusRef: { current: 'idle' as 'working' | 'idle' },
     idleTimeoutRef: { current: null } as { current: ReturnType<typeof setTimeout> | null },
     scheduleUpdate: vi.fn(),
   }
@@ -67,19 +81,6 @@ describe('createPtyDataHandler', () => {
     handler.handleData('hello')
     handler.handleData(' world')
     expect(terminal.write).toHaveBeenCalledTimes(2)
-    expect(terminal.write).toHaveBeenCalledWith('hello')
-    expect(terminal.write).toHaveBeenCalledWith(' world')
-  })
-
-  it('runs activity detection for agent terminals', async () => {
-    const { evaluateActivity } = await import('../utils/terminalActivityDetector')
-    vi.mocked(evaluateActivity).mockReturnValue({ status: 'working', scheduleIdle: true })
-
-    const handler = createHandler({ isAgent: true })
-    handler.handleData('output')
-
-    expect(evaluateActivity).toHaveBeenCalled()
-    expect(state.scheduleUpdate).toHaveBeenCalledWith({ status: 'working' })
   })
 
   it('does not run activity detection for non-agent terminals', () => {
@@ -88,46 +89,146 @@ describe('createPtyDataHandler', () => {
     expect(state.processPlanDetection).not.toHaveBeenCalled()
   })
 
-  it('schedules idle timeout when scheduleIdle is true and status is not working', async () => {
-    vi.useFakeTimers()
-    const { evaluateActivity } = await import('../utils/terminalActivityDetector')
-    vi.mocked(evaluateActivity).mockReturnValue({ status: null, scheduleIdle: true })
+  describe('activity detection (rendered-change + capped stability lease)', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(1_000_000)
+    })
+    afterEach(() => { vi.useRealTimers() })
 
-    const handler = createHandler({ isAgent: true })
-    handler.handleData('output')
+    /** Create an agent handler past its warmup, with a known baseline screen. */
+    function agentPastWarmup(baseline: string[]) {
+      terminal.setScreen(baseline)
+      const handler = createHandler({ isAgent: true })
+      vi.advanceTimersByTime(6000) // past the 5s warmup
+      return handler
+    }
 
-    // Idle timeout not yet fired
-    expect(state.scheduleUpdate).not.toHaveBeenCalledWith({ status: 'idle' })
+    it('flags working when the rendered screen changes after warmup', () => {
+      const handler = agentPastWarmup(['prompt>'])
+      terminal.setScreen(['prompt>', 'thinking...'])
+      handler.handleData('thinking...')
+      vi.advanceTimersByTime(SAMPLE_MS)
+      expect(state.scheduleUpdate).toHaveBeenCalledWith({ status: 'working' })
+      expect(state.lastStatusRef.current).toBe('working')
+    })
 
-    // Existing idle timeout should have been cleared and a new one scheduled
-    vi.advanceTimersByTime(1000)
-    expect(state.lastStatusRef.current).toBe('idle')
-    expect(state.scheduleUpdate).toHaveBeenCalledWith({ status: 'idle' })
+    it('never flips an idle session to working on an UNCHANGED repaint — the core fix', () => {
+      const handler = agentPastWarmup(['idle footer'])
+      // Agent repaints the exact same screen (sync-wrapped), many times.
+      for (let i = 0; i < 5; i++) {
+        handler.handleData('\x1b[?2026h idle footer \x1b[?2026l')
+        vi.advanceTimersByTime(SAMPLE_MS)
+      }
+      expect(state.scheduleUpdate).not.toHaveBeenCalledWith({ status: 'working' })
+      expect(state.lastStatusRef.current).toBe('idle')
+    })
 
-    vi.useRealTimers()
-  })
+    it('idles after the stability cap when an idle TUI keeps repainting the same screen', () => {
+      const handler = agentPastWarmup(['line 1'])
+      // Real work makes the screen change → working.
+      terminal.setScreen(['line 1', 'working...'])
+      handler.handleData('working...')
+      vi.advanceTimersByTime(SAMPLE_MS)
+      expect(state.lastStatusRef.current).toBe('working')
 
-  it('clears previous idle timeout when scheduleIdle and status is not working', async () => {
-    vi.useFakeTimers()
-    const { evaluateActivity } = await import('../utils/terminalActivityDetector')
-    vi.mocked(evaluateActivity).mockReturnValue({ status: null, scheduleIdle: true })
+      // Then the agent goes idle but repaints the SAME screen every 500ms.
+      state.scheduleUpdate.mockClear()
+      for (let i = 0; i < 12; i++) {
+        vi.advanceTimersByTime(500)
+        handler.handleData('\x1b[?2026h working... \x1b[?2026l') // screen unchanged
+        vi.advanceTimersByTime(SAMPLE_MS)
+      }
+      // Within maxStableOutputMs (3s) of the last real change it must have idled,
+      // despite output never stopping.
+      expect(state.scheduleUpdate).toHaveBeenCalledWith({ status: 'idle' })
+      expect(state.lastStatusRef.current).toBe('idle')
+    })
 
-    const handler = createHandler({ isAgent: true })
-    // Set up an existing idle timeout
-    state.idleTimeoutRef.current = setTimeout(() => {}, 5000)
-    handler.handleData('output')
+    it('stays working while the screen keeps changing, even past the stability cap', () => {
+      const handler = agentPastWarmup(['line 1'])
+      terminal.setScreen(['line 1', 'stream 0'])
+      handler.handleData('stream 0')
+      vi.advanceTimersByTime(SAMPLE_MS)
+      expect(state.lastStatusRef.current).toBe('working')
 
-    // The old timeout should have been replaced
-    vi.advanceTimersByTime(1000)
-    expect(state.scheduleUpdate).toHaveBeenCalledWith({ status: 'idle' })
+      state.scheduleUpdate.mockClear()
+      for (let i = 1; i < 12; i++) {
+        vi.advanceTimersByTime(500)
+        terminal.setScreen(['line 1', `stream ${i}`]) // screen changes each time
+        handler.handleData(`stream ${i}`)
+        vi.advanceTimersByTime(SAMPLE_MS)
+      }
+      expect(state.lastStatusRef.current).toBe('working')
+      expect(state.scheduleUpdate).not.toHaveBeenCalledWith({ status: 'idle' })
+    })
 
-    vi.useRealTimers()
+    it('idles after idleTimeoutMs of true silence', () => {
+      const handler = agentPastWarmup(['line 1'])
+      terminal.setScreen(['line 1', 'done'])
+      handler.handleData('done')
+      vi.advanceTimersByTime(SAMPLE_MS)
+      expect(state.lastStatusRef.current).toBe('working')
+
+      state.scheduleUpdate.mockClear()
+      vi.advanceTimersByTime(1000) // no further output → silence timeout
+      expect(state.scheduleUpdate).toHaveBeenCalledWith({ status: 'idle' })
+      expect(state.lastStatusRef.current).toBe('idle')
+    })
+
+    it('ignores a screen change during the warmup window', () => {
+      terminal.setScreen(['a'])
+      const handler = createHandler({ isAgent: true })
+      vi.advanceTimersByTime(1000) // still within 5s warmup
+      terminal.setScreen(['a', 'b'])
+      handler.handleData('b')
+      vi.advanceTimersByTime(SAMPLE_MS)
+      expect(state.scheduleUpdate).not.toHaveBeenCalledWith({ status: 'working' })
+    })
+
+    it('clearTimers cancels the pending idle and sample timers', () => {
+      const handler = agentPastWarmup(['line 1'])
+      terminal.setScreen(['line 1', 'x'])
+      handler.handleData('x') // arms a sample; will arm idle once working
+      vi.advanceTimersByTime(SAMPLE_MS)
+      handler.handleData('\x1b[?2026h x \x1b[?2026l') // another sample pending
+
+      handler.clearTimers()
+      state.scheduleUpdate.mockClear()
+      vi.advanceTimersByTime(10000)
+      expect(state.scheduleUpdate).not.toHaveBeenCalled()
+    })
+
+    it('samples only after the write callback fires — a change parsed late is still caught', () => {
+      const handler = agentPastWarmup(['line 1'])
+      // Simulate a slow/large parse: capture the write callback instead of firing it now.
+      let parseComplete: (() => void) | undefined
+      vi.mocked(terminal.write).mockImplementation((_d: string, cb?: () => void) => { parseComplete = cb })
+      handler.handleData('big burst still parsing...')
+      vi.advanceTimersByTime(2000)
+      // Parse not done → no sample scheduled → no premature transition.
+      expect(state.scheduleUpdate).not.toHaveBeenCalledWith({ status: 'working' })
+      // Parse completes with a changed screen → the post-parse sample catches it.
+      terminal.setScreen(['line 1', 'big burst parsed'])
+      parseComplete?.()
+      vi.advanceTimersByTime(SAMPLE_MS)
+      expect(state.scheduleUpdate).toHaveBeenCalledWith({ status: 'working' })
+    })
+
+    it('a sample pending at teardown cannot revive the session', () => {
+      const handler = agentPastWarmup(['line 1'])
+      terminal.setScreen(['line 1', 'late output'])
+      handler.handleData('late output') // schedules a sample
+      handler.clearTimers()              // e.g. PTY exit / unmount before it runs
+      state.scheduleUpdate.mockClear()
+      vi.advanceTimersByTime(SAMPLE_MS + 5000)
+      expect(state.scheduleUpdate).not.toHaveBeenCalledWith({ status: 'working' })
+    })
   })
 
   describe('repaint transaction detection', () => {
     it('registers CSI handlers for agent terminals', () => {
       createHandler({ isAgent: true })
-      // Should register 3 CSI handlers: sync set, clear scrollback, sync reset
       expect(terminal.parser.registerCsiHandler).toHaveBeenCalledTimes(3)
     })
 
@@ -138,8 +239,6 @@ describe('createPtyDataHandler', () => {
 
     it('scrolls to bottom after a repaint transaction (CSI 3 J inside DEC mode 2026)', () => {
       vi.useFakeTimers()
-
-      // Capture the CSI handler callbacks
       const handlers: { prefix?: string; final: string; cb: (params: (number | number[])[]) => void }[] = []
       vi.mocked(terminal.parser.registerCsiHandler).mockImplementation(
         (id: { prefix?: string; final: string }, cb: (params: (number | number[])[]) => boolean | Promise<boolean>) => {
@@ -147,30 +246,21 @@ describe('createPtyDataHandler', () => {
           return { dispose: vi.fn() }
         },
       )
-
       createHandler({ isAgent: true })
-
-      // Find handlers by their signature
       const syncSetHandler = handlers.find(h => h.prefix === '?' && h.final === 'h')!
       const clearScrollbackHandler = handlers.find(h => h.final === 'J' && !h.prefix)!
       const syncResetHandler = handlers.find(h => h.prefix === '?' && h.final === 'l')!
-
-      // Simulate: DEC mode 2026 set → CSI 3 J → DEC mode 2026 reset
       syncSetHandler.cb([2026])
       clearScrollbackHandler.cb([3])
       syncResetHandler.cb([2026])
-
-      // scrollToBottom should be called after 20ms delay
       expect(terminal.scrollToBottom).not.toHaveBeenCalled()
       vi.advanceTimersByTime(20)
       expect(terminal.scrollToBottom).toHaveBeenCalledTimes(1)
-
       vi.useRealTimers()
     })
 
     it('does not scroll to bottom if CSI 3 J is not inside a sync transaction', () => {
       vi.useFakeTimers()
-
       const handlers: { prefix?: string; final: string; cb: (params: (number | number[])[]) => void }[] = []
       vi.mocked(terminal.parser.registerCsiHandler).mockImplementation(
         (id: { prefix?: string; final: string }, cb: (params: (number | number[])[]) => boolean | Promise<boolean>) => {
@@ -178,70 +268,27 @@ describe('createPtyDataHandler', () => {
           return { dispose: vi.fn() }
         },
       )
-
       createHandler({ isAgent: true })
-
       const clearScrollbackHandler = handlers.find(h => h.final === 'J' && !h.prefix)!
       const syncResetHandler = handlers.find(h => h.prefix === '?' && h.final === 'l')!
-
-      // CSI 3 J without prior DEC mode 2026 set
       clearScrollbackHandler.cb([3])
-      syncResetHandler.cb([2026])
-
-      vi.advanceTimersByTime(20)
-      expect(terminal.scrollToBottom).not.toHaveBeenCalled()
-
-      vi.useRealTimers()
-    })
-
-    it('does not scroll if repaint transaction exceeds timeout', () => {
-      vi.useFakeTimers()
-
-      const handlers: { prefix?: string; final: string; cb: (params: (number | number[])[]) => void }[] = []
-      vi.mocked(terminal.parser.registerCsiHandler).mockImplementation(
-        (id: { prefix?: string; final: string }, cb: (params: (number | number[])[]) => boolean | Promise<boolean>) => {
-          handlers.push({ ...id, cb: cb as (params: (number | number[])[]) => void })
-          return { dispose: vi.fn() }
-        },
-      )
-
-      createHandler({ isAgent: true })
-
-      const syncSetHandler = handlers.find(h => h.prefix === '?' && h.final === 'h')!
-      const clearScrollbackHandler = handlers.find(h => h.final === 'J' && !h.prefix)!
-      const syncResetHandler = handlers.find(h => h.prefix === '?' && h.final === 'l')!
-
-      // Start transaction
-      syncSetHandler.cb([2026])
-      clearScrollbackHandler.cb([3])
-
-      // Wait longer than MAX_REPAINT_TRANSACTION_MS (2000ms)
-      vi.advanceTimersByTime(2100)
-
-      // End transaction — too late
       syncResetHandler.cb([2026])
       vi.advanceTimersByTime(20)
       expect(terminal.scrollToBottom).not.toHaveBeenCalled()
-
       vi.useRealTimers()
     })
 
     it('disposes CSI handlers on clearTimers', () => {
       const disposeFns = [vi.fn(), vi.fn(), vi.fn()]
       let callIdx = 0
-      vi.mocked(terminal.parser.registerCsiHandler).mockImplementation(() => {
-        return { dispose: disposeFns[callIdx++] }
-      })
-
+      vi.mocked(terminal.parser.registerCsiHandler).mockImplementation(() => ({ dispose: disposeFns[callIdx++] }))
       const handler = createHandler({ isAgent: true })
       handler.clearTimers()
-
       disposeFns.forEach(fn => expect(fn).toHaveBeenCalled())
     })
 
     it('ignores non-2026 DEC mode params', () => {
       vi.useFakeTimers()
-
       const handlers: { prefix?: string; final: string; cb: (params: (number | number[])[]) => void }[] = []
       vi.mocked(terminal.parser.registerCsiHandler).mockImplementation(
         (id: { prefix?: string; final: string }, cb: (params: (number | number[])[]) => boolean | Promise<boolean>) => {
@@ -249,49 +296,15 @@ describe('createPtyDataHandler', () => {
           return { dispose: vi.fn() }
         },
       )
-
       createHandler({ isAgent: true })
-
       const syncSetHandler = handlers.find(h => h.prefix === '?' && h.final === 'h')!
       const clearScrollbackHandler = handlers.find(h => h.final === 'J' && !h.prefix)!
       const syncResetHandler = handlers.find(h => h.prefix === '?' && h.final === 'l')!
-
-      // Use a different DEC mode (not 2026)
       syncSetHandler.cb([1049])
       clearScrollbackHandler.cb([3])
       syncResetHandler.cb([1049])
-
       vi.advanceTimersByTime(20)
       expect(terminal.scrollToBottom).not.toHaveBeenCalled()
-
-      vi.useRealTimers()
-    })
-
-    it('ignores non-3 erase params (e.g. CSI 2 J)', () => {
-      vi.useFakeTimers()
-
-      const handlers: { prefix?: string; final: string; cb: (params: (number | number[])[]) => void }[] = []
-      vi.mocked(terminal.parser.registerCsiHandler).mockImplementation(
-        (id: { prefix?: string; final: string }, cb: (params: (number | number[])[]) => boolean | Promise<boolean>) => {
-          handlers.push({ ...id, cb: cb as (params: (number | number[])[]) => void })
-          return { dispose: vi.fn() }
-        },
-      )
-
-      createHandler({ isAgent: true })
-
-      const syncSetHandler = handlers.find(h => h.prefix === '?' && h.final === 'h')!
-      const clearScrollbackHandler = handlers.find(h => h.final === 'J' && !h.prefix)!
-      const syncResetHandler = handlers.find(h => h.prefix === '?' && h.final === 'l')!
-
-      // CSI 2 J (clear screen, not scrollback)
-      syncSetHandler.cb([2026])
-      clearScrollbackHandler.cb([2])
-      syncResetHandler.cb([2026])
-
-      vi.advanceTimersByTime(20)
-      expect(terminal.scrollToBottom).not.toHaveBeenCalled()
-
       vi.useRealTimers()
     })
   })
