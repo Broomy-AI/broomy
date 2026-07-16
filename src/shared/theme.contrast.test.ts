@@ -13,7 +13,7 @@
 import { describe, expect, it } from 'vitest'
 import { PALETTE, TOKENS, type ThemeName, type Token } from './theme'
 import { composite, contrast, parseTriplet } from './color'
-import { ACCENT_PRESETS, deriveAccent } from './appearance'
+import { ACCENT_PRESETS, deriveAccent, deriveStatusColor } from './appearance'
 
 const THEME_NAMES = Object.keys(PALETTE) as ThemeName[]
 
@@ -126,11 +126,11 @@ describe.each(THEME_NAMES)('%s', (theme) => {
   // values on a light ground these are 1.48:1–2.67:1 — literally invisible.
   //
   // These are rendered as dots and a spinner — NON-TEXT indicators, WCAG floor 3:1.
-  // status-working is deliberately a vivid green rather than a dark forest one: a
+  // status-accent is deliberately a vivid green rather than a dark forest one: a
   // 12px spinner tuned to 4.5:1 (as if it were body text) comes out so dark it reads
   // as "dark", not "green". The point of a status colour is to be recognisable at a
   // glance, and green on white cannot be both vivid AND clear 4.5:1.
-  it.each(['status-working', 'status-waiting', 'status-idle'] as Token[])(
+  it.each(['status-accent', 'status-waiting', 'status-idle'] as Token[])(
     '%s is a visible non-text indicator on every surface',
     (token) => {
       for (const surface of SURFACES) expectContrast(theme, token, surface, AA_NON_TEXT)
@@ -212,5 +212,23 @@ describe('user-chosen accents', () => {
 
     // The fitted accent must still be a colour, not a clipped black or white.
     expect(accent.some((c, i) => c !== onAccent[i])).toBe(true)
+  })
+})
+
+/**
+ * Status colours are chosen at RUNTIME too — "Match accent" or a custom pick — so like
+ * the accents they must stay a visible NON-TEXT indicator after fitting: 3:1, or 4.5:1 in
+ * high contrast. This is the runtime counterpart of the static status-accent token check
+ * above, and the reason the dot is held to the non-text floor and NOT the 4.5:1 text bar.
+ */
+describe('user-chosen status colours', () => {
+  const cases = THEME_NAMES.flatMap((theme) =>
+    ['#4ade80', '#ff00ff', '#4a9eff', '#f59e0b', '#14b8a6'].map((hex) => ({ theme, hex }))
+  )
+
+  it.each(cases)('$hex stays a visible non-text indicator in $theme', ({ theme, hex }) => {
+    const min = theme === 'hc' || theme === 'hc-light' ? 4.5 : 3
+    const { contrastVsBg } = deriveStatusColor(hex, theme)
+    expect(contrastVsBg, `${hex} on ${theme} is ${contrastVsBg.toFixed(2)}:1`).toBeGreaterThanOrEqual(min - 0.01)
   })
 })

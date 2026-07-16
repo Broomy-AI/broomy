@@ -43,7 +43,7 @@
   --color-accent: 74 158 255;           /* #4a9eff */
   --color-on-accent: 255 255 255;       /* label on a saturated fill */
   --color-on-solid: 255 255 255;        /* label on a SEMANTIC fill — never follows the accent */
-  --color-status-working: 74 222 128;   /* #4ade80 */
+  --color-status-accent: 74 222 128;   /* #4ade80 */
   --color-status-waiting: 250 204 21;   /* #facc15 */
   --color-status-idle: 107 114 128;     /* #6b7280 */
   --color-status-error: 248 113 113;    /* #f87171 */
@@ -115,7 +115,7 @@
   --color-accent: 14 79 174;            /* #0e4fae —  7.4:1 (dark accent is 2.66:1 here) */
   --color-on-accent: 255 255 255;       
   --color-on-solid: 255 255 255;        /* label on a SEMANTIC fill — never follows the accent */
-  --color-status-working: 23 138 63;    /* #178a3f — vivid emerald; the working spinner is a non-text indicator (3:1) */
+  --color-status-accent: 23 138 63;    /* #178a3f — vivid emerald; status indicators are non-text (3:1), so tuned to that floor, not 4.5:1 */
   --color-status-waiting: 133 77 14;    /* yellow-800 — yellow-700 was 4.39:1 on bg-secondary */
   --color-status-idle: 87 83 78;        /* #57534e */
   --color-status-error: 185 28 28;      /* #b91c1c */
@@ -188,7 +188,7 @@
   --color-accent: 124 196 255;          
   --color-on-accent: 0 0 0;             /* dark label on a bright fill */
   --color-on-solid: 0 0 0;              /* label on a SEMANTIC fill — never follows the accent */
-  --color-status-working: 94 255 159;   
+  --color-status-accent: 94 255 159;   
   --color-status-waiting: 255 225 77;   
   --color-status-idle: 176 176 176;     
   --color-status-error: 255 128 128;    
@@ -257,7 +257,7 @@
   --color-accent: 0 61 153;             
   --color-on-accent: 255 255 255;       
   --color-on-solid: 255 255 255;        /* label on a SEMANTIC fill — never follows the accent */
-  --color-status-working: 0 102 34;     
+  --color-status-accent: 0 102 34;     
   --color-status-waiting: 122 74 0;     
   --color-status-idle: 61 61 61;        
   --color-status-error: 160 0 0;        

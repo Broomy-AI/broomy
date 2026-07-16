@@ -47,7 +47,7 @@ export const TOKENS = [
   // put a black label on a red button.
   'on-solid',
   // session/agent status
-  'status-working',
+  'status-accent',
   'status-waiting',
   'status-idle',
   'status-error',
@@ -96,7 +96,7 @@ export const PALETTE: Record<ThemeName, Record<Token, string>> = {
     'accent': '74 158 255',            // #4a9eff
     'on-accent': '255 255 255',        // label on a saturated fill
     'on-solid': '255 255 255',
-    'status-working': '74 222 128',    // #4ade80
+    'status-accent': '74 222 128',    // #4ade80
     'status-waiting': '250 204 21',    // #facc15
     'status-idle': '107 114 128',      // #6b7280
     'status-error': '248 113 113',     // #f87171
@@ -174,7 +174,7 @@ export const PALETTE: Record<ThemeName, Record<Token, string>> = {
     'accent': '14 79 174',             // #0e4fae —  7.4:1 (dark accent is 2.66:1 here)
     'on-accent': '255 255 255',
     'on-solid': '255 255 255',
-    'status-working': '23 138 63',      // #178a3f — a vivid emerald. The spinner
+    'status-accent': '23 138 63',      // #178a3f — a vivid emerald. The indicator
                                         // is a NON-TEXT indicator (WCAG 3:1), so it does
                                         // not need 4.5:1; tuning it as text made it dark.
     'status-waiting': '133 77 14',     // yellow-800 — yellow-700 was 4.39:1 on bg-secondary
@@ -248,7 +248,7 @@ export const PALETTE: Record<ThemeName, Record<Token, string>> = {
     'accent': '124 196 255',
     'on-accent': '0 0 0',              // dark label on a bright fill
     'on-solid': '0 0 0',
-    'status-working': '94 255 159',
+    'status-accent': '94 255 159',
     'status-waiting': '255 225 77',
     'status-idle': '176 176 176',
     'status-error': '255 128 128',
@@ -314,7 +314,7 @@ export const PALETTE: Record<ThemeName, Record<Token, string>> = {
     'accent': '0 61 153',
     'on-accent': '255 255 255',
     'on-solid': '255 255 255',
-    'status-working': '0 102 34',
+    'status-accent': '0 102 34',
     'status-waiting': '122 74 0',
     'status-idle': '61 61 61',
     'status-error': '160 0 0',

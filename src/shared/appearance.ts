@@ -19,6 +19,13 @@ import { IS_LIGHT, PALETTE, type ThemeName } from './theme'
 /** What the user picks. `system` follows the OS appearance. */
 export type ThemePreference = ThemeName | 'system'
 
+/**
+ * The status-indicator colour preference: the built-in green (`'default'`), the theme
+ * accent (`'accent'`), or a custom `#rrggbb`. The template-literal union keeps the two
+ * sentinels visible in autocomplete while still allowing any hex.
+ */
+export type StatusColorPreference = 'default' | 'accent' | `#${string}`
+
 export interface Appearance {
   theme: ThemePreference
   /** Multiplies every font-size token. Reaches the agent transcript, session list
@@ -45,6 +52,14 @@ export interface Appearance {
   terminalContrast: number | 'auto'
   /** The accent HUE. Fitted per theme — see deriveAccent. */
   accent: string
+  /**
+   * Colour of the status indicators — the unread "check me" dot and the "Working"
+   * spinner. `'default'` is the semantic green, `'accent'` follows the theme accent, a
+   * `#rrggbb` is a custom pick. Unlike `accent`, this is fitted to the NON-TEXT contrast
+   * floor (3:1; 4.5:1 in high contrast): a dot is not text, and tuning it to 4.5:1 is
+   * exactly what made the old green come out dark. See resolveStatusColorVar.
+   */
+  statusColor: StatusColorPreference
 }
 
 export const DEFAULT_APPEARANCE: Appearance = {
@@ -58,6 +73,9 @@ export const DEFAULT_APPEARANCE: Appearance = {
   terminalLineHeight: 1.2,
   terminalContrast: 'auto',
   accent: '#4a9eff',
+  // The semantic green, brightened per theme via the status-accent token. Not tied to
+  // `accent`: a purple button next to a green "ready" dot is the sensible default.
+  statusColor: 'default',
 }
 
 export const APP_TEXT_SCALES = [1, 1.1, 1.25, 1.4] as const
@@ -129,6 +147,66 @@ export function deriveAccent(accentHex: string, theme: ThemeName) {
   }
 }
 
+/** Recognises a #rrggbb hex, shared by the status-colour resolvers and the normaliser. */
+const STATUS_HEX = /^#[0-9a-fA-F]{6}$/
+
+/**
+ * Status-indicator contrast floor. The dot and the spinner are NON-TEXT indicators
+ * (WCAG 1.4.11, 3:1), not text — holding a filled dot to the 4.5:1 body-text bar is
+ * exactly what made the old green come out dark. High contrast asks for more, so 4.5.
+ */
+const statusTarget = (theme: ThemeName): number => (theme === 'hc' || theme === 'hc-light' ? 4.5 : 3)
+
+/**
+ * Fit a custom status colour to the theme — like deriveAccent, but to the non-text floor
+ * and against the WORST-CASE surface. The indicators sit on the sidebar (bg-secondary)
+ * and on active/hover cards; for a colour darkened (light theme) or lightened (dark
+ * theme) to reach a floor, bg-tertiary is the hardest of the three surfaces in every
+ * theme, so clearing it clears all three.
+ */
+export function deriveStatusColor(hex: string, theme: ThemeName) {
+  let picked: Rgb
+  try {
+    picked = hexToRgb(hex)
+  } catch {
+    picked = parseTriplet(PALETTE[theme]['status-accent'])
+  }
+  const bg = parseTriplet(PALETTE[theme]['bg-tertiary'])
+  const fitted = fitContrast(picked, bg, statusTarget(theme))
+  return {
+    rgb: fitted,
+    triplet: rgbToTriplet(fitted),
+    contrastVsBg: contrast(fitted, bg),
+    /** True when the pick had to be adjusted — worth telling the user. */
+    adjusted: fitted.join() !== picked.join(),
+  }
+}
+
+/**
+ * The RGB the status indicators resolve to for the current preference + theme, so the
+ * Settings preview matches the sidebar. `'accent'` follows the theme accent; a valid hex
+ * is fitted; anything else (`'default'`, or a hand-edited/garbage value) is the token
+ * default green.
+ */
+export function resolveStatusColorRgb(appearance: Appearance, theme: ThemeName): Rgb {
+  const { statusColor } = appearance
+  if (statusColor === 'accent') return deriveAccent(appearance.accent, theme).accent
+  if (typeof statusColor === 'string' && STATUS_HEX.test(statusColor)) {
+    return deriveStatusColor(statusColor, theme).rgb
+  }
+  return parseTriplet(PALETTE[theme]['status-accent'])
+}
+
+/**
+ * The triplet to write to the inline `--color-status-accent`, or `null` to clear it and
+ * let the per-theme CSS token (the green) win. Only `'accent'` and a custom hex override.
+ */
+export function resolveStatusColorVar(appearance: Appearance, theme: ThemeName): string | null {
+  const { statusColor } = appearance
+  const override = statusColor === 'accent' || (typeof statusColor === 'string' && STATUS_HEX.test(statusColor))
+  return override ? rgbToTriplet(resolveStatusColorRgb(appearance, theme)) : null
+}
+
 /** True when the resolved theme has a light base. Terminals and editors need this. */
 export const themeIsLight = (theme: ThemeName): boolean => IS_LIGHT[theme]
 
@@ -153,6 +231,13 @@ const clampToSteps = (value: unknown, steps: readonly number[], fallback: number
 
 const VALID_THEMES: ThemePreference[] = ['dark', 'light', 'hc', 'hc-light', 'system']
 
+/** 'accent' and a valid #rrggbb pass through; everything else → 'default'. */
+function normalizeStatusColor(raw: unknown): StatusColorPreference {
+  if (raw === 'accent') return 'accent'
+  if (typeof raw === 'string' && STATUS_HEX.test(raw)) return raw as `#${string}`
+  return 'default'
+}
+
 /**
  * Coerce anything off disk into a usable Appearance. A hand-edited or
  * partially-written settings file must degrade to defaults, never crash the app
@@ -176,6 +261,7 @@ export function normalizeAppearance(raw: unknown): Appearance {
       typeof r.accent === 'string' && /^#[0-9a-fA-F]{6}$/.test(r.accent)
         ? r.accent
         : DEFAULT_APPEARANCE.accent,
+    statusColor: normalizeStatusColor(r.statusColor),
   }
 }
 

@@ -53,3 +53,20 @@ export const MagentaAccentOnLight: Story = {
   },
   decorators: [withTheme('light')],
 }
+
+/** Status indicators following the theme accent instead of the default green. */
+export const StatusMatchAccentOnLight: Story = {
+  args: {
+    appearance: { ...DEFAULT_APPEARANCE, statusColor: 'accent' },
+    resolvedTheme: 'light',
+  },
+  decorators: [withTheme('light')],
+}
+
+/** A custom magenta status colour, fitted to the non-text floor on dark. */
+export const StatusCustomOnDark: Story = {
+  args: {
+    appearance: { ...DEFAULT_APPEARANCE, statusColor: '#ff00ff' },
+  },
+  decorators: [withTheme('dark')],
+}

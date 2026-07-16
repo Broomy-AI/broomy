@@ -20,8 +20,11 @@ import {
   TERMINAL_CONTRASTS,
   TERMINAL_LINE_HEIGHTS,
   deriveAccent,
+  deriveStatusColor,
+  resolveStatusColorRgb,
   resolveTerminalContrast,
   type Appearance,
+  type StatusColorPreference,
   type ThemePreference,
 } from '../../../shared/appearance'
 import { THEMES, type ThemeName } from '../../../shared/theme'
@@ -117,6 +120,13 @@ export function AppearanceSettings({
         </p>
       </div>
 
+      <StatusColorField
+        appearance={appearance}
+        resolvedTheme={resolvedTheme}
+        accentHex={fittedHex}
+        onChange={onChange}
+      />
+
       <Stepper
         id="app-text-size"
         label="App text size"
@@ -199,6 +209,101 @@ export function AppearanceSettings({
       >
         Reset appearance to defaults
       </button>
+    </div>
+  )
+}
+
+interface StatusColorFieldProps {
+  appearance: Appearance
+  resolvedTheme: ThemeName
+  accentHex: string
+  onChange: (patch: Partial<Appearance>) => void
+}
+
+/**
+ * The "Status indicator colour" control — the semantic green (default), the theme accent,
+ * or a custom pick — for the unread "check me" dot and the working spinner. The swatches
+ * and the preview render the SAME resolved colour the sidebar will, so what you see is
+ * what you get. Split out to keep AppearanceSettings under the max-lines rule.
+ */
+function StatusColorField({ appearance, resolvedTheme, accentHex, onChange }: StatusColorFieldProps) {
+  const statusHex = rgbToHex(resolveStatusColorRgb(appearance, resolvedTheme))
+  const greenHex = rgbToHex(resolveStatusColorRgb({ ...appearance, statusColor: 'default' }, resolvedTheme))
+  const isCustom = appearance.statusColor !== 'default' && appearance.statusColor !== 'accent'
+  const custom = isCustom ? deriveStatusColor(appearance.statusColor, resolvedTheme) : null
+  const help =
+    appearance.statusColor === 'accent'
+      ? 'Follows your accent colour above.'
+      : !isCustom
+        ? 'The semantic ready / check-me green, brightened per theme. A non-text indicator, so it clears 3:1 — not the 4.5:1 used for text.'
+        : custom?.adjusted
+          ? `Darkened to ${statusHex} for this theme so the dot stays visible (${custom.contrastVsBg.toFixed(1)}:1). Fitted to the 3:1 non-text floor, not the 4.5:1 used for text.`
+          : `${custom?.contrastVsBg.toFixed(1)}:1 against the sidebar — a non-text indicator, so 3:1 is enough.`
+
+  return (
+    <div className="space-y-2">
+      <span className="text-xs text-text-secondary">Status indicator colour</span>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onChange({ statusColor: 'default' })}
+          title="Green (default)"
+          aria-label="Green (default)"
+          aria-pressed={appearance.statusColor === 'default'}
+          className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${
+            appearance.statusColor === 'default' ? 'border-text-primary' : 'border-border'
+          }`}
+          style={{ backgroundColor: greenHex }}
+        />
+        <button
+          type="button"
+          onClick={() => onChange({ statusColor: 'accent' })}
+          title="Match accent"
+          aria-label="Match accent"
+          aria-pressed={appearance.statusColor === 'accent'}
+          className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${
+            appearance.statusColor === 'accent' ? 'border-text-primary' : 'border-border'
+          }`}
+          style={{ backgroundColor: accentHex }}
+        />
+        <label
+          className={`h-6 w-6 rounded-full border-2 grid place-items-center cursor-pointer text-micro text-text-secondary hover:border-text-primary ${
+            isCustom ? 'border-text-primary' : 'border-border'
+          }`}
+          title="Custom colour"
+        >
+          +
+          <input
+            type="color"
+            value={isCustom ? appearance.statusColor : statusHex}
+            onChange={(e) => onChange({ statusColor: e.target.value as StatusColorPreference })}
+            className="sr-only"
+            aria-label="Custom status colour"
+          />
+        </label>
+        <span className="ml-1 flex items-center gap-2" aria-hidden="true">
+          <span
+            className="w-3 h-3 rounded-full"
+            style={{ backgroundColor: statusHex, boxShadow: `0 0 6px 1px ${statusHex}80` }}
+          />
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ color: statusHex }}>
+            <circle
+              className="opacity-[var(--spinner-track-opacity)]"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-[var(--spinner-arc-opacity)]"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            />
+          </svg>
+        </span>
+      </div>
+      <p className="text-xs text-text-tertiary">{help}</p>
     </div>
   )
 }

@@ -7,7 +7,7 @@
  */
 import { useEffect } from 'react'
 import { useSettingsStore } from '../../store/settings'
-import { deriveAccent } from '../../../shared/appearance'
+import { deriveAccent, resolveStatusColorVar } from '../../../shared/appearance'
 
 /** Set the theme, accent and text scale on <html>. Safe to call before React mounts. */
 export function applyAppearanceToDocument(): void {
@@ -30,6 +30,16 @@ export function applyAppearanceToDocument(): void {
     root.style.removeProperty('--color-focus-ring')
   } else {
     root.style.setProperty('--color-focus-ring', accentTriplet)
+  }
+
+  // The status indicators (unread "check me" dot, working spinner) ride the same seam.
+  // 'default' returns null → clear the inline var so the per-theme CSS token (the green)
+  // wins; 'accent'/custom return a fitted triplet that overrides it.
+  const statusTriplet = resolveStatusColorVar(appearance, resolvedTheme)
+  if (statusTriplet) {
+    root.style.setProperty('--color-status-accent', statusTriplet)
+  } else {
+    root.style.removeProperty('--color-status-accent')
   }
 }
 

@@ -54,7 +54,7 @@ function StatusIndicator({ status, isUnread }: { status: SessionStatus; isUnread
   }
 
   if (status === 'working') {
-    return <Spinner className="text-status-working" />
+    return <Spinner className="text-status-accent" />
   }
 
   if (status === 'error') {
@@ -64,7 +64,7 @@ function StatusIndicator({ status, isUnread }: { status: SessionStatus; isUnread
   // idle
   if (isUnread) {
     return (
-      <span className="w-3 h-3 rounded-full bg-success-fg shadow-[0_0_6px_1px_rgba(74,222,128,0.5)]" />
+      <span className="w-3 h-3 rounded-full bg-status-accent shadow-[0_0_6px_1px_rgb(var(--color-status-accent)/0.5)]" />
     )
   }
   return <span className="w-2 h-2 rounded-full bg-status-idle" />

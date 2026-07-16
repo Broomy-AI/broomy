@@ -2,8 +2,8 @@
  * Feature Documentation: Appearance (themes and text size)
  *
  * Broomy was dark-only, with every font size hardcoded to 13px. This adds a light
- * theme, two high-contrast themes, a customisable accent colour, and three
- * independent size controls.
+ * theme, two high-contrast themes, a customisable accent colour, a configurable
+ * status-indicator (LED / spinner) colour, and three independent size controls.
  *
  * Run with: pnpm test:feature-docs appearance
  */
@@ -49,7 +49,8 @@ test.afterAll(async () => {
       description:
         'Broomy was dark-only and every font size was hardcoded to 13px, which is a real barrier ' +
         'for low-vision users. Appearance adds a light theme, two high-contrast themes, a ' +
-        'customisable accent colour, and three independent size controls. It is the first section ' +
+        'customisable accent colour, a configurable status-indicator colour, and three independent ' +
+        'size controls. It is the first section ' +
         'in Settings on purpose: someone who cannot read the UI should not have to scroll past it ' +
         'to find the control that fixes that. Colours resolve through CSS custom properties, so a ' +
         'theme change repaints the whole app — including Monaco and the agent terminal — without ' +
@@ -137,16 +138,38 @@ test.describe.serial('Feature: Appearance', () => {
     })
   })
 
-  test('Step 5: App text size — the control that reaches the agent transcript', async () => {
+  test('Step 5: Status indicator colour — decoupled from text contrast', async () => {
+    // Still on light from the accent step. Match the status colour to the accent so the
+    // LED and spinner follow it instead of the default green.
+    await page.locator('button[aria-label="Match accent"]').click()
+    await expect(page.locator('button[aria-label="Match accent"]')).toHaveAttribute('aria-pressed', 'true')
+
+    await page.screenshot({ path: path.join(SCREENSHOTS, '05-status-colour.png') })
+    steps.push({
+      screenshotPath: 'screenshots/05-status-colour.png',
+      caption: 'The status LED and spinner colour, held to the non-text contrast bar',
+      description:
+        'The sidebar\'s unread "check me" dot and the "Working" spinner are NON-TEXT indicators. ' +
+        'WCAG governs them at 3:1 (1.4.11), not the 4.5:1 body-text bar (1.4.3) — and tuning a 12px ' +
+        'dot to 4.5:1 is exactly what made the old green come out dark forest-green on a light ' +
+        'ground. They now ride a dedicated status-accent token fitted to the non-text floor, so the ' +
+        'green stays a vivid emerald. This control keeps that green, matches the theme accent ' +
+        '(shown here), or takes any custom colour — each fitted per theme against the worst-case ' +
+        'sidebar surface so the dot never washes out. The live dot-and-spinner preview renders the ' +
+        'exact colour the sidebar will show.',
+    })
+  })
+
+  test('Step 6: App text size — the control that reaches the agent transcript', async () => {
     const increase = page.locator('button[aria-label="Increase App text size"]')
     await increase.click()
     await increase.click()
 
     await expect(page.locator('#app-text-size')).toContainText('125%')
 
-    await page.screenshot({ path: path.join(SCREENSHOTS, '05-app-text-size.png') })
+    await page.screenshot({ path: path.join(SCREENSHOTS, '06-app-text-size.png') })
     steps.push({
-      screenshotPath: 'screenshots/05-app-text-size.png',
+      screenshotPath: 'screenshots/06-app-text-size.png',
       caption: 'App text size at 125%',
       description:
         'Three size controls, because one is not enough. **App text size** scales every font ' +
@@ -160,12 +183,12 @@ test.describe.serial('Feature: Appearance', () => {
     })
   })
 
-  test('Step 6: Back to dark, and everything persists', async () => {
+  test('Step 7: Back to dark, and everything persists', async () => {
     await setTheme('dark')
 
-    await page.screenshot({ path: path.join(SCREENSHOTS, '06-back-to-dark.png') })
+    await page.screenshot({ path: path.join(SCREENSHOTS, '07-back-to-dark.png') })
     steps.push({
-      screenshotPath: 'screenshots/06-back-to-dark.png',
+      screenshotPath: 'screenshots/07-back-to-dark.png',
       caption: 'Back to dark — the accent and text size survive the theme change',
       description:
         'Appearance is stored globally in ~/.broomy/settings.json rather than per-profile: ' +

@@ -43,7 +43,7 @@ export default {
         'accent': token('accent'),
         'on-accent': token('on-accent'),
         'on-solid': token('on-solid'),
-        'status-working': token('status-working'),
+        'status-accent': token('status-accent'),
         'status-waiting': token('status-waiting'),
         'status-idle': token('status-idle'),
         'status-error': token('status-error'),

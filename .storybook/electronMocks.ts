@@ -26,6 +26,7 @@ export function installElectronMocks() {
       terminalLineHeight: 1.2,
       terminalContrast: 7,
       accent: '#4a9eff',
+      statusColor: 'default',
     },
     systemIsDark: true,
     resolvedTheme: 'dark',

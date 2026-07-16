@@ -149,7 +149,7 @@ A raw `text-red-400` is hardcoded for a dark background and cannot follow a them
 | Lines | `border` `border-strong` |
 | Text | `text-primary` `text-secondary` `text-tertiary` |
 | Brand | `accent` `on-accent` (the label that sits *on* a saturated fill) |
-| Status | `status-working` `status-waiting` `status-idle` `status-error` |
+| Status | `status-accent` `status-waiting` `status-idle` `status-error` |
 | Roles | `danger-*` `warning-*` `success-*` `info-*` `review-*` `attention-*` `note-*` |
 | Neutral roles | `muted` `overlay` (modal scrim, dark in every theme) `elevate` (a wash *over* a surface) |
 
