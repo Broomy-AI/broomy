@@ -71,15 +71,15 @@ function PrRow({ pr, hasSession, isFocused, onSelect, onMouseEnter }: { key?: st
       onMouseEnter={onMouseEnter}
       data-pr-row
       className={`w-full flex items-start gap-3 p-2 rounded border transition-colors text-left ${
-        isFocused ? 'bg-bg-tertiary border-purple-500/50 ring-1 ring-purple-500/50' : 'border-border bg-bg-primary hover:bg-bg-tertiary hover:border-purple-500/50'
+        isFocused ? 'bg-bg-tertiary border-review-base/50 ring-1 ring-review-base/50' : 'border-border bg-bg-primary hover:bg-bg-tertiary hover:border-review-base/50'
       }`}
     >
-      <span className="text-purple-400 font-mono text-xs mt-0.5 flex-shrink-0">#{pr.number}</span>
+      <span className="text-review-fg font-mono text-xs mt-0.5 flex-shrink-0">#{pr.number}</span>
       <div className="flex-1 min-w-0">
         <div className="text-sm text-text-primary flex items-center gap-2">
           {pr.title}
           {hasSession && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 flex-shrink-0">
+            <span className="text-3xs px-1.5 py-0.5 rounded-full bg-warning-base/20 text-warning-fg flex-shrink-0">
               reviewing
             </span>
           )}
@@ -88,7 +88,7 @@ function PrRow({ pr, hasSession, isFocused, onSelect, onMouseEnter }: { key?: st
         {pr.labels.length > 0 && (
           <div className="flex gap-1 mt-1 flex-wrap">
             {pr.labels.map((label) => (
-              <span key={label} className="text-xs px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400">
+              <span key={label} className="text-xs px-1.5 py-0.5 rounded-full bg-review-base/20 text-review-fg">
                 {label}
               </span>
             ))}
@@ -119,7 +119,7 @@ function PrConfirmation({ repo, pr, agents, error, creating, onBack, onCreate, o
       </div>
 
       <div className="p-4 space-y-3">
-        <div className="rounded border border-purple-500/30 bg-purple-500/5 px-3 py-2">
+        <div className="rounded border border-review-base/30 bg-review-base/5 px-3 py-2">
           <div className="text-xs text-text-secondary">PR #{pr.number} by {pr.author}</div>
           <div className="text-sm text-text-primary">{pr.title}</div>
           <div className="text-xs text-text-secondary mt-1 font-mono">
@@ -128,7 +128,7 @@ function PrConfirmation({ repo, pr, agents, error, creating, onBack, onCreate, o
           {pr.labels.length > 0 && (
             <div className="flex gap-1 mt-1 flex-wrap">
               {pr.labels.map((label) => (
-                <span key={label} className="text-xs px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-400">
+                <span key={label} className="text-xs px-1.5 py-0.5 rounded-full bg-review-base/20 text-review-fg">
                   {label}
                 </span>
               ))}
@@ -151,7 +151,7 @@ function PrConfirmation({ repo, pr, agents, error, creating, onBack, onCreate, o
         </div>
 
         {error && (
-          <div className="text-xs text-red-400 bg-red-400/10 rounded px-3 py-2 whitespace-pre-wrap">{error}</div>
+          <div className="text-xs text-danger-fg bg-danger-fg/10 rounded px-3 py-2 whitespace-pre-wrap">{error}</div>
         )}
       </div>
 
@@ -165,7 +165,7 @@ function PrConfirmation({ repo, pr, agents, error, creating, onBack, onCreate, o
         <button
           onClick={onCreate}
           disabled={creating}
-          className="px-4 py-2 text-sm rounded bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="px-4 py-2 text-sm rounded bg-review-solid text-on-accent hover:bg-review-base disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {creating ? 'Setting up...' : 'Start Review'}
         </button>

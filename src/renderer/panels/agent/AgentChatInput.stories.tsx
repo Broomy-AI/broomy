@@ -4,7 +4,7 @@ import { AgentChatInput } from './AgentChatInput'
 const meta: Meta<typeof AgentChatInput> = {
   title: 'Agent/AgentChatInput',
   component: AgentChatInput,
-  decorators: [(Story) => <div className="bg-[#1a1a1a] max-w-2xl"><Story /></div>],
+  decorators: [(Story) => <div className="bg-bg-primary max-w-2xl"><Story /></div>],
 }
 export default meta
 type Story = StoryObj<typeof AgentChatInput>

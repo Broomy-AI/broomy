@@ -64,7 +64,7 @@ export default function Explorer({
   }
 
   const tabBtnClass = (active: boolean) => `p-1 rounded transition-colors ${
-    active ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
+    active ? 'bg-accent text-on-accent' : 'text-text-secondary hover:text-text-primary hover:bg-bg-tertiary'
   }`
 
   return (
@@ -88,7 +88,7 @@ export default function Explorer({
             onClick={() => onFileSelect?.({ filePath: planFilePath, openInDiffMode: false })}
             className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors ${
               selectedFilePath === planFilePath
-                ? 'bg-accent text-white'
+                ? 'bg-accent text-on-accent'
                 : 'bg-bg-tertiary text-text-secondary hover:text-text-primary hover:bg-accent/20'
             }`}
             title={planFilePath}

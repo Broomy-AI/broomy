@@ -50,7 +50,7 @@ function RepoRow({
           </button>
         )}
         {ghAvailable && (
-          <button onClick={() => onReviewPrs(repo)} className="px-2 py-1 text-xs rounded bg-bg-tertiary hover:bg-purple-500/20 text-text-secondary hover:text-purple-400 transition-colors" title="Review pull requests">
+          <button onClick={() => onReviewPrs(repo)} className="px-2 py-1 text-xs rounded bg-bg-tertiary hover:bg-review-base/20 text-text-secondary hover:text-review-fg transition-colors" title="Review pull requests">
             <u>R</u>eview
           </button>
         )}
@@ -148,7 +148,7 @@ export function HomeView({
         )}
         {ghAvailable === false && repos.length > 0 && (
           <div className="text-xs text-text-secondary bg-bg-tertiary rounded px-3 py-2 border border-border">
-            <span className="font-medium text-yellow-400">GitHub CLI (gh) not found.</span>{' '}
+            <span className="font-medium text-warning-fg">GitHub CLI (gh) not found.</span>{' '}
             Issues and PR review features are hidden. Install it to enable them:{' '}
             <button onClick={() => window.shell.openExternal('https://cli.github.com')} className="text-accent hover:underline">cli.github.com</button>
           </div>

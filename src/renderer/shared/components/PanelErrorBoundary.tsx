@@ -37,14 +37,14 @@ export default class PanelErrorBoundary extends Component<Props, State> {
     if (this.state.error) {
       return (
         <div className="flex flex-col h-full">
-          <div className="flex-shrink-0 px-3 py-2 bg-red-600/20 border-b border-red-600/40 flex items-center justify-between gap-2">
-            <span className="text-xs text-red-300 truncate">
+          <div className="flex-shrink-0 px-3 py-2 bg-danger-solid/20 border-b border-danger-solid/40 flex items-center justify-between gap-2">
+            <span className="text-xs text-danger-soft truncate">
               {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
               {(this as any).props.name} crashed: {this.state.error.message}
             </span>
             <button
               onClick={this.handleRetry}
-              className="flex-shrink-0 px-2 py-0.5 text-xs rounded bg-red-600/30 text-red-300 hover:bg-red-600/40 transition-colors"
+              className="flex-shrink-0 px-2 py-0.5 text-xs rounded bg-danger-solid/30 text-danger-soft hover:bg-danger-solid/40 transition-colors"
             >
               Retry
             </button>

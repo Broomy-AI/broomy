@@ -100,7 +100,7 @@ const shortcutGroups: ShortcutGroup[] = [
 
 export default function ShortcutsModal({ onClose }: ShortcutsModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/50">
       <div role="dialog" className="bg-bg-secondary border border-border rounded-lg shadow-xl w-[500px] max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
@@ -139,7 +139,7 @@ export default function ShortcutsModal({ onClose }: ShortcutsModalProps) {
         <div className="px-6 py-4 border-t border-border flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm rounded bg-accent text-white hover:bg-accent/90 transition-colors"
+            className="px-4 py-2 text-sm rounded bg-accent text-on-accent hover:bg-accent/90 transition-colors"
           >
             Close
           </button>

@@ -181,7 +181,7 @@ export function RepoSettingsView({
             <div className="pt-2 border-t border-border">
               <button
                 onClick={handleDelete}
-                className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                className="text-xs text-danger-fg hover:text-danger-soft transition-colors"
               >
                 Remove repository from Broomy
               </button>
@@ -204,7 +204,7 @@ export function RepoSettingsView({
           <button
             onClick={handleSave}
             disabled={saving || loading}
-            className="px-4 py-2 text-sm rounded bg-accent text-white hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-4 py-2 text-sm rounded bg-accent text-on-accent hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {saving ? 'Saving...' : 'Save'}
           </button>

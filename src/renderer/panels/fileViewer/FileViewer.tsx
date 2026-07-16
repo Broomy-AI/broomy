@@ -78,7 +78,7 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
 
   if (viewer.error && viewer.viewMode !== 'diff') {
     return (
-      <div className="h-full flex items-center justify-center text-red-400 text-sm">
+      <div className="h-full flex items-center justify-center text-danger-fg text-sm">
         {viewer.error}
       </div>
     )
@@ -99,8 +99,8 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
     <div className="h-full flex flex-col">
       {/* File changed on disk notification */}
       {viewer.fileChangedOnDisk && (
-        <div className="flex-shrink-0 px-3 py-2 bg-yellow-600/20 border-b border-yellow-600/40 flex items-center justify-between">
-          <span className="text-xs text-yellow-300">This file has been changed on disk.</span>
+        <div className="flex-shrink-0 px-3 py-2 bg-warning-solid/20 border-b border-warning-solid/40 flex items-center justify-between">
+          <span className="text-xs text-warning-soft">This file has been changed on disk.</span>
           <div className="flex gap-2">
             <button
               onClick={viewer.handleKeepLocalChanges}
@@ -110,7 +110,7 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
             </button>
             <button
               onClick={viewer.handleLoadDiskVersion}
-              className="px-2 py-0.5 text-xs rounded bg-yellow-600/30 text-yellow-300 hover:bg-yellow-600/40 transition-colors"
+              className="px-2 py-0.5 text-xs rounded bg-warning-solid/30 text-warning-soft hover:bg-warning-solid/40 transition-colors"
             >
               Load disk version
             </button>
@@ -187,7 +187,7 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
       </div>
 
       {viewer.pendingViewMode && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/50">
           <div role="dialog" className="bg-bg-secondary border border-border rounded-lg shadow-xl p-4 max-w-sm mx-4">
             <h3 className="text-sm font-medium text-text-primary mb-2">Unsaved Changes</h3>
             <p className="text-xs text-text-secondary mb-4">
@@ -195,8 +195,8 @@ export default function FileViewer({ filePath, position = 'top', onPositionChang
             </p>
             <div className="flex gap-2 justify-end">
               <button onClick={viewer.handleViewModeCancel} className="px-3 py-1.5 text-xs rounded bg-bg-tertiary text-text-secondary hover:text-text-primary transition-colors">Cancel</button>
-              <button onClick={viewer.handleViewModeDiscard} className="px-3 py-1.5 text-xs rounded bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors">Discard</button>
-              <button onClick={viewer.handleViewModeSave} className="px-3 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/80 transition-colors">Save</button>
+              <button onClick={viewer.handleViewModeDiscard} className="px-3 py-1.5 text-xs rounded bg-danger-solid/20 text-danger-fg hover:bg-danger-solid/30 transition-colors">Discard</button>
+              <button onClick={viewer.handleViewModeSave} className="px-3 py-1.5 text-xs rounded bg-accent text-on-accent hover:bg-accent/80 transition-colors">Save</button>
             </div>
           </div>
         </div>

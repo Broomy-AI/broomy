@@ -91,7 +91,7 @@ export default function FileViewerToolbar({
           <button
             onClick={onSaveButton}
             disabled={isSaving}
-            className="px-2 py-0.5 text-xs rounded bg-accent text-white hover:bg-accent/80 transition-colors disabled:opacity-50"
+            className="px-2 py-0.5 text-xs rounded bg-accent text-on-accent hover:bg-accent/80 transition-colors disabled:opacity-50"
             title="Save (Cmd+S)"
           >
             {isSaving ? 'Saving...' : 'Save'}
@@ -127,7 +127,7 @@ export default function FileViewerToolbar({
         )}
         <span className="text-xs text-text-secondary truncate">{relativePath}</span>
         {fileStatus === 'deleted' && (
-          <span className="text-xs px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 shrink-0">
+          <span className="text-xs px-1.5 py-0.5 rounded bg-danger-base/20 text-danger-fg shrink-0">
             Deleted
           </span>
         )}
@@ -157,7 +157,7 @@ export default function FileViewerToolbar({
             onClick={() => onSetDiffSideBySide(!diffSideBySide)}
             className={`p-1.5 rounded transition-colors ${
               diffSideBySide
-                ? 'bg-accent text-white'
+                ? 'bg-accent text-on-accent'
                 : 'bg-bg-tertiary text-text-secondary hover:text-text-primary'
             }`}
             title={diffSideBySide ? 'Switch to inline view' : 'Switch to side-by-side view'}
@@ -180,7 +180,7 @@ export default function FileViewerToolbar({
                 }}
                 className={`p-1.5 rounded transition-colors ${
                   selectedViewerId === viewer.id && viewMode === 'latest'
-                    ? 'bg-accent text-white'
+                    ? 'bg-accent text-on-accent'
                     : 'bg-bg-tertiary text-text-secondary hover:text-text-primary'
                 }`}
                 title={viewer.name}
@@ -198,7 +198,7 @@ export default function FileViewerToolbar({
                 onClick={() => onSetViewMode('diff')}
                 className={`p-1.5 rounded transition-colors ${
                   viewMode === 'diff'
-                    ? 'bg-accent text-white'
+                    ? 'bg-accent text-on-accent'
                     : 'bg-bg-tertiary text-text-secondary hover:text-text-primary'
                 }`}
                 title="Diff"
@@ -248,7 +248,7 @@ function PositionToggle({ position, onPositionChange }: { position: FileViewerPo
     <>
       <button
         onClick={() => onPositionChange('top')}
-        className={`p-1 rounded transition-colors ${position === 'top' ? 'bg-accent text-white' : 'hover:bg-bg-tertiary text-text-secondary hover:text-text-primary'}`}
+        className={`p-1 rounded transition-colors ${position === 'top' ? 'bg-accent text-on-accent' : 'hover:bg-bg-tertiary text-text-secondary hover:text-text-primary'}`}
         title="Position above agent"
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -258,7 +258,7 @@ function PositionToggle({ position, onPositionChange }: { position: FileViewerPo
       </button>
       <button
         onClick={() => onPositionChange('left')}
-        className={`p-1 rounded transition-colors ${position === 'left' ? 'bg-accent text-white' : 'hover:bg-bg-tertiary text-text-secondary hover:text-text-primary'}`}
+        className={`p-1 rounded transition-colors ${position === 'left' ? 'bg-accent text-on-accent' : 'hover:bg-bg-tertiary text-text-secondary hover:text-text-primary'}`}
         title="Position left of agent"
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

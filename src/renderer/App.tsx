@@ -51,7 +51,7 @@ function UnsavedChangesDialog({ onCancel, onDiscard, onSave }: {
   onCancel: () => void; onDiscard: () => void; onSave: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/50">
       <div className="bg-bg-secondary border border-border rounded-lg shadow-xl p-4 max-w-sm mx-4">
         <h3 className="text-sm font-medium text-text-primary mb-2">Unsaved Changes</h3>
         <p className="text-xs text-text-secondary mb-4">
@@ -59,8 +59,8 @@ function UnsavedChangesDialog({ onCancel, onDiscard, onSave }: {
         </p>
         <div className="flex gap-2 justify-end">
           <button onClick={onCancel} className="px-3 py-1.5 text-xs rounded bg-bg-tertiary text-text-secondary hover:text-text-primary transition-colors">Cancel</button>
-          <button onClick={onDiscard} className="px-3 py-1.5 text-xs rounded bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors">Discard</button>
-          <button onClick={onSave} className="px-3 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/80 transition-colors">Save</button>
+          <button onClick={onDiscard} className="px-3 py-1.5 text-xs rounded bg-danger-solid/20 text-danger-fg hover:bg-danger-solid/30 transition-colors">Discard</button>
+          <button onClick={onSave} className="px-3 py-1.5 text-xs rounded bg-accent text-on-accent hover:bg-accent/80 transition-colors">Save</button>
         </div>
       </div>
     </div>
@@ -71,7 +71,7 @@ function DuplicateSessionModal({ info, onDismiss }: {
   info: { name: string; wasArchived: boolean }; onDismiss: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/50">
       <div className="bg-bg-secondary border border-border rounded-lg shadow-xl p-4 max-w-sm mx-4">
         <p className="text-sm text-text-primary mb-4">
           {info.wasArchived
@@ -82,7 +82,7 @@ function DuplicateSessionModal({ info, onDismiss }: {
         <div className="flex justify-end">
           <button
             onClick={onDismiss}
-            className="px-3 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/80 transition-colors"
+            className="px-3 py-1.5 text-xs rounded bg-accent text-on-accent hover:bg-accent/80 transition-colors"
           >
             OK
           </button>
@@ -96,9 +96,9 @@ function GitMissingBanner() {
   const { gitAvailable } = useRepoStore()
   if (gitAvailable !== false) return null
   return (
-    <div className="bg-red-900/30 border-b border-red-500/30 px-4 py-2 text-xs text-red-300 flex items-center gap-2">
+    <div className="bg-danger-deep/30 border-b border-danger-base/30 px-4 py-2 text-xs text-danger-soft flex items-center gap-2">
       <span className="font-medium">git is not installed.</span>
-      <span className="text-red-400">Broomy requires git to manage repositories.</span>
+      <span className="text-danger-fg">Broomy requires git to manage repositories.</span>
       <button onClick={() => window.shell.openExternal('https://git-scm.com/downloads')} className="text-accent hover:underline ml-1">Download git</button>
     </div>
   )
@@ -108,9 +108,9 @@ function GhMissingBanner() {
   const { ghAvailable } = useRepoStore()
   if (ghAvailable !== false) return null
   return (
-    <div className="bg-yellow-900/30 border-b border-yellow-500/30 px-4 py-2 text-xs text-yellow-300 flex items-center gap-2">
+    <div className="bg-warning-deep/30 border-b border-warning-base/30 px-4 py-2 text-xs text-warning-soft flex items-center gap-2">
       <span className="font-medium">GitHub CLI (gh) is not installed.</span>
-      <span className="text-yellow-400">Install it for authentication, issues, and PR features.</span>
+      <span className="text-warning-fg">Install it for authentication, issues, and PR features.</span>
       <button onClick={() => window.shell.openExternal('https://cli.github.com')} className="text-accent hover:underline ml-1">Install gh</button>
     </div>
   )

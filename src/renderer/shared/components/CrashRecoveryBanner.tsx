@@ -24,7 +24,7 @@ export default function CrashRecoveryBanner() {
   }
 
   return (
-    <div className="bg-red-900/30 border-b border-red-500/30 px-4 py-2 text-xs text-red-300 flex items-center gap-2">
+    <div className="bg-danger-deep/30 border-b border-danger-base/30 px-4 py-2 text-xs text-danger-soft flex items-center gap-2">
       <span className="font-medium">Broomy crashed unexpectedly during your last session.</span>
       <button
         onClick={() => void handleReport()}
@@ -34,7 +34,7 @@ export default function CrashRecoveryBanner() {
       </button>
       <button
         onClick={() => void handleDismiss()}
-        className="text-red-400 hover:text-red-300 ml-1"
+        className="text-danger-fg hover:text-danger-soft ml-1"
       >
         Dismiss
       </button>

@@ -21,7 +21,7 @@ import { Divider } from './Divider'
 
 function FlashOverlay({ panelId, flashedPanel }: { panelId: string; flashedPanel: string | null }) {
   return flashedPanel === panelId ? (
-    <div className="absolute inset-0 bg-white/10 pointer-events-none z-10" />
+    <div className="absolute inset-0 bg-elevate/10 pointer-events-none z-10" />
   ) : null
 }
 
@@ -209,7 +209,7 @@ export default function Layout({
             {errorMessage && (
               <div className="flex-1 flex items-center justify-center bg-bg-primary text-text-secondary">
                 <div className="text-center">
-                  <p className="text-red-400">{errorMessage}</p>
+                  <p className="text-danger-fg">{errorMessage}</p>
                 </div>
               </div>
             )}

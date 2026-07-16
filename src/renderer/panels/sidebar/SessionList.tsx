@@ -102,7 +102,7 @@ export default function SessionList({
       <div className="p-3 border-b border-border flex items-center gap-2">
         <button
           onClick={onNewSession}
-          className="flex-1 py-2 px-3 bg-accent hover:bg-accent/80 text-white text-sm font-medium rounded transition-colors"
+          className="flex-1 py-2 px-3 bg-accent hover:bg-accent/80 text-on-accent text-sm font-medium rounded transition-colors"
         >
           + New Session
         </button>

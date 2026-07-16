@@ -142,7 +142,7 @@ describe('AgentChatMessage', () => {
     }
     const { container } = render(<AgentChatMessage msg={msg} />)
     expect(screen.getByText('Rate limit exceeded')).toBeTruthy()
-    expect(container.querySelector('.border-red-800')).toBeTruthy()
+    expect(container.querySelector('.border-danger-deeper')).toBeTruthy()
   })
 
   it('renders ExitPlanMode as markdown plan block', () => {

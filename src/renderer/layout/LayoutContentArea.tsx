@@ -10,7 +10,7 @@ import { Divider } from './Divider'
 
 function FlashOverlay({ panelId, flashedPanel }: { panelId: string; flashedPanel: string | null }) {
   return flashedPanel === panelId ? (
-    <div className="absolute inset-0 bg-white/10 pointer-events-none z-10" />
+    <div className="absolute inset-0 bg-elevate/10 pointer-events-none z-10" />
   ) : null
 }
 

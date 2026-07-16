@@ -406,7 +406,7 @@ export default function ReviewPanel({ session, repo, onSelectFile, gitStatus, sy
             </button>
           )}
         </div>
-        {error && <div className="text-xs text-red-400 mt-1">{error}</div>}
+        {error && <div className="text-xs text-danger-fg mt-1">{error}</div>}
       </div>
 
       {/* Action buttons from commands.json filtered by surface='review' */}

@@ -94,12 +94,12 @@ export function GitIdentitySetup({
   if (saved) {
     return (
       <div className="flex items-center gap-2">
-        <span className="text-xs text-green-400">
+        <span className="text-xs text-success-fg">
           {showIdentity ? 'Git identity configured.' : 'Default merge mode configured.'}
         </span>
         <button
           onClick={onRetry}
-          className="px-3 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/80 transition-colors"
+          className="px-3 py-1.5 text-xs rounded bg-accent text-on-accent hover:bg-accent/80 transition-colors"
         >
           {retryLabel}
         </button>
@@ -109,7 +109,7 @@ export function GitIdentitySetup({
 
   return (
     <div className="space-y-2">
-      <p className="text-xs text-yellow-300">
+      <p className="text-xs text-warning-soft">
         {showIdentity
           ? 'Git identity not configured. Enter your name and email to continue.'
           : 'Git default merge mode not configured.'}
@@ -135,13 +135,13 @@ export function GitIdentitySetup({
       )}
 
       {saveError && (
-        <p className="text-xs text-red-400">{saveError}</p>
+        <p className="text-xs text-danger-fg">{saveError}</p>
       )}
 
       <button
         onClick={handleSave}
         disabled={saving || (showIdentity && (!name.trim() || !email.trim()))}
-        className="px-3 py-1.5 text-xs rounded bg-yellow-600/20 text-yellow-300 hover:bg-yellow-600/30 border border-yellow-500/30 transition-colors disabled:opacity-50"
+        className="px-3 py-1.5 text-xs rounded bg-warning-solid/20 text-warning-soft hover:bg-warning-solid/30 border border-warning-base/30 transition-colors disabled:opacity-50"
       >
         {saving ? 'Saving...' : showIdentity ? 'Save Git Identity' : 'Set Default Merge Mode'}
       </button>

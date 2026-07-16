@@ -5,7 +5,7 @@ import type { AgentSdkMessage } from '../../../shared/agentSdkTypes'
 const meta: Meta<typeof AgentChatMessage> = {
   title: 'Agent/AgentChatMessage',
   component: AgentChatMessage,
-  decorators: [(Story) => <div className="bg-[#1a1a1a] p-4 max-w-2xl"><Story /></div>],
+  decorators: [(Story) => <div className="bg-bg-primary p-4 max-w-2xl"><Story /></div>],
 }
 export default meta
 type Story = StoryObj<typeof AgentChatMessage>

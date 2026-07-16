@@ -47,7 +47,7 @@ export function ArgDialog({ title, description, template, argsMeta, context, ini
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/50"
       onClick={onCancel}
       onKeyDown={onKeyDown}
       role="dialog"
@@ -95,7 +95,7 @@ export function ArgDialog({ title, description, template, argsMeta, context, ini
                         className={fieldClass}
                       />
                     )}
-                    {meta?.description && <p className="text-[11px] text-text-tertiary">{meta.description}</p>}
+                    {meta?.description && <p className="text-2xs text-text-tertiary">{meta.description}</p>}
                   </>
                 )}
               </div>
@@ -103,7 +103,7 @@ export function ArgDialog({ title, description, template, argsMeta, context, ini
           }
           return (
             <div key={arg.name} className="space-y-1">
-              <label className="text-xs text-text-secondary">{arg.name} <span className="text-red-400">*</span></label>
+              <label className="text-xs text-text-secondary">{arg.name} <span className="text-danger-fg">*</span></label>
               {multiline ? (
                 <textarea
                   aria-label={arg.name}
@@ -123,13 +123,13 @@ export function ArgDialog({ title, description, template, argsMeta, context, ini
                   className={fieldClass}
                 />
               )}
-              {meta?.description && <p className="text-[11px] text-text-tertiary">{meta.description}</p>}
+              {meta?.description && <p className="text-2xs text-text-tertiary">{meta.description}</p>}
             </div>
           )
         })}
 
         <div className="pt-2 border-t border-border">
-          <div className="text-[11px] text-text-tertiary">Resolved:</div>
+          <div className="text-2xs text-text-tertiary">Resolved:</div>
           <pre data-testid="resolved-preview" className="text-xs font-mono text-text-primary whitespace-pre-wrap break-words max-h-32 overflow-y-auto">{resolved}</pre>
         </div>
 
@@ -138,7 +138,7 @@ export function ArgDialog({ title, description, template, argsMeta, context, ini
           <button
             disabled={!requiredOk}
             onClick={() => onRun(values)}
-            className="px-3 py-1.5 text-sm rounded bg-accent text-white hover:bg-accent/80 transition-colors disabled:opacity-50"
+            className="px-3 py-1.5 text-sm rounded bg-accent text-on-accent hover:bg-accent/80 transition-colors disabled:opacity-50"
           >
             Run
           </button>

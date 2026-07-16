@@ -24,7 +24,7 @@ export function Divider({ type, direction, draggingDivider, onMouseDown }: Divid
         direction === 'vertical' ? 'w-4 h-full -left-2 top-0' : 'h-4 w-full -top-2 left-0'
       }`} />
       <div className={`absolute transition-colors ${
-        draggingDivider === type ? 'bg-accent' : 'bg-[#4a4a4a] group-hover:bg-accent/70'
+        draggingDivider === type ? 'bg-accent' : 'bg-border-strong group-hover:bg-accent/70'
       } ${direction === 'vertical' ? 'w-px h-full left-0 top-0' : 'h-px w-full top-0 left-0'}`} />
     </div>
   )

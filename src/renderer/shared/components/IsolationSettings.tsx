@@ -20,13 +20,13 @@ export function IsolationSettings({ isolated, skipApproval, dockerStatus, devcon
         <label className="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" checked={isolated} onChange={(e) => onIsolatedChange(e.target.checked)} className="rounded border-border" />
           <span className="text-xs text-text-secondary">Run agent in isolated container</span>
-          <span className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">Experimental</span>
+          <span className="px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wider rounded bg-warning-base/20 text-warning-fg border border-warning-base/30">Experimental</span>
         </label>
         {isolated && (
           <div className="ml-6 space-y-2">
             {devcontainerStatus && (
-              <div className={`text-xs flex items-center gap-1.5 ${devcontainerStatus.available ? 'text-green-400' : 'text-yellow-400'}`}>
-                <span className={`w-2 h-2 rounded-full ${devcontainerStatus.available ? 'bg-green-400' : 'bg-yellow-400'}`} />
+              <div className={`text-xs flex items-center gap-1.5 ${devcontainerStatus.available ? 'text-success-fg' : 'text-warning-fg'}`}>
+                <span className={`w-2 h-2 rounded-full ${devcontainerStatus.available ? 'bg-success-fg' : 'bg-warning-fg'}`} />
                 {devcontainerStatus.available
                   ? `devcontainer CLI ${devcontainerStatus.version || ''}`
                   : (devcontainerStatus.error || 'devcontainer CLI not available')
@@ -37,8 +37,8 @@ export function IsolationSettings({ isolated, skipApproval, dockerStatus, devcon
               </div>
             )}
             {dockerStatus && (
-              <div className={`text-xs flex items-center gap-1.5 ${dockerStatus.available ? 'text-green-400' : 'text-yellow-400'}`}>
-                <span className={`w-2 h-2 rounded-full ${dockerStatus.available ? 'bg-green-400' : 'bg-yellow-400'}`} />
+              <div className={`text-xs flex items-center gap-1.5 ${dockerStatus.available ? 'text-success-fg' : 'text-warning-fg'}`}>
+                <span className={`w-2 h-2 rounded-full ${dockerStatus.available ? 'bg-success-fg' : 'bg-warning-fg'}`} />
                 {dockerStatus.available ? 'Docker available' : (dockerStatus.error || 'Docker not available')}
                 {!dockerStatus.available && dockerStatus.installUrl && (
                   <button onClick={() => void window.shell.openExternal(dockerStatus.installUrl!)} className="underline hover:text-text-primary transition-colors ml-1">Install</button>
@@ -46,8 +46,8 @@ export function IsolationSettings({ isolated, skipApproval, dockerStatus, devcon
               </div>
             )}
             {hasDevcontainerConfig !== null && (
-              <div className={`text-xs flex items-center gap-1.5 ${hasDevcontainerConfig ? 'text-green-400' : 'text-zinc-500'}`}>
-                <span className={`w-2 h-2 rounded-full ${hasDevcontainerConfig ? 'bg-green-400' : 'bg-zinc-500'}`} />
+              <div className={`text-xs flex items-center gap-1.5 ${hasDevcontainerConfig ? 'text-success-fg' : 'text-text-tertiary'}`}>
+                <span className={`w-2 h-2 rounded-full ${hasDevcontainerConfig ? 'bg-success-fg' : 'bg-muted'}`} />
                 {hasDevcontainerConfig
                   ? '.devcontainer/devcontainer.json found'
                   : (
@@ -75,7 +75,7 @@ export function IsolationSettings({ isolated, skipApproval, dockerStatus, devcon
           <span className="text-xs text-text-secondary">Auto-approve agent commands</span>
         </label>
         {skipApproval && !isolated && (
-          <p className="text-xs text-yellow-400 ml-6">
+          <p className="text-xs text-warning-fg ml-6">
             Warning: Auto-approving without container isolation gives agents unrestricted access to your machine.
             Enable &quot;Run agent in isolated container&quot; above for safe auto-approval.
           </p>

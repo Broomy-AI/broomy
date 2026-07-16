@@ -419,12 +419,12 @@ export default function TabbedTerminal({ sessionId, cwd, agentCommand, agentEnv,
       </div>
 
       {devcontainerMissing.missing && !devcontainerMissing.dismissed && (
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-500/10 border-b border-yellow-500/30 text-xs text-yellow-300">
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-warning-base/10 border-b border-warning-base/30 text-xs text-warning-soft">
           <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
           </svg>
           <span>No devcontainer config found — running without container isolation. Use the &quot;Create Dev Container Config&quot; action in Source Control to add one.</span>
-          <button onClick={devcontainerMissing.dismiss} className="ml-auto text-yellow-400 hover:text-yellow-200 flex-shrink-0">
+          <button onClick={devcontainerMissing.dismiss} className="ml-auto text-warning-fg hover:text-warning-subtle flex-shrink-0">
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>

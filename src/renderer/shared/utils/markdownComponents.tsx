@@ -65,7 +65,7 @@ function MarkdownImage({ src, alt, className }: { src?: string; alt?: string; cl
         onClick={() => setLightbox(true)}
       />
       {lightbox && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={close}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/80" onClick={close}>
           <img src={src} alt={alt} className="max-w-[90vw] max-h-[90vh] rounded-lg shadow-2xl" />
         </div>
       )}

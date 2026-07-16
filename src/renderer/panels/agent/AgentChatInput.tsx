@@ -139,21 +139,21 @@ export function AgentChatInput({ onSubmit, onStop, isRunning, sessionId, availab
   const showEffort = (availableModels && availableModels.length > 0) && (selectedModelInfo?.supportsEffort ?? false) && effortLevels.length > 0
 
   return (
-    <div className="border-t border-neutral-700 bg-neutral-900 px-3 py-2">
+    <div className="border-t border-border bg-bg-primary px-3 py-2">
       {/* Autocomplete dropdown */}
       {showAutocomplete && filteredCommands.length > 0 && (
-        <div className="mb-1 max-h-48 overflow-y-auto rounded border border-neutral-600 bg-neutral-800">
+        <div className="mb-1 max-h-48 overflow-y-auto rounded border border-border-strong bg-bg-secondary">
           {filteredCommands.map((cmd, i) => (
             <button
               key={`${cmd.name}-${String(i)}`}
               className={`flex w-full items-baseline gap-2 px-3 py-1.5 text-left text-xs ${
-                i === selectedIndex ? 'bg-blue-600/30 text-neutral-100' : 'text-neutral-300 hover:bg-neutral-700/50'
+                i === selectedIndex ? 'bg-info-solid/30 text-text-primary' : 'text-text-primary hover:bg-surface-hover/50'
               }`}
               onMouseDown={(e) => { e.preventDefault(); selectCommand(cmd.name) }}
               onMouseEnter={() => setSelectedIndex(i)}
             >
-              <span className="font-mono font-medium text-blue-300">/{cmd.name}</span>
-              <span className="truncate text-neutral-500">{cmd.description}</span>
+              <span className="font-mono font-medium text-info-soft">/{cmd.name}</span>
+              <span className="truncate text-text-tertiary">{cmd.description}</span>
             </button>
           ))}
         </div>
@@ -166,20 +166,20 @@ export function AgentChatInput({ onSubmit, onStop, isRunning, sessionId, availab
           onKeyDown={handleKeyDown}
           placeholder={isRunning ? 'Agent is working... (type your next message)' : 'Message or /command'}
           rows={1}
-          className="flex-1 resize-none rounded border border-neutral-600 bg-neutral-800 px-3 py-2 text-sm text-neutral-200 placeholder-neutral-500 focus:border-blue-500 focus:outline-none"
+          className="flex-1 resize-none rounded border border-border-strong bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder-text-tertiary focus:border-info-base focus:outline-none"
         />
         {isRunning ? (
           <>
             <button
               onClick={handleSubmit}
               disabled={!value.trim()}
-              className="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 disabled:hover:bg-blue-600"
+              className="rounded bg-info-solid px-3 py-2 text-sm font-medium text-on-accent hover:bg-info-base disabled:opacity-50 disabled:hover:bg-info-solid"
             >
               Queue
             </button>
             <button
               onClick={onStop}
-              className="rounded bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-500"
+              className="rounded bg-danger-solid px-3 py-2 text-sm font-medium text-on-accent hover:bg-danger-base"
             >
               Stop
             </button>
@@ -188,7 +188,7 @@ export function AgentChatInput({ onSubmit, onStop, isRunning, sessionId, availab
           <button
             onClick={handleSubmit}
             disabled={!value.trim()}
-            className="rounded bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 disabled:hover:bg-blue-600"
+            className="rounded bg-info-solid px-3 py-2 text-sm font-medium text-on-accent hover:bg-info-base disabled:opacity-50 disabled:hover:bg-info-solid"
           >
             Send
           </button>
@@ -201,7 +201,7 @@ export function AgentChatInput({ onSubmit, onStop, isRunning, sessionId, availab
           <select
             value={model ?? ''}
             onChange={e => onModelChange?.(e.target.value)}
-            className="rounded border border-neutral-700 bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300 hover:border-neutral-500 focus:border-blue-500 focus:outline-none"
+            className="rounded border border-border bg-bg-secondary px-2 py-0.5 text-xs text-text-primary hover:border-border-strong focus:border-info-base focus:outline-none"
           >
             {availableModels.map(m => (
               <option key={m.value} value={m.value}>{m.displayName}</option>
@@ -213,7 +213,7 @@ export function AgentChatInput({ onSubmit, onStop, isRunning, sessionId, availab
             <select
               value={effort ?? ''}
               onChange={e => onEffortChange?.(e.target.value)}
-              className="rounded border border-neutral-700 bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300 hover:border-neutral-500 focus:border-blue-500 focus:outline-none"
+              className="rounded border border-border bg-bg-secondary px-2 py-0.5 text-xs text-text-primary hover:border-border-strong focus:border-info-base focus:outline-none"
             >
               <option value="">Auto effort</option>
               {effortLevels.map(level => (
@@ -227,7 +227,7 @@ export function AgentChatInput({ onSubmit, onStop, isRunning, sessionId, availab
             <select
               value={permissionMode ?? 'default'}
               onChange={e => onPermissionModeChange(e.target.value as PermissionMode)}
-              className="rounded border border-neutral-700 bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300 hover:border-neutral-500 focus:border-blue-500 focus:outline-none"
+              className="rounded border border-border bg-bg-secondary px-2 py-0.5 text-xs text-text-primary hover:border-border-strong focus:border-info-base focus:outline-none"
             >
               {(Object.keys(PERMISSION_MODE_LABELS) as PermissionMode[]).map(mode => (
                 <option key={mode} value={mode}>{PERMISSION_MODE_LABELS[mode]}</option>

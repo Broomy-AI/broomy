@@ -24,7 +24,7 @@ export function Field({
         {action}
       </div>
       {children}
-      {hint && <p className="text-[11px] text-text-tertiary">{hint}</p>}
+      {hint && <p className="text-2xs text-text-tertiary">{hint}</p>}
     </div>
   )
 }
@@ -57,7 +57,7 @@ export function StageChips({
               key={s}
               type="button"
               onClick={() => toggle(s)}
-              className={`px-2 py-0.5 text-xs rounded-full border ${on ? 'bg-accent text-white border-accent' : 'bg-bg-primary border-border text-text-secondary'}`}
+              className={`px-2 py-0.5 text-xs rounded-full border ${on ? 'bg-accent text-on-accent border-accent' : 'bg-bg-primary border-border text-text-secondary'}`}
             >
               {s}
             </button>
@@ -92,7 +92,7 @@ export function NewStageModal({
   const ok = value.trim().length > 0
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/50"
       onClick={onCancel}
       role="dialog"
     >
@@ -120,7 +120,7 @@ export function NewStageModal({
           <button
             onClick={() => onSubmit(value)}
             disabled={!ok}
-            className="px-3 py-1.5 text-sm rounded bg-accent text-white hover:bg-accent/80 disabled:opacity-50"
+            className="px-3 py-1.5 text-sm rounded bg-accent text-on-accent hover:bg-accent/80 disabled:opacity-50"
             data-testid="new-stage-submit"
           >
             Add
@@ -140,7 +140,7 @@ export function EmptyPane({ tab, onAddProjectFile }: { tab: Tab; onAddProjectFil
         <p className="text-sm text-text-secondary">No project commands.</p>
         <button
           onClick={onAddProjectFile}
-          className="px-3 py-1.5 text-sm rounded bg-accent text-white hover:bg-accent/80"
+          className="px-3 py-1.5 text-sm rounded bg-accent text-on-accent hover:bg-accent/80"
         >
           Add project commands
         </button>
@@ -159,7 +159,7 @@ export function DeleteButton({ id, onDelete }: { id: string; onDelete: () => voi
       {pendingDelete === id ? (
         <div className="flex items-center gap-2">
           <span className="text-xs text-text-secondary">Delete this command?</span>
-          <button onClick={onDelete} className="text-xs text-red-400 hover:text-red-300">
+          <button onClick={onDelete} className="text-xs text-danger-fg hover:text-danger-soft">
             Confirm delete
           </button>
           <button onClick={() => setPendingDelete(null)} className="text-xs text-text-secondary hover:text-text-primary">
@@ -167,7 +167,7 @@ export function DeleteButton({ id, onDelete }: { id: string; onDelete: () => voi
           </button>
         </div>
       ) : (
-        <button onClick={() => setPendingDelete(id)} className="text-xs text-red-400 hover:text-red-300">
+        <button onClick={() => setPendingDelete(id)} className="text-xs text-danger-fg hover:text-danger-soft">
           Delete command
         </button>
       )}
@@ -189,7 +189,7 @@ export function UnsavedChangesModal({
   onCancel: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/50">
       <div className="bg-bg-secondary border border-border rounded-lg shadow-xl w-full max-w-sm mx-4 p-4 space-y-3">
         <h3 className="text-base font-medium text-text-primary">Unsaved changes</h3>
         <p className="text-sm text-text-secondary">
@@ -210,7 +210,7 @@ export function UnsavedChangesModal({
           </button>
           <button
             onClick={onSave}
-            className="px-3 py-1.5 text-sm rounded bg-accent text-white hover:bg-accent/80 transition-colors"
+            className="px-3 py-1.5 text-sm rounded bg-accent text-on-accent hover:bg-accent/80 transition-colors"
           >
             Save
           </button>
@@ -265,7 +265,7 @@ export function ArgsTable({
                 </td>
                 <td className="py-0.5">
                   {a.optional && (
-                    <span className="text-[10px] px-1 py-0.5 rounded bg-purple-500/20 text-purple-400">
+                    <span className="text-3xs px-1 py-0.5 rounded bg-review-base/20 text-review-fg">
                       optional
                     </span>
                   )}
@@ -290,7 +290,7 @@ export function CommandExpandedEditor({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/60"
       onClick={onClose}
       onKeyDown={(e) => { if (e.key === 'Escape') onClose() }}
       role="dialog"
@@ -318,7 +318,7 @@ export function CommandExpandedEditor({
           spellCheck={false}
           data-testid="expanded-command-textarea"
         />
-        <div className="px-4 py-2 border-t border-border text-[11px] text-text-tertiary">
+        <div className="px-4 py-2 border-t border-border text-2xs text-text-tertiary">
           Use {'{name}'} for args; {'--flag {name}'} makes the arg optional. Changes save as you type.
         </div>
       </div>

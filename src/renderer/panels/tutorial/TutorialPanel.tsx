@@ -73,14 +73,14 @@ export default function TutorialPanel() {
               >
                 {/* Completion indicator */}
                 <div className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center ${
-                  isComplete ? 'bg-accent text-white' : 'bg-bg-secondary border border-border'
+                  isComplete ? 'bg-accent text-on-accent' : 'bg-bg-secondary border border-border'
                 }`}>
                   {isComplete ? (
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                   ) : (
-                    <span className="text-[10px] text-text-secondary font-medium">{index + 1}</span>
+                    <span className="text-3xs text-text-secondary font-medium">{index + 1}</span>
                   )}
                 </div>
 
@@ -125,7 +125,7 @@ export default function TutorialPanel() {
                   ) : (
                     <button
                       onClick={() => markStepComplete(step.id)}
-                      className="text-xs px-2.5 py-1 rounded bg-accent text-white hover:bg-accent/80 transition-colors"
+                      className="text-xs px-2.5 py-1 rounded bg-accent text-on-accent hover:bg-accent/80 transition-colors"
                     >
                       Done
                     </button>
