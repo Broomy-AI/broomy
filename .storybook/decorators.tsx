@@ -39,3 +39,18 @@ export const withDarkTheme: Decorator = (Story) => (
     <Story />
   </div>
 )
+
+/**
+ * Render a story under a specific theme.
+ *
+ * This works only because the themes are scoped to `[data-theme='...']` rather than
+ * `:root[data-theme=...]` — so a wrapper element can carry one, and a single story
+ * can be light while the rest of the page stays dark.
+ */
+export const withTheme =
+  (theme: 'dark' | 'light' | 'hc' | 'hc-light'): Decorator =>
+  (Story) => (
+    <div data-theme={theme} className="bg-bg-primary text-text-primary p-4">
+      <Story />
+    </div>
+  )

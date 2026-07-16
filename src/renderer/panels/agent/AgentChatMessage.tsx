@@ -250,7 +250,7 @@ function PlanBlock({ msg, isLast, onApprovePlan, onOpenFile }: { msg: AgentSdkMe
           <div className="flex items-center gap-3">
             <button
               onClick={onApprovePlan}
-              className="rounded bg-success-solid px-4 py-1.5 text-xs font-medium text-on-accent hover:bg-success-base"
+              className="rounded bg-success-solid px-4 py-1.5 text-xs font-medium text-on-solid hover:bg-success-base"
             >
               Approve Plan
             </button>

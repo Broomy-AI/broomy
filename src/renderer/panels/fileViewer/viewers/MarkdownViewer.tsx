@@ -149,11 +149,11 @@ function MarkdownViewerComponent({ content, onEditorReady }: FileViewerComponent
 
       <style>{`
         ::highlight(broomy-find) {
-          background-color: rgba(234, 179, 8, 0.3);
+          background-color: rgb(var(--color-warning-base) / 0.3);
           color: inherit;
         }
         ::highlight(broomy-find-active) {
-          background-color: rgba(234, 179, 8, 0.7);
+          background-color: rgb(var(--color-warning-base) / 0.7);
           color: inherit;
         }
       `}</style>

@@ -37,7 +37,7 @@ function UpdateBannerReady() {
   return (
     <div className="mx-2 mt-2 px-2.5 py-1.5 rounded bg-success-base/10 border border-success-base/20 flex items-center gap-2">
       <span className="text-xs text-text-primary flex-1">Ready to install</span>
-      <button className="text-3xs font-medium px-1.5 py-0.5 rounded bg-success-solid text-on-accent hover:bg-success-solid/80 transition-colors flex-shrink-0">Restart</button>
+      <button className="text-3xs font-medium px-1.5 py-0.5 rounded bg-success-solid text-on-solid hover:bg-success-solid/80 transition-colors flex-shrink-0">Restart</button>
     </div>
   )
 }

@@ -47,7 +47,53 @@ const RULES = [
   },
 ]
 
+/**
+ * Raw colour literals in CSS and in injected <style> blocks.
+ *
+ * The className rules above do not see these, which is exactly how an xterm
+ * scrollbar thumb stayed `rgba(255,255,255,.2)` (invisible on a light background)
+ * and Monaco's review markers stayed a hardcoded `#eab308` while CI reported a clean
+ * token boundary. A guard that only checks the easy surface is worse than no guard,
+ * because it tells you you're safe.
+ *
+ * index.css is the one file allowed to contain literals: it is where the tokens are
+ * DEFINED.
+ */
+const CSS_RULES = [
+  {
+    name: 'raw colour literal in CSS',
+    // hex, or rgb()/rgba() with literal channels (rgb(var(--x) ...) is fine)
+    pattern: '#[0-9a-fA-F]{3,8}\\b|rgba?\\(\\s*[0-9]',
+    hint: 'use rgb(var(--color-x) / <alpha>) so it follows the theme',
+    files: 'src/renderer --glob "*.css" --glob "!index.css"',
+  },
+  {
+    name: 'raw colour literal in an injected <style> block',
+    pattern: 'background-color:\\s*(#[0-9a-fA-F]{3,8}|rgba?\\(\\s*[0-9])|color:\\s*(#[0-9a-fA-F]{3,8}|rgba?\\(\\s*[0-9])',
+    hint: 'use rgb(var(--color-x) / <alpha>) — an injected style still has to follow the theme',
+    files: 'src/renderer --glob "*.tsx" --glob "!*.stories.tsx" --glob "!*.test.tsx"',
+  },
+]
+
 let failed = 0
+
+for (const rule of CSS_RULES) {
+  let out = ''
+  try {
+    out = execSync(`rg --line-number --no-heading -o "${rule.pattern}" ${rule.files}`, {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+  } catch {
+    continue
+  }
+  if (!out) continue
+  const lines = out.split('\n')
+  failed += lines.length
+  console.error(`\n✗ ${lines.length} ${rule.name}${lines.length === 1 ? '' : 's'} — ${rule.hint}`)
+  for (const line of lines.slice(0, 20)) console.error(`    ${line}`)
+  if (lines.length > 20) console.error(`    … and ${lines.length - 20} more`)
+}
 
 for (const rule of RULES) {
   let out = ''

@@ -18,6 +18,9 @@ vi.mock('monaco-editor', () => ({
   editor: {
     registerEditorOpener: (...args: unknown[]) => mockRegisterEditorOpener(...args),
     MouseTargetType: { GUTTER_GLYPH_MARGIN: 2 },
+    // shared/theme/monacoTheme.ts calls this at module scope — it has to, or
+    // setTheme() would silently fall back to the builtin light 'vs'.
+    defineTheme: vi.fn(),
   },
   Range: vi.fn(),
   KeyMod: { CtrlCmd: 2048 },
@@ -96,7 +99,9 @@ describe('MonacoViewerComponent', () => {
     expect(mockEditor).toHaveBeenCalledWith(
       expect.objectContaining({
         language: 'typescript',
-        theme: 'vs-dark',
+        // Both editors read one value from the settings store — Monaco's setTheme is
+        // global, so MonacoViewer and MonacoDiffViewer cannot be allowed to disagree.
+        theme: 'broomy-dark',
       })
     )
   })

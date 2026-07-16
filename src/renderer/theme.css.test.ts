@@ -10,7 +10,7 @@
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { describe, expect, it } from 'vitest'
-import { PALETTE, TOKENS, hexFromTriplet } from '../shared/theme'
+import { PALETTE, TOKENS, hexFromTriplet, type ThemeName } from '../shared/theme'
 
 const css = readFileSync(join(__dirname, 'index.css'), 'utf-8')
 
@@ -26,16 +26,28 @@ function readVars(selector: string): Record<string, string> {
   return out
 }
 
-describe('theme tokens', () => {
-  const rootVars = readVars(':root')
+/** Dark is the unconditional :root default; the others are attribute overrides. */
+const SELECTOR: Record<ThemeName, string> = {
+  dark: ':root',
+  light: "[data-theme='light']",
+  hc: "[data-theme='hc']",
+  'hc-light': "[data-theme='hc-light']",
+}
+
+describe.each(Object.keys(PALETTE) as ThemeName[])('%s', (theme) => {
+  const vars = readVars(SELECTOR[theme])
 
   it('declares every token from the palette', () => {
-    expect(Object.keys(rootVars).sort()).toEqual([...TOKENS].sort())
+    expect(Object.keys(vars).sort()).toEqual([...TOKENS].sort())
   })
 
-  it.each(TOKENS)('dark %s matches PALETTE', (name) => {
-    expect(rootVars[name]).toBe(PALETTE.dark[name])
+  it.each(TOKENS)('%s matches PALETTE', (name) => {
+    expect(vars[name]).toBe(PALETTE[theme][name])
   })
+})
+
+describe('theme tokens', () => {
+  const rootVars = readVars(':root')
 
   it('stores triplets, not hex — Tailwind consumes them as rgb(var(--x) / <alpha-value>)', () => {
     for (const value of Object.values(rootVars)) {

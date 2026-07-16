@@ -87,6 +87,7 @@ export function createPanelActions(get: StoreGet, set: StoreSet) {
       store.toggleGlobalPanel(PANEL_IDS.SIDEBAR)
     },
 
+    // Only ever called for a real user action (a divider drag) — see updateLayoutSize.
     setSidebarWidth: (width: number) => {
       set({ sidebarWidth: width })
       debouncedSave()

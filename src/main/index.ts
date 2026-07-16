@@ -10,7 +10,10 @@
  * deterministic mock data during Playwright tests so no real repos, APIs, or
  * config files are touched.
  */
-import { app, BrowserWindow, ipcMain, Menu, shell, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, shell, dialog, nativeTheme } from 'electron'
+import { chromeFor, getAppearance, getResolvedTheme, initSettings } from './settings'
+import { zoomMenuItems } from './handlers/settings'
+import { themeIsLight } from '../shared/appearance'
 import pkg from 'electron-updater'
 const { autoUpdater } = pkg
 import { join, dirname } from 'path'
@@ -99,13 +102,23 @@ const dockerContainers = new Map<string, import('./handlers/types').DockerContai
 let mainWindow: BrowserWindow | null = null
 
 function createWindow(profileId?: string): BrowserWindow {
+  // Seed the native chrome from the persisted theme BEFORE the window exists.
+  // backgroundColor and titleBarOverlay are constructor options: set them after the
+  // fact and a light-mode user gets a dark frame flashed at them on every launch.
+  const appearance = getAppearance()
+  const chrome = chromeFor(getResolvedTheme(), appearance.accent)
+
   const window = new BrowserWindow({
     title: 'Broomy',
     width: 1400,
     height: 900,
+    // NOT scaled by interfaceScale. `minWidth: 800 * 2` would demand a 1600x1200
+    // window at 200% — taller than a 1080p display — and would forbid the very
+    // window size the 200% acceptance test uses. The renderer copes with the
+    // resulting small logical viewport instead.
     minWidth: 800,
     minHeight: 600,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: chrome.background,
     ...(isMac ? {
       titleBarStyle: 'hiddenInset' as const,
       trafficLightPosition: { x: 15, y: 10 },
@@ -115,9 +128,9 @@ function createWindow(profileId?: string): BrowserWindow {
     } : {
       titleBarStyle: 'hidden' as const,
       titleBarOverlay: {
-        color: '#252525',
-        symbolColor: '#e0e0e0',
-        height: 40,
+        color: chrome.titleBar,
+        symbolColor: chrome.symbol,
+        height: Math.round(40 * appearance.interfaceScale),
       },
       autoHideMenuBar: true,
     }),
@@ -128,8 +141,17 @@ function createWindow(profileId?: string): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       webviewTag: true,
+      // Chromium keeps zoom per-origin in the session's zoom map, and a zoom set on
+      // a webContents that has not yet committed a document is discarded on first
+      // navigation. Setting it here makes it stick from the first paint; the
+      // did-finish-load handler below re-applies it so it also survives Cmd+R.
+      zoomFactor: appearance.interfaceScale,
     },
     acceptFirstMouse: true,
+  })
+
+  window.webContents.on('did-finish-load', () => {
+    window.webContents.setZoomFactor(getAppearance().interfaceScale)
   })
 
   // Security: restrict webview tags to HTTPS URLs only
@@ -353,9 +375,8 @@ function buildAppMenu() {
               { type: 'separator' as const },
             ]
           : []),
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
+        // Persisted, not Electron's stateless zoom roles — see zoomMenuItems().
+        ...zoomMenuItems(context),
         { type: 'separator' },
         { role: 'togglefullscreen' },
       ],
@@ -439,6 +460,18 @@ function buildAppMenu() {
 // App lifecycle
   void app.whenReady().then(async () => {
     await resolveShellEnv()
+
+    // Appearance must be resolved BEFORE the first window and before the menu.
+    // createWindow() reads it to seed backgroundColor, the Windows title-bar overlay
+    // and the zoom factor — all constructor options. Load it late and a light-mode
+    // user gets a dark frame flashed at them on every single launch.
+    //
+    // themeSource is what makes the NATIVE surfaces follow: traffic lights, context
+    // menus, and the file dialogs. A renderer-side media query can never reach them.
+    initSettings(isDev, isE2ETest, nativeTheme.shouldUseDarkColors)
+    const pref = getAppearance().theme
+    nativeTheme.themeSource =
+      pref === 'system' ? 'system' : themeIsLight(getResolvedTheme()) ? 'light' : 'dark'
 
     // Reap PTY trees left behind by previous Broomy main-process crashes
     // before any new PTYs are spawned. Best-effort — never blocks startup.

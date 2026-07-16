@@ -292,8 +292,8 @@ export function usePanelsMap(config: PanelsMapConfig) {
             <div key={session.id} className={`absolute inset-0 flex items-center justify-center ${isVisible ? '' : 'invisible pointer-events-none'}`}>
               <div className="text-center text-text-secondary">
                 <svg className="animate-spin w-6 h-6 mx-auto mb-2 text-accent" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  <circle className="opacity-[var(--spinner-track-opacity)]" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-[var(--spinner-arc-opacity)]" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
                 <div className="text-sm">Setting up session...</div>
                 <div className="text-xs mt-1 text-text-secondary/60">Creating worktree and pushing branch</div>
@@ -322,8 +322,8 @@ export function usePanelsMap(config: PanelsMapConfig) {
             <div key={session.id} className={`absolute inset-0 flex items-center justify-center ${isVisible ? '' : 'invisible pointer-events-none'}`}>
               <div className="text-center text-text-secondary">
                 <svg className="animate-spin w-6 h-6 mx-auto mb-2 text-accent" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  <circle className="opacity-[var(--spinner-track-opacity)]" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-[var(--spinner-arc-opacity)]" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
                 <div className="text-sm">Starting agent...</div>
               </div>

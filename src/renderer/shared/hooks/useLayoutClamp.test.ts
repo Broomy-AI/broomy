@@ -1,320 +1,97 @@
-// @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { renderHook } from '@testing-library/react'
-import { useLayoutClamp } from './useLayoutClamp'
-import { SIDEBAR_MIN, EXPLORER_MIN, TUTORIAL_MIN, AGENT_MIN_WIDTH } from './useDividerResize'
+/**
+ * The clamp derives what to RENDER. It must never write to the store, because the
+ * store is what gets persisted — and a clamp is a response to a tight viewport, not
+ * a layout the user asked for.
+ */
+import { describe, it, expect } from 'vitest'
+import { clampLayout } from './useLayoutClamp'
+import {
+  SIDEBAR_MIN,
+  EXPLORER_MIN,
+  TUTORIAL_MIN,
+  AGENT_MIN_WIDTH,
+} from './useDividerResize'
 import type { LayoutSizes } from '../../store/sessions'
 
-type ResizeCallback = () => void
+const layoutSizes: LayoutSizes = {
+  explorerWidth: 250,
+  fileViewerSize: 300,
+  userTerminalHeight: 192,
+  diffPanelWidth: 320,
+  tutorialPanelWidth: 300,
+}
 
-describe('useLayoutClamp', () => {
-  let resizeCallback: ResizeCallback | null = null
-  const mockDisconnect = vi.fn()
-  const mockObserve = vi.fn()
+const base = {
+  showSidebar: true,
+  showExplorer: true,
+  showTutorial: true,
+  sidebarWidth: 200,
+  layoutSizes,
+}
 
-  beforeEach(() => {
-    vi.clearAllMocks()
-    resizeCallback = null
-
-    // Mock ResizeObserver — must use function() not arrow for constructor
-    globalThis.ResizeObserver = function MockResizeObserver(cb: ResizeCallback) {
-      resizeCallback = cb
-      return {
-        observe: mockObserve,
-        disconnect: mockDisconnect,
-        unobserve: vi.fn(),
-      }
-    } as unknown as typeof ResizeObserver
+describe('clampLayout', () => {
+  it('leaves everything alone when there is room', () => {
+    const result = clampLayout(4000, base)
+    expect(result.sidebarWidth).toBe(200)
+    expect(result.layoutSizes).toEqual(layoutSizes)
   })
 
-  afterEach(() => {
-    vi.restoreAllMocks()
+  it('returns the input untouched for a zero-width container', () => {
+    // Happens on first paint, before the ResizeObserver has measured anything.
+    expect(clampLayout(0, base)).toEqual({ sidebarWidth: 200, layoutSizes })
   })
 
-  const defaultLayoutSizes: LayoutSizes = {
-    explorerWidth: 250,
-    fileViewerSize: 300,
-    userTerminalHeight: 200,
-    diffPanelWidth: 400,
-    tutorialPanelWidth: 300,
-  }
-
-  function makeRef(width = 1200): { current: HTMLDivElement } {
-    const el = document.createElement('div')
-    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
-      width,
-      height: 800,
-      top: 0,
-      left: 0,
-      bottom: 800,
-      right: width,
-      x: 0,
-      y: 0,
-      toJSON: () => {},
-    })
-    return { current: el }
-  }
-
-  it('observes the main content element', () => {
-    const ref = makeRef()
-    renderHook(() =>
-      useLayoutClamp({
-        mainContentRef: ref,
-        showSidebar: false,
-        showExplorer: false,
-        showTutorial: false,
-        sidebarWidth: 200,
-        layoutSizes: defaultLayoutSizes,
-        onSidebarWidthChange: vi.fn(),
-        onLayoutSizeChange: vi.fn(),
-      }),
-    )
-
-    expect(mockObserve).toHaveBeenCalledWith(ref.current)
+  it('shrinks the tutorial panel first', () => {
+    const result = clampLayout(900, base)
+    expect(result.layoutSizes.tutorialPanelWidth).toBeLessThan(300)
+    expect(result.layoutSizes.explorerWidth).toBe(250)
+    expect(result.sidebarWidth).toBe(200)
   })
 
-  it('disconnects on unmount', () => {
-    const ref = makeRef()
-    const { unmount } = renderHook(() =>
-      useLayoutClamp({
-        mainContentRef: ref,
-        showSidebar: false,
-        showExplorer: false,
-        showTutorial: false,
-        sidebarWidth: 200,
-        layoutSizes: defaultLayoutSizes,
-        onSidebarWidthChange: vi.fn(),
-        onLayoutSizeChange: vi.fn(),
-      }),
-    )
-
-    unmount()
-    expect(mockDisconnect).toHaveBeenCalled()
+  it('shrinks the explorer once the tutorial is at its minimum', () => {
+    const result = clampLayout(700, base)
+    expect(result.layoutSizes.tutorialPanelWidth).toBe(TUTORIAL_MIN)
+    expect(result.layoutSizes.explorerWidth).toBeLessThan(250)
   })
 
-  it('does nothing when agent width is above minimum', () => {
-    const ref = makeRef(1200)
-    const onLayoutSizeChange = vi.fn()
-    const onSidebarWidthChange = vi.fn()
-
-    renderHook(() =>
-      useLayoutClamp({
-        mainContentRef: ref,
-        showSidebar: true,
-        showExplorer: true,
-        showTutorial: false,
-        sidebarWidth: 200,
-        layoutSizes: defaultLayoutSizes,
-        onSidebarWidthChange,
-        onLayoutSizeChange,
-      }),
-    )
-
-    resizeCallback?.()
-
-    expect(onLayoutSizeChange).not.toHaveBeenCalled()
-    expect(onSidebarWidthChange).not.toHaveBeenCalled()
+  it('shrinks the sidebar last, and never below its minimum', () => {
+    const result = clampLayout(300, base)
+    expect(result.layoutSizes.tutorialPanelWidth).toBe(TUTORIAL_MIN)
+    expect(result.layoutSizes.explorerWidth).toBe(EXPLORER_MIN)
+    expect(result.sidebarWidth).toBeGreaterThanOrEqual(SIDEBAR_MIN)
   })
 
-  it('shrinks tutorial panel first when agent width is below minimum', () => {
-    // Total = 600, sidebar=200, explorer=250, tutorial=300 → agent = 600-750 = -150
-    const ref = makeRef(600)
-    const onLayoutSizeChange = vi.fn()
-    const onSidebarWidthChange = vi.fn()
-
-    renderHook(() =>
-      useLayoutClamp({
-        mainContentRef: ref,
-        showSidebar: true,
-        showExplorer: true,
-        showTutorial: true,
-        sidebarWidth: 200,
-        layoutSizes: defaultLayoutSizes,
-        onSidebarWidthChange,
-        onLayoutSizeChange,
-      }),
-    )
-
-    resizeCallback?.()
-
-    // Tutorial should be shrunk first
-    expect(onLayoutSizeChange).toHaveBeenCalledWith('tutorialPanelWidth', expect.any(Number))
+  it('ignores hidden panels', () => {
+    const result = clampLayout(600, { ...base, showExplorer: false, showTutorial: false })
+    expect(result.layoutSizes.explorerWidth).toBe(250)
+    expect(result.layoutSizes.tutorialPanelWidth).toBe(300)
   })
 
-  it('shrinks explorer after tutorial is at minimum', () => {
-    // Tutorial already at minimum
-    const layoutSizes = { ...defaultLayoutSizes, tutorialPanelWidth: TUTORIAL_MIN }
-    // Total = 600, sidebar=200, explorer=250, tutorial=TUTORIAL_MIN → need shrink
-    const ref = makeRef(600)
-    const onLayoutSizeChange = vi.fn()
-
-    renderHook(() =>
-      useLayoutClamp({
-        mainContentRef: ref,
-        showSidebar: true,
-        showExplorer: true,
-        showTutorial: true,
-        sidebarWidth: 200,
-        layoutSizes,
-        onSidebarWidthChange: vi.fn(),
-        onLayoutSizeChange,
-      }),
-    )
-
-    resizeCallback?.()
-
-    expect(onLayoutSizeChange).toHaveBeenCalledWith('explorerWidth', expect.any(Number))
+  it('keeps the agent terminal at its minimum whenever it can', () => {
+    const result = clampLayout(1000, base)
+    const used =
+      result.sidebarWidth + result.layoutSizes.explorerWidth + result.layoutSizes.tutorialPanelWidth + 18
+    expect(1000 - used).toBeGreaterThanOrEqual(AGENT_MIN_WIDTH - 1)
   })
 
-  it('shrinks sidebar as last resort', () => {
-    // All panels at minimum except sidebar
-    const layoutSizes = {
-      ...defaultLayoutSizes,
-      explorerWidth: EXPLORER_MIN,
-      tutorialPanelWidth: TUTORIAL_MIN,
-    }
-    // Total small enough that sidebar needs shrinking
-    // 3 visible panels = 3 dividers × 6px = 18px
-    const DIVIDER_WIDTH = 6
-    const dividers = 3 * DIVIDER_WIDTH
-    const usedByPanels = EXPLORER_MIN + TUTORIAL_MIN
-    const totalWidth = usedByPanels + dividers + 300 + AGENT_MIN_WIDTH - 50 // 50px deficit
-    const ref = makeRef(totalWidth)
-    const onSidebarWidthChange = vi.fn()
+  /**
+   * The regression this whole refactor exists for.
+   *
+   * Zooming to 200% halves the logical viewport, which fires the clamp. If a clamped
+   * width could reach the store it would be persisted, and zooming back to 100% would
+   * leave the sidebar permanently narrower than the user set it.
+   *
+   * Because clampLayout is pure, "the store is untouched" is not something to trust —
+   * it is structurally impossible. Shrinking and re-expanding must round-trip exactly.
+   */
+  it('is fully reversible — no clamped width can leak into what the user chose', () => {
+    const zoomedIn = clampLayout(500, base) // viewport halved
+    expect(zoomedIn.sidebarWidth).toBeLessThan(base.sidebarWidth)
 
-    renderHook(() =>
-      useLayoutClamp({
-        mainContentRef: ref,
-        showSidebar: true,
-        showExplorer: true,
-        showTutorial: true,
-        sidebarWidth: 300,
-        layoutSizes,
-        onSidebarWidthChange,
-        onLayoutSizeChange: vi.fn(),
-      }),
-    )
-
-    resizeCallback?.()
-
-    expect(onSidebarWidthChange).toHaveBeenCalledWith(250) // 300 - 50
-  })
-
-  it('does nothing when ref.current is null', () => {
-    const ref = { current: null } as unknown as { current: HTMLDivElement }
-    const onLayoutSizeChange = vi.fn()
-
-    renderHook(() =>
-      useLayoutClamp({
-        mainContentRef: ref,
-        showSidebar: false,
-        showExplorer: false,
-        showTutorial: false,
-        sidebarWidth: 200,
-        layoutSizes: defaultLayoutSizes,
-        onSidebarWidthChange: vi.fn(),
-        onLayoutSizeChange,
-      }),
-    )
-
-    expect(mockObserve).not.toHaveBeenCalled()
-  })
-
-  it('does nothing when total width is zero', () => {
-    const ref = makeRef(0)
-    const onLayoutSizeChange = vi.fn()
-
-    renderHook(() =>
-      useLayoutClamp({
-        mainContentRef: ref,
-        showSidebar: false,
-        showExplorer: false,
-        showTutorial: false,
-        sidebarWidth: 200,
-        layoutSizes: defaultLayoutSizes,
-        onSidebarWidthChange: vi.fn(),
-        onLayoutSizeChange,
-      }),
-    )
-
-    resizeCallback?.()
-
-    expect(onLayoutSizeChange).not.toHaveBeenCalled()
-  })
-
-  it('handles only sidebar visible', () => {
-    // Total = 356, sidebar=200, 1 divider=6 → agent = 150, need to recover 50
-    const DIVIDER_WIDTH = 6
-    const ref = makeRef(350 + DIVIDER_WIDTH)
-    const onSidebarWidthChange = vi.fn()
-
-    renderHook(() =>
-      useLayoutClamp({
-        mainContentRef: ref,
-        showSidebar: true,
-        showExplorer: false,
-        showTutorial: false,
-        sidebarWidth: 200,
-        layoutSizes: defaultLayoutSizes,
-        onSidebarWidthChange,
-        onLayoutSizeChange: vi.fn(),
-      }),
-    )
-
-    resizeCallback?.()
-
-    expect(onSidebarWidthChange).toHaveBeenCalledWith(SIDEBAR_MIN)
-  })
-
-  it('handles only explorer visible', () => {
-    // Total = 406, explorer=250, 1 divider=6 → agent = 150, deficit = 50
-    const DIVIDER_WIDTH = 6
-    const ref = makeRef(400 + DIVIDER_WIDTH)
-    const onLayoutSizeChange = vi.fn()
-
-    renderHook(() =>
-      useLayoutClamp({
-        mainContentRef: ref,
-        showSidebar: false,
-        showExplorer: true,
-        showTutorial: false,
-        sidebarWidth: 200,
-        layoutSizes: defaultLayoutSizes,
-        onSidebarWidthChange: vi.fn(),
-        onLayoutSizeChange,
-      }),
-    )
-
-    resizeCallback?.()
-
-    expect(onLayoutSizeChange).toHaveBeenCalledWith('explorerWidth', 200) // 250 - 50
-  })
-
-  it('does not shrink panels below their minimum', () => {
-    // Explorer at minimum already, sidebar should not be touched if hidden
-    const layoutSizes = { ...defaultLayoutSizes, explorerWidth: EXPLORER_MIN }
-    const ref = makeRef(300)
-    const onLayoutSizeChange = vi.fn()
-    const onSidebarWidthChange = vi.fn()
-
-    renderHook(() =>
-      useLayoutClamp({
-        mainContentRef: ref,
-        showSidebar: false,
-        showExplorer: true,
-        showTutorial: false,
-        sidebarWidth: 200,
-        layoutSizes,
-        onSidebarWidthChange,
-        onLayoutSizeChange,
-      }),
-    )
-
-    resizeCallback?.()
-
-    // Explorer is already at minimum, can't shrink
-    expect(onLayoutSizeChange).not.toHaveBeenCalled()
-    // Sidebar is hidden, shouldn't be touched
-    expect(onSidebarWidthChange).not.toHaveBeenCalled()
+    // The canonical input is unchanged, so restoring the viewport restores the layout.
+    const zoomedBack = clampLayout(4000, base)
+    expect(zoomedBack.sidebarWidth).toBe(200)
+    expect(zoomedBack.layoutSizes).toEqual(layoutSizes)
+    expect(base.layoutSizes).toEqual(layoutSizes) // and the input was never mutated
   })
 })

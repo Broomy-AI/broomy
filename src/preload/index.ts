@@ -55,6 +55,7 @@ import { fsApi } from './apis/fs'
 import { gitApi } from './apis/git'
 import { ghApi } from './apis/gh'
 import { configApi, profilesApi, agentsApi, reposApi } from './apis/config'
+import { settingsApi, type SettingsApi } from './apis/settings'
 import { shellApi, dialogApi, appApi, updateApi, windowControlsApi } from './apis/shell'
 import { menuApi, tsApi } from './apis/menu'
 import { devcontainerApi } from './apis/devcontainer'
@@ -95,6 +96,7 @@ contextBridge.exposeInMainWorld('update', updateApi)
 contextBridge.exposeInMainWorld('devcontainer', devcontainerApi)
 contextBridge.exposeInMainWorld('windowControls', windowControlsApi)
 contextBridge.exposeInMainWorld('agentSdk', agentSdkApi)
+contextBridge.exposeInMainWorld('settings', settingsApi)
 
 declare global {
   interface Window {
@@ -103,6 +105,7 @@ declare global {
     fs: FsApi
     git: GitApi
     config: ConfigApi
+    settings: SettingsApi
     app: AppApi
 
     menu: MenuApi

@@ -25,6 +25,7 @@ import ErrorDetailModal from './shared/components/ErrorDetailModal'
 import { useGitPolling } from './features/git/hooks/useGitPolling'
 import { useFileNavigation } from './panels/fileViewer/hooks/useFileNavigation'
 import { useSessionLifecycle } from './features/sessions/hooks/useSessionLifecycle'
+import { useAppearance } from './shared/hooks/useAppearance'
 import { useAgentChatStore } from './store/agentChat'
 import { useAppCallbacks } from './shared/hooks/useAppCallbacks'
 import { usePanelsMap } from './hooks/usePanelsMap'
@@ -212,6 +213,8 @@ function AppContent() {
   const [showPanelPicker, setShowPanelPicker] = useState(false)
   const [duplicateSessionInfo, setDuplicateSessionInfo] = useState<{ name: string; wasArchived: boolean } | null>(null)
   const [appError, setAppError] = useState<string | null>(null)
+  useAppearance()
+
   const { activeSessionGitStatus, activeSessionGitStatusResult, selectedFileStatus, fetchGitStatus } =
     useGitPolling({ sessions, activeSession, repos, markHasHadCommits, clearHasHadCommits, updateBranchStatus, updateSessionBranch, updatePrState })
 

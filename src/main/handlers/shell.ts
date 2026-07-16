@@ -5,6 +5,7 @@ import { BrowserWindow, IpcMain, dialog, Menu, shell } from 'electron'
 import { exec } from 'child_process'
 import { getExecShell, normalizePath, getAvailableShells, getDefaultShell } from '../platform'
 import { HandlerContext, expandHomePath } from './types'
+import { zoomMenuItems } from './settings'
 
 const isDev = process.env.ELECTRON_RENDERER_URL !== undefined
 
@@ -106,11 +107,10 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
                   { type: 'separator' as const },
                 ]
               : []),
-            { role: 'resetZoom' },
-            { role: 'zoomIn' },
-            { role: 'zoomOut' },
-            { type: 'separator' },
-            { role: 'togglefullscreen' },
+            // Same persisted items as the app menu — the two must not drift apart.
+            ...zoomMenuItems(ctx),
+            { type: 'separator' as const },
+            { role: 'togglefullscreen' as const },
           ],
         },
         {
