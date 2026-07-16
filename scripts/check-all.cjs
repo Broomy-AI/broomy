@@ -7,6 +7,7 @@ const path = require('path')
 
 const CHECKS = [
   { name: 'workers', script: 'check-workers.cjs' },
+  { name: 'colors', script: 'check-colors.cjs' },
 ]
 
 let failed = 0

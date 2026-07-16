@@ -263,6 +263,9 @@ export const useSessionStore = create<SessionStore>((set, get) => {
     debouncedSave()
   },
 
+  // Only ever called for a real user action (a divider drag). The layout clamp does
+  // NOT come through here — it derives render-only widths, because writing a clamped
+  // width to the store would persist it and destroy the layout the user chose.
   updateLayoutSize: (id: string, key: keyof LayoutSizes, value: number) => {
     const { sessions } = get()
     const updatedSessions = sessions.map((s) =>

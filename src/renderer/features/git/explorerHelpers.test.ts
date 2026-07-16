@@ -39,23 +39,23 @@ describe('statusLabel', () => {
 
 describe('getStatusColor', () => {
   it('returns yellow for modified', () => {
-    expect(getStatusColor('modified')).toBe('text-yellow-400')
+    expect(getStatusColor('modified')).toBe('text-warning-fg')
   })
 
   it('returns green for added', () => {
-    expect(getStatusColor('added')).toBe('text-green-400')
+    expect(getStatusColor('added')).toBe('text-success-fg')
   })
 
   it('returns red for deleted', () => {
-    expect(getStatusColor('deleted')).toBe('text-red-400')
+    expect(getStatusColor('deleted')).toBe('text-danger-fg')
   })
 
   it('returns gray for untracked', () => {
-    expect(getStatusColor('untracked')).toBe('text-gray-400')
+    expect(getStatusColor('untracked')).toBe('text-text-secondary')
   })
 
   it('returns blue for renamed', () => {
-    expect(getStatusColor('renamed')).toBe('text-blue-400')
+    expect(getStatusColor('renamed')).toBe('text-info-fg')
   })
 
   it('returns default for undefined', () => {
@@ -83,23 +83,23 @@ describe('statusBadgeLetter', () => {
 
 describe('statusBadgeColor', () => {
   it('returns yellow for modified', () => {
-    expect(statusBadgeColor('modified')).toBe('text-yellow-400')
+    expect(statusBadgeColor('modified')).toBe('text-warning-fg')
   })
 
   it('returns green for added', () => {
-    expect(statusBadgeColor('added')).toBe('text-green-400')
+    expect(statusBadgeColor('added')).toBe('text-success-fg')
   })
 
   it('returns red for deleted', () => {
-    expect(statusBadgeColor('deleted')).toBe('text-red-400')
+    expect(statusBadgeColor('deleted')).toBe('text-danger-fg')
   })
 
   it('returns gray for untracked', () => {
-    expect(statusBadgeColor('untracked')).toBe('text-gray-400')
+    expect(statusBadgeColor('untracked')).toBe('text-text-secondary')
   })
 
   it('returns blue for renamed', () => {
-    expect(statusBadgeColor('renamed')).toBe('text-blue-400')
+    expect(statusBadgeColor('renamed')).toBe('text-info-fg')
   })
 
   it('returns default for unknown status', () => {
@@ -203,18 +203,18 @@ describe('isPrOpen', () => {
 
 describe('prStateBadgeClass', () => {
   it('returns green classes for OPEN', () => {
-    expect(prStateBadgeClass('OPEN')).toBe('bg-green-500/20 text-green-400')
+    expect(prStateBadgeClass('OPEN')).toBe('bg-success-base/20 text-success-fg')
   })
 
   it('returns purple classes for MERGED', () => {
-    expect(prStateBadgeClass('MERGED')).toBe('bg-purple-500/20 text-purple-400')
+    expect(prStateBadgeClass('MERGED')).toBe('bg-review-base/20 text-review-fg')
   })
 
   it('returns red classes for CLOSED', () => {
-    expect(prStateBadgeClass('CLOSED')).toBe('bg-red-500/20 text-red-400')
+    expect(prStateBadgeClass('CLOSED')).toBe('bg-danger-base/20 text-danger-fg')
   })
 
   it('returns red classes for unknown states', () => {
-    expect(prStateBadgeClass('UNKNOWN')).toBe('bg-red-500/20 text-red-400')
+    expect(prStateBadgeClass('UNKNOWN')).toBe('bg-danger-base/20 text-danger-fg')
   })
 })

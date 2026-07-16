@@ -22,6 +22,8 @@ import type { ShellApi, DialogApi, AppApi, UpdateApi, WindowControlsApi } from '
 import type { MenuApi, TsApi } from '../preload/apis/menu'
 import type { DevcontainerApi } from '../preload/apis/devcontainer'
 import type { AgentSdkApi } from '../preload/apis/agentSdk'
+import type { SettingsApi } from '../preload/apis/settings'
+import { DEFAULT_APPEARANCE } from '../shared/appearance'
 
 /** Maps every key of an API type to a Vitest Mock — catches missing/extra keys and non-function values. */
 type Mocked<T> = { [K in keyof T]: Mock }
@@ -236,9 +238,25 @@ const mockDevcontainer: Mocked<DevcontainerApi> = {
   resetContainer: vi.fn().mockResolvedValue(undefined),
 }
 
+const mockSettings: Mocked<SettingsApi> = {
+  getInitial: vi.fn(() => ({
+    appearance: DEFAULT_APPEARANCE,
+    systemIsDark: true,
+    resolvedTheme: 'dark' as const,
+  })),
+  load: vi.fn().mockResolvedValue({
+    appearance: DEFAULT_APPEARANCE,
+    systemIsDark: true,
+    resolvedTheme: 'dark' as const,
+  }),
+  save: vi.fn().mockResolvedValue({ success: true }),
+  onChanged: vi.fn(() => () => {}),
+}
+
 // All Broomy-specific mocks to attach to window
 const broomyMocks = {
   config: mockConfig,
+  settings: mockSettings,
   git: mockGit,
   app: mockApp,
   profiles: mockProfiles,

@@ -1,14 +1,315 @@
 /**
  * Global styles for the renderer process.
  *
- * Imports Tailwind CSS base/components/utilities layers, then adds global resets
- * (box-sizing, zero margins), dark-theme scrollbar styling, a focus-within border
- * indicator for panel containers, Monaco search highlight decorations, and the
- * macOS-style draggable title bar region rules.
+ * Imports Tailwind CSS base/components/utilities layers, then declares the colour
+ * palette as CSS custom properties, and adds global resets (box-sizing, zero
+ * margins), themed scrollbar styling, a focus-within border indicator for panel
+ * containers, Monaco search highlight decorations, and the macOS-style draggable
+ * title bar region rules.
  */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ─── Palette ────────────────────────────────────────────────────────────────
+ *
+ * Mirrors PALETTE in src/shared/theme.ts — src/renderer/theme.css.test.ts fails
+ * if the two drift apart.
+ *
+ * Dark lives on plain `:root`, unconditionally. It must NOT be scoped to
+ * `[data-theme='dark']`: any document without that attribute (Storybook's <html>,
+ * for one) would then resolve every colour to nothing. Additional themes attach
+ * as `[data-theme='...']` overrides on top of this.
+ *
+ * NEVER express a theme with `@media (prefers-color-scheme: ...)`. The headless
+ * Chromium in scripts/storybook-screenshot-test.mjs reports `light` by default,
+ * so such a rule would repaint every story and blow all 264 reference
+ * screenshots at once.
+ *
+ * Values here are byte-identical to the hex literals they replace, so this is a
+ * no-op for rendering — which is exactly what `pnpm storybook:test` proves.
+ */
+:root {
+  --app-text-scale: 1;
+
+  --color-bg-primary: 26 26 26;         /* #1a1a1a */
+  --color-bg-secondary: 37 37 37;       /* #252525 */
+  --color-bg-tertiary: 45 45 45;        /* #2d2d2d */
+  --color-border: 58 58 58;             /* #3a3a3a */
+  --color-border-strong: 74 74 74;      /* #4a4a4a — the raw hex in Divider.tsx */
+  --color-text-primary: 224 224 224;    /* #e0e0e0 */
+  --color-text-secondary: 160 160 160;  /* #a0a0a0 */
+  --color-text-tertiary: 148 148 148;   /* #949494 */
+  --color-accent: 74 158 255;           /* #4a9eff */
+  --color-on-accent: 255 255 255;       /* label on a saturated fill */
+  --color-on-solid: 255 255 255;        /* label on a SEMANTIC fill — never follows the accent */
+  --color-status-working: 74 222 128;   /* #4ade80 */
+  --color-status-waiting: 250 204 21;   /* #facc15 */
+  --color-status-idle: 107 114 128;     /* #6b7280 */
+  --color-status-error: 248 113 113;    /* #f87171 */
+  --color-danger-soft: 252 165 165;     /* #fca5a5 (red-300) */
+  --color-danger-fg: 248 113 113;       /* #f87171 (red-400) */
+  --color-danger-base: 239 68 68;       /* #ef4444 (red-500) */
+  --color-danger-solid: 220 38 38;      /* #dc2626 (red-600) */
+  --color-danger-deeper: 153 27 27;     /* #991b1b (red-800) */
+  --color-danger-deep: 127 29 29;       /* #7f1d1d (red-900) */
+  --color-warning-subtle: 254 240 138;  /* #fef08a (yellow-200) */
+  --color-warning-soft: 253 224 71;     /* #fde047 (yellow-300) */
+  --color-warning-fg: 250 204 21;       /* #facc15 (yellow-400) */
+  --color-warning-base: 234 179 8;      /* #eab308 (yellow-500) */
+  --color-warning-solid: 202 138 4;     /* #ca8a04 (yellow-600) */
+  --color-warning-strong: 161 98 7;     /* #a16207 (yellow-700) */
+  --color-warning-deep: 113 63 18;      /* #713f12 (yellow-900) */
+  --color-success-soft: 134 239 172;    /* #86efac (green-300) */
+  --color-success-fg: 74 222 128;       /* #4ade80 (green-400) */
+  --color-success-base: 34 197 94;      /* #22c55e (green-500) */
+  --color-success-solid: 22 163 74;     /* #16a34a (green-600) */
+  --color-success-deep: 20 83 45;       /* #14532d (green-900) */
+  --color-info-subtle: 191 219 254;     /* #bfdbfe (blue-200) */
+  --color-info-soft: 147 197 253;       /* #93c5fd (blue-300) */
+  --color-info-fg: 96 165 250;          /* #60a5fa (blue-400) */
+  --color-info-base: 59 130 246;        /* #3b82f6 (blue-500) */
+  --color-info-solid: 37 99 235;        /* #2563eb (blue-600) */
+  --color-info-strong: 29 78 216;       /* #1d4ed8 (blue-700) */
+  --color-info-deep: 30 58 138;         /* #1e3a8a (blue-900) */
+  --color-review-fg: 192 132 252;       /* #c084fc (purple-400) */
+  --color-review-base: 168 85 247;      /* #a855f7 (purple-500) */
+  --color-review-solid: 147 51 234;     /* #9333ea (purple-600) */
+  --color-review-strong: 126 34 206;    /* #7e22ce (purple-700) */
+  --color-review-deep: 88 28 135;       /* #581c87 (purple-900) */
+  --color-attention-fg: 251 146 60;     /* #fb923c (orange-400) */
+  --color-attention-base: 249 115 22;   /* #f97316 (orange-500) */
+  --color-attention-solid: 234 88 12;   /* #ea580c (orange-600) */
+  --color-note-fg: 34 211 238;          /* #22d3ee (cyan-400) */
+  --color-note-base: 6 182 212;         /* #06b6d4 (cyan-500) */
+  --color-muted: 107 114 128;           /* #6b7280 (gray-500) — grey chips and dots */
+  --color-surface-hover: 64 64 64;      /* #404040 (neutral-700) — neutral hover fill */
+  --color-overlay: 0 0 0;               /* modal scrim; dark in every theme */
+  --color-elevate: 255 255 255;         /* #ffffff — a wash over a surface */
+  --color-focus-ring: 59 130 246;       /* #3b82f6 — used at 0.4 alpha today */
+  --color-search-highlight: 255 213 0;  /* #ffd500 */
+
+  --scrollbar-thumb: rgb(var(--color-elevate) / 0.2);
+  /* Spinner. unchanged — a bright colour on a dark ground reads fine at 75%.
+     At <100% the composited colour is NOT the colour the contrast tests verify,
+     so on light grounds the arc runs at full strength and the tested ratio is the
+     ratio that actually renders. */
+  --spinner-track-opacity: 0.25;
+  --spinner-arc-opacity: 0.75;
+}
+
+/* Light. Warm off-white base, deliberately not #ffffff — pure white's specular
+ * glare is itself a source of low-vision eye strain. Note the role tiers INVERT:
+ * deep/deeper/strong are dark banner grounds on dark, and must become PALE grounds
+ * here or every banner turns into a black box. Ratios asserted in
+ * src/shared/theme.contrast.test.ts. */
+[data-theme='light'] {
+  --color-bg-primary: 251 251 250;      /* #fbfbfa */
+  --color-bg-secondary: 242 242 240;    /* #f2f2f0 */
+  --color-bg-tertiary: 230 230 227;     /* #e6e6e3 — "raised" is DARKER on light */
+  --color-border: 194 194 187;          /* #c2c2bb */
+  --color-border-strong: 143 143 136;   /* #8f8f88 — clears WCAG 1.4.11 (3:1) */
+  --color-text-primary: 28 28 26;       /* #1c1c1a — 16.5:1 */
+  --color-text-secondary: 82 82 73;     /* #525249 —  7.6:1 (the most-used text class) */
+  --color-text-tertiary: 97 97 90;      /* #61615a —  6.0:1 */
+  --color-accent: 14 79 174;            /* #0e4fae —  7.4:1 (dark accent is 2.66:1 here) */
+  --color-on-accent: 255 255 255;       
+  --color-on-solid: 255 255 255;        /* label on a SEMANTIC fill — never follows the accent */
+  --color-status-working: 23 138 63;    /* #178a3f — vivid emerald; the working spinner is a non-text indicator (3:1) */
+  --color-status-waiting: 133 77 14;    /* yellow-800 — yellow-700 was 4.39:1 on bg-secondary */
+  --color-status-idle: 87 83 78;        /* #57534e */
+  --color-status-error: 185 28 28;      /* #b91c1c */
+  --color-danger-soft: 153 27 27;       /* red-800 */
+  --color-danger-fg: 185 28 28;         /* red-700 */
+  --color-danger-base: 220 38 38;       /* red-600 */
+  --color-danger-solid: 185 28 28;      /* red-700 — dark enough to carry a white label */
+  --color-danger-deeper: 254 202 202;   /* red-200  <- inverted: a pale border */
+  --color-danger-deep: 254 226 226;     /* red-100  <- inverted: a pale ground */
+  --color-warning-subtle: 133 77 14;    /* yellow-800 */
+  --color-warning-soft: 146 64 14;      /* amber-800 */
+  --color-warning-fg: 133 77 14;        /* yellow-800 — 6.2:1 */
+  --color-warning-base: 202 138 4;      /* yellow-600 */
+  --color-warning-solid: 133 77 14;     /* yellow-800 */
+  --color-warning-strong: 253 224 71;   /* yellow-300 <- inverted: a pale border */
+  --color-warning-deep: 254 249 195;    /* yellow-100 <- inverted: a pale ground */
+  --color-success-soft: 22 101 52;      /* green-800 */
+  --color-success-fg: 22 101 52;        /* green-800 — 6.1:1 (green-700 was 4.47:1 on bg-secondary) */
+  --color-success-base: 22 163 74;      /* green-600 */
+  --color-success-solid: 21 128 61;     /* green-700 */
+  --color-success-deep: 220 252 231;    /* green-100 <- inverted */
+  --color-info-subtle: 30 64 175;       /* blue-800 */
+  --color-info-soft: 29 78 216;         /* blue-700 */
+  --color-info-fg: 29 78 216;           /* blue-700 — 6.5:1 */
+  --color-info-base: 37 99 235;         /* blue-600 */
+  --color-info-solid: 29 78 216;        /* blue-700 */
+  --color-info-strong: 147 197 253;     /* blue-300 <- inverted: a pale border */
+  --color-info-deep: 219 234 254;       /* blue-100 <- inverted: a pale ground */
+  --color-review-fg: 126 34 206;        /* purple-700 — 6.9:1 */
+  --color-review-base: 147 51 234;      /* purple-600 */
+  --color-review-solid: 126 34 206;     /* purple-700 */
+  --color-review-strong: 216 180 254;   /* purple-300 <- inverted */
+  --color-review-deep: 243 232 255;     /* purple-100 <- inverted */
+  --color-attention-fg: 154 52 18;      /* orange-800 — orange-700 was 4.14:1 on bg-tertiary */
+  --color-attention-base: 234 88 12;    /* orange-600 */
+  --color-attention-solid: 194 65 12;   /* orange-700 */
+  --color-note-fg: 21 94 117;           /* cyan-800 — cyan-700 was 4.28:1 on bg-tertiary */
+  --color-note-base: 8 145 178;         /* cyan-600 */
+  --color-muted: 91 98 112;             /* #5b6270 — 5.9:1 */
+  --color-surface-hover: 226 226 222;   /* #e2e2de */
+  --color-overlay: 28 28 26;            /* scrim stays DARK — a pale scrim reads as nothing */
+  --color-elevate: 0 0 0;               /* a wash OVER a surface: black on light, white on dark */
+  --color-focus-ring: 14 79 174;        /* #0e4fae — 7.4:1 */
+  --color-search-highlight: 202 138 4;  /* #ca8a04 — #ffd500 is invisible on white */
+  color-scheme: light;
+  /* Spinner. the arc is a DARK colour on a light ground; below 100% it washes out.
+     At <100% the composited colour is NOT the colour the contrast tests verify,
+     so on light grounds the arc runs at full strength and the tested ratio is the
+     ratio that actually renders. */
+  --spinner-track-opacity: 0.25;
+  --spinner-arc-opacity: 1;
+}
+
+/* High contrast (dark). The defining move is HIERARCHY COLLAPSE: text-secondary
+ * stops being a dimmer tier and resolves to primary. ~400 elements here are
+ * deliberately greyed below body text, and magnifying grey does not make it
+ * legible — only removing the dimming does.
+ *
+ * Note white-on-black MAXIMISES halation. For astigmatism, hc-light is the one to
+ * reach for; this exists for users whose need is the opposite. */
+[data-theme='hc'] {
+  --color-bg-primary: 0 0 0;            
+  --color-bg-secondary: 10 10 10;       
+  --color-bg-tertiary: 26 26 26;        
+  --color-border: 118 118 118;          /* 3:1 minimum for non-text */
+  --color-border-strong: 176 176 176;   
+  --color-text-primary: 255 255 255;    /* 21:1 */
+  --color-text-secondary: 255 255 255;  /* <- COLLAPSED. No dimmer tier. */
+  --color-text-tertiary: 224 224 224;   /* one step off, ~17:1 */
+  --color-accent: 124 196 255;          
+  --color-on-accent: 0 0 0;             /* dark label on a bright fill */
+  --color-on-solid: 0 0 0;              /* label on a SEMANTIC fill — never follows the accent */
+  --color-status-working: 94 255 159;   
+  --color-status-waiting: 255 225 77;   
+  --color-status-idle: 176 176 176;     
+  --color-status-error: 255 128 128;    
+  --color-danger-soft: 255 179 179;     
+  --color-danger-fg: 255 138 138;       
+  --color-danger-base: 255 107 107;     
+  --color-danger-solid: 255 107 107;    
+  --color-danger-deeper: 255 179 179;   
+  --color-danger-deep: 61 0 0;          
+  --color-warning-subtle: 255 240 138;  
+  --color-warning-soft: 255 225 77;     
+  --color-warning-fg: 255 225 77;       
+  --color-warning-base: 255 208 0;      
+  --color-warning-solid: 255 208 0;     
+  --color-warning-strong: 255 240 138;  
+  --color-warning-deep: 61 46 0;        
+  --color-success-soft: 147 255 192;    
+  --color-success-fg: 94 255 159;       
+  --color-success-base: 52 235 130;     
+  --color-success-solid: 52 235 130;    
+  --color-success-deep: 0 51 20;        
+  --color-info-subtle: 188 223 255;     
+  --color-info-soft: 142 203 255;       
+  --color-info-fg: 142 203 255;         
+  --color-info-base: 108 186 255;       
+  --color-info-solid: 108 186 255;      
+  --color-info-strong: 188 223 255;     
+  --color-info-deep: 0 31 61;           
+  --color-review-fg: 234 160 255;       
+  --color-review-base: 221 122 255;     
+  --color-review-solid: 221 122 255;    
+  --color-review-strong: 242 194 255;   
+  --color-review-deep: 46 0 61;         
+  --color-attention-fg: 255 176 102;    
+  --color-attention-base: 255 149 51;   
+  --color-attention-solid: 255 149 51;  
+  --color-note-fg: 127 230 245;         
+  --color-note-base: 77 214 235;        
+  --color-muted: 176 176 176;           
+  --color-surface-hover: 51 51 51;      
+  --color-overlay: 0 0 0;               
+  --color-elevate: 255 255 255;         
+  --color-focus-ring: 255 255 0;        /* maximum-visibility yellow */
+  --color-search-highlight: 255 255 0;  
+  color-scheme: dark;
+  /* Spinner. maximum legibility.
+     At <100% the composited colour is NOT the colour the contrast tests verify,
+     so on light grounds the arc runs at full strength and the tested ratio is the
+     ratio that actually renders. */
+  --spinner-track-opacity: 0.4;
+  --spinner-arc-opacity: 1;
+}
+
+/* High contrast (light). Same hierarchy collapse on a light ground. This is the
+ * mode for astigmatism/halation: dark text on light is the low-halation
+ * configuration, and the greys stop hiding. */
+[data-theme='hc-light'] {
+  --color-bg-primary: 255 255 255;      
+  --color-bg-secondary: 245 245 245;    
+  --color-bg-tertiary: 232 232 232;     
+  --color-border: 89 89 89;             
+  --color-border-strong: 51 51 51;      
+  --color-text-primary: 0 0 0;          /* 21:1 */
+  --color-text-secondary: 0 0 0;        /* <- COLLAPSED */
+  --color-text-tertiary: 26 26 26;      
+  --color-accent: 0 61 153;             
+  --color-on-accent: 255 255 255;       
+  --color-on-solid: 255 255 255;        /* label on a SEMANTIC fill — never follows the accent */
+  --color-status-working: 0 102 34;     
+  --color-status-waiting: 122 74 0;     
+  --color-status-idle: 61 61 61;        
+  --color-status-error: 160 0 0;        
+  --color-danger-soft: 128 0 0;         
+  --color-danger-fg: 160 0 0;           
+  --color-danger-base: 178 10 39;       
+  --color-danger-solid: 160 0 0;        
+  --color-danger-deeper: 255 205 205;   
+  --color-danger-deep: 255 235 235;     
+  --color-warning-subtle: 92 56 0;      
+  --color-warning-soft: 92 56 0;        
+  --color-warning-fg: 92 56 0;          
+  --color-warning-base: 122 74 0;       
+  --color-warning-solid: 92 56 0;       
+  --color-warning-strong: 250 224 130;  
+  --color-warning-deep: 255 248 219;    
+  --color-success-soft: 0 77 25;        
+  --color-success-fg: 0 102 34;         
+  --color-success-base: 0 102 34;       
+  --color-success-solid: 0 102 34;      
+  --color-success-deep: 223 250 231;    
+  --color-info-subtle: 0 45 115;        
+  --color-info-soft: 0 45 115;          
+  --color-info-fg: 0 61 153;            
+  --color-info-base: 0 61 153;          
+  --color-info-solid: 0 61 153;         
+  --color-info-strong: 176 205 245;     
+  --color-info-deep: 228 238 252;       
+  --color-review-fg: 82 11 143;         
+  --color-review-base: 82 11 143;       
+  --color-review-solid: 82 11 143;      
+  --color-review-strong: 221 190 246;   
+  --color-review-deep: 245 235 253;     
+  --color-attention-fg: 148 50 0;       
+  --color-attention-base: 148 50 0;     
+  --color-attention-solid: 148 50 0;    
+  --color-note-fg: 0 82 94;             
+  --color-note-base: 0 82 94;           
+  --color-muted: 61 61 61;              
+  --color-surface-hover: 224 224 224;   
+  --color-overlay: 0 0 0;               
+  --color-elevate: 0 0 0;               
+  --color-focus-ring: 0 61 153;         
+  --color-search-highlight: 122 74 0;   
+  color-scheme: light;
+  /* Spinner. maximum legibility.
+     At <100% the composited colour is NOT the colour the contrast tests verify,
+     so on light grounds the arc runs at full strength and the tested ratio is the
+     ratio that actually renders. */
+  --spinner-track-opacity: 0.3;
+  --spinner-arc-opacity: 1;
+}
 
 * {
   box-sizing: border-box;
@@ -30,23 +331,23 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom scrollbar for dark theme */
+/* Themed scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #1a1a1a;
+  background: rgb(var(--color-bg-primary));
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3a3a3a;
+  background: rgb(var(--color-border));
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #4a4a4a;
+  background: rgb(var(--color-border-strong));
 }
 
 /* Focus indicator for panels — ::after overlay sits above panel content (including overflow).
@@ -63,13 +364,13 @@ body {
   z-index: 20;
 }
 [data-panel-id]:focus-within::after {
-  border-color: rgba(59, 130, 246, 0.4);
+  border-color: rgb(var(--color-focus-ring) / 0.4);
 }
 
 /* Search highlight in Monaco editor */
 .searchHighlight {
-  background-color: rgba(255, 213, 0, 0.3);
-  border: 1px solid rgba(255, 213, 0, 0.6);
+  background-color: rgb(var(--color-search-highlight) / 0.3);
+  border: 1px solid rgb(var(--color-search-highlight) / 0.6);
   border-radius: 2px;
 }
 

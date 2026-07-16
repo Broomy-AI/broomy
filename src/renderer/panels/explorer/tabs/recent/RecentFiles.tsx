@@ -65,7 +65,7 @@ export function RecentFiles({
             <span className="w-4" />
             <div className="flex flex-col min-w-0 flex-1">
               <span className="text-xs text-text-primary truncate">{name}</span>
-              <span className="text-[10px] text-text-secondary truncate">{relativePath}</span>
+              <span className="text-3xs text-text-secondary truncate">{relativePath}</span>
             </div>
           </div>
         )

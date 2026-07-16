@@ -30,10 +30,10 @@ interface ActionButtonsProps {
 }
 
 const STYLE_CLASSES: Record<string, string> = {
-  primary: 'bg-accent text-white hover:bg-accent/80',
+  primary: 'bg-accent text-on-accent hover:bg-accent/80',
   secondary: 'bg-bg-tertiary text-text-primary hover:bg-bg-secondary',
-  accent: 'bg-purple-600 text-white hover:bg-purple-500',
-  danger: 'bg-orange-600 text-white hover:bg-orange-500',
+  accent: 'bg-review-solid text-on-solid hover:bg-review-base',
+  danger: 'bg-attention-solid text-on-solid hover:bg-attention-base',
 }
 
 function slashSubtitle(template: string): string | null {
@@ -124,7 +124,7 @@ export function ActionButtons(props: ActionButtonsProps) {
               className={`w-full px-3 py-2 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-start ${style}`}
             >
               <span className="text-sm">{isLoading || opensDialog ? `${action.label}…` : action.label}</span>
-              {subtitle && <span className="text-[10px] opacity-70 font-mono">{subtitle}</span>}
+              {subtitle && <span className="text-3xs opacity-70 font-mono">{subtitle}</span>}
             </button>
             {err && (
               <div className="mt-1">

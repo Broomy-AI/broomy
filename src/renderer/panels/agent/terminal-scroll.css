@@ -22,5 +22,7 @@
 }
 
 .xterm-viewport:hover::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.2);
+  /* Was a hardcoded white-at-20% thumb, which is invisible on a light background.
+     --scrollbar-thumb derives from --color-elevate, which flips to black on light. */
+  background-color: var(--scrollbar-thumb);
 }

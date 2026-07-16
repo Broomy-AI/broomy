@@ -26,6 +26,10 @@ import { createPtyDataHandler } from './ptyDataHandler'
 import { ScrollLog, scrollLogRegistry } from '../utils/scrollLog'
 import type { ScrollSource } from '../utils/scrollLog'
 import type { ShellKind } from '../../../../shared/shellQuote'
+import { useSettingsStore } from '../../../store/settings'
+import { resolveTerminalContrast } from '../../../../shared/appearance'
+import { XTERM_THEMES } from '../../../shared/theme/xtermTheme'
+import { useTerminalAppearance } from './useTerminalAppearance'
 
 export interface TerminalConfig {
   sessionId: string | undefined
@@ -60,31 +64,9 @@ export interface TerminalSetupResult {
   exitInfo: ExitInfo | null
 }
 
-// ── Xterm theme (module-level constant) ──────────────────────────────
-
-const XTERM_THEME = {
-  background: '#1a1a1a',
-  foreground: '#e0e0e0',
-  cursor: '#e0e0e0',
-  cursorAccent: '#1a1a1a',
-  selectionBackground: '#4a9eff40',
-  black: '#5c5c5c',
-  brightBlack: '#888888',
-  red: '#ff6b6b',
-  brightRed: '#ff9999',
-  green: '#69db7c',
-  brightGreen: '#8ce99a',
-  yellow: '#ffd43b',
-  brightYellow: '#ffe066',
-  blue: '#74c0fc',
-  brightBlue: '#a5d8ff',
-  magenta: '#da77f2',
-  brightMagenta: '#e599f7',
-  cyan: '#66d9e8',
-  brightCyan: '#99e9f2',
-  white: '#e8e8e8',
-  brightWhite: '#ffffff',
-} as const
+// ── Xterm theme ──────────────────────────────────────────────────────
+// Lives in shared/theme/xtermTheme.ts so it can vary per theme. The dark values
+// there are byte-identical to the ones that used to be inline here.
 
 // ── At-bottom detection (Wave Terminal approach) ─────────────────────
 //
@@ -299,6 +281,8 @@ function useTerminalState(config: TerminalConfig) {
 
   const terminalRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
+  // Exposed so the appearance effect can preserve bottom-following across a refit.
+  const scrollStateRef = useRef<ScrollState | null>(null)
   const serializeAddonRef = useRef<SerializeAddon | null>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
   const updateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -366,7 +350,7 @@ function useTerminalState(config: TerminalConfig) {
   }, [])
 
   return {
-    terminalRef, fitAddonRef, serializeAddonRef, cleanupRef,
+    terminalRef, fitAddonRef, serializeAddonRef, cleanupRef, scrollStateRef,
     updateTimeoutRef, idleTimeoutRef, lastStatusRef,
     lastUserInputRef, lastInteractionRef, ptyIdRef, shellKindRef,
     isActiveRef,
@@ -404,15 +388,20 @@ export function useTerminalSetup(
     const effectCwd = s.cwdRef.current
     const effectStartTime = Date.now()
 
+    // Read imperatively rather than as a hook dependency. THIS EFFECT'S CLEANUP
+    // KILLS THE PTY — adding theme or fontSize to its deps would destroy the running
+    // agent on every appearance change. The separate effect below applies changes to
+    // the live terminal instead.
+    const { appearance, resolvedTheme } = useSettingsStore.getState()
     const terminal = new XTerm({
-      theme: XTERM_THEME,
+      theme: XTERM_THEMES[resolvedTheme],
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      fontSize: 13,
-      lineHeight: 1.2,
+      fontSize: appearance.editorFontSize,
+      lineHeight: appearance.terminalLineHeight,
       cursorBlink: !document.documentElement.classList.contains('e2e-stable'),
       cursorStyle: 'bar',
       scrollback: 5000,
-      minimumContrastRatio: 7,
+      minimumContrastRatio: resolveTerminalContrast(appearance.terminalContrast, resolvedTheme),
       macOptionIsMeta: true,
     })
 
@@ -447,6 +436,7 @@ export function useTerminalSetup(
 
     // ── Scroll state tracking (Wave Terminal approach) ───────────────
     const scrollState = createScrollState(viewportEl)
+    s.scrollStateRef.current = scrollState
 
     // ── Scroll event log for debugging ──────────────────────────────
     const scrollLog = new ScrollLog()
@@ -600,6 +590,10 @@ export function useTerminalSetup(
       ptyCaptureRegistry.dispose(registryKey)
     }
   }, [sessionId, restartKey, config.command]) // Recreate terminal when session identity, command, or restart key changes
+
+  // Applied to the live terminal in its own hook — never through the construction
+  // effect above, whose cleanup kills the PTY.
+  useTerminalAppearance(s)
 
   // Subscribe to store for activation changes — imperative only, no re-render.
   useEffect(() => {

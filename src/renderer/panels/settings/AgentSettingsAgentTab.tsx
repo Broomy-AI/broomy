@@ -193,7 +193,7 @@ export function AgentSettingsAgentTab({
             <button
               onClick={onAdd}
               disabled={!name.trim() || !command.trim()}
-              className="px-3 py-1.5 bg-accent text-white text-sm rounded hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-3 py-1.5 bg-accent text-on-accent text-sm rounded hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               Add Agent
             </button>
@@ -333,7 +333,7 @@ function AgentEditForm({
         <button
           onClick={onSave}
           disabled={!name.trim() || !command.trim()}
-          className="px-3 py-1.5 bg-accent text-white text-sm rounded hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="px-3 py-1.5 bg-accent text-on-accent text-sm rounded hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           Save
         </button>
@@ -441,10 +441,10 @@ function AgentRow({
           <div className="font-medium text-sm text-text-primary flex items-center gap-2">
             {agent.name}
             {ENABLE_AGENT_SDK && agent.connectionMode === 'api' && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-normal">API</span>
+              <span className="text-3xs px-1.5 py-0.5 rounded bg-info-base/20 text-info-fg font-normal">API</span>
             )}
             {agent.skipApprovalFlag && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 font-normal">auto</span>
+              <span className="text-3xs px-1.5 py-0.5 rounded bg-warning-base/20 text-warning-fg font-normal">auto</span>
             )}
           </div>
           <div className="text-xs text-text-secondary font-mono">

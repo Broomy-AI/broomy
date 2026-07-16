@@ -18,13 +18,13 @@ export default function ErrorDetailModal() {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={hideErrorDetail}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/50" onClick={hideErrorDetail}>
       <div
         role="dialog"
         className="bg-bg-secondary border border-border rounded-lg shadow-xl p-4 max-w-lg w-full mx-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-sm font-medium text-red-400 mb-2">Error Details</h3>
+        <h3 className="text-sm font-medium text-danger-fg mb-2">Error Details</h3>
         <p className="text-sm text-text-primary mb-3">{detailError.displayMessage}</p>
 
         {detailError.detail && (

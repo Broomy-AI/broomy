@@ -84,7 +84,7 @@ describe('LayoutContentArea', () => {
     // Agent panel doesn't use FlashOverlay in LayoutContentArea,
     // but file viewer does. Check that no flash overlay appears for unknown panel
     // The flash overlay is only on FILE_VIEWER in LayoutContentArea
-    const flashOverlay = container.querySelector('.bg-white\\/10')
+    const flashOverlay = container.querySelector('.bg-elevate\\/10')
     // Agent doesn't have its own flash overlay in LayoutContentArea
     expect(flashOverlay).toBeNull()
   })
@@ -94,13 +94,13 @@ describe('LayoutContentArea', () => {
       showFileViewer: true,
       flashedPanel: PANEL_IDS.FILE_VIEWER,
     })
-    const flashOverlay = container.querySelector('.bg-white\\/10')
+    const flashOverlay = container.querySelector('.bg-elevate\\/10')
     expect(flashOverlay).toBeTruthy()
   })
 
   it('does not show flash overlay when flashedPanel does not match', () => {
     const { container } = renderContentArea({ flashedPanel: null })
-    const flashOverlay = container.querySelector('.bg-white\\/10')
+    const flashOverlay = container.querySelector('.bg-elevate\\/10')
     expect(flashOverlay).toBeNull()
   })
 

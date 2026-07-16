@@ -256,6 +256,6 @@ describe('Explorer', () => {
       />
     )
     const planButton = screen.getByText('Plan').closest('button')!
-    expect(planButton.className).not.toContain('bg-accent text-white')
+    expect(planButton.className).not.toContain('bg-accent text-on-accent')
   })
 })

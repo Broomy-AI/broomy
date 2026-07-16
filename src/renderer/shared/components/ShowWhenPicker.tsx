@@ -81,7 +81,7 @@ function ConditionPickerModal({ availableTokens, onSelect, onClose }: {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/50"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
       data-testid="condition-modal"
     >

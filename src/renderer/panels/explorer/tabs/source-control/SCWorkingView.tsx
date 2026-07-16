@@ -62,20 +62,20 @@ function StatusInfoContent({ syncStatus, branchStatus }: { syncStatus?: GitStatu
       )}
 
       {ahead > 0 && (
-        <div className="flex items-center gap-2 text-xs text-green-400">
+        <div className="flex items-center gap-2 text-xs text-success-fg">
           <span>&uarr;</span>
           <span>{ahead} commit{ahead !== 1 ? 's' : ''} to push</span>
         </div>
       )}
       {behind > 0 && (
-        <div className="flex items-center gap-2 text-xs text-blue-400">
+        <div className="flex items-center gap-2 text-xs text-info-fg">
           <span>&darr;</span>
           <span>{behind} commit{behind !== 1 ? 's' : ''} to pull</span>
         </div>
       )}
 
       {hasNoTracking && (
-        <div className="text-xs text-yellow-400">No remote tracking branch</div>
+        <div className="text-xs text-warning-fg">No remote tracking branch</div>
       )}
 
       {showBranchCard && (
@@ -105,14 +105,14 @@ function MergeCommitArea({ hasConflicts, isCommitting, onCommitMerge }: {
   return (
     <div className="px-3 py-2 border-b border-border">
       <div className="flex flex-col gap-1.5">
-        <div className={`text-xs font-medium ${hasConflicts ? 'text-yellow-400' : 'text-green-400'}`}>
+        <div className={`text-xs font-medium ${hasConflicts ? 'text-warning-fg' : 'text-success-fg'}`}>
           {hasConflicts ? 'Merge in progress' : 'Merge conflicts resolved'}
         </div>
         {!hasConflicts && (
           <button
             onClick={onCommitMerge}
             disabled={isCommitting}
-            className="w-full px-2 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-2 py-1.5 text-xs rounded bg-accent text-on-accent hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isCommitting ? 'Committing...' : 'Commit Merge'}
           </button>

@@ -21,7 +21,7 @@ import { Divider } from './Divider'
 
 function FlashOverlay({ panelId, flashedPanel }: { panelId: string; flashedPanel: string | null }) {
   return flashedPanel === panelId ? (
-    <div className="absolute inset-0 bg-white/10 pointer-events-none z-10" />
+    <div className="absolute inset-0 bg-elevate/10 pointer-events-none z-10" />
   ) : null
 }
 
@@ -125,15 +125,16 @@ export default function Layout({
     onLayoutSizeChange,
   })
 
-  useLayoutClamp({
+  // What fits on screen. The STORE keeps what the user dragged — the clamp is a
+  // rendering response to a tight viewport and must never be written back, or
+  // zooming to 200% and back would permanently shrink their layout.
+  const { sidebarWidth: renderSidebarWidth, layoutSizes: renderLayoutSizes } = useLayoutClamp({
     mainContentRef,
     showSidebar,
     showExplorer,
     showTutorial,
     sidebarWidth,
     layoutSizes,
-    onSidebarWidthChange,
-    onLayoutSizeChange,
   })
 
   const { flashedPanel } = useLayoutKeyboard({
@@ -190,7 +191,7 @@ export default function Layout({
               data-panel-id={PANEL_IDS.SIDEBAR}
               tabIndex={-1}
               className="relative flex-shrink-0 bg-bg-secondary overflow-y-auto outline-none"
-              style={{ width: sidebarWidth }}
+              style={{ width: renderSidebarWidth }}
             >
               <FlashOverlay flashedPanel={flashedPanel} panelId={PANEL_IDS.SIDEBAR} />
               <PanelErrorBoundary name="Sidebar">
@@ -209,7 +210,7 @@ export default function Layout({
             {errorMessage && (
               <div className="flex-1 flex items-center justify-center bg-bg-primary text-text-secondary">
                 <div className="text-center">
-                  <p className="text-red-400">{errorMessage}</p>
+                  <p className="text-danger-fg">{errorMessage}</p>
                 </div>
               </div>
             )}
@@ -221,7 +222,7 @@ export default function Layout({
                   data-panel-id={PANEL_IDS.EXPLORER}
                   tabIndex={-1}
                   className="relative flex-shrink-0 bg-bg-secondary overflow-hidden outline-none"
-                  style={{ width: layoutSizes.explorerWidth }}
+                  style={{ width: renderLayoutSizes.explorerWidth }}
                 >
                   <FlashOverlay flashedPanel={flashedPanel} panelId={PANEL_IDS.EXPLORER} />
                   <PanelErrorBoundary name="Explorer">
@@ -257,7 +258,7 @@ export default function Layout({
                   data-panel-id={PANEL_IDS.TUTORIAL}
                   tabIndex={-1}
                   className="relative flex-shrink-0 bg-bg-secondary overflow-y-auto outline-none"
-                  style={{ width: layoutSizes.tutorialPanelWidth }}
+                  style={{ width: renderLayoutSizes.tutorialPanelWidth }}
                 >
                   <FlashOverlay flashedPanel={flashedPanel} panelId={PANEL_IDS.TUTORIAL} />
                   <PanelErrorBoundary name="Tutorial">

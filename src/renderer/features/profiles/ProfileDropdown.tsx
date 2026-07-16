@@ -88,7 +88,7 @@ export default function ProfileDropdown({
           {profiles.length > 1 && (
             <button
               role="menuitem"
-              className="text-text-tertiary hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
+              className="text-text-tertiary hover:text-danger-fg opacity-0 group-hover:opacity-100 transition-opacity p-0.5"
               onClick={(e) => {
                 e.stopPropagation()
                 onDelete(profile.id)
@@ -151,7 +151,7 @@ export default function ProfileDropdown({
           </div>
           <div className="flex gap-1">
             <button
-              className="flex-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-500"
+              className="flex-1 px-2 py-1 text-xs bg-info-solid text-on-solid rounded hover:bg-info-base"
               onClick={onSaveEdit}
             >
               Save
@@ -214,7 +214,7 @@ export default function ProfileDropdown({
           </div>
           <div className="flex gap-1">
             <button
-              className="flex-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-500"
+              className="flex-1 px-2 py-1 text-xs bg-info-solid text-on-solid rounded hover:bg-info-base"
               onClick={onCreateProfile}
             >
               Create

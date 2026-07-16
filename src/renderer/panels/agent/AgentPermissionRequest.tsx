@@ -34,21 +34,21 @@ interface Question {
 
 function PlanApproval({ permission, onRespond }: PermissionRequestProps) {
   return (
-    <div className="my-2 rounded border border-blue-700/30 bg-blue-900/10 px-3 py-2">
-      <div className="text-sm font-medium text-blue-200">Plan ready for review</div>
-      <div className="mt-1 text-xs text-neutral-400">
+    <div className="my-2 rounded border border-info-strong/30 bg-info-deep/10 px-3 py-2">
+      <div className="text-sm font-medium text-info-subtle">Plan ready for review</div>
+      <div className="mt-1 text-xs text-text-secondary">
         The plan is shown above. Approve to start implementation, or reject to request changes.
       </div>
       <div className="mt-2 flex gap-2">
         <button
           onClick={() => onRespond(permission.toolUseId, true)}
-          className="rounded bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-500"
+          className="rounded bg-success-solid px-3 py-1.5 text-xs font-medium text-on-solid hover:bg-success-base"
         >
           Approve Plan
         </button>
         <button
           onClick={() => onRespond(permission.toolUseId, false)}
-          className="rounded bg-neutral-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-500"
+          className="rounded bg-muted px-3 py-1.5 text-xs font-medium text-on-solid hover:bg-muted"
         >
           Reject
         </button>
@@ -76,15 +76,15 @@ function QuestionUI({ permission, onRespond }: PermissionRequestProps) {
   const allAnswered = questionList.every(q => answers[q.question])
 
   return (
-    <div className="my-2 rounded border border-purple-700/30 bg-purple-900/10 px-3 py-3">
+    <div className="my-2 rounded border border-review-strong/30 bg-review-deep/10 px-3 py-3">
       {questionList.map((q) => (
         <div key={q.question} className="mb-3 last:mb-0">
           {q.header && (
-            <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-purple-400">
+            <div className="mb-1 text-3xs font-medium uppercase tracking-wider text-review-fg">
               {q.header}
             </div>
           )}
-          <div className="mb-2 text-sm text-neutral-200">{q.question}</div>
+          <div className="mb-2 text-sm text-text-primary">{q.question}</div>
           <div className="space-y-1">
             {q.options.map((opt) => (
               <button
@@ -92,8 +92,8 @@ function QuestionUI({ permission, onRespond }: PermissionRequestProps) {
                 onClick={() => handleSelect(q.question, opt.label)}
                 className={`flex w-full items-start gap-2 rounded px-3 py-1.5 text-left text-xs transition-colors ${
                   answers[q.question] === opt.label
-                    ? 'bg-purple-600/30 border border-purple-500/50 text-neutral-100'
-                    : 'bg-neutral-800/50 border border-neutral-700 text-neutral-300 hover:bg-neutral-700/50'
+                    ? 'bg-review-solid/30 border border-review-base/50 text-text-primary'
+                    : 'bg-bg-secondary/50 border border-border text-text-primary hover:bg-surface-hover/50'
                 }`}
               >
                 <span className="mt-0.5 flex-shrink-0">
@@ -102,7 +102,7 @@ function QuestionUI({ permission, onRespond }: PermissionRequestProps) {
                 <div>
                   <div className="font-medium">{opt.label}</div>
                   {opt.description && (
-                    <div className="mt-0.5 text-neutral-400">{opt.description}</div>
+                    <div className="mt-0.5 text-text-secondary">{opt.description}</div>
                   )}
                 </div>
               </button>
@@ -114,13 +114,13 @@ function QuestionUI({ permission, onRespond }: PermissionRequestProps) {
         <button
           onClick={handleSubmit}
           disabled={!allAnswered}
-          className="rounded bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-500 disabled:opacity-50"
+          className="rounded bg-review-solid px-3 py-1.5 text-xs font-medium text-on-solid hover:bg-review-base disabled:opacity-50"
         >
           Submit
         </button>
         <button
           onClick={() => onRespond(permission.toolUseId, false)}
-          className="rounded bg-neutral-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-500"
+          className="rounded bg-muted px-3 py-1.5 text-xs font-medium text-on-solid hover:bg-muted"
         >
           Skip
         </button>
@@ -140,34 +140,34 @@ function GenericPermission({ permission, onRespond }: PermissionRequestProps) {
   const markdownContent = markdownField ? (input[markdownField] as string) : null
 
   return (
-    <div className="my-2 rounded border border-yellow-700 bg-yellow-900/20 px-3 py-2">
-      <div className="text-sm text-yellow-200">
+    <div className="my-2 rounded border border-warning-strong bg-warning-deep/20 px-3 py-2">
+      <div className="text-sm text-warning-subtle">
         Claude wants to use <span className="font-mono font-bold">{permission.toolName}</span>
       </div>
       {permission.decisionReason && (
-        <div className="mt-1 text-xs text-yellow-300/70">{permission.decisionReason}</div>
+        <div className="mt-1 text-xs text-warning-soft/70">{permission.decisionReason}</div>
       )}
       {markdownContent ? (
-        <div className="mt-2 max-h-60 overflow-auto rounded bg-neutral-800 px-3 py-2 text-sm text-neutral-200">
+        <div className="mt-2 max-h-60 overflow-auto rounded bg-bg-secondary px-3 py-2 text-sm text-text-primary">
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
             {markdownContent}
           </ReactMarkdown>
         </div>
       ) : (
-        <pre className="mt-2 max-h-40 overflow-auto rounded bg-neutral-800 px-2 py-1 text-xs text-neutral-300">
+        <pre className="mt-2 max-h-40 overflow-auto rounded bg-bg-secondary px-2 py-1 text-xs text-text-primary">
           {JSON.stringify(input, null, 2)}
         </pre>
       )}
       <div className="mt-2 flex gap-2">
         <button
           onClick={() => onRespond(permission.toolUseId, true)}
-          className="rounded bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-500"
+          className="rounded bg-success-solid px-3 py-1 text-xs font-medium text-on-solid hover:bg-success-base"
         >
           Allow
         </button>
         <button
           onClick={() => onRespond(permission.toolUseId, false)}
-          className="rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-500"
+          className="rounded bg-danger-solid px-3 py-1 text-xs font-medium text-on-solid hover:bg-danger-base"
         >
           Deny
         </button>

@@ -18,6 +18,8 @@ import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import type { FileViewerPlugin, FileViewerComponentProps } from './types'
 import { getFileExtension } from './types'
 import { useMonacoComments } from '../hooks/useMonacoComments'
+import { useSettingsStore } from '../../../store/settings'
+import { MONACO_THEMES } from '../../../shared/theme/monacoTheme'
 
 // Configure Monaco workers for Vite
 ;(window as unknown as { MonacoEnvironment: unknown }).MonacoEnvironment = {
@@ -183,6 +185,9 @@ function scrollAndHighlight(
 }
 
 function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrollToLine, searchHighlight, reviewContext, onEditorReady, onOpenFile }: FileViewerComponentProps) {
+  // One source for both editors: Monaco's setTheme is global, so they cannot disagree.
+  const resolvedTheme = useSettingsStore((s) => s.resolvedTheme)
+  const editorFontSize = useSettingsStore((s) => s.appearance.editorFontSize)
   const language = getLanguageFromPath(filePath)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const originalContentRef = useRef(content)
@@ -366,7 +371,7 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
             <button
               onClick={handleAddComment}
               disabled={!commentText.trim()}
-              className="px-2 py-1 text-xs rounded bg-purple-600 text-white hover:bg-purple-500 disabled:opacity-50 transition-colors"
+              className="px-2 py-1 text-xs rounded bg-review-solid text-on-solid hover:bg-review-base disabled:opacity-50 transition-colors"
             >
               Add
             </button>
@@ -385,13 +390,13 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
           path={filePath}
           language={language}
           value={content}
-          theme="vs-dark"
+          theme={MONACO_THEMES[resolvedTheme]}
           onMount={handleEditorDidMount}
           onChange={handleEditorChange}
           options={{
             readOnly: !onSave,
             minimap: { enabled: false },
-            fontSize: 13,
+            fontSize: editorFontSize,
             fontFamily: 'Menlo, Monaco, "Courier New", monospace',
             lineNumbers: 'on',
             scrollBeyondLastLine: false,
@@ -406,7 +411,7 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
       {reviewContext && (
         <style>{`
           .review-comment-glyph {
-            background-color: #eab308;
+            background-color: rgb(var(--color-warning-base));
             border-radius: 50%;
             width: 8px !important;
             height: 8px !important;
@@ -414,7 +419,8 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
             margin-left: 4px;
           }
           .review-comment-line {
-            background-color: rgba(234, 179, 8, 0.05);
+            /* 0.05 is invisible on a light ground; the token carries the theme. */
+            background-color: rgb(var(--color-warning-base) / 0.12);
           }
           .margin-view-overlays .cgmr {
             cursor: pointer;

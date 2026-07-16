@@ -118,7 +118,7 @@ function ImageViewerComponent({ filePath }: FileViewerComponentProps) {
 
   if (error) {
     return (
-      <div className="h-full flex items-center justify-center text-red-400 text-sm">
+      <div className="h-full flex items-center justify-center text-danger-fg text-sm">
         {error}
       </div>
     )

@@ -17,6 +17,27 @@ export function installElectronMocks() {
     save: successResolved,
   }
 
+  const snapshot = {
+    appearance: {
+      theme: 'dark',
+      appTextScale: 1,
+      interfaceScale: 1,
+      editorFontSize: 13,
+      terminalLineHeight: 1.2,
+      terminalContrast: 7,
+      accent: '#4a9eff',
+    },
+    systemIsDark: true,
+    resolvedTheme: 'dark',
+  }
+
+  w.settings = {
+    getInitial: () => snapshot,
+    load: resolved(snapshot),
+    save: successResolved,
+    onChanged: unsubscribe,
+  }
+
   w.git = {
     isInstalled: resolved(true),
     getBranch: resolved('main'),

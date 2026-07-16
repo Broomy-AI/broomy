@@ -19,7 +19,7 @@ export default function WelcomeScreen({ onNewSession }: WelcomeScreenProps) {
 
         <button
           onClick={onNewSession}
-          className="px-6 py-2.5 rounded-lg bg-accent text-white font-medium hover:bg-accent/90 transition-colors mb-8"
+          className="px-6 py-2.5 rounded-lg bg-accent text-on-accent font-medium hover:bg-accent/90 transition-colors mb-8"
         >
           + New Session
         </button>

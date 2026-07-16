@@ -61,7 +61,7 @@ describe('PanelPicker', () => {
     const onClose = vi.fn()
     renderPanelPicker({ onClose })
     // Click the backdrop (the semi-transparent overlay)
-    const backdrop = screen.getByText('Done').closest('.fixed')!.querySelector('.bg-black\\/30')!
+    const backdrop = screen.getByText('Done').closest('.fixed')!.querySelector('.bg-overlay\\/30')!
     fireEvent.click(backdrop)
     expect(onClose).toHaveBeenCalled()
   })
