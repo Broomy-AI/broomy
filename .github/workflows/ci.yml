@@ -11,7 +11,10 @@ concurrency:
 
 env:
   NODE_VERSION: '20'
-  PNPM_VERSION: '10'
+  # Exact version so it matches the `packageManager` field in package.json.
+  # pnpm/action-setup@v4 compares the two as exact strings and fails the run
+  # (ERR_PNPM_BAD_PM_VERSION) if they differ — a bare '10' would not match.
+  PNPM_VERSION: '10.34.5'
 
 jobs:
   lint:
