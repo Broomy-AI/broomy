@@ -370,6 +370,26 @@ function useTerminalState(config: TerminalConfig) {
  * Custom hook that encapsulates all xterm.js terminal setup, PTY creation,
  * scroll following logic, activity detection, and cleanup.
  */
+/**
+ * Construct the xterm instance with the user's current appearance settings.
+ * Reads settings imperatively (getState) so the caller's setup effect need not
+ * depend on them — see the call site for why that dependency is deliberately avoided.
+ */
+function createConfiguredTerminal(): XTerm {
+  const { appearance, resolvedTheme } = useSettingsStore.getState()
+  return new XTerm({
+    theme: XTERM_THEMES[resolvedTheme],
+    fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+    fontSize: appearance.editorFontSize,
+    lineHeight: appearance.terminalLineHeight,
+    cursorBlink: !document.documentElement.classList.contains('e2e-stable'),
+    cursorStyle: 'bar',
+    scrollback: 5000,
+    minimumContrastRatio: resolveTerminalContrast(appearance.terminalContrast, resolvedTheme),
+    macOptionIsMeta: true,
+  })
+}
+
 export function useTerminalSetup(
   config: TerminalConfig,
   containerRef: React.RefObject<HTMLDivElement | null>,
@@ -388,22 +408,11 @@ export function useTerminalSetup(
     const effectCwd = s.cwdRef.current
     const effectStartTime = Date.now()
 
-    // Read imperatively rather than as a hook dependency. THIS EFFECT'S CLEANUP
-    // KILLS THE PTY — adding theme or fontSize to its deps would destroy the running
-    // agent on every appearance change. The separate effect below applies changes to
-    // the live terminal instead.
-    const { appearance, resolvedTheme } = useSettingsStore.getState()
-    const terminal = new XTerm({
-      theme: XTERM_THEMES[resolvedTheme],
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      fontSize: appearance.editorFontSize,
-      lineHeight: appearance.terminalLineHeight,
-      cursorBlink: !document.documentElement.classList.contains('e2e-stable'),
-      cursorStyle: 'bar',
-      scrollback: 5000,
-      minimumContrastRatio: resolveTerminalContrast(appearance.terminalContrast, resolvedTheme),
-      macOptionIsMeta: true,
-    })
+    // Appearance is read imperatively inside createConfiguredTerminal rather than
+    // as a hook dependency. THIS EFFECT'S CLEANUP KILLS THE PTY — adding theme or
+    // fontSize to its deps would destroy the running agent on every appearance
+    // change. The separate effect below applies changes to the live terminal instead.
+    const terminal = createConfiguredTerminal()
 
     const fitAddon = new FitAddon()
     terminal.loadAddon(fitAddon)
