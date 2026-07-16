@@ -155,7 +155,7 @@ test.describe.serial('Feature: Appearance', () => {
         'ground. They now ride a dedicated status-accent token fitted to the non-text floor, so the ' +
         'green stays a vivid emerald. This control keeps that green, matches the theme accent ' +
         '(shown here), or takes any custom colour — each fitted per theme against the worst-case ' +
-        'sidebar surface so the dot never washes out. The live dot-and-spinner preview renders the ' +
+        'sidebar surface so the dot stays legible rather than washing out. The live preview renders the ' +
         'exact colour the sidebar will show.',
     })
   })

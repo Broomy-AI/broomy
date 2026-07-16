@@ -231,14 +231,18 @@ function StatusColorField({ appearance, resolvedTheme, accentHex, onChange }: St
   const greenHex = rgbToHex(resolveStatusColorRgb({ ...appearance, statusColor: 'default' }, resolvedTheme))
   const isCustom = appearance.statusColor !== 'default' && appearance.statusColor !== 'accent'
   const custom = isCustom ? deriveStatusColor(appearance.statusColor, resolvedTheme) : null
+  // The non-text floor is theme-aware (higher in high contrast), and fitContrast can move
+  // the pick either way — it lightens on a dark ground and darkens on a light one — so the
+  // copy says "Adjusted", not "Darkened".
+  const floor = resolvedTheme === 'hc' || resolvedTheme === 'hc-light' ? 4.5 : 3
   const help =
     appearance.statusColor === 'accent'
       ? 'Follows your accent colour above.'
       : !isCustom
-        ? 'The semantic ready / check-me green, brightened per theme. A non-text indicator, so it clears 3:1 — not the 4.5:1 used for text.'
+        ? 'The semantic ready / check-me green, brightened per theme so it stays a vivid non-text indicator.'
         : custom?.adjusted
-          ? `Darkened to ${statusHex} for this theme so the dot stays visible (${custom.contrastVsBg.toFixed(1)}:1). Fitted to the 3:1 non-text floor, not the 4.5:1 used for text.`
-          : `${custom?.contrastVsBg.toFixed(1)}:1 against the sidebar — a non-text indicator, so 3:1 is enough.`
+          ? `Adjusted to ${statusHex} for this theme so the dot stays visible (${custom.contrastVsBg.toFixed(1)}:1, clearing the ${floor}:1 non-text floor).`
+          : `${custom?.contrastVsBg.toFixed(1)}:1 against the sidebar — a non-text indicator, so ${floor}:1 is enough.`
 
   return (
     <div className="space-y-2">

@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { applyAppearanceToDocument, useAppearance } from './useAppearance'
 import { useSettingsStore } from '../../store/settings'
-import { DEFAULT_APPEARANCE, type Appearance, type AppearanceSnapshot } from '../../../shared/appearance'
+import { DEFAULT_APPEARANCE, type Appearance } from '../../../shared/appearance'
 import type { ThemeName } from '../../../shared/theme'
 
 const statusVar = () => document.documentElement.style.getPropertyValue('--color-status-accent')
@@ -70,21 +70,19 @@ describe('useAppearance hook', () => {
   })
 
   it('applies the appearance on mount and writes remote changes back to the store', () => {
-    let captured: ((s: AppearanceSnapshot) => void) | null = null
-    vi.mocked(window.settings.onChanged).mockImplementation((cb) => {
-      captured = cb
-      return () => {}
-    })
+    const onChanged = vi.mocked(window.settings.onChanged)
+    onChanged.mockClear()
     seed({ statusColor: 'accent', accent: '#4a9eff' }, 'dark')
 
     renderHook(() => useAppearance())
 
-    // The mount effect applied the current appearance to <html>.
+    // The mount effect applied the current appearance to <html>, and subscribed.
     expect(statusVar()).toMatch(/^\d{1,3} \d{1,3} \d{1,3}$/)
-    expect(window.settings.onChanged).toHaveBeenCalled()
+    expect(onChanged).toHaveBeenCalled()
 
-    // A change pushed from another window is applied to this window's store.
-    captured?.({
+    // Invoke the subscribed callback to simulate a change pushed from another window.
+    const cb = onChanged.mock.calls[0][0]
+    cb({
       appearance: { ...DEFAULT_APPEARANCE, statusColor: 'default' },
       systemIsDark: false,
       resolvedTheme: 'light',

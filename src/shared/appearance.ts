@@ -161,8 +161,17 @@ const statusTarget = (theme: ThemeName): number => (theme === 'hc' || theme === 
  * Fit a custom status colour to the theme — like deriveAccent, but to the non-text floor
  * and against the WORST-CASE surface. The indicators sit on the sidebar (bg-secondary)
  * and on active/hover cards; for a colour darkened (light theme) or lightened (dark
- * theme) to reach a floor, bg-tertiary is the hardest of the three surfaces in every
+ * theme) to reach a floor, bg-tertiary is the hardest of the three SOLID surfaces in every
  * theme, so clearing it clears all three.
+ *
+ * Two residuals are deliberately NOT modelled and are accepted as within tolerance:
+ *   - the active card tints its ground with bg-accent/15, so a very dark accent can make
+ *     that one card's surface darker than bg-tertiary;
+ *   - the dark working spinner renders its arc at 75% opacity (--spinner-arc-opacity).
+ * Either can dip a floor-hugging pick a little under target on that single card / that
+ * spinner — a small shortfall on a redundantly-encoded non-text dot (unread also bolds the
+ * name and enlarges the dot), not the 1.4:1 washout this replaced. Modelling them would
+ * make the fit accent-dependent and re-darken the default green we set out to brighten.
  */
 export function deriveStatusColor(hex: string, theme: ThemeName) {
   let picked: Rgb
