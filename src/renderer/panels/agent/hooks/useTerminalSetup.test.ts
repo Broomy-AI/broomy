@@ -43,7 +43,7 @@ vi.mock('@xterm/xterm', () => {
       resize = mockTerminalResize
       cols = 80
       rows = 24
-      buffer = { active: { viewportY: 0, baseY: 0 } }
+      buffer = { active: { viewportY: 0, baseY: 0, getLine: () => undefined } }
       parser = { registerCsiHandler: mockRegisterCsiHandler }
     },
   }
@@ -86,9 +86,13 @@ vi.mock('../../../shared/utils/terminalBufferRegistry', () => ({
   },
 }))
 
-vi.mock('../utils/terminalActivityDetector', () => ({
-  evaluateActivity: vi.fn().mockReturnValue({ status: null, scheduleIdle: false }),
-}))
+vi.mock('../utils/terminalActivityDetector', async (importActual) => {
+  const actual = await importActual<typeof import('../utils/terminalActivityDetector')>()
+  return {
+    ...actual, // keep computeIdleDeadline + DEFAULT_CONFIG real
+    evaluateActivity: vi.fn().mockReturnValue({ status: null }),
+  }
+})
 
 // Mock ResizeObserver - track instances for assertions
 const mockResizeObserverInstances: { observe: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }[] = []
@@ -497,7 +501,7 @@ describe('useTerminalSetup', () => {
   describe('agent idle on unmount', () => {
     it('sets agent to idle on unmount when agent was still working', async () => {
       const { evaluateActivity } = await import('../utils/terminalActivityDetector')
-      vi.mocked(evaluateActivity).mockReturnValue({ status: 'working', scheduleIdle: true })
+      vi.mocked(evaluateActivity).mockReturnValue({ status: 'working' })
 
       const config = makeConfig({ isAgentTerminal: true, command: 'claude-code' })
       const containerRef = makeContainerRef()
@@ -695,7 +699,7 @@ describe('useTerminalSetup', () => {
 
     it('processes agent activity detection on PTY data for agent terminals', async () => {
       const { evaluateActivity } = await import('../utils/terminalActivityDetector')
-      vi.mocked(evaluateActivity).mockReturnValue({ status: 'working', scheduleIdle: true })
+      vi.mocked(evaluateActivity).mockReturnValue({ status: 'working' })
 
       let onDataCb: ((data: string) => void) | null = null
       vi.mocked(window.pty.onData).mockImplementation((_id, cb) => {
@@ -711,6 +715,9 @@ describe('useTerminalSetup', () => {
 
       if (onDataCb) {
         act(() => { onDataCb!('some data') })
+        // Activity detection now samples the rendered screen on a throttle, so
+        // it runs shortly after output rather than synchronously per chunk.
+        await act(async () => { await new Promise(r => setTimeout(r, 300)) })
         expect(evaluateActivity).toHaveBeenCalled()
       }
     })

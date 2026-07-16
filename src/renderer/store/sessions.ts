@@ -160,7 +160,7 @@ interface SessionStore {
   updateLayoutSize: (id: string, key: keyof LayoutSizes, value: number) => void
   setExplorerFilter: (id: string, filter: ExplorerFilter) => void
   // Agent monitoring actions
-  updateAgentMonitor: (id: string, update: { status?: SessionStatus; lastMessage?: string }) => void
+  updateAgentMonitor: (id: string, update: { status?: SessionStatus; lastMessage?: string; workingStartedAt?: number }) => void
   markSessionRead: (id: string) => void
   // Terminal tab actions
   addTerminalTab: (sessionId: string, name?: string, isolated?: boolean) => string
@@ -284,7 +284,7 @@ export const useSessionStore = create<SessionStore>((set, get) => {
     debouncedSave()
   },
 
-  updateAgentMonitor: (id: string, update: { status?: SessionStatus; lastMessage?: string }) => {
+  updateAgentMonitor: (id: string, update: { status?: SessionStatus; lastMessage?: string; workingStartedAt?: number }) => {
     const { sessions } = get()
     const session = sessions.find(s => s.id === id)
     if (!session) return
@@ -301,9 +301,11 @@ export const useSessionStore = create<SessionStore>((set, get) => {
         changes.lastMessage = update.lastMessage
         changes.lastMessageTime = Date.now()
       }
-      // Track when working period starts
+      // Track when the working period starts. Prefer the caller's source
+      // timestamp (the first output of the working burst) over receipt time, so
+      // the >=3s unread threshold isn't undercounted by detection/debounce delay.
       if (update.status === 'working' && s.status !== 'working') {
-        changes.workingStartTime = Date.now()
+        changes.workingStartTime = update.workingStartedAt ?? Date.now()
       }
       // Mark as unread when transitioning from working to idle,
       // but only if the agent was working for at least 3 seconds.
