@@ -3,17 +3,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import '../../../test/react-setup'
 import Terminal from './Terminal'
+import type { TerminalSetupResult } from './hooks/useTerminalSetup'
+import { FILE_PATH_MIME } from '../../../shared/dnd'
 
 // Mock the useTerminalSetup hook to avoid xterm.js issues in jsdom
 vi.mock('./hooks/useTerminalSetup', () => ({
-  useTerminalSetup: vi.fn().mockReturnValue({
-    terminalRef: { current: null },
-    ptyIdRef: { current: 'pty-123' },
-    isActiveRef: { current: false },
-    showScrollButton: false,
-    handleScrollToBottom: vi.fn(),
-    exitInfo: null,
-  }),
+  useTerminalSetup: vi.fn(),
 }))
 
 // Mock the xterm CSS import
@@ -27,12 +22,42 @@ vi.mock('../shared/utils/agentInstallUrls', () => ({
   },
 }))
 
+/** Build a full useTerminalSetup return value with sensible defaults for the mock. */
+function makeSetup(overrides: Partial<TerminalSetupResult> = {}): TerminalSetupResult {
+  return {
+    terminalRef: { current: null },
+    ptyIdRef: { current: 'pty-123' },
+    shellKindRef: { current: 'posix' },
+    isActiveRef: { current: false },
+    showScrollButton: false,
+    handleScrollToBottom: vi.fn(),
+    exitInfo: null,
+    ...overrides,
+  }
+}
+
+/** Minimal DataTransfer stand-in for jsdom drag/drop events. */
+function dropData(init: { types: string[]; files?: { path: string }[]; mime?: Record<string, string> }): DataTransfer {
+  return {
+    types: init.types,
+    files: init.files ?? [],
+    dropEffect: 'none',
+    getData: (t: string) => init.mime?.[t] ?? '',
+  } as unknown as DataTransfer
+}
+
+async function setSetup(overrides: Partial<TerminalSetupResult> = {}) {
+  const { useTerminalSetup } = await import('./hooks/useTerminalSetup')
+  vi.mocked(useTerminalSetup).mockReturnValue(makeSetup(overrides))
+}
+
 afterEach(() => {
   cleanup()
 })
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks()
+  await setSetup()
 })
 
 describe('Terminal', () => {
@@ -54,30 +79,14 @@ describe('Terminal', () => {
   })
 
   it('shows scroll button when showScrollButton is true', async () => {
-    const { useTerminalSetup } = await import('./hooks/useTerminalSetup')
-    vi.mocked(useTerminalSetup).mockReturnValue({
-      terminalRef: { current: null },
-      ptyIdRef: { current: 'pty-123' },
-      isActiveRef: { current: false },
-      showScrollButton: true,
-      handleScrollToBottom: vi.fn(),
-      exitInfo: null,
-    })
+    await setSetup({ showScrollButton: true })
     render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
     expect(screen.getByText(/Go to End/)).toBeTruthy()
   })
 
   it('calls handleScrollToBottom when scroll button is clicked', async () => {
     const handleScrollToBottom = vi.fn()
-    const { useTerminalSetup } = await import('./hooks/useTerminalSetup')
-    vi.mocked(useTerminalSetup).mockReturnValue({
-      terminalRef: { current: null },
-      ptyIdRef: { current: 'pty-123' },
-      isActiveRef: { current: false },
-      showScrollButton: true,
-      handleScrollToBottom,
-      exitInfo: null,
-    })
+    await setSetup({ showScrollButton: true, handleScrollToBottom })
     render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
     fireEvent.click(screen.getByText(/Go to End/))
     expect(handleScrollToBottom).toHaveBeenCalled()
@@ -183,16 +192,10 @@ describe('Terminal', () => {
     })
 
     it('handles copy action with selection', async () => {
-      const { useTerminalSetup } = await import('./hooks/useTerminalSetup')
       const mockGetSelection = vi.fn().mockReturnValue('selected text')
       const mockHasSelection = vi.fn().mockReturnValue(true)
-      vi.mocked(useTerminalSetup).mockReturnValue({
+      await setSetup({
         terminalRef: { current: { hasSelection: mockHasSelection, getSelection: mockGetSelection, selectAll: vi.fn() } as never },
-        ptyIdRef: { current: 'pty-123' },
-        isActiveRef: { current: false },
-        showScrollButton: false,
-        handleScrollToBottom: vi.fn(),
-        exitInfo: null,
       })
       vi.mocked(window.menu.popup).mockResolvedValue('copy')
       Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined), readText: vi.fn() } })
@@ -217,31 +220,74 @@ describe('Terminal', () => {
     })
   })
 
+  describe('drag and drop', () => {
+    const container = () => document.querySelector('.h-full.w-full.flex.flex-col')!
+
+    it('writes the shell-quoted path when a Finder file is dropped', () => {
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
+      fireEvent.drop(container(), { dataTransfer: dropData({ types: ['Files'], files: [{ path: '/a/b c.txt' }] }) })
+      expect(window.pty.write).toHaveBeenCalledWith('pty-123', "'/a/b c.txt' ")
+    })
+
+    it('writes the path from an explorer (FILE_PATH_MIME) drop', () => {
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
+      fireEvent.drop(container(), { dataTransfer: dropData({ types: [FILE_PATH_MIME], mime: { [FILE_PATH_MIME]: '/x/y.ts' } }) })
+      expect(window.pty.write).toHaveBeenCalledWith('pty-123', '/x/y.ts ')
+    })
+
+    it('accepts a file dragover and sets a copy drop effect', () => {
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
+      const dt = dropData({ types: ['Files'] })
+      const notPrevented = fireEvent.dragOver(container(), { dataTransfer: dt })
+      expect(dt.dropEffect).toBe('copy')
+      expect(notPrevented).toBe(false) // preventDefault was called → drop is allowed
+    })
+
+    it('ignores a tab-reorder (text/plain) drag — no accept, no write', () => {
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
+      const dt = dropData({ types: ['text/plain'], mime: { 'text/plain': 'tab-id' } })
+      const notPrevented = fireEvent.dragOver(container(), { dataTransfer: dt })
+      expect(dt.dropEffect).toBe('none') // untouched
+      expect(notPrevented).toBe(true) // not prevented → browser handles it
+      fireEvent.drop(container(), { dataTransfer: dt })
+      expect(window.pty.write).not.toHaveBeenCalled()
+    })
+
+    it('prevents default but does not write when nothing extractable was dropped', () => {
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
+      // Accepted (types includes Files) but no files and no MIME → empty extraction.
+      const notPrevented = fireEvent.drop(container(), { dataTransfer: dropData({ types: ['Files'], files: [] }) })
+      expect(notPrevented).toBe(false) // still preventDefault (data-loss guard)
+      expect(window.pty.write).not.toHaveBeenCalled()
+    })
+
+    it('does not write when the PTY id is not set', async () => {
+      await setSetup({ ptyIdRef: { current: null } })
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
+      fireEvent.drop(container(), { dataTransfer: dropData({ types: ['Files'], files: [{ path: '/a.txt' }] }) })
+      expect(window.pty.write).not.toHaveBeenCalled()
+    })
+
+    it('does not write while the shell kind is unknown (create in flight / restart)', async () => {
+      await setSetup({ shellKindRef: { current: null } })
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
+      fireEvent.drop(container(), { dataTransfer: dropData({ types: ['Files'], files: [{ path: '/a.txt' }] }) })
+      expect(window.pty.write).not.toHaveBeenCalled()
+    })
+  })
+
   describe('resume banner', () => {
     it('shows resume banner for restored agent with resume command', async () => {
-      const { useTerminalSetup } = await import('./hooks/useTerminalSetup')
-      vi.mocked(useTerminalSetup).mockReturnValue({
-        terminalRef: { current: null },
-        ptyIdRef: { current: 'pty-123' },
-        isActiveRef: { current: false },
-        showScrollButton: false,
-        handleScrollToBottom: vi.fn(),
-        exitInfo: null,
-      })
+      await setSetup()
       render(<Terminal sessionId="session-1" cwd="/tmp/test" isAgentTerminal isRestored />)
       expect(screen.getByText(/Resume your previous conversation/)).toBeTruthy()
     })
 
     it('focuses the terminal after clicking resume', async () => {
-      const { useTerminalSetup } = await import('./hooks/useTerminalSetup')
       const mockFocus = vi.fn()
-      vi.mocked(useTerminalSetup).mockReturnValue({
+      await setSetup({
         terminalRef: { current: { focus: mockFocus } as unknown as import('@xterm/xterm').Terminal },
-        ptyIdRef: { current: 'pty-123' },
         isActiveRef: { current: true },
-        showScrollButton: false,
-        handleScrollToBottom: vi.fn(),
-        exitInfo: null,
       })
 
       const rAFs: FrameRequestCallback[] = []
@@ -261,15 +307,7 @@ describe('Terminal', () => {
     })
 
     it('dismisses resume banner when close button is clicked', async () => {
-      const { useTerminalSetup } = await import('./hooks/useTerminalSetup')
-      vi.mocked(useTerminalSetup).mockReturnValue({
-        terminalRef: { current: null },
-        ptyIdRef: { current: 'pty-123' },
-        isActiveRef: { current: false },
-        showScrollButton: false,
-        handleScrollToBottom: vi.fn(),
-        exitInfo: null,
-      })
+      await setSetup()
       render(<Terminal sessionId="session-1" cwd="/tmp/test" isAgentTerminal isRestored />)
       fireEvent.click(screen.getByLabelText('Dismiss'))
       expect(screen.queryByText(/Resume your previous conversation/)).toBeNull()
@@ -278,43 +316,19 @@ describe('Terminal', () => {
 
   describe('exit error banner', () => {
     it('shows exit error banner when exitInfo is set', async () => {
-      const { useTerminalSetup } = await import('./hooks/useTerminalSetup')
-      vi.mocked(useTerminalSetup).mockReturnValue({
-        terminalRef: { current: null },
-        ptyIdRef: { current: 'pty-123' },
-        isActiveRef: { current: false },
-        showScrollButton: false,
-        handleScrollToBottom: vi.fn(),
-        exitInfo: { code: 137, message: 'Agent killed by Docker out-of-memory killer (SIGKILL)', detail: 'Some detail' },
-      })
+      await setSetup({ exitInfo: { code: 137, message: 'Agent killed by Docker out-of-memory killer (SIGKILL)', detail: 'Some detail' } })
       render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
       expect(screen.getByText(/out-of-memory killer/)).toBeTruthy()
     })
 
     it('does not show exit error banner when exitInfo is null', async () => {
-      const { useTerminalSetup } = await import('./hooks/useTerminalSetup')
-      vi.mocked(useTerminalSetup).mockReturnValue({
-        terminalRef: { current: null },
-        ptyIdRef: { current: 'pty-123' },
-        isActiveRef: { current: false },
-        showScrollButton: false,
-        handleScrollToBottom: vi.fn(),
-        exitInfo: null,
-      })
+      await setSetup({ exitInfo: null })
       render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
       expect(screen.queryByText(/out-of-memory/)).toBeNull()
     })
 
     it('dismisses exit error banner when close button is clicked', async () => {
-      const { useTerminalSetup } = await import('./hooks/useTerminalSetup')
-      vi.mocked(useTerminalSetup).mockReturnValue({
-        terminalRef: { current: null },
-        ptyIdRef: { current: 'pty-123' },
-        isActiveRef: { current: false },
-        showScrollButton: false,
-        handleScrollToBottom: vi.fn(),
-        exitInfo: { code: 137, message: 'Process killed (SIGKILL)', detail: 'Some detail' },
-      })
+      await setSetup({ exitInfo: { code: 137, message: 'Process killed (SIGKILL)', detail: 'Some detail' } })
       render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
       expect(screen.getByText(/SIGKILL/)).toBeTruthy()
       fireEvent.click(screen.getByLabelText('Dismiss'))
@@ -322,17 +336,9 @@ describe('Terminal', () => {
     })
 
     it('does not open error detail modal when exitInfo has no detail', async () => {
-      const { useTerminalSetup } = await import('./hooks/useTerminalSetup')
       const { useErrorStore } = await import('../../store/errors')
       useErrorStore.setState({ detailError: null })
-      vi.mocked(useTerminalSetup).mockReturnValue({
-        terminalRef: { current: null },
-        ptyIdRef: { current: 'pty-123' },
-        isActiveRef: { current: false },
-        showScrollButton: false,
-        handleScrollToBottom: vi.fn(),
-        exitInfo: { code: 137, message: 'Process killed (SIGKILL)' },
-      })
+      await setSetup({ exitInfo: { code: 137, message: 'Process killed (SIGKILL)' } })
       render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
       // Without detail, ExitErrorBanner is not shown — AgentExitBanner shows instead (no detail button)
       expect(screen.queryByLabelText('Dismiss')).toBeNull()
@@ -341,16 +347,8 @@ describe('Terminal', () => {
     })
 
     it('opens error detail modal when banner with detail is clicked', async () => {
-      const { useTerminalSetup } = await import('./hooks/useTerminalSetup')
       const { useErrorStore } = await import('../../store/errors')
-      vi.mocked(useTerminalSetup).mockReturnValue({
-        terminalRef: { current: null },
-        ptyIdRef: { current: 'pty-123' },
-        isActiveRef: { current: false },
-        showScrollButton: false,
-        handleScrollToBottom: vi.fn(),
-        exitInfo: { code: 137, message: 'Agent killed by OOM', detail: 'Docker Desktop runs all containers...' },
-      })
+      await setSetup({ exitInfo: { code: 137, message: 'Agent killed by OOM', detail: 'Docker Desktop runs all containers...' } })
       render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
       fireEvent.click(screen.getByText(/Agent killed by OOM/))
       const state = useErrorStore.getState()

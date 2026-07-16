@@ -77,7 +77,7 @@ describe('AuthSetupSection', () => {
 
   it('creates PTY when gh available and button clicked', async () => {
     vi.mocked(window.app.homedir).mockResolvedValue('/home/user')
-    vi.mocked(window.pty.create).mockResolvedValue({ id: 'auth-setup-123' })
+    vi.mocked(window.pty.create).mockResolvedValue({ id: 'auth-setup-123', shellKind: 'posix' })
 
     render(
       <AuthSetupSection error="could not read Username" ghAvailable={true} onRetry={vi.fn()} />
@@ -93,7 +93,7 @@ describe('AuthSetupSection', () => {
   it('shows retry button with custom label after auth completes', async () => {
     vi.useFakeTimers()
     vi.mocked(window.app.homedir).mockResolvedValue('/home/user')
-    vi.mocked(window.pty.create).mockResolvedValue({ id: 'auth-setup-123' })
+    vi.mocked(window.pty.create).mockResolvedValue({ id: 'auth-setup-123', shellKind: 'posix' })
 
     const onRetry = vi.fn()
     render(
@@ -124,7 +124,7 @@ describe('AuthSetupSection', () => {
   it('uses default "Retry" label when retryLabel not provided', async () => {
     vi.useFakeTimers()
     vi.mocked(window.app.homedir).mockResolvedValue('/home/user')
-    vi.mocked(window.pty.create).mockResolvedValue({ id: 'auth-setup-123' })
+    vi.mocked(window.pty.create).mockResolvedValue({ id: 'auth-setup-123', shellKind: 'posix' })
 
     render(
       <AuthSetupSection error="could not read Username" ghAvailable={true} onRetry={vi.fn()} />

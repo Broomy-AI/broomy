@@ -187,7 +187,7 @@ const mockFs: Mocked<FsApi> = {
 
 // Mock window.pty
 const mockPty: Mocked<PtyApi> = {
-  create: vi.fn().mockResolvedValue(undefined),
+  create: vi.fn().mockResolvedValue({ id: 'test-pty', shellKind: 'posix' }),
   write: vi.fn().mockResolvedValue(undefined),
   resize: vi.fn().mockResolvedValue(undefined),
   kill: vi.fn().mockResolvedValue(undefined),

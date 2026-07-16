@@ -10,6 +10,7 @@ import { homedir } from 'os'
 import * as pty from 'node-pty'
 import type { IPty } from 'node-pty'
 import { isWindows, getDefaultShell, resolveCommand, enhancedPath } from '../platform'
+import { classifyShellKind } from '../../shared/shellQuote'
 import { HandlerContext } from './types'
 import { getScenarioData } from './scenarios'
 import { isDockerAvailable, dockerSetupMessage, ensureAgentInstalled, acquireSetupLock } from '../containerUtils'
@@ -137,7 +138,7 @@ function createDevcontainerPty(
   ctx: HandlerContext,
   options: { id: string; cwd: string; command?: string; sessionId: string; env?: Record<string, string>; repoRootDir?: string },
   senderWindow: BrowserWindow | null,
-): { id: string } | 'fallthrough' | null {
+): { id: string; shellKind: 'posix' } | 'fallthrough' | null {
   const { id, cwd, command } = options
   // Devcontainer workspace folder = the worktree directory (cwd), not repoRootDir.
   // Each worktree may have a different .devcontainer/devcontainer.json, so each
@@ -287,7 +288,8 @@ function createDevcontainerPty(
     displayTerminalError(id, `Unexpected error: ${err instanceof Error ? err.message : String(err)}`, senderWindow)
   })
 
-  return { id }
+  // The devcontainer PTY always runs bash inside the container → posix quoting.
+  return { id, shellKind: 'posix' }
 }
 
 /** Resolve shell, args, and initial command for the standard (non-isolated) PTY path. */
@@ -366,6 +368,9 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     // Standard (non-isolated) path
     const { shell, shellArgs, initialCommand: resolvedCommand, extraEnv } = resolveShellConfig(ctx, options)
     let initialCommand = resolvedCommand
+    // Classify the resolved shell so the renderer can quote dropped file paths
+    // for the parser actually running (bash/zsh, fish, PowerShell, or cmd).
+    const shellKind = classifyShellKind(shell)
 
     // Build environment — extend PATH with common bin dirs so agents in
     // ~/.local/bin, /opt/homebrew/bin, etc. are reachable even if the
@@ -411,7 +416,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
       })
     } catch (err) {
       displayTerminalError(options.id, `Failed to start terminal: ${err instanceof Error ? err.message : String(err)}`, senderWindow)
-      return { id: options.id }
+      return { id: options.id, shellKind }
     }
 
     wirePtyEvents(ctx, ptyProcess, options.id, senderWindow)
@@ -426,7 +431,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
       }, 100)
     }
 
-    return { id: options.id }
+    return { id: options.id, shellKind }
   })
 
   ipcMain.handle('pty:write', (_event, id: string, data: string) => {

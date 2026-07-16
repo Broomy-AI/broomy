@@ -49,6 +49,7 @@ vi.mock('../../hooks/useExplorerWatcher', () => ({
 
 import type { TreeNode } from '../../types'
 import { FileTree } from './FileTree'
+import { FILE_PATH_MIME } from '../../../../../shared/dnd'
 
 afterEach(() => {
   cleanup()
@@ -232,5 +233,31 @@ describe('FileTree', () => {
     const pathEl = screen.getByText('/repos/project')
     fireEvent.contextMenu(pathEl)
     expect(mockUseFileTree.handleContextMenu).toHaveBeenCalled()
+  })
+
+  describe('drag source', () => {
+    it('sets copyMove and the file-path MIME on drag start', () => {
+      mockUseFileTree.tree = [
+        { name: 'index.ts', path: '/repos/project/index.ts', isDirectory: false },
+      ]
+      render(<FileTree directory="/repos/project" />)
+      const dataTransfer = { effectAllowed: 'none', setData: vi.fn() }
+      fireEvent.dragStart(screen.getByText('index.ts'), { dataTransfer })
+      expect(dataTransfer.effectAllowed).toBe('copyMove')
+      expect(dataTransfer.setData).toHaveBeenCalledWith(FILE_PATH_MIME, '/repos/project/index.ts')
+      expect(mockUseFileTree.startDrag).toHaveBeenCalledWith('/repos/project/index.ts')
+    })
+
+    it('still uses a move drop effect over an internal directory target', () => {
+      mockUseFileTree.draggedPath = '/repos/project/other.ts'
+      mockUseFileTree.tree = [
+        { name: 'src', path: '/repos/project/src', isDirectory: true },
+      ]
+      render(<FileTree directory="/repos/project" />)
+      const dataTransfer = { dropEffect: 'none' }
+      fireEvent.dragOver(screen.getByText('src'), { dataTransfer })
+      expect(dataTransfer.dropEffect).toBe('move')
+      expect(mockUseFileTree.setDropTarget).toHaveBeenCalledWith('/repos/project/src')
+    })
   })
 })

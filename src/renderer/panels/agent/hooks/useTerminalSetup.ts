@@ -25,6 +25,7 @@ import { usePlanDetection } from '../../../features/git/hooks/usePlanDetection'
 import { createPtyDataHandler } from './ptyDataHandler'
 import { ScrollLog, scrollLogRegistry } from '../utils/scrollLog'
 import type { ScrollSource } from '../utils/scrollLog'
+import type { ShellKind } from '../../../../shared/shellQuote'
 import { useSettingsStore } from '../../../store/settings'
 import { resolveTerminalContrast } from '../../../../shared/appearance'
 import { XTERM_THEMES } from '../../../shared/theme/xtermTheme'
@@ -55,6 +56,8 @@ export interface ExitInfo {
 export interface TerminalSetupResult {
   terminalRef: React.MutableRefObject<XTerm | null>
   ptyIdRef: React.MutableRefObject<string | null>
+  /** Shell parser family of the live PTY, for quoting dropped file paths. null until create resolves. */
+  shellKindRef: React.MutableRefObject<ShellKind | null>
   isActiveRef: React.MutableRefObject<boolean>
   showScrollButton: boolean
   handleScrollToBottom: () => void
@@ -288,6 +291,7 @@ function useTerminalState(config: TerminalConfig) {
   const lastUserInputRef = useRef<number>(0)
   const lastInteractionRef = useRef<number>(0)
   const ptyIdRef = useRef<string | null>(null)
+  const shellKindRef = useRef<ShellKind | null>(null)
   const [showScrollButton, setShowScrollButton] = useState(false)
 
   const isActiveRef = useRef(true)
@@ -357,7 +361,7 @@ function useTerminalState(config: TerminalConfig) {
   return {
     terminalRef, fitAddonRef, serializeAddonRef, cleanupRef, scrollStateRef,
     updateTimeoutRef, idleTimeoutRef, lastStatusRef,
-    lastUserInputRef, lastInteractionRef, ptyIdRef,
+    lastUserInputRef, lastInteractionRef, ptyIdRef, shellKindRef,
     isActiveRef,
     showScrollButton, setShowScrollButton,
     exitInfo, setExitInfo,
@@ -375,6 +379,26 @@ function useTerminalState(config: TerminalConfig) {
  * Custom hook that encapsulates all xterm.js terminal setup, PTY creation,
  * scroll following logic, activity detection, and cleanup.
  */
+/**
+ * Construct the xterm instance with the user's current appearance settings.
+ * Reads settings imperatively (getState) so the caller's setup effect need not
+ * depend on them — see the call site for why that dependency is deliberately avoided.
+ */
+function createConfiguredTerminal(): XTerm {
+  const { appearance, resolvedTheme } = useSettingsStore.getState()
+  return new XTerm({
+    theme: XTERM_THEMES[resolvedTheme],
+    fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+    fontSize: appearance.editorFontSize,
+    lineHeight: appearance.terminalLineHeight,
+    cursorBlink: !document.documentElement.classList.contains('e2e-stable'),
+    cursorStyle: 'bar',
+    scrollback: 5000,
+    minimumContrastRatio: resolveTerminalContrast(appearance.terminalContrast, resolvedTheme),
+    macOptionIsMeta: true,
+  })
+}
+
 export function useTerminalSetup(
   config: TerminalConfig,
   containerRef: React.RefObject<HTMLDivElement | null>,
@@ -393,22 +417,11 @@ export function useTerminalSetup(
     const effectCwd = s.cwdRef.current
     const effectStartTime = Date.now()
 
-    // Read imperatively rather than as a hook dependency. THIS EFFECT'S CLEANUP
-    // KILLS THE PTY — adding theme or fontSize to its deps would destroy the running
-    // agent on every appearance change. The separate effect below applies changes to
-    // the live terminal instead.
-    const { appearance, resolvedTheme } = useSettingsStore.getState()
-    const terminal = new XTerm({
-      theme: XTERM_THEMES[resolvedTheme],
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-      fontSize: appearance.editorFontSize,
-      lineHeight: appearance.terminalLineHeight,
-      cursorBlink: !document.documentElement.classList.contains('e2e-stable'),
-      cursorStyle: 'bar',
-      scrollback: 5000,
-      minimumContrastRatio: resolveTerminalContrast(appearance.terminalContrast, resolvedTheme),
-      macOptionIsMeta: true,
-    })
+    // Appearance is read imperatively inside createConfiguredTerminal rather than
+    // as a hook dependency. THIS EFFECT'S CLEANUP KILLS THE PTY — adding theme or
+    // fontSize to its deps would destroy the running agent on every appearance
+    // change. The separate effect below applies changes to the live terminal instead.
+    const terminal = createConfiguredTerminal()
 
     const fitAddon = new FitAddon()
     terminal.loadAddon(fitAddon)
@@ -484,6 +497,9 @@ export function useTerminalSetup(
 
     const id = `${sessionId}-${Date.now()}`
     s.ptyIdRef.current = id
+    // Reset before create resolves so a stale kind from a prior PTY can never
+    // pair with this new id and mis-quote a drop during a restart.
+    s.shellKindRef.current = null
     let isStale = false
 
     // Register onData/onExit listeners BEFORE pty.create() so we don't miss
@@ -551,10 +567,12 @@ export function useTerminalSetup(
     })
 
     window.pty.create({ id, cwd: effectCwd, command: cmd, sessionId, env: envVars, shell: defaultShell || undefined, isolated: s.isolatedRef.current, repoRootDir: s.repoRootDirRef.current })
-      .then(() => {
+      .then((result) => {
         // Guard against stale effect: terminal may have been disposed during async setup
         if (isStale) return
 
+        // Record the shell parser family for quoting dropped file paths.
+        s.shellKindRef.current = result.shellKind
         if (isAgentTerminal && sessionId) s.setAgentPtyId(sessionId, id)
       })
       .catch((err: unknown) => {
@@ -581,6 +599,7 @@ export function useTerminalSetup(
       if (onRenderRAF) cancelAnimationFrame(onRenderRAF)
       s.cleanupRef.current?.()
       if (s.ptyIdRef.current) { void window.pty.kill(s.ptyIdRef.current); s.ptyIdRef.current = null }
+      s.shellKindRef.current = null
       terminal.dispose()
       if (s.updateTimeoutRef.current) clearTimeout(s.updateTimeoutRef.current)
       if (s.idleTimeoutRef.current) clearTimeout(s.idleTimeoutRef.current)
@@ -641,5 +660,5 @@ export function useTerminalSetup(
     }
   }, [])
 
-  return { terminalRef: s.terminalRef, ptyIdRef: s.ptyIdRef, isActiveRef: s.isActiveRef, showScrollButton: s.showScrollButton, handleScrollToBottom: s.handleScrollToBottom, exitInfo: s.exitInfo }
+  return { terminalRef: s.terminalRef, ptyIdRef: s.ptyIdRef, shellKindRef: s.shellKindRef, isActiveRef: s.isActiveRef, showScrollButton: s.showScrollButton, handleScrollToBottom: s.handleScrollToBottom, exitInfo: s.exitInfo }
 }

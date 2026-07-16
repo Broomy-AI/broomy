@@ -360,7 +360,7 @@ describe('CloneView', () => {
     it('creates PTY and shows auth terminal when gh available and auth button clicked', async () => {
       vi.mocked(window.git.clone).mockResolvedValue({ success: false, error: 'fatal: could not read Username' })
       vi.mocked(window.app.homedir).mockResolvedValue('/home/user')
-      vi.mocked(window.pty.create).mockResolvedValue({ id: 'auth-setup-123' })
+      vi.mocked(window.pty.create).mockResolvedValue({ id: 'auth-setup-123', shellKind: 'posix' })
       useRepoStore.setState({ ghAvailable: true })
 
       render(<CloneView onBack={vi.fn()} onComplete={vi.fn()} />)

@@ -156,7 +156,7 @@ describe('useTerminalSetup', () => {
     })
 
     // Reset PTY mocks
-    vi.mocked(window.pty.create).mockResolvedValue({ id: 'mock-pty-id' })
+    vi.mocked(window.pty.create).mockResolvedValue({ id: 'mock-pty-id', shellKind: 'posix' })
     vi.mocked(window.pty.write).mockResolvedValue(undefined)
     vi.mocked(window.pty.resize).mockResolvedValue(undefined)
     vi.mocked(window.pty.kill).mockResolvedValue(undefined)
@@ -176,6 +176,7 @@ describe('useTerminalSetup', () => {
 
     expect(result.current).toHaveProperty('terminalRef')
     expect(result.current).toHaveProperty('ptyIdRef')
+    expect(result.current).toHaveProperty('shellKindRef')
     expect(result.current).toHaveProperty('showScrollButton')
     expect(result.current).toHaveProperty('handleScrollToBottom')
     expect(typeof result.current.handleScrollToBottom).toBe('function')
@@ -222,6 +223,22 @@ describe('useTerminalSetup', () => {
         env: { TERM: 'xterm' },
       }),
     )
+  })
+
+  it('records the shell kind after create resolves and clears it on unmount', async () => {
+    vi.mocked(window.pty.create).mockResolvedValue({ id: 'mock-pty-id', shellKind: 'fish' })
+    const config = makeConfig({ sessionId: 'my-session' })
+    const containerRef = makeContainerRef()
+
+    const { result, unmount } = renderHook(() => useTerminalSetup(config, containerRef))
+    expect(result.current.shellKindRef.current).toBeNull() // null until create resolves
+
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+    expect(result.current.shellKindRef.current).toBe('fish')
+
+    const shellKindRef = result.current.shellKindRef
+    unmount()
+    expect(shellKindRef.current).toBeNull() // cleared on cleanup so a stale kind can't leak
   })
 
   it('recreates PTY when command changes (e.g. auto-approve flag appended after repos load)', async () => {
