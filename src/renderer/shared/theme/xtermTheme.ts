@@ -37,7 +37,13 @@ const DARK: ITheme = {
   brightWhite: '#ffffff',
 }
 
-/** Every slot clears 4.5:1 on #fbfbfa. */
+/**
+ * Most slots clear 4.5:1 on #fbfbfa. Green is intentionally brightened toward a faithful,
+ * iTerm-like terminal green (~3:1) — the 4.5-fitted dark green read as muddy. This is a
+ * fidelity choice, not a contrast one: green/brightGreen land below the 4.5 text bar, so
+ * standard light turns the contrast floor off (see resolveTerminalContrast) to render them
+ * as authored rather than darkening them back toward that muddy green.
+ */
 const LIGHT: ITheme = {
   background: '#fbfbfa',
   foreground: '#1f2328',
@@ -48,8 +54,8 @@ const LIGHT: ITheme = {
   brightBlack: '#4c5560',
   red: '#c02a30',
   brightRed: '#a81f25',
-  green: '#1a7a35',
-  brightGreen: '#116b2c',
+  green: '#1ca14a',
+  brightGreen: '#22c55e',
   yellow: '#8a5a00',
   brightYellow: '#a06800',
   blue: '#0a5ec9',

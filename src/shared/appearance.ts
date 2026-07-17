@@ -33,14 +33,18 @@ export interface Appearance {
   /**
    * xterm's minimumContrastRatio floor.
    *
-   * 'auto' is theme-aware and is what you want: 7 on dark, 4.5 on light.
+   * 'auto' is theme-aware and is what you want: off (1) on standard light (so the
+   * palette renders as authored — faithful colours), 4.5 on hc-light, 7 on dark/hc.
    *
    * A single fixed number cannot serve both. The DARK ANSI palette is bright
    * pastels, where 7 is a useful safety net for tools that print colours tuned for
-   * some other background. But the LIGHT palette is designed to clear 4.5 natively
-   * (its slots land at 4.5-5.9:1), so a floor of 7 forces xterm to darken every
-   * single one of them until they hit 7 — cyan, yellow, blue, green and red all
-   * collapse into the same muddy brown, and the hues stop meaning anything.
+   * some other background. But MOST of the LIGHT palette already clears 4.5 natively
+   * (those slots land at 4.5-5.9:1). A floor of 4.5 would darken only the two green
+   * exceptions (which sit below it); a floor of 7 would push nearly every slot down to
+   * reach it, so cyan, yellow, blue, green and red all collapse into the same muddy
+   * brown. Standard light therefore turns the floor OFF entirely: its green/brightGreen
+   * sit deliberately below 4.5, for a faithful, iTerm-like look — a fidelity choice, not
+   * a legibility one. hc-light keeps 4.5 for users who want the extra floor.
    */
   terminalContrast: number | 'auto'
   /** The accent HUE. Fitted per theme — see deriveAccent. */
@@ -135,14 +139,17 @@ export const themeIsLight = (theme: ThemeName): boolean => IS_LIGHT[theme]
 /**
  * The actual floor to hand xterm.
  *
- * On a light ground the palette already clears 4.5:1, so raising the floor to 7
- * only destroys it. On dark, 7 remains the safety net it has always been.
+ * On standard light the floor is turned OFF (1 = xterm's disabled value) so the ANSI
+ * palette renders as authored — faithful, iTerm-like colours. hc-light keeps 4.5
+ * (its users need the extra floor), and dark/hc keep 7, the safety net dark has always
+ * had. (A floor of 7 on light would darken every hue into the same muddy brown.)
  */
 export function resolveTerminalContrast(
   setting: number | 'auto',
   theme: ThemeName
 ): number {
   if (setting !== 'auto') return setting
+  if (theme === 'light') return 1
   return themeIsLight(theme) ? 4.5 : 7
 }
 

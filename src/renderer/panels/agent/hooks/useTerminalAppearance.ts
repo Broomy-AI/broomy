@@ -51,7 +51,8 @@ export function useTerminalAppearance(refs: TerminalAppearanceRefs): void {
         term.options.theme = XTERM_THEMES[state.resolvedTheme]
       }
       // Re-resolve on a THEME change too, not just a setting change: under 'auto'
-      // the floor itself depends on the theme (7 on dark, 4.5 on light).
+      // the floor itself depends on the theme (7 on dark, 4.5 on hc-light, off on
+      // standard light).
       if (themeChanged || next.terminalContrast !== before.terminalContrast) {
         term.options.minimumContrastRatio = resolveTerminalContrast(
           next.terminalContrast,

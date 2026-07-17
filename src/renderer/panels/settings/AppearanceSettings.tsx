@@ -177,7 +177,9 @@ export function AppearanceSettings({
             {TERMINAL_CONTRASTS.map((c) => (
               <option key={c} value={c}>
                 {c === 'auto'
-                  ? `Automatic (${resolveTerminalContrast('auto', resolvedTheme)}:1 for this theme)`
+                  ? resolveTerminalContrast('auto', resolvedTheme) === 1
+                    ? 'Automatic (off for this theme)'
+                    : `Automatic (${resolveTerminalContrast('auto', resolvedTheme)}:1 for this theme)`
                   : c === 21
                     ? 'Maximum (21:1)'
                     : `${c}:1`}
@@ -185,9 +187,9 @@ export function AppearanceSettings({
             ))}
           </select>
           <p className="text-xs text-text-tertiary">
-            Forces agent output to stay legible when a tool prints colours tuned for a different
-            background. Automatic is theme-aware — the light palette is already legible, so raising
-            its floor only muddies the colours.
+            A floor forces agent output to stay legible when a tool prints colours tuned for a
+            different background. Automatic turns it off for standard Light (faithful colours), uses
+            4.5:1 for High-contrast light, and keeps 7:1 on dark themes.
           </p>
         </div>
       </div>
