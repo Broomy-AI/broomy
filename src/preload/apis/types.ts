@@ -226,6 +226,7 @@ export type ConfigData = {
   showSidebar?: boolean
   sidebarWidth?: number
   toolbarPanels?: string[]
+  collapsedRepoGroups?: string[]
   repos?: ManagedRepo[]
   defaultCloneDir?: string
   defaultShell?: string

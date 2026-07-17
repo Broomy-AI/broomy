@@ -94,12 +94,19 @@ function migrateToolbarPanels(saved: string[] | undefined): string[] {
 
 const generateId = () => `session-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
 
+/** Normalise a persisted collapsed-group list: unique strings, default []. */
+function normalizeCollapsedGroups(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value.filter((v): v is string => typeof v === 'string'))]
+}
+
 type StoreGet = () => {
   sessions: Session[]
   activeSessionId: string | null
   globalPanelVisibility: PanelVisibility
   sidebarWidth: number
   toolbarPanels: string[]
+  collapsedRepoGroups: string[]
 }
 type StoreSet = (partial: Partial<{
   sessions: Session[]
@@ -109,6 +116,9 @@ type StoreSet = (partial: Partial<{
   showSidebar: boolean
   sidebarWidth: number
   toolbarPanels: string[]
+  collapsedRepoGroups: string[]
+  sidebarFullOrder: string[]
+  sidebarVisibleOrder: string[]
   globalPanelVisibility: PanelVisibility
 }>) => void
 
@@ -299,11 +309,13 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
           showSidebar: config.showSidebar ?? true,
           sidebarWidth: clampSidebarWidth(config.sidebarWidth ?? DEFAULT_SIDEBAR_WIDTH),
           toolbarPanels: migrateToolbarPanels(config.toolbarPanels),
+          collapsedRepoGroups: normalizeCollapsedGroups(config.collapsedRepoGroups),
           globalPanelVisibility,
         })
       } catch (err) {
         console.warn('[sessions] Failed to load sessions config:', err)
-        set({ sessions: [], activeSessionId: null, isLoading: false, configLoadError: 'Failed to load session config' })
+        // Reset collapse prefs too, so a failed profile load can't leak the previous profile's state.
+        set({ sessions: [], activeSessionId: null, isLoading: false, configLoadError: 'Failed to load session config', collapsedRepoGroups: [] })
       }
     },
 

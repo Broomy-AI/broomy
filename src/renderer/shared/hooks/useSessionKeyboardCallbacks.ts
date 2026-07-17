@@ -4,11 +4,18 @@
 import { useCallback } from 'react'
 import { PANEL_IDS } from '../../panels'
 import type { Session } from '../../store/sessions'
+import { groupKeyForSession } from '../../panels/sidebar/repoGroups'
 
 const AGENT_TAB_ID = '__agent__'
 
 interface SessionKeyboardCallbacksDeps {
   sessions: Session[]
+  /** The visible grouped/sorted/filtered session-id order (excludes collapsed groups). */
+  visibleOrder?: string[]
+  /** Every active session in display order (for directional Next/Prev scanning). */
+  fullOrder?: string[]
+  /** Expands a collapsed group so Focus-Sessions can reach the active card. */
+  setRepoGroupCollapsed?: (key: string, collapsed: boolean) => void
   activeSessionId: string | null
   globalPanelVisibility: Record<string, boolean>
   toggleGlobalPanel: (panelId: string) => void
@@ -21,6 +28,9 @@ interface SessionKeyboardCallbacksDeps {
 
 export function useSessionKeyboardCallbacks({
   sessions,
+  visibleOrder = [],
+  fullOrder = [],
+  setRepoGroupCollapsed,
   activeSessionId,
   globalPanelVisibility,
   toggleGlobalPanel,
@@ -30,25 +40,44 @@ export function useSessionKeyboardCallbacks({
   setShowShortcutsModal,
   setActiveTerminalTab,
 }: SessionKeyboardCallbacksDeps) {
-  const handleNextSession = useCallback(() => {
-    const active = sessions.filter((s) => !s.isArchived)
-    if (active.length === 0) return
-    const currentIndex = active.findIndex((s) => s.id === activeSessionId)
-    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % active.length
-    handleSelectSession(active[nextIndex].id)
-  }, [sessions, activeSessionId, handleSelectSession])
+  // Scan the FULL grouped order in a direction to the next VISIBLE session. When the
+  // sidebar hasn't published a full order yet (unmounted/hidden), fall back to the raw
+  // active order and treat every session as visible.
+  const stepSession = useCallback(
+    (dir: 1 | -1) => {
+      // The published order is refreshed by an effect, so after a delete/archive/collapse
+      // it can momentarily hold an id that no longer exists. Intersect with the live
+      // non-archived sessions so Next/Prev never lands on a stale session.
+      const liveIds = new Set(sessions.filter((s) => !s.isArchived).map((s) => s.id))
+      const ready = fullOrder.length > 0
+      const full = (ready ? fullOrder : [...liveIds]).filter((id) => liveIds.has(id))
+      if (full.length === 0) return
+      const visible = ready ? new Set(visibleOrder.filter((id) => liveIds.has(id))) : new Set(full)
+      const start = full.indexOf(activeSessionId ?? '')
+      const from = start === -1 ? (dir === 1 ? -1 : 0) : start
+      for (let step = 1; step <= full.length; step++) {
+        const idx = (((from + dir * step) % full.length) + full.length) % full.length
+        if (visible.has(full[idx])) {
+          handleSelectSession(full[idx])
+          return
+        }
+      }
+      // Nothing visible (e.g. every group collapsed) → no-op.
+    },
+    [fullOrder, visibleOrder, sessions, activeSessionId, handleSelectSession],
+  )
 
-  const handlePrevSession = useCallback(() => {
-    const active = sessions.filter((s) => !s.isArchived)
-    if (active.length === 0) return
-    const currentIndex = active.findIndex((s) => s.id === activeSessionId)
-    const prevIndex = currentIndex <= 0 ? active.length - 1 : currentIndex - 1
-    handleSelectSession(active[prevIndex].id)
-  }, [sessions, activeSessionId, handleSelectSession])
+  const handleNextSession = useCallback(() => stepSession(1), [stepSession])
+  const handlePrevSession = useCallback(() => stepSession(-1), [stepSession])
 
   const handleFocusSessionList = useCallback(() => {
     if (!globalPanelVisibility[PANEL_IDS.SIDEBAR]) {
       toggleGlobalPanel(PANEL_IDS.SIDEBAR)
+    }
+    // If the active session sits in a collapsed group, expand it so its card can be focused.
+    const active = sessions.find((s) => s.id === activeSessionId)
+    if (active && !active.isArchived && setRepoGroupCollapsed) {
+      setRepoGroupCollapsed(groupKeyForSession(active), false)
     }
     requestAnimationFrame(() => {
       const activeCard = document.querySelector<HTMLElement>(`[data-panel-id="${PANEL_IDS.SIDEBAR}"] [tabindex="0"].bg-accent\\/15`)
@@ -59,7 +88,7 @@ export function useSessionKeyboardCallbacks({
         firstCard?.focus()
       }
     })
-  }, [globalPanelVisibility, toggleGlobalPanel])
+  }, [globalPanelVisibility, toggleGlobalPanel, sessions, activeSessionId, setRepoGroupCollapsed])
 
   const handleFocusSessionSearch = useCallback(() => {
     if (!globalPanelVisibility[PANEL_IDS.SIDEBAR]) {

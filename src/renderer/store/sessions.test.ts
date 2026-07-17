@@ -104,6 +104,26 @@ describe('useSessionStore', () => {
       expect(state.isLoading).toBe(false)
     })
 
+    it('normalises collapsedRepoGroups (dedupes, drops non-strings)', async () => {
+      vi.mocked(window.config.load).mockResolvedValue({
+        agents: [],
+        sessions: [],
+        collapsedRepoGroups: ['repo:r1', 'repo:r1', 42, 'repo:r2'],
+      } as unknown as import('../../preload/index').ConfigData)
+
+      await useSessionStore.getState().loadSessions()
+      expect(useSessionStore.getState().collapsedRepoGroups).toEqual(['repo:r1', 'repo:r2'])
+    })
+
+    it('resets collapsedRepoGroups to [] when the config load fails (no cross-profile leak)', async () => {
+      allowConsoleWarn()
+      useSessionStore.setState({ collapsedRepoGroups: ['stale:repo'] })
+      vi.mocked(window.config.load).mockRejectedValue(new Error('boom'))
+
+      await useSessionStore.getState().loadSessions()
+      expect(useSessionStore.getState().collapsedRepoGroups).toEqual([])
+    })
+
     it('migrates legacy explorerFilter "all" to "files"', async () => {
       vi.mocked(window.config.load).mockResolvedValue({
         agents: [],

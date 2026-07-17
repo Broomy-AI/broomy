@@ -67,6 +67,58 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+describe('grouped visible-order navigation', () => {
+  // Full order s1,s2,s3 with s2 in a collapsed group (visible: s1, s3).
+  const grouped = { fullOrder: ['s1', 's2', 's3'], visibleOrder: ['s1', 's3'] }
+
+  it('Next scans the full order to the next visible session (wrapping)', () => {
+    const deps = makeDeps({ ...grouped, activeSessionId: 's3' })
+    const { result } = renderHook(() => useSessionKeyboardCallbacks(deps))
+    act(() => result.current.handleNextSession())
+    expect(deps.handleSelectSession).toHaveBeenCalledWith('s1')
+  })
+
+  it('Next from an active session in a COLLAPSED group keeps direction', () => {
+    const deps = makeDeps({ ...grouped, activeSessionId: 's2' })
+    const { result } = renderHook(() => useSessionKeyboardCallbacks(deps))
+    act(() => result.current.handleNextSession())
+    expect(deps.handleSelectSession).toHaveBeenCalledWith('s3')
+  })
+
+  it('Prev scans backward, skipping collapsed sessions', () => {
+    const deps = makeDeps({ ...grouped, activeSessionId: 's3' })
+    const { result } = renderHook(() => useSessionKeyboardCallbacks(deps))
+    act(() => result.current.handlePrevSession())
+    expect(deps.handleSelectSession).toHaveBeenCalledWith('s1')
+  })
+
+  it('no-ops when every group is collapsed (nothing visible)', () => {
+    const deps = makeDeps({ fullOrder: ['s1', 's2', 's3'], visibleOrder: [], activeSessionId: 's1' })
+    const { result } = renderHook(() => useSessionKeyboardCallbacks(deps))
+    act(() => result.current.handleNextSession())
+    expect(deps.handleSelectSession).not.toHaveBeenCalled()
+  })
+
+  it('falls back to raw active order when the sidebar has not published (fullOrder empty)', () => {
+    const deps = makeDeps({ fullOrder: [], visibleOrder: [] })
+    const { result } = renderHook(() => useSessionKeyboardCallbacks(deps))
+    act(() => result.current.handleNextSession())
+    expect(deps.handleSelectSession).toHaveBeenCalledWith('s2')
+  })
+
+  it('Focus Sessions expands the active session\'s collapsed group', () => {
+    const setRepoGroupCollapsed = vi.fn()
+    const deps = makeDeps({
+      sessions: [makeSession({ id: 's1', repoId: 'r-x' })],
+      activeSessionId: 's1',
+      setRepoGroupCollapsed,
+    })
+    const { result } = renderHook(() => useSessionKeyboardCallbacks(deps))
+    act(() => result.current.handleFocusSessionList())
+    expect(setRepoGroupCollapsed).toHaveBeenCalledWith('repo:r-x', false)
+  })
+})
+
 describe('useSessionKeyboardCallbacks', () => {
   describe('handleNextSession', () => {
     it('selects next session', () => {

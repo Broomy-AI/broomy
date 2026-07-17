@@ -433,6 +433,20 @@ describe('config handlers', () => {
       expect(writtenJson.sidebarWidth).toBe(300)
       expect(writtenJson.toolbarPanels).toEqual(['panel1'])
     })
+
+    it('persists collapsedRepoGroups', async () => {
+      const handlers = setupHandlers()
+      await handlers['config:save'](null, { profileId: 'default', sessions: [], collapsedRepoGroups: ['repo:r1'] })
+      const written = JSON.parse(vi.mocked(writeFile).mock.calls[0][1] as string)
+      expect(written.collapsedRepoGroups).toEqual(['repo:r1'])
+    })
+
+    it('lets an empty collapsedRepoGroups clear it on disk', async () => {
+      const handlers = setupHandlers()
+      await handlers['config:save'](null, { profileId: 'default', sessions: [], collapsedRepoGroups: [] })
+      const written = JSON.parse(vi.mocked(writeFile).mock.calls[0][1] as string)
+      expect(written.collapsedRepoGroups).toEqual([])
+    })
   })
 
   describe('repos:getInitScript', () => {

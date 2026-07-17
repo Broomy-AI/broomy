@@ -91,9 +91,21 @@ test.describe('Broomy App', () => {
     const idleStatus = page.locator('text=Idle').first()
     await expect(idleStatus).toBeVisible()
 
-    // Look for status dot indicators
-    const statusDot = page.locator('.bg-status-idle').first()
+    // Look for status dot indicators (accessible status LED)
+    const statusDot = page.locator('[role="img"][aria-label="idle"]').first()
     await expect(statusDot).toBeVisible()
+  })
+
+  test('groups sessions under a collapsible repo header', async () => {
+    // The broomy session carries repoId 'repo-1' → clusters under a 'demo-project' group header.
+    const header = page.locator('[aria-expanded][aria-label*="demo-project"]')
+    await expect(header).toBeVisible()
+    // Collapsing hides the group's cards; expanding shows them again.
+    await expect(page.locator('.cursor-pointer:has-text("broomy")')).toBeVisible()
+    await header.click()
+    await expect(page.locator('.cursor-pointer:has-text("broomy")')).toBeHidden()
+    await header.click()
+    await expect(page.locator('.cursor-pointer:has-text("broomy")')).toBeVisible()
   })
 
   test('should show branch names for sessions', async () => {
