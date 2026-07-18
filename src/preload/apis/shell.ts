@@ -3,10 +3,17 @@
  */
 import { ipcRenderer } from 'electron'
 import type { ShellOption, CrashReport } from './types'
+import type { OpenPathResult } from '../../shared/openPath'
+
+export type { OpenPathResult }
 
 export type ShellApi = {
   exec: (command: string, cwd: string) => Promise<{ success: boolean; stdout: string; stderr: string; exitCode: number }>
   openExternal: (url: string) => Promise<void>
+  /** Batch existence check for the terminal file-path link provider — one boolean per input, in order. */
+  pathExists: (paths: string[], baseCwd: string) => Promise<boolean[]>
+  /** Open (or reveal) a file path clicked in the terminal. Main resolves/validates the path. */
+  openPath: (path: string, baseCwd: string) => Promise<OpenPathResult>
   listShells: () => Promise<ShellOption[]>
 }
 
@@ -57,6 +64,10 @@ export const windowControlsApi: WindowControlsApi = {
 export const shellApi: ShellApi = {
   exec: (command, cwd) => ipcRenderer.invoke('shell:exec', command, cwd),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
+  // Clamp the batch here too (main is authoritative): only forward string paths, capped.
+  pathExists: (paths, baseCwd) =>
+    ipcRenderer.invoke('shell:pathExists', (Array.isArray(paths) ? paths : []).filter((p) => typeof p === 'string').slice(0, 64), baseCwd),
+  openPath: (path, baseCwd) => ipcRenderer.invoke('shell:openPath', path, baseCwd),
   listShells: () => ipcRenderer.invoke('shells:list'),
 }
 

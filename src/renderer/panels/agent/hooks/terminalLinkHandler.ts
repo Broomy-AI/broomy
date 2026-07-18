@@ -14,26 +14,27 @@ export interface TerminalLinkClick {
 }
 
 /**
- * Whether a click on a detected terminal link should open it.
- *
- * Requires the PRIMARY button plus the platform modifier — ⌘ on macOS, Ctrl elsewhere.
- * (Ctrl-click on macOS is the context-menu gesture, so it must not open; middle/right
- * clicks are excluded via the button check.) A plain click returns false, leaving xterm's
- * normal selection/cursor behaviour untouched.
- *
- * The scheme is re-checked here even though the addon only detects http(s): agent output
- * is untrusted, so this mirrors the renderer-side guard at
- * `shared/utils/markdownComponents.tsx` (the main process restricts it further still).
+ * Whether a terminal-link click carries the "open" intent: the PRIMARY button plus the platform
+ * modifier — ⌘ on macOS, Ctrl elsewhere. (Ctrl-click on macOS is the context-menu gesture, so it
+ * must not open; middle/right clicks are excluded by the button check.) A plain click returns
+ * false, leaving xterm's normal selection/cursor behaviour untouched. Shared by the URL handler
+ * and the file-path link provider.
+ */
+export function hasOpenModifier(event: TerminalLinkClick, isMac: boolean): boolean {
+  return event.button === 0 && (isMac ? event.metaKey : event.ctrlKey)
+}
+
+/**
+ * Whether a click on a detected terminal URL should open it. The scheme is re-checked here even
+ * though the addon only detects http(s): agent output is untrusted, so this mirrors the
+ * renderer-side guard at `shared/utils/markdownComponents.tsx` (main restricts it further still).
  */
 export function shouldOpenTerminalLink(
   event: TerminalLinkClick,
   uri: string,
   isMac: boolean
 ): boolean {
-  if (event.button !== 0) return false
-  const modifierHeld = isMac ? event.metaKey : event.ctrlKey
-  if (!modifierHeld) return false
-  return /^https?:\/\//i.test(uri)
+  return hasOpenModifier(event, isMac) && /^https?:\/\//i.test(uri)
 }
 
 /**

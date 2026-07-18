@@ -12,7 +12,7 @@
  *   ptyDataHandler.ts — only scroll to bottom if wasRecentlyAtBottom().
  */
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Terminal as XTerm, type ILinkHandler } from '@xterm/xterm'
+import { Terminal as XTerm, type ILinkHandler, type IDisposable } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -23,6 +23,7 @@ import { terminalBufferRegistry } from '../../../shared/utils/terminalBufferRegi
 import { ptyCaptureRegistry } from '../../../shared/utils/ptyCaptureRegistry'
 import { useTerminalKeyboard } from './useTerminalKeyboard'
 import { createTerminalLinkHandlers } from './terminalLinkHandler'
+import { registerFilePathLinks } from './terminalPathLinkProvider'
 import { usePlanDetection } from '../../../features/git/hooks/usePlanDetection'
 import { createPtyDataHandler } from './ptyDataHandler'
 import { ScrollLog, scrollLogRegistry } from '../utils/scrollLog'
@@ -403,6 +404,16 @@ function createConfiguredTerminal(linkHandler: ILinkHandler): XTerm {
   })
 }
 
+/** URL link handlers (#149): opens http(s) URLs via shell.openExternal, gated on the platform modifier. */
+function makeUrlLinkHandlers(): ReturnType<typeof createTerminalLinkHandlers> {
+  return createTerminalLinkHandlers({
+    isMac: navigator.userAgent.includes('Mac'),
+    openExternal: (uri) => {
+      window.shell.openExternal(uri).catch((err: unknown) => console.error('[terminal] failed to open link', err))
+    },
+  })
+}
+
 export function useTerminalSetup(
   config: TerminalConfig,
   containerRef: React.RefObject<HTMLDivElement | null>,
@@ -429,14 +440,7 @@ export function useTerminalSetup(
     // handler serves both detected URL text (web-links addon) and OSC 8 hyperlinks (xterm's
     // linkHandler), on every terminal. The gate requires the platform modifier + primary button
     // and re-checks the scheme (main further restricts shell.openExternal to http(s)).
-    const linkHandling = createTerminalLinkHandlers({
-      isMac: navigator.userAgent.includes('Mac'),
-      openExternal: (uri) => {
-        window.shell.openExternal(uri).catch((err: unknown) => {
-          console.error('[terminal] failed to open link', err)
-        })
-      },
-    })
+    const linkHandling = makeUrlLinkHandlers()
 
     const terminal = createConfiguredTerminal(linkHandling.linkHandler)
 
@@ -447,8 +451,9 @@ export function useTerminalSetup(
     terminal.loadAddon(serializeAddon)
     s.serializeAddonRef.current = serializeAddon
 
+    // Terminal links: URLs (web-links addon) + existing file paths (#153; host terminals only).
     terminal.loadAddon(new WebLinksAddon(linkHandling.onClick))
-
+    const filePathLinks: IDisposable | null = s.isolatedRef.current ? null : registerFilePathLinks(terminal, effectCwd)
     terminal.open(containerRef.current)
 
     // xterm 5.x uses DOM rendering by default. The WebGL addon is intentionally
@@ -619,6 +624,7 @@ export function useTerminalSetup(
       s.cleanupRef.current?.()
       if (s.ptyIdRef.current) { void window.pty.kill(s.ptyIdRef.current); s.ptyIdRef.current = null }
       s.shellKindRef.current = null
+      filePathLinks?.dispose() // before terminal.dispose(): stops any in-flight existence check's callback
       terminal.dispose()
       if (s.updateTimeoutRef.current) clearTimeout(s.updateTimeoutRef.current)
       if (s.idleTimeoutRef.current) clearTimeout(s.idleTimeoutRef.current)

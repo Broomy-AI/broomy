@@ -46,6 +46,7 @@ simulate_spinner 1 "Generating response..."
 echo ""
 echo "Done! This is a simulated Claude response."
 echo "View the PR at https://github.com/Broomy-AI/broomy/pull/149"
+echo "Wrote the design doc to /tmp/broomy-preview.html"
 echo ""
 
 # Now go idle (stop outputting)

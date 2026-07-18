@@ -24,6 +24,8 @@ const mockTerminalOnResize = vi.fn().mockReturnValue({ dispose: vi.fn() })
 const mockTerminalAttachCustomKeyEventHandler = vi.fn()
 const mockTerminalResize = vi.fn()
 const mockTerminalConstructor = vi.fn()
+const mockTerminalOnWriteParsed = vi.fn().mockReturnValue({ dispose: vi.fn() })
+const mockRegisterLinkProvider = vi.fn().mockReturnValue({ dispose: vi.fn() })
 
 const mockRegisterCsiHandler = vi.fn().mockReturnValue({ dispose: vi.fn() })
 
@@ -42,6 +44,8 @@ vi.mock('@xterm/xterm', () => {
       onRender = mockTerminalOnRender
       onScroll = mockTerminalOnScroll
       onResize = mockTerminalOnResize
+      onWriteParsed = mockTerminalOnWriteParsed
+      registerLinkProvider = mockRegisterLinkProvider
       attachCustomKeyEventHandler = mockTerminalAttachCustomKeyEventHandler
       resize = mockTerminalResize
       cols = 80
@@ -266,6 +270,29 @@ describe('useTerminalSetup', () => {
     ctorOptions!.linkHandler!.activate!({ button: 0, metaKey: true, ctrlKey: true } as MouseEvent, 'https://osc8.example')
     ctorOptions!.linkHandler!.activate!({ button: 0, metaKey: false, ctrlKey: false } as MouseEvent, 'https://osc8.example')
     expect(window.shell.openExternal).toHaveBeenCalledExactlyOnceWith('https://osc8.example')
+  })
+
+  it('registers the file-path link provider for a host session and disposes it on unmount (#153)', async () => {
+    const config = makeConfig({ sessionId: 'host', isolated: false })
+    const containerRef = makeContainerRef()
+
+    const { unmount } = renderHook(() => useTerminalSetup(config, containerRef))
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+
+    expect(mockRegisterLinkProvider).toHaveBeenCalledTimes(1)
+    const reg = mockRegisterLinkProvider.mock.results[0].value as { dispose: ReturnType<typeof vi.fn> }
+    unmount()
+    expect(reg.dispose).toHaveBeenCalled()
+  })
+
+  it('does NOT register the file-path provider for an isolated session (#153)', async () => {
+    const config = makeConfig({ sessionId: 'iso', isolated: true })
+    const containerRef = makeContainerRef()
+
+    renderHook(() => useTerminalSetup(config, containerRef))
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+
+    expect(mockRegisterLinkProvider).not.toHaveBeenCalled()
   })
 
   it('records the shell kind after create resolves and clears it on unmount', async () => {
