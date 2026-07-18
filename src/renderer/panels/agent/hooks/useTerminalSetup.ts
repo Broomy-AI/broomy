@@ -12,15 +12,17 @@
  *   ptyDataHandler.ts — only scroll to bottom if wasRecentlyAtBottom().
  */
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Terminal as XTerm } from '@xterm/xterm'
+import { Terminal as XTerm, type ILinkHandler } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SerializeAddon } from '@xterm/addon-serialize'
+import { WebLinksAddon } from '@xterm/addon-web-links'
 
 import { useSessionStore } from '../../../store/sessions'
 import { useRepoStore } from '../../../store/repos'
 import { terminalBufferRegistry } from '../../../shared/utils/terminalBufferRegistry'
 import { ptyCaptureRegistry } from '../../../shared/utils/ptyCaptureRegistry'
 import { useTerminalKeyboard } from './useTerminalKeyboard'
+import { createTerminalLinkHandlers } from './terminalLinkHandler'
 import { usePlanDetection } from '../../../features/git/hooks/usePlanDetection'
 import { createPtyDataHandler } from './ptyDataHandler'
 import { ScrollLog, scrollLogRegistry } from '../utils/scrollLog'
@@ -384,7 +386,7 @@ function useTerminalState(config: TerminalConfig) {
  * Reads settings imperatively (getState) so the caller's setup effect need not
  * depend on them — see the call site for why that dependency is deliberately avoided.
  */
-function createConfiguredTerminal(): XTerm {
+function createConfiguredTerminal(linkHandler: ILinkHandler): XTerm {
   const { appearance, resolvedTheme } = useSettingsStore.getState()
   return new XTerm({
     theme: XTERM_THEMES[resolvedTheme],
@@ -396,6 +398,8 @@ function createConfiguredTerminal(): XTerm {
     scrollback: 5000,
     minimumContrastRatio: resolveTerminalContrast(appearance.terminalContrast, resolvedTheme),
     macOptionIsMeta: true,
+    // Route OSC 8 hyperlinks through the same gated handler as detected URL text (#149).
+    linkHandler,
   })
 }
 
@@ -421,7 +425,20 @@ export function useTerminalSetup(
     // as a hook dependency. THIS EFFECT'S CLEANUP KILLS THE PTY — adding theme or
     // fontSize to its deps would destroy the running agent on every appearance
     // change. The separate effect below applies changes to the live terminal instead.
-    const terminal = createConfiguredTerminal()
+    // ⌘-click (⌃-click on Win/Linux) an http(s) URL to open it externally (#149). One gated
+    // handler serves both detected URL text (web-links addon) and OSC 8 hyperlinks (xterm's
+    // linkHandler), on every terminal. The gate requires the platform modifier + primary button
+    // and re-checks the scheme (main further restricts shell.openExternal to http(s)).
+    const linkHandling = createTerminalLinkHandlers({
+      isMac: navigator.userAgent.includes('Mac'),
+      openExternal: (uri) => {
+        window.shell.openExternal(uri).catch((err: unknown) => {
+          console.error('[terminal] failed to open link', err)
+        })
+      },
+    })
+
+    const terminal = createConfiguredTerminal(linkHandling.linkHandler)
 
     const fitAddon = new FitAddon()
     terminal.loadAddon(fitAddon)
@@ -429,6 +446,8 @@ export function useTerminalSetup(
     const serializeAddon = new SerializeAddon()
     terminal.loadAddon(serializeAddon)
     s.serializeAddonRef.current = serializeAddon
+
+    terminal.loadAddon(new WebLinksAddon(linkHandling.onClick))
 
     terminal.open(containerRef.current)
 

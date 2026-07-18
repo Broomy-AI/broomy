@@ -9,6 +9,27 @@ import { zoomMenuItems } from './settings'
 
 const isDev = process.env.ELECTRON_RENDERER_URL !== undefined
 
+/**
+ * External URLs cross an untrusted boundary — agent terminal output, repo content, review
+ * markdown — so the privileged side only ever hands http(s) URLs to the OS. Everything else
+ * (file:, mailto:, custom app protocols, malformed input) is refused. Every in-app caller
+ * already passes http(s), so this narrows the attack surface without changing behaviour.
+ *
+ * Requires a literal `http(s)://` prefix (rejecting `http:\\host`, whitespace-prefixed, and
+ * scheme-only inputs) and returns the WHATWG-normalized form, so the OS receives exactly the
+ * URL that was validated rather than a variant its own parser might read differently.
+ */
+function toHttpUrl(url: unknown): string | null {
+  if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return null
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
+    return parsed.href
+  } catch {
+    return null
+  }
+}
+
 export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   ipcMain.handle('shell:exec', async (_event, command: string, cwd: string) => {
     if (ctx.isE2ETest && !ctx.e2eRealRepos) {
@@ -32,7 +53,13 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     if (ctx.isE2ETest) {
       return
     }
-    await shell.openExternal(url)
+    // Refuse anything that isn't http(s): agent output / repo content is untrusted, and
+    // every in-app caller already passes http(s). Silent, like the other guarded handlers.
+    const safeUrl = toHttpUrl(url)
+    if (!safeUrl) {
+      return
+    }
+    await shell.openExternal(safeUrl)
   })
 
   ipcMain.handle('shells:list', (_event) => {

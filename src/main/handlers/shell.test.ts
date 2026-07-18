@@ -178,8 +178,54 @@ describe('shell handlers', () => {
       register(mockIpcMain as never, ctx)
 
       mockShellOpenExternal.mockResolvedValue(undefined)
-      await handlers['shell:openExternal'](mockEvent, 'https://example.com')
-      expect(mockShellOpenExternal).toHaveBeenCalledWith('https://example.com')
+      // A URL with a path is passed through unchanged (normalized href === input).
+      await handlers['shell:openExternal'](mockEvent, 'https://github.com/Broomy-AI/broomy/pull/149')
+      expect(mockShellOpenExternal).toHaveBeenCalledWith('https://github.com/Broomy-AI/broomy/pull/149')
+    })
+
+    it('allows http as well as https', async () => {
+      const { register } = await import('./shell')
+      const ctx = createCtx()
+      register(mockIpcMain as never, ctx)
+
+      mockShellOpenExternal.mockResolvedValue(undefined)
+      // WHATWG normalizes a bare host to a trailing slash — the OS gets exactly what we validated.
+      await handlers['shell:openExternal'](mockEvent, 'http://localhost:5173')
+      expect(mockShellOpenExternal).toHaveBeenCalledWith('http://localhost:5173/')
+    })
+
+    it('dispatches the normalized href, not the raw string (parser-differential guard)', async () => {
+      const { register } = await import('./shell')
+      const ctx = createCtx()
+      register(mockIpcMain as never, ctx)
+
+      mockShellOpenExternal.mockResolvedValue(undefined)
+      // Backslashes are normalized to forward slashes by WHATWG; the OS must not re-parse the raw form.
+      await handlers['shell:openExternal'](mockEvent, 'https://example.com\\@evil.com')
+      expect(mockShellOpenExternal).toHaveBeenCalledTimes(1)
+      expect(mockShellOpenExternal.mock.calls[0][0]).not.toContain('\\')
+    })
+
+    it('refuses non-http(s) schemes (file:, javascript:, mailto:, custom)', async () => {
+      const { register } = await import('./shell')
+      const ctx = createCtx()
+      register(mockIpcMain as never, ctx)
+
+      for (const url of ['file:///etc/passwd', 'javascript:alert(1)', 'mailto:a@b.com', 'app://x']) {
+        await handlers['shell:openExternal'](mockEvent, url)
+      }
+      expect(mockShellOpenExternal).not.toHaveBeenCalled()
+    })
+
+    it('refuses malformed / non-string input', async () => {
+      const { register } = await import('./shell')
+      const ctx = createCtx()
+      register(mockIpcMain as never, ctx)
+
+      await handlers['shell:openExternal'](mockEvent, 'not a url')
+      await handlers['shell:openExternal'](mockEvent, '')
+      await handlers['shell:openExternal'](mockEvent, undefined as never)
+      expect(mockShellOpenExternal).not.toHaveBeenCalled()
     })
   })
 

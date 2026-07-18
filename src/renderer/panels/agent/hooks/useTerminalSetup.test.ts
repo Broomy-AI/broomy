@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useTerminalSetup, type TerminalConfig } from './useTerminalSetup'
+import { WebLinksAddon } from '@xterm/addon-web-links'
 import { useSessionStore, type StatusChip } from '../../../store/sessions'
 import { useErrorStore } from '../../../store/errors'
 import { allowConsoleError } from '../../../../test/console-guard'
@@ -22,12 +23,14 @@ const mockTerminalOnScroll = vi.fn().mockReturnValue({ dispose: vi.fn() })
 const mockTerminalOnResize = vi.fn().mockReturnValue({ dispose: vi.fn() })
 const mockTerminalAttachCustomKeyEventHandler = vi.fn()
 const mockTerminalResize = vi.fn()
+const mockTerminalConstructor = vi.fn()
 
 const mockRegisterCsiHandler = vi.fn().mockReturnValue({ dispose: vi.fn() })
 
 vi.mock('@xterm/xterm', () => {
   return {
     Terminal: class MockTerminal {
+      constructor(options?: unknown) { mockTerminalConstructor(options) }
       write = mockTerminalWrite
       open = mockTerminalOpen
       dispose = mockTerminalDispose
@@ -63,6 +66,14 @@ vi.mock('@xterm/addon-serialize', () => {
   return {
     SerializeAddon: class MockSerializeAddon {
       serialize = mockSerializeAddonSerialize
+    },
+  }
+})
+
+vi.mock('@xterm/addon-web-links', () => {
+  return {
+    WebLinksAddon: class MockWebLinksAddon {
+      constructor(public handler?: (event: MouseEvent, uri: string) => void) {}
     },
   }
 })
@@ -223,6 +234,38 @@ describe('useTerminalSetup', () => {
         env: { TERM: 'xterm' },
       }),
     )
+  })
+
+  it('wires the web-links addon to the gated open handler (#149)', async () => {
+    const config = makeConfig({ sessionId: 'my-session' })
+    const containerRef = makeContainerRef()
+
+    renderHook(() => useTerminalSetup(config, containerRef))
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
+
+    // Pull the click handler the addon actually received, rather than only asserting it loaded.
+    const webLinks = mockTerminalLoadAddon.mock.calls
+      .map(([addon]) => addon)
+      .find((addon) => addon instanceof WebLinksAddon) as { handler?: (e: MouseEvent, uri: string) => void } | undefined
+    expect(webLinks?.handler).toBeTypeOf('function')
+
+    // 1) URL-shaped text (web-links addon): modifier-click opens (both modifiers set so the
+    //    assertion is platform-independent), a plain click does not.
+    vi.mocked(window.shell.openExternal).mockClear()
+    webLinks!.handler!({ button: 0, metaKey: true, ctrlKey: true } as MouseEvent, 'https://text.example')
+    webLinks!.handler!({ button: 0, metaKey: false, ctrlKey: false } as MouseEvent, 'https://text.example')
+    expect(window.shell.openExternal).toHaveBeenCalledExactlyOnceWith('https://text.example')
+
+    // 2) OSC 8 hyperlinks (xterm linkHandler): the same gate must reach the Terminal constructor,
+    //    or OSC 8 links fall back to xterm's plain-click confirm()+window.open.
+    const ctorOptions = mockTerminalConstructor.mock.calls.at(-1)?.[0] as
+      | { linkHandler?: { activate?: (e: MouseEvent, uri: string) => void; allowNonHttpProtocols?: boolean } }
+      | undefined
+    expect(ctorOptions?.linkHandler?.allowNonHttpProtocols).toBe(false)
+    vi.mocked(window.shell.openExternal).mockClear()
+    ctorOptions!.linkHandler!.activate!({ button: 0, metaKey: true, ctrlKey: true } as MouseEvent, 'https://osc8.example')
+    ctorOptions!.linkHandler!.activate!({ button: 0, metaKey: false, ctrlKey: false } as MouseEvent, 'https://osc8.example')
+    expect(window.shell.openExternal).toHaveBeenCalledExactlyOnceWith('https://osc8.example')
   })
 
   it('records the shell kind after create resolves and clears it on unmount', async () => {
