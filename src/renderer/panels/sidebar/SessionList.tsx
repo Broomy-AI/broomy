@@ -15,7 +15,6 @@ import PanelErrorBoundary from '../../shared/components/PanelErrorBoundary'
 import SessionCard from './SessionCard'
 import DeleteSessionDialog from './DeleteSessionDialog'
 import UpdateBanner from './UpdateBanner'
-import { railColorFor } from './repoRail'
 import { RepoGroupSection } from './RepoGroupSection'
 import { ArchivedSection } from './ArchivedSection'
 import { useSessionGrouping } from './useSessionGrouping'
@@ -103,7 +102,7 @@ export default function SessionList({
 
   // Repo grouping + alphabetical sort + the visible-order view-model.
   const searching = searchQuery.trim().length > 0
-  const { resolvedTheme, railColored, collapsedSet, setRepoGroupCollapsed, repoLabelFor, groups, orderedSessions, archivedRollup } =
+  const { railColorByKey, collapsedSet, setRepoGroupCollapsed, repoLabelFor, groups, orderedSessions, archivedRollup } =
     useSessionGrouping(allActive, activeSessions, archivedSessions, repos, searching)
 
   return (
@@ -194,7 +193,7 @@ export default function SessionList({
               key={group.key}
               group={group}
               collapsed={collapsed}
-              rail={railColorFor(resolvedTheme, { repoId: group.repoId, resolved: group.kind === 'repo', colored: railColored })}
+              rail={railColorByKey.get(group.key) ?? null}
               onToggle={() => setRepoGroupCollapsed(group.key, !collapsed)}
               onSelect={onSelectSession}
               onDelete={handleDelete}

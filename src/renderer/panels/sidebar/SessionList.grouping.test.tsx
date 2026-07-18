@@ -146,4 +146,17 @@ describe('SessionList — repo grouping', () => {
     expect(screen.getByText('acme-web')).toBeTruthy()
     expect(screen.queryByText('other')).toBeNull()
   })
+
+  it('renders a DISTINCT rail colour for each repo group (#148)', () => {
+    useSessionStore.setState({ sessions: [
+      makeSession({ id: '1', repoId: 'r-a', branch: 'a1' }),
+      makeSession({ id: '2', repoId: 'r-b', branch: 'b1' }),
+    ] })
+    const { container } = render(<SessionList {...makeProps()} />)
+    const rails = Array.from(container.querySelectorAll('div.ml-3.pl-2'))
+      .map((el) => el.getAttribute('style') ?? '')
+      .filter((s) => s.includes('border-left'))
+    expect(rails).toHaveLength(2)
+    expect(rails[0]).not.toBe(rails[1]) // two repos → two different rail colours reach the DOM
+  })
 })

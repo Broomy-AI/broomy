@@ -86,6 +86,22 @@ export function rgbToOklch([r8, g8, b8]: Rgb): [number, number, number] {
   return [L, Math.sqrt(A * A + B * B), Math.atan2(B, A)]
 }
 
+/**
+ * Perceptual distance between two sRGB colours in OKLab (ΔE-OK). ~0 = identical; roughly, >0.02 is
+ * just-noticeable and >0.08 reads as clearly different. Unlike raw sRGB distance it judges hues the
+ * way the eye does (a lighter red still reads "red"), so it's the right metric for keeping the
+ * repo-rail palette entries visibly distinct from each other and from the status LEDs.
+ */
+export function oklabDistance(x: Rgb, y: Rgb): number {
+  const toLab = (rgb: Rgb): [number, number, number] => {
+    const [L, C, h] = rgbToOklch(rgb)
+    return [L, C * Math.cos(h), C * Math.sin(h)]
+  }
+  const [l1, a1, b1] = toLab(x)
+  const [l2, a2, b2] = toLab(y)
+  return Math.hypot(l1 - l2, a1 - a2, b1 - b2)
+}
+
 function oklchToLinear(L: number, C: number, h: number): [number, number, number] {
   const A = C * Math.cos(h)
   const B = C * Math.sin(h)

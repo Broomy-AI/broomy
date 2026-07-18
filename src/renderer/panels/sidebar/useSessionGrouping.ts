@@ -8,6 +8,7 @@ import { useSettingsStore } from '../../store/settings'
 import type { Session } from '../../store/sessions'
 import type { ManagedRepo } from '../../../preload/index'
 import { groupSessionsByRepo, rollUpStatus } from './repoGroups'
+import { railColorsForGroups } from './repoRail'
 
 export function useSessionGrouping(
   allActive: Session[],
@@ -58,5 +59,12 @@ export function useSessionGrouping(
   // falls back to raw active order rather than a stale/filtered list.
   useEffect(() => () => setSidebarOrder([], []), [setSidebarOrder])
 
-  return { resolvedTheme, railColored, collapsedSet, setRepoGroupCollapsed, repoLabelFor, groups, orderedSessions, archivedRollup }
+  // Rail colours assigned across the whole group set at once, so every visible repo is guaranteed a
+  // distinct colour (see railColorsForGroups) rather than gambling on a per-repo hash.
+  const railColorByKey = useMemo(
+    () => railColorsForGroups(resolvedTheme, groups, railColored),
+    [resolvedTheme, groups, railColored],
+  )
+
+  return { resolvedTheme, railColored, railColorByKey, collapsedSet, setRepoGroupCollapsed, repoLabelFor, groups, orderedSessions, archivedRollup }
 }
