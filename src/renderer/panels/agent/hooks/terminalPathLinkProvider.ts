@@ -3,17 +3,32 @@
  * (document/media → OS default app) or reveal it in the file manager (everything else). Modeled on
  * iTerm2 Semantic History — only paths that resolve to an existing file are linkified.
  *
- * The soft-wrap line reconstruction and cell-accurate string-offset → buffer-position mapping
- * (`getWindowedLineStrings` / `mapStrIdx`) are adapted from `@xterm/addon-web-links` `LinkComputer`
- * (MIT © 2019 The xterm.js authors), with the URL regex + `isUrl` filter replaced by path detection
- * and an asynchronous existence gate added.
+ * Two line shapes are reconstructed before detection:
+ *  - xterm SOFT wraps (`ILine.isWrapped`) — a logical line the terminal split at its right edge.
+ *  - Claude Code HARD wraps — Ink prints a long tool-call argument as a real `\n` + a hanging indent
+ *    aligned under the tool label (`● Read(/very/long/…` → `           …/name.html)`), so the path
+ *    lands on several `isWrapped === false` rows. These are stitched only inside a `● Label( … )`
+ *    tool-call envelope, gated by the wrap margin, a consistent content-start indent, and existence,
+ *    so an ordinary indented line can't be mis-joined (#154 follow-up).
+ *
+ * Everything is reconstructed into one canonical string `T` with a span table mapping each UTF-16
+ * code unit back to its `{row, cell}` origin, so detection runs once and every link gets an exact,
+ * honest cell range (per-row segments for hard wraps, where the stripped indent must not be
+ * underlined). The cell/text walker is shared by both shapes. Adapted in spirit from
+ * `@xterm/addon-web-links` `LinkComputer` (MIT © 2019 The xterm.js authors).
  */
-import type { Terminal, ILink, ILinkProvider, IDisposable, IBuffer } from '@xterm/xterm'
+import type { Terminal, ILink, ILinkProvider, IDisposable, IBuffer, IBufferLine, IBufferCell } from '@xterm/xterm'
 import { hasOpenModifier, type TerminalLinkClick } from './terminalLinkHandler'
 
 const MAX_PATH_LEN = 4096
 /** Matches the main `shell:pathExists` per-call cap; larger candidate sets are chunked. */
 const PATHS_PER_BATCH = 64
+/** Most unused display cells a row may have and still count as "wrapped at the right edge". */
+const WRAP_MARGIN_TOL = 1
+/** Hard-wrap logical units we'll stitch into one block before giving up (a scan bound, not a proof). */
+const MAX_WRAP_ROWS = 8
+/** Physical rows a single soft-wrap unit may span before we stop expanding (bounds hover work). */
+const MAX_SOFT_ROWS = 64
 
 // A path candidate at a token boundary. The boundary (start-of-line / whitespace / opening
 // delimiter) is NOT captured — only group 1, the path, is. The relative first segment excludes `:`
@@ -22,12 +37,18 @@ const PATHS_PER_BATCH = 64
 const PATH_RE = /(?:^|[\s'"`([{<])((?:~\/|\/|[^\s/:'"`([{<]+\/)[^\s'"`)\]}>]*)/g
 const LINE_SUFFIX_RE = /:\d+(?::\d+)?$/
 const TRAILING_PUNCT_RE = /[.,;:!?)\]}'"]+$/
+/** A "path-ish" char — same class as PATH_RE's tail (used to detect a token cut across a hard wrap). */
+const PATH_CHAR_RE = /[^\s'"`)\]}>]/
+/** A Claude Code tool-call header: optional nesting, a bullet, a label, then the opening paren. */
+const ANCHOR_RE = /^(\s*)[●⏺] \S+\(/
+/** Claude structural markers a hard-wrap continuation must never start with. */
+const STRUCT_MARKER_RE = /^[⎿●⏺]/
 
 /**
- * Find file-path candidates in a (reconstructed, possibly soft-wrapped) line. Matches absolute
- * `/…`, `~/…`, and relative `seg/…` tokens; strips a trailing `:line[:col]` suffix and trailing
- * punctuation. Returns each path's exact text and its `[start, end)` offsets in `line`. These are
- * only candidates — existence is checked separately.
+ * Find file-path candidates in a (reconstructed) line. Matches absolute `/…`, `~/…`, and relative
+ * `seg/…` tokens; strips a trailing `:line[:col]` suffix and trailing punctuation. Returns each
+ * path's exact text and its `[start, end)` offsets in `line`. These are only candidates — existence
+ * is checked separately.
  */
 export function detectPathCandidates(line: string): { text: string; start: number; end: number }[] {
   const out: { text: string; start: number; end: number }[] = []
@@ -49,76 +70,182 @@ export function detectPathCandidates(line: string): { text: string; start: numbe
   return out
 }
 
-// --- Adapted from @xterm/addon-web-links LinkComputer (MIT © 2019 The xterm.js authors) ---
+// --- Line reconstruction: soft-wrap units, hard-wrap blocks, and the shared cell/span walker ---
 
-/** Reconstruct the wrapped logical line containing 0-based `lineIndex`. Returns [rows, topIndex]. */
-function getWindowedLineStrings(lineIndex: number, terminal: Terminal): [string[], number] {
-  let line = terminal.buffer.active.getLine(lineIndex)
-  let topIdx = lineIndex
-  let bottomIdx = lineIndex
-  let length = 0
-  let content = ''
-  const lines: string[] = []
+/** Where one UTF-16 code unit of the reconstructed text came from: buffer row `y`, half-open cells. */
+interface Span { y: number; x1: number; x2: number }
+/**
+ * A physical buffer row contributing to the reconstruction, with `skip` leading cells (indent)
+ * dropped. `unitStart` marks the first row of a hard-wrap continuation unit — a hard boundary the
+ * linked path must cross.
+ */
+interface RowSpec { y: number; skip: number; unitStart?: boolean }
 
-  if (line) {
-    const currentContent = line.translateToString(true)
-    // expand up while wrapped, stopping at a space or > 2048 chars
-    if (line.isWrapped && !currentContent.startsWith(' ')) {
-      length = 0
-      while ((line = terminal.buffer.active.getLine(--topIdx)) && length < 2048) {
-        content = line.translateToString(true)
-        length += content.length
-        lines.push(content)
-        if (!line.isWrapped || content.includes(' ')) break
-      }
-      lines.reverse()
-    }
-    lines.push(currentContent)
-    // expand down while wrapped
-    length = 0
-    while ((line = terminal.buffer.active.getLine(++bottomIdx)) && line.isWrapped && length < 2048) {
-      content = line.translateToString(true)
-      length += content.length
-      lines.push(content)
-      if (content.includes(' ')) break
+/**
+ * End-exclusive display column after a line's last WRITTEN cell — matching xterm's
+ * `translateToString(true)`, which trims trailing unwritten cells (`getChars() === ''`) but KEEPS a
+ * printed trailing space. Using this as the reconstruction boundary preserves a space at a wrap seam,
+ * so two tokens can never be glued into a bogus path.
+ */
+function occupiedEnd(line: IBufferLine, cell: IBufferCell): number {
+  let end = 0
+  for (let i = 0; i < line.length; i++) {
+    line.getCell(i, cell)
+    if (cell.getWidth() === 0) continue
+    if (cell.getChars() !== '') end = i + cell.getWidth() // written (a printed space counts)
+  }
+  return end
+}
+
+/** Number of leading blank cells (the hanging-indent width). */
+function leadingIndent(line: IBufferLine, cell: IBufferCell): number {
+  let i = 0
+  for (; i < line.length; i++) {
+    line.getCell(i, cell)
+    const ch = cell.getChars()
+    if (ch !== ' ' && ch !== '') break
+  }
+  return i
+}
+
+/**
+ * Physical row range [top, bottom] of the xterm soft-wrap logical line containing `y`, bounded to
+ * `MAX_SOFT_ROWS` in each direction. `overflow` is set when the cap was hit before the wrap ended, so
+ * callers can fail closed rather than treat a truncated middle of a giant path as a whole line.
+ */
+function softUnitBounds(buf: IBuffer, y: number): { top: number; bottom: number; overflow: boolean } {
+  let top = y
+  let overflow = false
+  for (let n = 0; top > 0 && buf.getLine(top)?.isWrapped; n++) {
+    if (n >= MAX_SOFT_ROWS) { overflow = true; break }
+    top--
+  }
+  let bottom = y
+  for (let n = 0; buf.getLine(bottom + 1)?.isWrapped; n++) {
+    if (n >= MAX_SOFT_ROWS) { overflow = true; break }
+    bottom++
+  }
+  return { top, bottom, overflow }
+}
+
+/**
+ * Whether the unit starting at `belowTop` is a Claude hard-wrap continuation of the unit ending at
+ * `aboveBottom`: the upper row fills to the wrap margin and ends mid-token (path-ish, no trailing
+ * space), and the lower row is indented then continues with a path-ish char (not a `⎿/●/⏺` marker).
+ */
+function isHardContinuation(buf: IBuffer, aboveBottom: number, belowTop: number, cell: IBufferCell, cols: number): boolean {
+  const a = buf.getLine(aboveBottom)
+  const b = buf.getLine(belowTop)
+  if (!a || !b) return false
+  const unused = cols - occupiedEnd(a, cell)
+  if (unused < 0 || unused > WRAP_MARGIN_TOL) return false // fills the right edge (fail closed if negative)
+  const aStr = a.translateToString(true)
+  if (aStr.length === 0 || !PATH_CHAR_RE.test(aStr[aStr.length - 1])) return false // cut mid-token
+  const indent = leadingIndent(b, cell)
+  if (indent < 1) return false
+  const bStr = b.translateToString(true)
+  if (indent >= bStr.length) return false // all-blank continuation
+  const first = bStr[indent]
+  return !STRUCT_MARKER_RE.test(first) && PATH_CHAR_RE.test(first)
+}
+
+/**
+ * If `q` sits inside a wrapped `● Label( … )` tool call, return the full ordered row set (continuation
+ * rows carry `skip` = the content-start indent to strip) plus the anchor row. Returns `null` when it
+ * is not such a block, so the caller falls back to the plain soft-wrap line.
+ */
+function collectBlock(term: Terminal, qUnit: { top: number; bottom: number }): { rows: RowSpec[] } | null {
+  const buf = term.buffer.active
+  const cell = buf.getNullCell()
+  const cols = term.cols
+
+  const units: { top: number; bottom: number }[] = [qUnit]
+  // Walk up to the anchor across hard-wrap continuations.
+  for (let guard = 0; guard < MAX_WRAP_ROWS; guard++) {
+    const first = units[0]
+    if (first.top <= 0) break
+    const above = softUnitBounds(buf, first.top - 1)
+    if (above.overflow || !isHardContinuation(buf, above.bottom, first.top, cell, cols)) break
+    units.unshift(above)
+  }
+
+  const anchorY = units[0].top
+  const anchorLine = buf.getLine(anchorY)
+  if (!anchorLine) return null
+  const m = ANCHOR_RE.exec(anchorLine.translateToString(true))
+  if (!m) return null
+  const N = m[1].length
+  anchorLine.getCell(N, cell)
+  const contentCol = N + (cell.getWidth() || 1) + 1 // where the label (and its hanging indent) starts
+
+  // Every continuation collected on the way up must align exactly at the content column.
+  for (let u = 1; u < units.length; u++) {
+    if (leadingIndent(buf.getLine(units[u].top)!, cell) !== contentCol) return null
+  }
+
+  // Walk down across further continuations.
+  for (let guard = 0; guard < MAX_WRAP_ROWS; guard++) {
+    const last = units[units.length - 1]
+    const nextIdx = last.bottom + 1
+    if (!buf.getLine(nextIdx)) break
+    const below = softUnitBounds(buf, nextIdx)
+    if (below.overflow || !isHardContinuation(buf, last.bottom, below.top, cell, cols)) break
+    if (leadingIndent(buf.getLine(below.top)!, cell) !== contentCol) break
+    units.push(below)
+  }
+
+  if (units.length < 2 || units.length > MAX_WRAP_ROWS) return null // not wrapped (or past the scan cap)
+
+  const rows: RowSpec[] = []
+  for (let u = 0; u < units.length; u++) {
+    for (let y = units[u].top; y <= units[u].bottom; y++) {
+      const unitStart = y === units[u].top
+      rows.push({ y, skip: u > 0 && unitStart ? contentCol : 0, unitStart: u > 0 && unitStart })
     }
   }
-  return [lines, topIdx]
+  return { rows }
 }
 
-/** +1 when the last cell of a row held an early-wrapped wide char whose continuation starts the next row. */
-function earlyWrappedWideCorrection(buf: IBuffer, lineIndex: number): number {
-  const next = buf.getLine(lineIndex + 1)
-  if (!next?.isWrapped) return 0
-  const cell = buf.getNullCell()
-  next.getCell(0, cell)
-  return cell.getWidth() === 2 ? 1 : 0
+/** Rows for the plain (non-block) case: the given soft-wrap logical line, nothing stripped. */
+function plainRows(qUnit: { top: number; bottom: number }): RowSpec[] {
+  const rows: RowSpec[] = []
+  for (let y = qUnit.top; y <= qUnit.bottom; y++) rows.push({ y, skip: 0 })
+  return rows
 }
 
-/** Map a string index in the reconstructed line to 0-based buffer `[lineIndex, columnIndex]`, or `[-1,-1]`. */
-function mapStrIdx(terminal: Terminal, lineIndex: number, rowIndex: number, stringIndex: number): [number, number] {
-  const buf = terminal.buffer.active
+/**
+ * Reconstruct the text of `rows` and a parallel span table. One entry per UTF-16 code unit; each
+ * occupied cell contributes its `getChars()` once (empty width>0 cells render as a space, matching
+ * `translateToString(true)`), width-0 continuation cells are skipped, and display width advances once
+ * per cell — so wide (CJK/emoji) and zero-width cells map to exact half-open cell ranges.
+ */
+function buildBlockText(buf: IBuffer, rows: RowSpec[]): { text: string; spans: Span[]; boundaries: number[] } {
   const cell = buf.getNullCell()
-  let start = rowIndex
-  while (stringIndex) {
-    const line = buf.getLine(lineIndex)
-    if (!line) return [-1, -1]
-    for (let i = start; i < line.length; ++i) {
+  let text = ''
+  const spans: Span[] = []
+  const boundaries: number[] = [] // text offset at the start of each hard-wrap continuation unit
+  for (const { y, skip, unitStart } of rows) {
+    const line = buf.getLine(y)
+    if (!line) continue
+    if (unitStart) boundaries.push(text.length)
+    const end = occupiedEnd(line, cell)
+    for (let i = skip; i < end; i++) {
       line.getCell(i, cell)
-      const chars = cell.getChars()
-      if (cell.getWidth()) {
-        stringIndex -= chars.length || 1
-        if (i === line.length - 1 && chars === '') stringIndex += earlyWrappedWideCorrection(buf, lineIndex)
-      }
-      if (stringIndex < 0) return [lineIndex, i]
+      const w = cell.getWidth()
+      if (w === 0) continue
+      const chars = cell.getChars() || ' '
+      const x2 = i + w
+      // One span per UTF-16 code unit (not per code point) so detect's string offsets map back
+      // exactly; a for-of over `chars` would collapse a surrogate pair and desync the count.
+      // eslint-disable-next-line @typescript-eslint/prefer-for-of
+      for (let u = 0; u < chars.length; u++) spans.push({ y, x1: i, x2 })
+      text += chars
     }
-    lineIndex++
-    start = 0
   }
-  return [lineIndex, start]
+  return { text, spans, boundaries }
 }
 
-// --- end adapted section ---
+// --- end reconstruction section ---
 
 interface CacheEntry {
   exists: boolean
@@ -168,14 +295,29 @@ export class FilePathLinkProvider implements ILinkProvider {
 
   provideLinks(bufferLineNumber: number, callback: (links: ILink[] | undefined) => void): void {
     const myEpoch = ++this._epoch
-    const [rows, topIdx] = getWindowedLineStrings(bufferLineNumber - 1, this._terminal)
-    const candidates = detectPathCandidates(rows.join(''))
+    const q = bufferLineNumber - 1
+    const buf = this._terminal.buffer.active
+    if (!buf.getLine(q)) { callback(undefined); return }
+    // All buffer reads + range mapping happen synchronously here, before the async existence probe.
+    const qUnit = softUnitBounds(buf, q)
+    if (qUnit.overflow) { callback(undefined); return } // truncated giant wrap → fail closed
+    const block = collectBlock(this._terminal, qUnit)
+    const rows = block ? block.rows : plainRows(qUnit)
+    const { text, spans, boundaries } = buildBlockText(buf, rows)
+    const candidates = detectPathCandidates(text)
     if (candidates.length === 0) {
       callback(undefined)
       return
     }
+
+    // A tool-call block only links the wrapped PAYLOAD path: it must start after the anchor's `(`
+    // (`● Label(`), begin in the anchor unit, and cross the FIRST hard-wrap boundary — which uniquely
+    // selects it (only one detected token can start in the anchor payload and cross that seam), so an
+    // incidental token sitting in a continuation row is never linked.
+    const blockInfo = block ? { parenOff: text.indexOf('('), boundaries } : null
+
     const mapped = candidates
-      .map((c) => this._toLink(c, topIdx))
+      .map((c) => this._toLink(c, spans, text, q, blockInfo))
       .filter((l): l is ILink => l !== null)
     if (mapped.length === 0) {
       callback(undefined)
@@ -213,14 +355,44 @@ export class FilePathLinkProvider implements ILinkProvider {
       })
   }
 
-  private _toLink(c: { text: string; start: number; end: number }, topIdx: number): ILink | null {
-    const [sy, sx] = mapStrIdx(this._terminal, topIdx, 0, c.start)
-    if (sy === -1 || sx === -1) return null
-    const [ey, ex] = mapStrIdx(this._terminal, sy, sx, c.text.length)
-    if (ey === -1 || ex === -1) return null
+  /**
+   * Turn a detected candidate into an `ILink`, or null if it doesn't qualify on this row. Plain lines
+   * get the full (possibly multi-row soft-wrap) range. A block candidate must be the wrapped payload
+   * path — starting after the anchor's `(`, beginning in the anchor unit, crossing the first hard-wrap
+   * boundary, and closed by a `)` — with a range covering only its per-row segment, so the stripped
+   * hanging indent is never underlined.
+   */
+  private _toLink(
+    c: { text: string; start: number; end: number },
+    spans: Span[],
+    text: string,
+    q: number,
+    block: { parenOff: number; boundaries: number[] } | null,
+  ): ILink | null {
+    let range: ILink['range']
+    if (block) {
+      // spans has one entry per code unit of `text`, so every offset in a detected candidate maps.
+      // The one wrapped payload starts after the anchor's `(`, inside the anchor unit, and crosses the
+      // first hard boundary. `first` exists because a block always has ≥1 continuation unit.
+      const first = block.boundaries[0]
+      if (c.start <= block.parenOff || c.start >= first || c.end <= first) return null
+      if (!text.includes(')', c.end)) return null // the tool call closes after the path
+      let x1 = Infinity
+      let x2 = -Infinity
+      for (let o = c.start; o < c.end; o++) {
+        const sp = spans[o]
+        if (sp.y === q) { if (sp.x1 < x1) x1 = sp.x1; if (sp.x2 > x2) x2 = sp.x2 }
+      }
+      if (x2 < 0) return null // no segment on this row
+      range = { start: { x: x1 + 1, y: q + 1 }, end: { x: x2, y: q + 1 } }
+    } else {
+      const s0 = spans[c.start]
+      const s1 = spans[c.end - 1]
+      range = { start: { x: s0.x1 + 1, y: s0.y + 1 }, end: { x: s1.x2, y: s1.y + 1 } }
+    }
     return {
       text: c.text,
-      range: { start: { x: sx + 1, y: sy + 1 }, end: { x: ex, y: ey + 1 } },
+      range,
       decorations: { underline: true, pointerCursor: true },
       activate: (event: MouseEvent, uri: string) => {
         if (hasOpenModifier(event as TerminalLinkClick, this._deps.isMac)) this._deps.openPath(uri)

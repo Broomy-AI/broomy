@@ -36,7 +36,7 @@ describe('detectPathCandidates', () => {
   })
 })
 
-// --- Faithful fake xterm buffer (ASCII 1-width cells, plus explicit wide cells) ---
+// --- Faithful fake xterm buffer: fixed-width rows, right-trim, wide + width-0 cells ---
 
 interface CellSpec { chars: string; width: number }
 class FakeCell {
@@ -46,22 +46,44 @@ class FakeCell {
   getWidth(): number { return this.width }
   set(c: string, w: number): void { this.chars = c; this.width = w }
 }
+/** One 1-wide cell per character. */
 const asciiCells = (text: string): CellSpec[] => Array.from(text, (ch) => ({ chars: ch, width: 1 }))
+/** Cells for text where any char in `wide` occupies 2 columns (a width-2 cell + a width-0 spacer). */
+function cellsWithWide(text: string, wide: string): CellSpec[] {
+  const out: CellSpec[] = []
+  for (const ch of Array.from(text)) {
+    if (wide.includes(ch)) { out.push({ chars: ch, width: 2 }); out.push({ chars: '', width: 0 }) }
+    else out.push({ chars: ch, width: 1 })
+  }
+  return out
+}
 
-function fakeLine(cells: CellSpec[], wrapped = false) {
+function fakeLine(cells: CellSpec[], wrapped: boolean, cols: number) {
+  const padded = cells.slice()
+  while (padded.length < cols) padded.push({ chars: '', width: 1 }) // unwritten trailing cells, like a real line
+  const render = (c: CellSpec) => (c.width === 0 ? '' : c.chars || ' ')
   return {
     isWrapped: wrapped,
-    length: cells.length,
-    translateToString: () => cells.map((c) => c.chars).join(''),
-    getCell: (i: number, cell: FakeCell) => { const c = cells[i]; cell.set(c ? c.chars : '', c ? c.width : 1) },
+    length: padded.length,
+    // Like xterm: trimRight drops trailing UNWRITTEN cells (chars === '') but keeps a printed space.
+    translateToString: (trimRight?: boolean) => {
+      let last = padded.length
+      if (trimRight) while (last > 0 && padded[last - 1].chars === '') last--
+      return padded.slice(0, last).map(render).join('')
+    },
+    getCell: (i: number, cell: FakeCell) => { const c = padded[i]; cell.set(c ? c.chars : '', c ? c.width : 1) },
   }
 }
 
-function fakeTerminal(rows: { cells: CellSpec[]; wrapped?: boolean }[]) {
-  const lines = rows.map((r) => fakeLine(r.cells, r.wrapped))
+function fakeTerminal(rows: { cells: CellSpec[]; wrapped?: boolean }[], cols?: number) {
+  const width = cols ?? Math.max(1, ...rows.map((r) => r.cells.length))
+  // A real xterm row is fixed-width; a fixture wider than `cols` would misrepresent wrapping.
+  for (const r of rows) if (r.cells.length > width) throw new Error(`fixture row exceeds cols=${width}`)
+  const lines = rows.map((r) => fakeLine(r.cells, r.wrapped ?? false, width))
   const writeCbs = new Set<() => void>()
   const resizeCbs = new Set<() => void>()
   const term = {
+    cols: width,
     buffer: { active: { getLine: (i: number) => lines[i], getNullCell: () => new FakeCell() } },
     onWriteParsed: (cb: () => void) => { writeCbs.add(cb); return { dispose: () => writeCbs.delete(cb) } },
     onResize: (cb: () => void) => { resizeCbs.add(cb); return { dispose: () => resizeCbs.delete(cb) } },
@@ -84,7 +106,11 @@ function provide(provider: FilePathLinkProvider, y: number): Promise<ILink[] | u
   return new Promise((resolve) => provider.provideLinks(y, resolve))
 }
 
-describe('FilePathLinkProvider', () => {
+/** pathExists that reports true only for the exact paths listed (order-preserving). */
+const existsOnly = (...real: string[]) =>
+  vi.fn((paths: string[]) => Promise.resolve(paths.map((p) => real.includes(p))))
+
+describe('FilePathLinkProvider — plain lines', () => {
   it('links a single-row existing path with the correct range', async () => {
     const term = fakeTerminal([{ cells: asciiCells('open /tmp/a.html done') }])
     const provider = new FilePathLinkProvider(term, deps())
@@ -95,7 +121,7 @@ describe('FilePathLinkProvider', () => {
     expect(links![0].range).toEqual({ start: { x: 6, y: 1 }, end: { x: 16, y: 1 } })
   })
 
-  it('links a soft-wrapped path from a continuation row', async () => {
+  it('links a soft-wrapped path across rows with one full range', async () => {
     // "/very/long/path/name.md" spans row 0 (not wrapped) and row 1 (wrapped).
     const term = fakeTerminal([
       { cells: asciiCells('go /very/long/pa') },
@@ -107,6 +133,56 @@ describe('FilePathLinkProvider', () => {
     expect(links![0].text).toBe('/very/long/path/name.md')
     // Path starts at string index 3 on row 0 and ends 23 chars later on row 1.
     expect(links![0].range).toEqual({ start: { x: 4, y: 1 }, end: { x: 10, y: 2 } })
+  })
+
+  it('maps ranges past a wide (2-column) char correctly', async () => {
+    // 王 is 2 cols: '王', space, then the path at display column 3.
+    const term = fakeTerminal([{ cells: cellsWithWide('王 /tmp/a.html', '王') }])
+    const provider = new FilePathLinkProvider(term, deps())
+    const links = await provide(provider, 1)
+    expect(links).toHaveLength(1)
+    expect(links![0].text).toBe('/tmp/a.html')
+    // path occupies display cols 3..13 (王=2 cols, then a space) → 1-based start x 4, end-exclusive x 14.
+    expect(links![0].range).toEqual({ start: { x: 4, y: 1 }, end: { x: 14, y: 1 } })
+  })
+
+  it('maps ranges past an emoji (surrogate pair, 2 cols) correctly', async () => {
+    // 😀 is one code point, TWO UTF-16 units, TWO display cols → a width-2 cell + a width-0 spacer.
+    const cells: CellSpec[] = [{ chars: '😀', width: 2 }, { chars: '', width: 0 }, ...asciiCells(' /tmp/a.html')]
+    const term = fakeTerminal([{ cells }])
+    const provider = new FilePathLinkProvider(term, deps())
+    const links = await provide(provider, 1)
+    expect(links).toHaveLength(1)
+    expect(links![0].text).toBe('/tmp/a.html')
+    // 😀 cols 0-1, space col 2, path at display col 3 → start x 4, end-exclusive x 14.
+    expect(links![0].range).toEqual({ start: { x: 4, y: 1 }, end: { x: 14, y: 1 } })
+  })
+
+  it('handles an early-wrapped wide char (unwritten last cell, glyph on the next row)', async () => {
+    // At cols=10 a width-2 王 can't fit at col 9, so xterm leaves col 9 unwritten and moves 王 to the
+    // next (wrapped) row. The path must reconstruct across that seam with no phantom space.
+    const row0: CellSpec[] = [...asciiCells('/aaaaaaaa'), { chars: '', width: 1 }] // 9 written + 1 unwritten
+    const row1: CellSpec[] = [{ chars: '王', width: 2 }, { chars: '', width: 0 }, ...asciiCells('x.md')]
+    const term = fakeTerminal([{ cells: row0 }, { cells: row1, wrapped: true }], 10)
+    const provider = new FilePathLinkProvider(term, deps({ pathExists: existsOnly('/aaaaaaaa王x.md') }))
+    const links = await provide(provider, 2) // hover the wrapped row
+    expect(links).toHaveLength(1)
+    expect(links![0].text).toBe('/aaaaaaaa王x.md')
+    // Spans cols 0..8 on row 1, then 王(0-1)/x(2)/.(3)/m(4)/d(5) on row 2 → end-exclusive x 6 on y 2.
+    expect(links![0].range).toEqual({ start: { x: 1, y: 1 }, end: { x: 6, y: 2 } })
+  })
+
+  it('keeps a printed space at a soft-wrap seam (no token glue)', async () => {
+    // Logical line "see /foo bar/baz" soft-wraps right after the printed trailing space.
+    const term = fakeTerminal([
+      { cells: asciiCells('see /foo ') }, //          9 cells, ends in a PRINTED space
+      { cells: asciiCells('bar/baz'), wrapped: true },
+    ], 9)
+    const provider = new FilePathLinkProvider(term, deps({ pathExists: existsOnly('/foo', 'bar/baz') }))
+    const texts = (await provide(provider, 1) ?? []).map((l) => l.text)
+    expect(texts).toContain('/foo')
+    expect(texts).toContain('bar/baz')
+    expect(texts).not.toContain('/foobar/baz') // the space survived reconstruction → nothing glued
   })
 
   it('does not link a path that does not exist, and memoizes the check', async () => {
@@ -127,8 +203,182 @@ describe('FilePathLinkProvider', () => {
     link.activate({ button: 0, metaKey: false, ctrlKey: false } as MouseEvent, link.text)
     expect(openPath).toHaveBeenCalledExactlyOnceWith('/tmp/a.html')
   })
+})
 
-  it('lifecycle: a superseded request never calls its callback', async () => {
+describe('FilePathLinkProvider — Claude hard-wrap blocks (#154)', () => {
+  // cols=40: the anchor fills exactly to the right edge, the path continues indented under the label.
+  const COLS = 40
+  const anchor = '● Read(/tmp/aa/family-controls-report-lo' //           40 cells, occupied to the edge
+  const cont = '  nger-name.html)' //                                    indent 2 (content col), then the tail
+  const FULL = '/tmp/aa/family-controls-report-longer-name.html'
+  const hardWrap = () =>
+    fakeTerminal([{ cells: asciiCells(anchor) }, { cells: asciiCells(cont) }], COLS)
+
+  it('links the anchor row segment and opens the full reconstructed path', async () => {
+    const openPath = vi.fn()
+    const provider = new FilePathLinkProvider(hardWrap(), deps({ pathExists: existsOnly(FULL), openPath }))
+    const links = await provide(provider, 1) // hover the "● Read(" row
+    expect(links).toHaveLength(1)
+    expect(links![0].text).toBe(FULL)
+    // Underlines only the fragment on this row: "/tmp/aa/family-controls-report-lo" at cols 7..40.
+    expect(links![0].range).toEqual({ start: { x: 8, y: 1 }, end: { x: 40, y: 1 } })
+    links![0].activate({ button: 0, metaKey: true, ctrlKey: false } as MouseEvent, links![0].text)
+    expect(openPath).toHaveBeenCalledExactlyOnceWith(FULL)
+  })
+
+  it('links the continuation row segment (indent excluded) to the full path', async () => {
+    const provider = new FilePathLinkProvider(hardWrap(), deps({ pathExists: existsOnly(FULL) }))
+    const links = await provide(provider, 2) // hover the "  nger-name.html)" row
+    expect(links).toHaveLength(1)
+    expect(links![0].text).toBe(FULL)
+    // "nger-name.html" underlined (cols 2..16); the stripped 2-space indent and the ")" are excluded.
+    expect(links![0].range).toEqual({ start: { x: 3, y: 2 }, end: { x: 16, y: 2 } })
+  })
+
+  it('does not link when the reconstructed full path does not exist', async () => {
+    const provider = new FilePathLinkProvider(hardWrap(), deps({ pathExists: existsOnly('/nope') }))
+    expect(await provide(provider, 1)).toBeUndefined()
+    expect(await provide(provider, 2)).toBeUndefined()
+  })
+
+  it('requires the anchor to reach the wrap margin (unrelated indented line is not joined)', async () => {
+    // The "● Read(" row is short (does not fill to cols), so the next col-2 line is NOT a continuation.
+    const shortAnchor = '● Read(/tmp/aa/short-name.md' // occupied end well left of col 40
+    const term = fakeTerminal([{ cells: asciiCells(shortAnchor) }, { cells: asciiCells('  other/thing.md') }], COLS)
+    // Only the SHORT path exists — never the accidental concatenation.
+    const provider = new FilePathLinkProvider(term, deps({ pathExists: existsOnly('/tmp/aa/short-name.md') }))
+    const links = await provide(provider, 1)
+    expect(links).toHaveLength(1)
+    expect(links![0].text).toBe('/tmp/aa/short-name.md') // the real short path, not a glued one
+  })
+
+  it('does not join a continuation that starts with a Claude structural marker', async () => {
+    const term = fakeTerminal([{ cells: asciiCells(anchor) }, { cells: asciiCells('  ⎿ Read 1 line') }], COLS)
+    const provider = new FilePathLinkProvider(term, deps({ pathExists: existsOnly(FULL) }))
+    // The `⎿` result line is not a continuation, so nothing is joined; the truncated anchor
+    // fragment does not exist on its own → no link.
+    expect(await provide(provider, 1)).toBeUndefined()
+  })
+
+  it('does not join outside a tool-call envelope (no bullet anchor)', async () => {
+    // Same geometry but the first row is prose, not "● Label(...".
+    const proseAnchor = 'wrote to /tmp/aa/family-controls-report-longerX' // 47 cells, fills a wider line
+    const term = fakeTerminal([{ cells: asciiCells(proseAnchor) }, { cells: asciiCells('  nger-name.html)') }], 47)
+    const provider = new FilePathLinkProvider(term, deps({ pathExists: existsOnly(FULL) }))
+    // Falls back to plain handling: the anchor's own fragment path isn't FULL, so no link on row 1
+    // from a join. (Row 1's own token is relative and unchecked-existing.)
+    const links = await provide(provider, 1)
+    expect(links ?? []).not.toContainEqual(expect.objectContaining({ text: FULL }))
+  })
+
+  it('links across three units including a middle row with no slash', async () => {
+    const a = `● Read(/tmp/${'a'.repeat(28)}` //  40 cells, fills margin
+    const b = `  ${'b'.repeat(38)}` //             40 cells, NO slash, fills margin
+    const cc = '  cc.html)'
+    const full = `/tmp/${'a'.repeat(28)}${'b'.repeat(38)}cc.html`
+    const term = fakeTerminal([{ cells: asciiCells(a) }, { cells: asciiCells(b) }, { cells: asciiCells(cc) }], COLS)
+    const provider = new FilePathLinkProvider(term, deps({ pathExists: existsOnly(full) }))
+    const mid = await provide(provider, 2) // hover the slash-less middle row
+    expect(mid).toHaveLength(1)
+    expect(mid![0].text).toBe(full)
+    expect(mid![0].range.start.y).toBe(2) // the underlined segment is on the middle row
+  })
+
+  it('accepts a one-cell margin gap but rejects a two-cell gap', async () => {
+    const cont = { cells: asciiCells('  bb.html)') }
+    const full = (n: number) => `/tmp/${'a'.repeat(n)}bb.html`
+    // unused = 1 → still counts as wrapped.
+    const t1 = fakeTerminal([{ cells: asciiCells(`● Read(/tmp/${'a'.repeat(27)}`) }, cont], COLS) // 39 cells
+    const p1 = new FilePathLinkProvider(t1, deps({ pathExists: existsOnly(full(27)) }))
+    expect(await provide(p1, 1)).toHaveLength(1)
+    // unused = 2 → not a wrap; the continuation is not joined and the fragment doesn't exist.
+    const t2 = fakeTerminal([{ cells: asciiCells(`● Read(/tmp/${'a'.repeat(26)}`) }, cont], COLS) // 38 cells
+    const p2 = new FilePathLinkProvider(t2, deps({ pathExists: existsOnly(full(26)) }))
+    expect(await provide(p2, 1)).toBeUndefined()
+  })
+
+  it('does not link an incidental path that starts in a continuation row', async () => {
+    // ● Bash(cat /aaa…  wraps, then a space + an unrelated /inc on the continuation.
+    const anchorB = `● Bash(cat /${'a'.repeat(18)}` // 30 cells, fills margin
+    const payload = `/${'a'.repeat(21)}` //           anchor tail + the 3 leading a's of the continuation
+    const term = fakeTerminal([{ cells: asciiCells(anchorB) }, { cells: asciiCells('  aaa /inc)') }], 30)
+    const provider = new FilePathLinkProvider(term, deps({ pathExists: existsOnly(payload, '/inc') }))
+    // Hover the continuation row, where BOTH the payload's tail and /inc render — so the boundary gate
+    // (not a missing segment) is what rejects /inc.
+    const texts = (await provide(provider, 2) ?? []).map((l) => l.text)
+    expect(texts).toContain(payload)
+    expect(texts).not.toContain('/inc') // begins in a continuation unit → not the wrapped payload
+  })
+
+  it('still links a payload that ends before a later greedily-admitted boundary (multi-token call)', async () => {
+    // ● Bash(cat /a…  wraps; the continuation holds the /a tail, a space, then a SECOND path /b… that
+    // itself wraps into a third unit. The first path (payload1) ends before the /b boundary but must
+    // still link; the second path begins in a continuation and must not.
+    const anchorB = `● Bash(cat /${'a'.repeat(18)}` //          30 cells
+    const cont1 = `  aaa /${'b'.repeat(23)}` //                 30 cells, fills margin (payload2 head)
+    const cont2 = '  bbb)'
+    const payload1 = `/${'a'.repeat(21)}`
+    const payload2 = `/${'b'.repeat(26)}`
+    const term = fakeTerminal([{ cells: asciiCells(anchorB) }, { cells: asciiCells(cont1) }, { cells: asciiCells(cont2) }], 30)
+    const provider = new FilePathLinkProvider(term, deps({ pathExists: existsOnly(payload1, payload2) }))
+    // Hover cont1 (row 2), where payload1's tail AND payload2's head both render.
+    const texts = (await provide(provider, 2) ?? []).map((l) => l.text)
+    expect(texts).toContain(payload1) // ends before the 2nd boundary, but still the wrapped payload
+    expect(texts).not.toContain(payload2) // starts in a continuation unit
+  })
+
+  it('reconstructs a soft-wrapped anchor that then hard-wraps (mixed soft/hard units)', async () => {
+    const SMALL = 20
+    const full = `/tmp/${'a'.repeat(8)}${'b'.repeat(20)}cc.html`
+    const term = fakeTerminal([
+      { cells: asciiCells(`● Read(/tmp/${'a'.repeat(8)}`) }, // 20 cells, soft-wraps
+      { cells: asciiCells('b'.repeat(20)), wrapped: true }, //  20 cells, soft continuation (col 0)
+      { cells: asciiCells('  cc.html)') }, //                   hard continuation, indent 2
+    ], SMALL)
+    const provider = new FilePathLinkProvider(term, deps({ pathExists: existsOnly(full) }))
+    const links = await provide(provider, 3) // hover the hard-continuation row
+    expect(links).toHaveLength(1)
+    expect(links![0].text).toBe(full)
+    expect(links![0].range.start.y).toBe(3)
+  })
+
+  it('treats a tab-expanded (blank-cell) indent as the hanging indent', async () => {
+    const full = `/tmp/${'a'.repeat(28)}bb.html`
+    // The continuation indent is two UNWRITTEN cells (as xterm stores an expanded tab), not spaces.
+    const cont: CellSpec[] = [{ chars: '', width: 1 }, { chars: '', width: 1 }, ...asciiCells('bb.html)')]
+    const term = fakeTerminal([{ cells: asciiCells(`● Read(/tmp/${'a'.repeat(28)}`) }, { cells: cont }], COLS)
+    const provider = new FilePathLinkProvider(term, deps({ pathExists: existsOnly(full) }))
+    const links = await provide(provider, 1)
+    expect(links).toHaveLength(1)
+    expect(links![0].text).toBe(full)
+  })
+
+  it('fails closed on a soft-wrap that exceeds the row cap', async () => {
+    // A single path soft-wrapped across > MAX_SOFT_ROWS rows: reconstruction would be truncated, so no
+    // link is offered rather than risking a bogus mid-path token.
+    const rows: { cells: CellSpec[]; wrapped?: boolean }[] = [{ cells: asciiCells(`/tmp/${'a'.repeat(75)}`) }]
+    for (let i = 0; i < 70; i++) rows.push({ cells: asciiCells('a'.repeat(80)), wrapped: true })
+    const term = fakeTerminal(rows, 80)
+    const provider = new FilePathLinkProvider(term, deps({ pathExists: vi.fn().mockResolvedValue([true]) }))
+    expect(await provide(provider, 71)).toBeUndefined() // hover deep inside the overflow
+  })
+
+  it('rejects the reconstruction past the row cap (falls back to the plain fragment)', async () => {
+    // 1 anchor + 9 margin-filling continuations would be > MAX_WRAP_ROWS (8) units → block rejected,
+    // so it falls back to plain handling of the anchor row. With everything "existing", a correct cap
+    // yields only the short anchor fragment; a broken cap would join into a giant path.
+    const rows = [{ cells: asciiCells(anchor) }]
+    for (let i = 0; i < 9; i++) rows.push({ cells: asciiCells(`  ${'a'.repeat(38)}`) }) // 40 cells, fills margin
+    const term = fakeTerminal(rows, COLS)
+    const provider = new FilePathLinkProvider(term, deps({ pathExists: vi.fn().mockResolvedValue([true]) }))
+    const links = await provide(provider, 1)
+    expect(links).toHaveLength(1)
+    expect(links![0].text).toBe('/tmp/aa/family-controls-report-lo') // the plain fragment, not a join
+  })
+})
+
+describe('FilePathLinkProvider — lifecycle', () => {
+  it('a superseded request never calls its callback', async () => {
     let resolveA: (v: boolean[]) => void = () => {}
     const pathExists = vi
       .fn()
@@ -145,7 +395,7 @@ describe('FilePathLinkProvider', () => {
     expect(cbA).not.toHaveBeenCalled()
   })
 
-  it('lifecycle: dispose while pending suppresses the callback', async () => {
+  it('dispose while pending suppresses the callback', async () => {
     let resolve: (v: boolean[]) => void = () => {}
     const pathExists = vi.fn().mockImplementation(() => new Promise<boolean[]>((r) => { resolve = r }))
     const term = fakeTerminal([{ cells: asciiCells('/tmp/a.html') }])
@@ -158,14 +408,14 @@ describe('FilePathLinkProvider', () => {
     expect(cb).not.toHaveBeenCalled()
   })
 
-  it('lifecycle: an IPC rejection completes the current request with no links', async () => {
+  it('an IPC rejection completes the current request with no links', async () => {
     const pathExists = vi.fn().mockRejectedValue(new Error('ipc down'))
     const term = fakeTerminal([{ cells: asciiCells('/tmp/a.html') }])
     const provider = new FilePathLinkProvider(term, deps({ pathExists }))
     expect(await provide(provider, 1)).toBeUndefined()
   })
 
-  it('lifecycle: buffer output while pending invalidates the request (no stale link, no stale cache)', async () => {
+  it('buffer output while pending invalidates the request (no stale link, no stale cache)', async () => {
     let resolveA: (v: boolean[]) => void = () => {}
     const pathExists = vi
       .fn()
