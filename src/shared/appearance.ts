@@ -137,20 +137,36 @@ export function deriveAccent(accentHex: string, theme: ThemeName) {
 export const themeIsLight = (theme: ThemeName): boolean => IS_LIGHT[theme]
 
 /**
+ * The automatic floor, stated per theme rather than derived from themeIsLight.
+ *
+ * The four outcomes are genuinely four decisions, not two rules — deriving them
+ * would mean a fifth theme silently inherits a floor nobody chose for it.
+ *
+ * - light     1   OFF (xterm's disabled value). The ANSI palette renders as authored,
+ *                 which is the whole point: its greens sit below 4.5 for fidelity.
+ * - hc-light  4.5 Its users asked for the extra floor, and its palette clears it natively.
+ * - dark/hc   7   The safety net dark has always had, for tools printing foreign colours.
+ */
+const AUTO_TERMINAL_CONTRAST: Record<ThemeName, number> = {
+  light: 1,
+  'hc-light': 4.5,
+  dark: 7,
+  hc: 7,
+}
+
+/**
  * The actual floor to hand xterm.
  *
- * On standard light the floor is turned OFF (1 = xterm's disabled value) so the ANSI
- * palette renders as authored — faithful, iTerm-like colours. hc-light keeps 4.5
- * (its users need the extra floor), and dark/hc keep 7, the safety net dark has always
- * had. (A floor of 7 on light would darken every hue into the same muddy brown.)
+ * A floor above what the palette natively achieves does not clamp — on a light ground
+ * xterm DARKENS every foreground until it reaches the floor, so 7 on light collapses
+ * cyan, yellow, blue and green into the same muddy brown.
  */
 export function resolveTerminalContrast(
   setting: number | 'auto',
   theme: ThemeName
 ): number {
   if (setting !== 'auto') return setting
-  if (theme === 'light') return 1
-  return themeIsLight(theme) ? 4.5 : 7
+  return AUTO_TERMINAL_CONTRAST[theme]
 }
 
 const clampToSteps = (value: unknown, steps: readonly number[], fallback: number): number => {

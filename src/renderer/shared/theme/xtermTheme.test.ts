@@ -45,22 +45,24 @@ describe.each(LIGHT_THEMES)('%s terminal palette', (theme) => {
 
   it('every ANSI colour sits in its intended contrast band against the terminal background', () => {
     // Standard light intentionally brightens green toward a faithful, iTerm-like terminal
-    // green — the 4.5-fitted dark green read as muddy. `green` lands at ~3.2:1 and the vivid
-    // `brightGreen` at ~2.2:1: both sit BELOW the 4.5 text bar on purpose. That is a fidelity
-    // trade-off, not a legibility guarantee — it only renders as authored because standard
-    // light turns the contrast floor OFF (see resolveTerminalContrast); it does not make 2.2:1
-    // text "accessible". The band is two-sided on purpose: the lower bound keeps the greens
-    // visible, and the < 4.5 upper bound is what fails if someone reverts to the muddy
-    // 4.5-fitted greens. Every other slot — and ALL of hc-light — still clears 4.5:1.
-    const fidelityGreens: Record<string, number> = theme === 'light' ? { green: 3, brightGreen: 2 } : {}
+    // green — the 4.5-fitted dark green read as muddy. `green` lands at ~4.3:1 and the vivid
+    // `brightGreen` at ~3.2:1, both BELOW the 4.5 text bar on purpose. That only renders as
+    // authored because standard light turns the contrast floor OFF (resolveTerminalContrast).
+    //
+    // The band is two-sided, and both sides are load-bearing:
+    //   - the >= 3 lower bound is the WCAG large-text bar. bright green is what agents print
+    //     for `+` diff lines and ✓ markers, so "visible" is not a high enough bar for it.
+    //   - the < 4.5 upper bound is what fails if someone reverts to the muddy 4.5-fitted greens.
+    // Every other slot — and ALL of hc-light — still clears 4.5:1.
+    const FIDELITY_GREENS = ['green', 'brightGreen']
+    const isFidelityGreen = (slot: string) => theme === 'light' && FIDELITY_GREENS.includes(slot)
     for (const slot of ANSI) {
       const ratio = contrast(hexToRgb(t[slot]!), bg)
-      const floorFor = fidelityGreens[slot]
-      if (floorFor !== undefined) {
+      if (isFidelityGreen(slot)) {
         expect(
           ratio,
-          `${slot} is ${ratio.toFixed(2)}:1 — a vivid fidelity green must stay >= ${floorFor}`
-        ).toBeGreaterThanOrEqual(floorFor)
+          `${slot} is ${ratio.toFixed(2)}:1 — a fidelity green must still hold the 3:1 large-text bar`
+        ).toBeGreaterThanOrEqual(3)
         expect(
           ratio,
           `${slot} is ${ratio.toFixed(2)}:1 — a >= 4.5 green means the muddy 4.5-fitted palette is back`
@@ -75,6 +77,15 @@ describe.each(LIGHT_THEMES)('%s terminal palette', (theme) => {
     // If a slot sits below the floor, xterm darkens it — and the palette stops
     // being the palette. This is the regression that turned Claude Code's status
     // line (cyan, yellow, blue) into one uniform brown.
+    //
+    // Standard light is exempt because its floor is OFF, and `ratio >= 1` is true of
+    // every colour that exists — asserting it would read as coverage while testing
+    // nothing. Assert the exemption itself instead; the band test above is what
+    // actually guards this palette.
+    if (floor === 1) {
+      expect(theme, 'only standard light turns the floor off').toBe('light')
+      return
+    }
     for (const slot of ANSI) {
       const ratio = contrast(hexToRgb(t[slot]!), bg)
       expect(

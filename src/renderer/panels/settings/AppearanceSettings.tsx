@@ -36,6 +36,20 @@ interface AppearanceSettingsProps {
 
 const pct = (n: number) => `${Math.round(n * 100)}%`
 
+/**
+ * Name the automatic floor for the theme in play. A floor of 1 is xterm's "disabled"
+ * value, and telling a user it is set to "1:1" reads as a setting rather than as off.
+ */
+const autoContrastLabel = (theme: ThemeName): string => {
+  const floor = resolveTerminalContrast('auto', theme)
+  return floor === 1 ? 'Automatic (off for this theme)' : `Automatic (${floor}:1 for this theme)`
+}
+
+const contrastOptionLabel = (c: (typeof TERMINAL_CONTRASTS)[number], theme: ThemeName): string => {
+  if (c === 'auto') return autoContrastLabel(theme)
+  return c === 21 ? 'Maximum (21:1)' : `${c}:1`
+}
+
 export function AppearanceSettings({
   appearance,
   resolvedTheme,
@@ -176,13 +190,7 @@ export function AppearanceSettings({
           >
             {TERMINAL_CONTRASTS.map((c) => (
               <option key={c} value={c}>
-                {c === 'auto'
-                  ? resolveTerminalContrast('auto', resolvedTheme) === 1
-                    ? 'Automatic (off for this theme)'
-                    : `Automatic (${resolveTerminalContrast('auto', resolvedTheme)}:1 for this theme)`
-                  : c === 21
-                    ? 'Maximum (21:1)'
-                    : `${c}:1`}
+                {contrastOptionLabel(c, resolvedTheme)}
               </option>
             ))}
           </select>

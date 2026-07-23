@@ -38,11 +38,15 @@ const DARK: ITheme = {
 }
 
 /**
- * Most slots clear 4.5:1 on #fbfbfa. Green is intentionally brightened toward a faithful,
- * iTerm-like terminal green (~3:1) — the 4.5-fitted dark green read as muddy. This is a
- * fidelity choice, not a contrast one: green/brightGreen land below the 4.5 text bar, so
- * standard light turns the contrast floor off (see resolveTerminalContrast) to render them
- * as authored rather than darkening them back toward that muddy green.
+ * Most slots clear 4.5:1 on #fbfbfa. Green is the exception: it is intentionally brightened
+ * toward a faithful, iTerm-like terminal green, because the 4.5-fitted dark green read as
+ * muddy. That is a fidelity choice, and it only renders as authored because standard light
+ * turns the contrast floor off (see resolveTerminalContrast) rather than darkening it back.
+ *
+ * Both greens still hold 3:1 — the WCAG large-text bar — on purpose. bright green is not a
+ * decorative slot: it is what agents print for `+` diff lines, ✓ markers and pass counts, so
+ * it has to stay readable at body size, not merely visible. The band is therefore two-sided:
+ * vivid enough to not be the old muddy green, legible enough to still be text.
  */
 const LIGHT: ITheme = {
   background: '#fbfbfa',
@@ -54,8 +58,8 @@ const LIGHT: ITheme = {
   brightBlack: '#4c5560',
   red: '#c02a30',
   brightRed: '#a81f25',
-  green: '#1ca14a',
-  brightGreen: '#22c55e',
+  green: '#128a3f',
+  brightGreen: '#1ca14a',
   yellow: '#8a5a00',
   brightYellow: '#a06800',
   blue: '#0a5ec9',
