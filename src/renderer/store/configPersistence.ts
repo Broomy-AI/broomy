@@ -137,6 +137,7 @@ async function doSave(): Promise<void> {
     showSidebar: sessionState.globalPanelVisibility[PANEL_IDS.SIDEBAR] ?? true,
     sidebarWidth: sessionState.sidebarWidth,
     toolbarPanels: sessionState.toolbarPanels,
+    collapsedRepoGroups: sessionState.collapsedRepoGroups,
   })
 }
 

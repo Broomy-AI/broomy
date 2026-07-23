@@ -49,6 +49,11 @@ export interface Appearance {
   terminalContrast: number | 'auto'
   /** The accent HUE. Fitted per theme — see deriveAccent. */
   accent: string
+  /**
+   * Colour-code the per-repo "rail" beside each sidebar group. On by default (a wayfinding
+   * cue); when off, the rail is a neutral grey so the sidebar reads calmer.
+   */
+  sidebarRailColored: boolean
 }
 
 export const DEFAULT_APPEARANCE: Appearance = {
@@ -62,6 +67,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   terminalLineHeight: 1.2,
   terminalContrast: 'auto',
   accent: '#4a9eff',
+  sidebarRailColored: true,
 }
 
 export const APP_TEXT_SCALES = [1, 1.1, 1.25, 1.4] as const
@@ -199,6 +205,10 @@ export function normalizeAppearance(raw: unknown): Appearance {
       typeof r.accent === 'string' && /^#[0-9a-fA-F]{6}$/.test(r.accent)
         ? r.accent
         : DEFAULT_APPEARANCE.accent,
+    sidebarRailColored:
+      typeof r.sidebarRailColored === 'boolean'
+        ? r.sidebarRailColored
+        : DEFAULT_APPEARANCE.sidebarRailColored,
   }
 }
 

@@ -322,7 +322,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     return loadConfigFile(configFile)
   })
 
-  ipcMain.handle('config:save', async (_event, config: { profileId?: string; agents?: unknown[]; sessions: unknown[]; repos?: unknown[]; defaultCloneDir?: string; defaultShell?: string; showSidebar?: boolean; sidebarWidth?: number; toolbarPanels?: string[] }) => {
+  ipcMain.handle('config:save', async (_event, config: { profileId?: string; agents?: unknown[]; sessions: unknown[]; repos?: unknown[]; defaultCloneDir?: string; defaultShell?: string; showSidebar?: boolean; sidebarWidth?: number; toolbarPanels?: string[]; collapsedRepoGroups?: string[] }) => {
     // Don't save config during E2E tests to avoid polluting real config
     if (ctx.isE2ETest) {
       return { success: true }
@@ -357,6 +357,8 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
         if (config.showSidebar !== undefined) configToSave.showSidebar = config.showSidebar
         if (config.sidebarWidth !== undefined) configToSave.sidebarWidth = config.sidebarWidth
         if (config.toolbarPanels !== undefined) configToSave.toolbarPanels = config.toolbarPanels
+        // `[]` is not undefined, so an empty array explicitly clears the collapse state on disk.
+        if (config.collapsedRepoGroups !== undefined) configToSave.collapsedRepoGroups = config.collapsedRepoGroups
 
         const tmpFile = `${configFile}.tmp`
         const backupFile = `${configFile}.backup`
