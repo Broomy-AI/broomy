@@ -33,22 +33,30 @@ export function isOpenableTerminalUri(uri: string): boolean {
 }
 
 /**
- * Whether a click on a detected terminal link should open it.
+ * Whether a click carries the "open" intent: the PRIMARY button plus the platform modifier —
+ * ⌘ on macOS, Ctrl elsewhere. (Ctrl-click on macOS is the context-menu gesture, so it must not
+ * open; middle/right clicks are excluded via the button check.) A plain click returns false,
+ * leaving xterm's normal selection/cursor behaviour untouched.
  *
- * Requires the PRIMARY button plus the platform modifier — ⌘ on macOS, Ctrl elsewhere.
- * (Ctrl-click on macOS is the context-menu gesture, so it must not open; middle/right
- * clicks are excluded via the button check.) A plain click returns false, leaving xterm's
- * normal selection/cursor behaviour untouched.
+ * Scheme-agnostic, because it is shared by both kinds of terminal link: URLs (below) and the
+ * file paths in `terminalPathLinkProvider.ts`. The two must agree on the gesture — a modifier
+ * that opened a URL but not a path would be indistinguishable from a broken link to the user.
+ */
+export function hasOpenModifier(event: TerminalLinkClick, isMac: boolean): boolean {
+  if (event.button !== 0) return false
+  return isMac ? event.metaKey : event.ctrlKey
+}
+
+/**
+ * Whether a click on a detected terminal link should open it: the open gesture, plus a URI
+ * this terminal will open at all.
  */
 export function shouldOpenTerminalLink(
   event: TerminalLinkClick,
   uri: string,
   isMac: boolean
 ): boolean {
-  if (event.button !== 0) return false
-  const modifierHeld = isMac ? event.metaKey : event.ctrlKey
-  if (!modifierHeld) return false
-  return isOpenableTerminalUri(uri)
+  return hasOpenModifier(event, isMac) && isOpenableTerminalUri(uri)
 }
 
 export interface TerminalLinkDeps {

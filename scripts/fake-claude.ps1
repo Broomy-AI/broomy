@@ -36,6 +36,11 @@ Write-Host "`r* Generating response...  "
 Write-Host ""
 Write-Host "Done! This is a simulated Claude response."
 Write-Host "View the PR at https://github.com/Broomy-AI/broomy/pull/149"
+# Written before it is announced: file-path links are existence-gated (#153), so a path to a file
+# that was never created is deliberately not linkified. Keeps parity with fake-claude.sh.
+$previewPath = Join-Path $env:TEMP 'broomy-preview.html'
+Set-Content -Path $previewPath -Value '<h1>Broomy preview</h1>'
+Write-Host "Wrote the design doc to $previewPath"
 Write-Host ""
 
 Write-Host "FAKE_CLAUDE_IDLE"

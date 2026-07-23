@@ -129,6 +129,8 @@ export function installElectronMocks() {
   w.shell = {
     exec: resolved({ success: true, stdout: '', stderr: '', exitCode: 0 }),
     openExternal: noopResolved,
+    pathExists: resolved([]),
+    openPath: resolved({ action: 'none' }),
     listShells: resolved([{ path: '/bin/bash', name: 'Bash', isDefault: true }]),
   }
 

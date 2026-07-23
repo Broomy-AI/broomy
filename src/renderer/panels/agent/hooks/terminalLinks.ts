@@ -18,13 +18,18 @@ import type { ILinkHandler } from '@xterm/xterm'
 
 import { isMac } from '../../../shared/utils/platform'
 import { createTerminalLinkHandlers } from './terminalLinkHandler'
-import { createTerminalLinkHint } from './terminalLinkHint'
+import { createTerminalLinkHint, type TerminalLinkHintElement } from './terminalLinkHint'
 
 export interface TerminalLinkWiring {
   /** Passed to the `XTerm` constructor — covers OSC 8 hyperlinks. */
   linkHandler: ILinkHandler
   /** `loadAddon` this — covers URL-shaped text. */
   addon: WebLinksAddon
+  /**
+   * The shared hover affordance. Handed to the file-path link provider (#153) so a path link
+   * and a URL link are indistinguishable to the user: same gesture, same "⌘click to open".
+   */
+  hint: TerminalLinkHintElement
   /** Belongs in the setup effect's cleanup, beside `terminal.dispose()`. */
   dispose: () => void
 }
@@ -52,6 +57,7 @@ export function createLinkWiring(container: HTMLElement): TerminalLinkWiring {
   return {
     linkHandler: handlers.linkHandler,
     addon: new WebLinksAddon(handlers.onClick, handlers.linkProviderOptions),
+    hint,
     dispose: () => hint.dispose(),
   }
 }

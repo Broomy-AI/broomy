@@ -34,6 +34,8 @@ export default defineConfig({
         'src/preload/index.ts',
         'src/renderer/vite-env.d.ts',
         'src/preload/apis/types.ts',
+        // Interface only (the `shell:openPath` result shape) — no runtime code to cover.
+        'src/shared/openPath.ts',
         'src/renderer/types/review.ts',
         'src/renderer/components/newSession/types.ts',
         'src/renderer/components/explorer/types.ts',

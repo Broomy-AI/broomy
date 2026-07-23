@@ -12,7 +12,7 @@
  *   ptyDataHandler.ts — only scroll to bottom if wasRecentlyAtBottom().
  */
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Terminal as XTerm, type ILinkHandler } from '@xterm/xterm'
+import { Terminal as XTerm, type ILinkHandler, type IDisposable } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SerializeAddon } from '@xterm/addon-serialize'
 
@@ -22,6 +22,7 @@ import { terminalBufferRegistry } from '../../../shared/utils/terminalBufferRegi
 import { ptyCaptureRegistry } from '../../../shared/utils/ptyCaptureRegistry'
 import { useTerminalKeyboard } from './useTerminalKeyboard'
 import { createLinkWiring } from './terminalLinks'
+import { registerFilePathLinks } from './terminalPathLinkProvider'
 import { usePlanDetection } from '../../../features/git/hooks/usePlanDetection'
 import { createPtyDataHandler } from './ptyDataHandler'
 import { ScrollLog, scrollLogRegistry } from '../utils/scrollLog'
@@ -437,6 +438,13 @@ export function useTerminalSetup(
 
     terminal.loadAddon(links.addon)
 
+    // Existing file paths are linkified too (#153), sharing the URL links' modifier gate and
+    // hover hint so the two kinds of link behave identically. Host terminals only: an
+    // isolated/devcontainer session's paths are container-side and would not resolve here.
+    const filePathLinks: IDisposable | null = s.isolatedRef.current
+      ? null
+      : registerFilePathLinks(terminal, effectCwd, links.hint)
+
     terminal.open(containerRef.current)
 
     // xterm 5.x uses DOM rendering by default. The WebGL addon is intentionally
@@ -607,6 +615,7 @@ export function useTerminalSetup(
       s.cleanupRef.current?.()
       if (s.ptyIdRef.current) { void window.pty.kill(s.ptyIdRef.current); s.ptyIdRef.current = null }
       s.shellKindRef.current = null
+      filePathLinks?.dispose() // before terminal.dispose(): stops any in-flight existence check's callback
       terminal.dispose()
       links.dispose()
       if (s.updateTimeoutRef.current) clearTimeout(s.updateTimeoutRef.current)

@@ -9,6 +9,8 @@ vi.mock('child_process', () => ({
 
 // Mock electron
 const mockShellOpenExternal = vi.fn()
+const mockShellOpenPath = vi.fn()
+const mockShowItemInFolder = vi.fn()
 const mockDialogShowOpenDialog = vi.fn()
 const mockDialogShowSaveDialog = vi.fn()
 const mockMenuBuildFromTemplate = vi.fn()
@@ -20,6 +22,8 @@ vi.mock('electron', () => ({
   },
   shell: {
     openExternal: (...args: unknown[]) => mockShellOpenExternal(...args),
+    openPath: (...args: unknown[]) => mockShellOpenPath(...args),
+    showItemInFolder: (...args: unknown[]) => mockShowItemInFolder(...args),
   },
   dialog: {
     showOpenDialog: (...args: unknown[]) => mockDialogShowOpenDialog(...args),
@@ -28,6 +32,12 @@ vi.mock('electron', () => ({
   Menu: {
     buildFromTemplate: (...args: unknown[]) => mockMenuBuildFromTemplate(...args),
   },
+}))
+
+// Mock fs/promises (lstat drives the openPath / pathExists file-type checks)
+const mockLstat = vi.fn()
+vi.mock('fs/promises', () => ({
+  lstat: (...args: unknown[]) => mockLstat(...args),
 }))
 
 // Mock platform
@@ -735,6 +745,150 @@ describe('shell handlers', () => {
       expect(capturedTemplate[1]).toEqual({ type: 'separator' })
       expect(capturedTemplate[2]).toHaveProperty('label', 'Delete')
       expect(capturedTemplate[2]).toHaveProperty('enabled', false)
+    })
+  })
+
+  describe('isNativeOpen', () => {
+    it('opens document/media extensions and reveals the rest (case-insensitive)', async () => {
+      const { isNativeOpen } = await import('./shell')
+      expect(isNativeOpen('/a/b.html')).toBe(true)
+      expect(isNativeOpen('/a/b.HTML')).toBe(true)
+      expect(isNativeOpen('/a/b.pdf')).toBe(true)
+      expect(isNativeOpen('/a/b.ts')).toBe(false)
+      expect(isNativeOpen('/a/Makefile')).toBe(false)
+      expect(isNativeOpen('/a/b')).toBe(false)
+    })
+  })
+
+  describe('resolveTerminalPath', () => {
+    it('keeps absolute paths and resolves relative ones against baseCwd', async () => {
+      const { resolveTerminalPath } = await import('./shell')
+      expect(resolveTerminalPath('/etc/hosts', '/repo')).toBe('/etc/hosts')
+      expect(resolveTerminalPath('src/a.ts', '/repo/app')).toBe('/repo/app/src/a.ts')
+    })
+    it('rejects non-strings, control chars, and a non-absolute base', async () => {
+      const { resolveTerminalPath } = await import('./shell')
+      expect(resolveTerminalPath(42, '/repo')).toBeNull()
+      expect(resolveTerminalPath('/a\u0000b', '/repo')).toBeNull()
+      expect(resolveTerminalPath('src/a.ts', 'relative')).toBeNull()
+    })
+  })
+
+  describe('shell:pathExists', () => {
+    it('returns one boolean per input (existing → true, missing → false)', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      mockLstat.mockImplementation((p: string) =>
+        p === '/repo/there.txt' ? Promise.resolve({ isFile: () => true }) : Promise.reject(Object.assign(new Error('no'), { code: 'ENOENT' })),
+      )
+      expect(await handlers['shell:pathExists'](mockEvent, ['there.txt', 'gone.txt'], '/repo')).toEqual([true, false])
+    })
+    it('counts a broken symlink as existing (lstat resolves)', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      mockLstat.mockResolvedValue({ isFile: () => false })
+      expect(await handlers['shell:pathExists'](mockEvent, ['/broken.link'], '/repo')).toEqual([true])
+    })
+    it('is a no-op (all false) in E2E mode', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx({ isE2ETest: true }))
+      expect(await handlers['shell:pathExists'](mockEvent, ['/a', '/b'], '/repo')).toEqual([false, false])
+    })
+
+    it('reports an unusable path as false, not null (it will never resolve)', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      // A control char can't be a path we'd open — that's a settled "no", not "didn't look".
+      expect(await handlers['shell:pathExists'](mockEvent, ['/a b'], '/repo')).toEqual([false])
+      expect(mockLstat).not.toHaveBeenCalled()
+    })
+
+    it('coalesces concurrent probes of the same path into one lstat', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      mockLstat.mockResolvedValue({ isFile: () => true })
+      // Same path twice in one call, plus a concurrent second call for the same path.
+      const [a, b] = await Promise.all([
+        handlers['shell:pathExists'](mockEvent, ['/dup.txt', '/dup.txt'], '/repo'),
+        handlers['shell:pathExists'](mockEvent, ['/dup.txt'], '/repo'),
+      ])
+      expect(a).toEqual([true, true])
+      expect(b).toEqual([true])
+      expect(mockLstat).toHaveBeenCalledTimes(1)
+    })
+
+    it('keeps concurrent lstats within the probe limit', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      let inFlight = 0
+      let peak = 0
+      mockLstat.mockImplementation(() => {
+        inFlight++
+        peak = Math.max(peak, inFlight)
+        return new Promise((r) => setTimeout(() => { inFlight--; r({ isFile: () => true }) }, 0))
+      })
+      const paths = Array.from({ length: 40 }, (_, i) => `/f${i}.txt`)
+      expect(await handlers['shell:pathExists'](mockEvent, paths, '/repo')).toHaveLength(40)
+      // The semaphore hands a released slot straight to a waiter, so the cap is never overshot.
+      expect(peak).toBeLessThanOrEqual(8)
+    })
+  })
+
+  describe('shell:openPath', () => {
+    it('opens a native-open regular file with the default app', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      mockLstat.mockResolvedValue({ isFile: () => true })
+      mockShellOpenPath.mockResolvedValue('')
+      expect(await handlers['shell:openPath'](mockEvent, '/repo/a.html', '/repo')).toEqual({ action: 'opened' })
+      expect(mockShellOpenPath).toHaveBeenCalledWith('/repo/a.html')
+    })
+    it('reveals a non-native regular file (source, no ext)', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      mockLstat.mockResolvedValue({ isFile: () => true })
+      expect(await handlers['shell:openPath'](mockEvent, '/repo/a.ts', '/repo')).toEqual({ action: 'revealed' })
+      expect(mockShowItemInFolder).toHaveBeenCalledWith('/repo/a.ts')
+      expect(mockShellOpenPath).not.toHaveBeenCalled()
+    })
+    it('reveals a symlink even with a safe extension (never follows it into openPath)', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      mockLstat.mockResolvedValue({ isFile: () => false }) // symlink or directory
+      expect(await handlers['shell:openPath'](mockEvent, '/repo/report.pdf', '/repo')).toEqual({ action: 'revealed' })
+      expect(mockShellOpenPath).not.toHaveBeenCalled()
+    })
+    it('returns none for a missing path', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      mockLstat.mockRejectedValue(Object.assign(new Error('no'), { code: 'ENOENT' }))
+      expect(await handlers['shell:openPath'](mockEvent, '/repo/gone.html', '/repo')).toEqual({ action: 'none' })
+    })
+    it('surfaces an openPath error string', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      mockLstat.mockResolvedValue({ isFile: () => true })
+      mockShellOpenPath.mockResolvedValue('No application set')
+      expect(await handlers['shell:openPath'](mockEvent, '/repo/a.pdf', '/repo')).toEqual({ action: 'failed', error: 'No application set' })
+    })
+    it('is a no-op in E2E mode', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx({ isE2ETest: true }))
+      expect(await handlers['shell:openPath'](mockEvent, '/repo/a.html', '/repo')).toEqual({ action: 'none' })
+      expect(mockShellOpenPath).not.toHaveBeenCalled()
+    })
+    it('returns failed on a non-ENOENT lstat error (e.g. EACCES)', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      mockLstat.mockRejectedValue(Object.assign(new Error('denied'), { code: 'EACCES' }))
+      expect((await handlers['shell:openPath'](mockEvent, '/repo/a.html', '/repo')).action).toBe('failed')
+    })
+    it('returns failed (never rejects) when the OS dispatch throws', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      mockLstat.mockResolvedValue({ isFile: () => true })
+      mockShellOpenPath.mockRejectedValue(new Error('boom'))
+      expect((await handlers['shell:openPath'](mockEvent, '/repo/a.html', '/repo')).action).toBe('failed')
     })
   })
 })

@@ -36,6 +36,21 @@ describe('preload shell API', () => {
       await shellApi.listShells()
       expect(mockInvoke).toHaveBeenCalledWith('shells:list')
     })
+
+    it('pathExists invokes shell:pathExists, forwarding baseCwd', async () => {
+      await shellApi.pathExists(['/a', '/b'], '/repo')
+      expect(mockInvoke).toHaveBeenCalledWith('shell:pathExists', ['/a', '/b'], '/repo')
+    })
+
+    it('pathExists clamps non-string entries before invoking', async () => {
+      await shellApi.pathExists(['/a', 42 as never, '/b'], '/repo')
+      expect(mockInvoke).toHaveBeenCalledWith('shell:pathExists', ['/a', '/b'], '/repo')
+    })
+
+    it('openPath invokes shell:openPath, forwarding baseCwd', async () => {
+      await shellApi.openPath('/a/b.html', '/repo')
+      expect(mockInvoke).toHaveBeenCalledWith('shell:openPath', '/a/b.html', '/repo')
+    })
   })
 
   describe('dialogApi', () => {

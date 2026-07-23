@@ -133,6 +133,8 @@ const mockGh: Mocked<GhApi> = {
 const mockShell: Mocked<ShellApi> = {
   exec: vi.fn().mockResolvedValue({ success: true, stdout: '', stderr: '', exitCode: 0 }),
   openExternal: vi.fn().mockResolvedValue(undefined),
+  pathExists: vi.fn().mockResolvedValue([]),
+  openPath: vi.fn().mockResolvedValue({ action: 'none' }),
   listShells: vi.fn().mockResolvedValue([{ path: '/bin/bash', name: 'Bash', isDefault: true }]),
 }
 

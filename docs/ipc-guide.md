@@ -127,7 +127,7 @@ declare global {
 | `window.gh` | `gh:*` | GitHub CLI wrappers (issues, PRs, reviews) |
 | `window.config` | `config:*` | Load/save per-profile configuration |
 | `window.profiles` | `profiles:*` | Multi-window profile management |
-| `window.shell` | `shell:*` | Execute shell commands, open external URLs |
+| `window.shell` | `shell:*` | Execute shell commands, open external URLs, probe/open filesystem paths |
 | `window.app` | `app:*` | Environment info (isDev, homedir, platform) |
 | `window.menu` | `menu:*` | Native context menus |
 | `window.dialog` | `dialog:*` | Native file/folder picker dialogs |
