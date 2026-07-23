@@ -393,7 +393,7 @@ describe('SessionList', () => {
     it('shows error dot', () => {
       setSessions([makeSession({ id: 's1', branch: 'b1', status: 'error' })])
       const { container } = render(<SessionList {...makeProps()} />)
-      expect(container.querySelector('.bg-status-error')).toBeTruthy()
+      expect(container.querySelector('[role="img"][aria-label="error"]')).toBeTruthy()
     })
 
     it('shows EMPTY branch status chip', () => {

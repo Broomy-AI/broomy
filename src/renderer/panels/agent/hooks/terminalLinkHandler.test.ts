@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
   shouldOpenTerminalLink,
-  createWebLinkHandler,
   createTerminalLinkHandlers,
   type TerminalLinkClick,
 } from './terminalLinkHandler'
@@ -63,43 +62,79 @@ describe('shouldOpenTerminalLink', () => {
   })
 })
 
-describe('createWebLinkHandler', () => {
-  it('opens exactly the links that qualify', () => {
-    const openExternal = vi.fn()
-    const handler = createWebLinkHandler({ isMac: true, openExternal })
-
-    // qualifying: ⌘ + primary + https
-    handler({ button: 0, metaKey: true, ctrlKey: false } as MouseEvent, 'https://example.com')
-    expect(openExternal).toHaveBeenCalledExactlyOnceWith('https://example.com')
-
-    // non-qualifying: plain click, and a modified file: URL
-    handler({ button: 0, metaKey: false, ctrlKey: false } as MouseEvent, 'https://example.com')
-    handler({ button: 0, metaKey: true, ctrlKey: false } as MouseEvent, 'file:///etc/passwd')
-    expect(openExternal).toHaveBeenCalledTimes(1)
-  })
-})
-
 describe('createTerminalLinkHandlers', () => {
-  it('gates OSC 8 links (linkHandler) with the same rule and forbids non-http protocols', () => {
+  const makeDeps = (isMac: boolean) => {
     const openExternal = vi.fn()
-    const { linkHandler } = createTerminalLinkHandlers({ isMac: true, openExternal })
+    const hint = { show: vi.fn(), hide: vi.fn() }
+    return { openExternal, hint, handlers: createTerminalLinkHandlers({ isMac, openExternal, hint }) }
+  }
+
+  it('gates OSC 8 links (linkHandler) with the same rule and forbids non-http protocols', () => {
+    const { openExternal, handlers } = makeDeps(true)
 
     // xterm must not fall back to its plain-click confirm()+window.open for non-http links.
-    expect(linkHandler.allowNonHttpProtocols).toBe(false)
+    expect(handlers.linkHandler.allowNonHttpProtocols).toBe(false)
 
-    linkHandler.activate({ button: 0, metaKey: true, ctrlKey: false } as MouseEvent, 'https://example.com')
+    handlers.linkHandler.activate({ button: 0, metaKey: true, ctrlKey: false } as MouseEvent, 'https://example.com')
     expect(openExternal).toHaveBeenCalledExactlyOnceWith('https://example.com')
 
-    linkHandler.activate({ button: 0, metaKey: false, ctrlKey: false } as MouseEvent, 'https://example.com')
+    handlers.linkHandler.activate({ button: 0, metaKey: false, ctrlKey: false } as MouseEvent, 'https://example.com')
     expect(openExternal).toHaveBeenCalledTimes(1)
   })
 
   it('exposes the same gate as onClick for detected URL text', () => {
-    const openExternal = vi.fn()
-    const { onClick } = createTerminalLinkHandlers({ isMac: false, openExternal })
+    const { openExternal, handlers } = makeDeps(false)
 
-    onClick({ button: 0, metaKey: false, ctrlKey: true } as MouseEvent, 'http://x.dev')
-    onClick({ button: 0, metaKey: false, ctrlKey: false } as MouseEvent, 'http://x.dev')
+    handlers.onClick({ button: 0, metaKey: false, ctrlKey: true } as MouseEvent, 'http://x.dev')
+    handlers.onClick({ button: 0, metaKey: false, ctrlKey: false } as MouseEvent, 'http://x.dev')
     expect(openExternal).toHaveBeenCalledExactlyOnceWith('http://x.dev')
+  })
+
+  it('refuses a non-http URI even with the modifier held (both paths)', () => {
+    const { openExternal, handlers } = makeDeps(true)
+    const modified = { button: 0, metaKey: true, ctrlKey: false } as MouseEvent
+
+    handlers.onClick(modified, 'file:///etc/passwd')
+    handlers.linkHandler.activate(modified, 'file:///etc/passwd')
+    expect(openExternal).not.toHaveBeenCalled()
+  })
+
+  it('shows the hint on hover and hides it on leave, for both link paths', () => {
+    const { hint, handlers } = makeDeps(true)
+    const event = { clientX: 10, clientY: 20 } as MouseEvent
+
+    handlers.linkProviderOptions.hover(event, 'https://example.com')
+    expect(hint.show).toHaveBeenCalledExactlyOnceWith(event, 'https://example.com')
+    handlers.linkProviderOptions.leave()
+    expect(hint.hide).toHaveBeenCalledOnce()
+
+    handlers.linkHandler.hover(event, 'https://example.com')
+    expect(hint.show).toHaveBeenCalledTimes(2)
+    handlers.linkHandler.leave()
+    expect(hint.hide).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not promise to open a URI the click gate would refuse', () => {
+    const { hint, handlers } = makeDeps(true)
+
+    handlers.linkProviderOptions.hover({} as MouseEvent, 'file:///etc/passwd')
+    expect(hint.show).not.toHaveBeenCalled()
+  })
+
+  it('hides the hint when a link is opened (no leave fires once focus goes to the browser)', () => {
+    const { hint, handlers } = makeDeps(true)
+
+    handlers.onClick({ button: 0, metaKey: true, ctrlKey: false } as MouseEvent, 'https://example.com')
+    expect(hint.hide).toHaveBeenCalledOnce()
+  })
+
+  it('works without a hint (optional affordance)', () => {
+    const openExternal = vi.fn()
+    const { onClick, linkProviderOptions } = createTerminalLinkHandlers({ isMac: true, openExternal })
+
+    expect(() => linkProviderOptions.hover({} as MouseEvent, 'https://example.com')).not.toThrow()
+    expect(() => linkProviderOptions.leave()).not.toThrow()
+    onClick({ button: 0, metaKey: true, ctrlKey: false } as MouseEvent, 'https://example.com')
+    expect(openExternal).toHaveBeenCalledExactlyOnceWith('https://example.com')
   })
 })

@@ -36,6 +36,20 @@ interface AppearanceSettingsProps {
 
 const pct = (n: number) => `${Math.round(n * 100)}%`
 
+/**
+ * Name the automatic floor for the theme in play. A floor of 1 is xterm's "disabled"
+ * value, and telling a user it is set to "1:1" reads as a setting rather than as off.
+ */
+const autoContrastLabel = (theme: ThemeName): string => {
+  const floor = resolveTerminalContrast('auto', theme)
+  return floor === 1 ? 'Automatic (off for this theme)' : `Automatic (${floor}:1 for this theme)`
+}
+
+const contrastOptionLabel = (c: (typeof TERMINAL_CONTRASTS)[number], theme: ThemeName): string => {
+  if (c === 'auto') return autoContrastLabel(theme)
+  return c === 21 ? 'Maximum (21:1)' : `${c}:1`
+}
+
 export function AppearanceSettings({
   appearance,
   resolvedTheme,
@@ -117,6 +131,31 @@ export function AppearanceSettings({
         </p>
       </div>
 
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <span className="text-xs text-text-secondary">Repo rail colour</span>
+          <p className="text-xs text-text-tertiary">
+            A colour-coded line beside each repo group in the sidebar. Off = a neutral grey rail.
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={appearance.sidebarRailColored}
+          aria-label="Repo rail colour"
+          onClick={() => onChange({ sidebarRailColored: !appearance.sidebarRailColored })}
+          className={`relative inline-flex h-5 w-9 flex-none items-center rounded-full transition-colors ${
+            appearance.sidebarRailColored ? 'bg-accent' : 'bg-bg-tertiary'
+          }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-on-accent shadow transition-transform ${
+              appearance.sidebarRailColored ? 'translate-x-[18px]' : 'translate-x-0.5'
+            }`}
+          />
+        </button>
+      </div>
+
       <Stepper
         id="app-text-size"
         label="App text size"
@@ -176,18 +215,14 @@ export function AppearanceSettings({
           >
             {TERMINAL_CONTRASTS.map((c) => (
               <option key={c} value={c}>
-                {c === 'auto'
-                  ? `Automatic (${resolveTerminalContrast('auto', resolvedTheme)}:1 for this theme)`
-                  : c === 21
-                    ? 'Maximum (21:1)'
-                    : `${c}:1`}
+                {contrastOptionLabel(c, resolvedTheme)}
               </option>
             ))}
           </select>
           <p className="text-xs text-text-tertiary">
-            Forces agent output to stay legible when a tool prints colours tuned for a different
-            background. Automatic is theme-aware — the light palette is already legible, so raising
-            its floor only muddies the colours.
+            A floor forces agent output to stay legible when a tool prints colours tuned for a
+            different background. Automatic turns it off for standard Light (faithful colours), uses
+            4.5:1 for High-contrast light, and keeps 7:1 on dark themes.
           </p>
         </div>
       </div>

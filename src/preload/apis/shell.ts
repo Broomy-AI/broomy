@@ -10,8 +10,12 @@ export type { OpenPathResult }
 export type ShellApi = {
   exec: (command: string, cwd: string) => Promise<{ success: boolean; stdout: string; stderr: string; exitCode: number }>
   openExternal: (url: string) => Promise<void>
-  /** Batch existence check for the terminal file-path link provider — one boolean per input, in order. */
-  pathExists: (paths: string[], baseCwd: string) => Promise<boolean[]>
+  /**
+   * Batch existence check for the terminal file-path link provider — one entry per input, in
+   * order. `null` means main declined to probe under load, which the caller must not read as
+   * "does not exist".
+   */
+  pathExists: (paths: string[], baseCwd: string) => Promise<(boolean | null)[]>
   /** Open (or reveal) a file path clicked in the terminal. Main resolves/validates the path. */
   openPath: (path: string, baseCwd: string) => Promise<OpenPathResult>
   listShells: () => Promise<ShellOption[]>

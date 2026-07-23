@@ -203,6 +203,27 @@ describe('FilePathLinkProvider — plain lines', () => {
     link.activate({ button: 0, metaKey: false, ctrlKey: false } as MouseEvent, link.text)
     expect(openPath).toHaveBeenCalledExactlyOnceWith('/tmp/a.html')
   })
+
+  it('drives the shared hover hint, and hides it on open (#149 parity)', async () => {
+    // xterm underlines a link and shows a pointer cursor whether or not the modifier is held, so
+    // a path link needs the same "⌘click to open" affordance a URL link gets — otherwise a plain
+    // click is a dead end with no feedback, and the two kinds of link behave differently.
+    const hint = { show: vi.fn(), hide: vi.fn() }
+    const term = fakeTerminal([{ cells: asciiCells('/tmp/a.html') }])
+    const provider = new FilePathLinkProvider(term, deps({ hint }))
+    const [link] = (await provide(provider, 1))!
+
+    const ev = { clientX: 5, clientY: 6 } as MouseEvent
+    link.hover!(ev, link.text)
+    expect(hint.show).toHaveBeenCalledWith(ev, '/tmp/a.html')
+    link.leave!(ev, link.text)
+    expect(hint.hide).toHaveBeenCalledTimes(1)
+
+    // Opening hides it too: focus leaves for the opened app and xterm fires no `leave` for a
+    // link the pointer never left, so the hint would otherwise stay on screen.
+    link.activate({ button: 0, metaKey: true, ctrlKey: false } as MouseEvent, link.text)
+    expect(hint.hide).toHaveBeenCalledTimes(2)
+  })
 })
 
 describe('FilePathLinkProvider — Claude hard-wrap blocks (#154)', () => {
@@ -310,6 +331,24 @@ describe('FilePathLinkProvider — Claude hard-wrap blocks (#154)', () => {
     expect(texts).not.toContain('/inc') // begins in a continuation unit → not the wrapped payload
   })
 
+  it('also links an unwrapped path sharing the anchor row (not just the wrapped payload)', async () => {
+    // ● Read(/s.md, /aaa…  — the SECOND argument wraps, the first does not. The first crosses no
+    // seam, so it is ordinary contiguous buffer text and must link like it would on any other
+    // line: whether an unrelated argument happened to wrap must not decide its fate.
+    const anchor = `● Read(/s.md, /${'a'.repeat(15)}` // 30 cells, fills the margin
+    const payload = `/${'a'.repeat(18)}` //             anchor tail + the 3 a's on the continuation
+    const term = fakeTerminal([{ cells: asciiCells(anchor) }, { cells: asciiCells('  aaa)') }], 30)
+    const provider = new FilePathLinkProvider(term, deps({ pathExists: existsOnly(payload, '/s.md') }))
+
+    const links = (await provide(provider, 1)) ?? []
+    const texts = links.map((l) => l.text)
+    expect(texts).toContain('/s.md') // unwrapped, entirely inside the anchor unit
+    expect(texts).toContain(payload) // the wrapped payload, as before
+    // ...and it is underlined at its own cells, not the payload's.
+    const short = links.find((l) => l.text === '/s.md')!
+    expect(short.range).toEqual({ start: { x: 8, y: 1 }, end: { x: 12, y: 1 } })
+  })
+
   it('still links a payload that ends before a later greedily-admitted boundary (multi-token call)', async () => {
     // ● Bash(cat /a…  wraps; the continuation holds the /a tail, a space, then a SECOND path /b… that
     // itself wraps into a third unit. The first path (payload1) ends before the /b boundary but must
@@ -415,7 +454,7 @@ describe('FilePathLinkProvider — lifecycle', () => {
     expect(await provide(provider, 1)).toBeUndefined()
   })
 
-  it('buffer output while pending invalidates the request (no stale link, no stale cache)', async () => {
+  it('buffer output while pending invalidates the request (no stale link) but keeps its result', async () => {
     let resolveA: (v: boolean[]) => void = () => {}
     const pathExists = vi
       .fn()
@@ -427,11 +466,41 @@ describe('FilePathLinkProvider — lifecycle', () => {
     provider.provideLinks(1, cbA)
     term.fireWrite() // buffer changed under a stationary pointer → epoch bumped, A is stale
     resolveA([true])
-    await Promise.resolve()
-    expect(cbA).not.toHaveBeenCalled()
-    // A must NOT have cached its result — the next hover re-probes (2nd pathExists call).
+    // Drain the microtask queue: the result travels through Promise.all before reaching the
+    // handler that writes the cache, so a single tick is not enough.
+    await new Promise((r) => setTimeout(r, 0))
+    expect(cbA).not.toHaveBeenCalled() // a stale callback would clobber xterm's reply map
+
+    // ...but the existence answer IS kept: it is a fact about the filesystem, not about the
+    // hover that asked. Without this, an agent writing several times a second supersedes every
+    // probe before it returns, the cache never warms, and paths stay un-clickable while it runs.
     expect(await provide(provider, 1)).toHaveLength(1)
+    expect(pathExists).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not cache a declined probe (null), so the next hover asks again', async () => {
+    // main returns null when it declines to probe under load — that is "didn't look", not
+    // "absent", and must not be negative-cached into a missing link for a whole TTL.
+    const pathExists = vi
+      .fn()
+      .mockResolvedValueOnce([null])
+      .mockResolvedValueOnce([true])
+    const term = fakeTerminal([{ cells: asciiCells('/tmp/a.html') }])
+    const provider = new FilePathLinkProvider(term, deps({ pathExists }))
+
+    expect(await provide(provider, 1)).toBeUndefined() // declined → no link this time
+    expect(await provide(provider, 1)).toHaveLength(1) // re-probed, not read from cache
     expect(pathExists).toHaveBeenCalledTimes(2)
+  })
+
+  it('caps the number of distinct paths probed per hover', async () => {
+    const pathExists = vi.fn().mockImplementation((paths: string[]) => Promise.resolve(paths.map(() => true)))
+    const line = Array.from({ length: 140 }, (_, i) => `/p${i}/f.md`).join(' ')
+    const term = fakeTerminal([{ cells: asciiCells(line) }])
+    const provider = new FilePathLinkProvider(term, deps({ pathExists }))
+    await provide(provider, 1)
+    const probed = pathExists.mock.calls.reduce((n, [paths]) => n + paths.length, 0)
+    expect(probed).toBe(128) // MAX_PROBES_PER_HOVER, not all 140 candidates
   })
 
   it('dispose unsubscribes from the terminal events', () => {

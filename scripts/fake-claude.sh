@@ -46,6 +46,10 @@ simulate_spinner 1 "Generating response..."
 echo ""
 echo "Done! This is a simulated Claude response."
 echo "View the PR at https://github.com/Broomy-AI/broomy/pull/149"
+# Actually write the file before announcing it: file-path links are existence-gated (#153), so a
+# path to a file that was never created is deliberately NOT linkified — the dev-mode demo and the
+# feature-doc screenshot would both show plain text and quietly misrepresent the feature.
+printf '<h1>Broomy preview</h1>\n' > /tmp/broomy-preview.html
 echo "Wrote the design doc to /tmp/broomy-preview.html"
 echo ""
 

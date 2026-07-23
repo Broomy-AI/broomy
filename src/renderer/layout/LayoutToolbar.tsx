@@ -4,15 +4,10 @@
 import { ReactNode } from 'react'
 import VersionIndicator from './VersionIndicator'
 import type { PanelDefinition } from '../panels'
-
-// Detect platform for keyboard shortcut display
-const isMac = navigator.userAgent.includes('Mac')
+import { isMac, modifierSymbol } from '../shared/utils/platform'
 
 // Keyboard shortcut helper
-const formatShortcut = (key: string) => {
-  const modifier = isMac ? '\u2318' : 'Ctrl+'
-  return `${modifier}${key}`
-}
+const formatShortcut = (key: string) => `${modifierSymbol}${key}`
 
 interface ToolbarPanelInfo extends PanelDefinition {
   shortcutKey: string | null

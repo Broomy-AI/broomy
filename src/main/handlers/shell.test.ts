@@ -193,47 +193,28 @@ describe('shell handlers', () => {
       expect(mockShellOpenExternal).toHaveBeenCalledWith('https://github.com/Broomy-AI/broomy/pull/149')
     })
 
-    it('allows http as well as https', async () => {
-      const { register } = await import('./shell')
-      const ctx = createCtx()
-      register(mockIpcMain as never, ctx)
-
-      mockShellOpenExternal.mockResolvedValue(undefined)
-      // WHATWG normalizes a bare host to a trailing slash — the OS gets exactly what we validated.
-      await handlers['shell:openExternal'](mockEvent, 'http://localhost:5173')
-      expect(mockShellOpenExternal).toHaveBeenCalledWith('http://localhost:5173/')
-    })
-
+    // The validation table itself lives in externalUrl.test.ts (toHttpUrl) — these two cover
+    // only the handler's contract: it dispatches the *normalized* URL, and refuses what the
+    // guard rejects rather than passing it through.
     it('dispatches the normalized href, not the raw string (parser-differential guard)', async () => {
       const { register } = await import('./shell')
       const ctx = createCtx()
       register(mockIpcMain as never, ctx)
 
       mockShellOpenExternal.mockResolvedValue(undefined)
-      // Backslashes are normalized to forward slashes by WHATWG; the OS must not re-parse the raw form.
-      await handlers['shell:openExternal'](mockEvent, 'https://example.com\\@evil.com')
-      expect(mockShellOpenExternal).toHaveBeenCalledTimes(1)
-      expect(mockShellOpenExternal.mock.calls[0][0]).not.toContain('\\')
+      // WHATWG normalizes a bare host to a trailing slash; the OS must never re-parse the raw form.
+      await handlers['shell:openExternal'](mockEvent, 'http://localhost:5173')
+      expect(mockShellOpenExternal).toHaveBeenCalledExactlyOnceWith('http://localhost:5173/')
     })
 
-    it('refuses non-http(s) schemes (file:, javascript:, mailto:, custom)', async () => {
+    it('refuses anything the http(s) guard rejects', async () => {
       const { register } = await import('./shell')
       const ctx = createCtx()
       register(mockIpcMain as never, ctx)
 
-      for (const url of ['file:///etc/passwd', 'javascript:alert(1)', 'mailto:a@b.com', 'app://x']) {
+      for (const url of ['file:///etc/passwd', 'javascript:alert(1)', 'mailto:a@b.com', 'https://github.com@evil.example', 'not a url', '']) {
         await handlers['shell:openExternal'](mockEvent, url)
       }
-      expect(mockShellOpenExternal).not.toHaveBeenCalled()
-    })
-
-    it('refuses malformed / non-string input', async () => {
-      const { register } = await import('./shell')
-      const ctx = createCtx()
-      register(mockIpcMain as never, ctx)
-
-      await handlers['shell:openExternal'](mockEvent, 'not a url')
-      await handlers['shell:openExternal'](mockEvent, '')
       await handlers['shell:openExternal'](mockEvent, undefined as never)
       expect(mockShellOpenExternal).not.toHaveBeenCalled()
     })
@@ -812,6 +793,44 @@ describe('shell handlers', () => {
       const { register } = await import('./shell')
       register(mockIpcMain as never, createCtx({ isE2ETest: true }))
       expect(await handlers['shell:pathExists'](mockEvent, ['/a', '/b'], '/repo')).toEqual([false, false])
+    })
+
+    it('reports an unusable path as false, not null (it will never resolve)', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      // A control char can't be a path we'd open — that's a settled "no", not "didn't look".
+      expect(await handlers['shell:pathExists'](mockEvent, ['/a b'], '/repo')).toEqual([false])
+      expect(mockLstat).not.toHaveBeenCalled()
+    })
+
+    it('coalesces concurrent probes of the same path into one lstat', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      mockLstat.mockResolvedValue({ isFile: () => true })
+      // Same path twice in one call, plus a concurrent second call for the same path.
+      const [a, b] = await Promise.all([
+        handlers['shell:pathExists'](mockEvent, ['/dup.txt', '/dup.txt'], '/repo'),
+        handlers['shell:pathExists'](mockEvent, ['/dup.txt'], '/repo'),
+      ])
+      expect(a).toEqual([true, true])
+      expect(b).toEqual([true])
+      expect(mockLstat).toHaveBeenCalledTimes(1)
+    })
+
+    it('keeps concurrent lstats within the probe limit', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      let inFlight = 0
+      let peak = 0
+      mockLstat.mockImplementation(() => {
+        inFlight++
+        peak = Math.max(peak, inFlight)
+        return new Promise((r) => setTimeout(() => { inFlight--; r({ isFile: () => true }) }, 0))
+      })
+      const paths = Array.from({ length: 40 }, (_, i) => `/f${i}.txt`)
+      expect(await handlers['shell:pathExists'](mockEvent, paths, '/repo')).toHaveLength(40)
+      // The semaphore hands a released slot straight to a waiter, so the cap is never overshot.
+      expect(peak).toBeLessThanOrEqual(8)
     })
   })
 

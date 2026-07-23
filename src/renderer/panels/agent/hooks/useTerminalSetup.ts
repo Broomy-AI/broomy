@@ -15,14 +15,13 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { Terminal as XTerm, type ILinkHandler, type IDisposable } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SerializeAddon } from '@xterm/addon-serialize'
-import { WebLinksAddon } from '@xterm/addon-web-links'
 
 import { useSessionStore } from '../../../store/sessions'
 import { useRepoStore } from '../../../store/repos'
 import { terminalBufferRegistry } from '../../../shared/utils/terminalBufferRegistry'
 import { ptyCaptureRegistry } from '../../../shared/utils/ptyCaptureRegistry'
 import { useTerminalKeyboard } from './useTerminalKeyboard'
-import { createTerminalLinkHandlers } from './terminalLinkHandler'
+import { createLinkWiring } from './terminalLinks'
 import { registerFilePathLinks } from './terminalPathLinkProvider'
 import { usePlanDetection } from '../../../features/git/hooks/usePlanDetection'
 import { createPtyDataHandler } from './ptyDataHandler'
@@ -404,15 +403,6 @@ function createConfiguredTerminal(linkHandler: ILinkHandler): XTerm {
   })
 }
 
-/** URL link handlers (#149): opens http(s) URLs via shell.openExternal, gated on the platform modifier. */
-function makeUrlLinkHandlers(): ReturnType<typeof createTerminalLinkHandlers> {
-  return createTerminalLinkHandlers({
-    isMac: navigator.userAgent.includes('Mac'),
-    openExternal: (uri) => {
-      window.shell.openExternal(uri).catch((err: unknown) => console.error('[terminal] failed to open link', err))
-    },
-  })
-}
 
 export function useTerminalSetup(
   config: TerminalConfig,
@@ -436,13 +426,8 @@ export function useTerminalSetup(
     // as a hook dependency. THIS EFFECT'S CLEANUP KILLS THE PTY — adding theme or
     // fontSize to its deps would destroy the running agent on every appearance
     // change. The separate effect below applies changes to the live terminal instead.
-    // ⌘-click (⌃-click on Win/Linux) an http(s) URL to open it externally (#149). One gated
-    // handler serves both detected URL text (web-links addon) and OSC 8 hyperlinks (xterm's
-    // linkHandler), on every terminal. The gate requires the platform modifier + primary button
-    // and re-checks the scheme (main further restricts shell.openExternal to http(s)).
-    const linkHandling = makeUrlLinkHandlers()
-
-    const terminal = createConfiguredTerminal(linkHandling.linkHandler)
+    const links = createLinkWiring(containerRef.current)
+    const terminal = createConfiguredTerminal(links.linkHandler)
 
     const fitAddon = new FitAddon()
     terminal.loadAddon(fitAddon)
@@ -451,9 +436,15 @@ export function useTerminalSetup(
     terminal.loadAddon(serializeAddon)
     s.serializeAddonRef.current = serializeAddon
 
-    // Terminal links: URLs (web-links addon) + existing file paths (#153; host terminals only).
-    terminal.loadAddon(new WebLinksAddon(linkHandling.onClick))
-    const filePathLinks: IDisposable | null = s.isolatedRef.current ? null : registerFilePathLinks(terminal, effectCwd)
+    terminal.loadAddon(links.addon)
+
+    // Existing file paths are linkified too (#153), sharing the URL links' modifier gate and
+    // hover hint so the two kinds of link behave identically. Host terminals only: an
+    // isolated/devcontainer session's paths are container-side and would not resolve here.
+    const filePathLinks: IDisposable | null = s.isolatedRef.current
+      ? null
+      : registerFilePathLinks(terminal, effectCwd, links.hint)
+
     terminal.open(containerRef.current)
 
     // xterm 5.x uses DOM rendering by default. The WebGL addon is intentionally
@@ -626,6 +617,7 @@ export function useTerminalSetup(
       s.shellKindRef.current = null
       filePathLinks?.dispose() // before terminal.dispose(): stops any in-flight existence check's callback
       terminal.dispose()
+      links.dispose()
       if (s.updateTimeoutRef.current) clearTimeout(s.updateTimeoutRef.current)
       if (s.idleTimeoutRef.current) clearTimeout(s.idleTimeoutRef.current)
       if (isAgent && s.sessionIdRef.current && s.lastStatusRef.current === 'working') {

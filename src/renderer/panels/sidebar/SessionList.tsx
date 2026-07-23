@@ -15,6 +15,9 @@ import PanelErrorBoundary from '../../shared/components/PanelErrorBoundary'
 import SessionCard from './SessionCard'
 import DeleteSessionDialog from './DeleteSessionDialog'
 import UpdateBanner from './UpdateBanner'
+import { RepoGroupSection } from './RepoGroupSection'
+import { ArchivedSection } from './ArchivedSection'
+import { useSessionGrouping } from './useSessionGrouping'
 
 interface SessionListProps {
   repos: ManagedRepo[]
@@ -41,8 +44,8 @@ export default function SessionList({
   const [searchQuery, setSearchQuery] = useState('')
 
   const matchesSearch = useCallback((session: Session) => {
-    if (!searchQuery) return true
-    const q = searchQuery.toLowerCase()
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return true
     // Match PR/issue numbers with or without '#' prefix
     const numericQ = q.startsWith('#') ? q.slice(1) : q
     const numMatch = (n: number | undefined) => n !== undefined && `${n}`.includes(numericQ)
@@ -57,7 +60,8 @@ export default function SessionList({
     )
   }, [searchQuery])
 
-  const activeSessions = useMemo(() => sessions.filter((s) => !s.isArchived && matchesSearch(s)), [sessions, matchesSearch])
+  const allActive = useMemo(() => sessions.filter((s) => !s.isArchived), [sessions])
+  const activeSessions = useMemo(() => allActive.filter(matchesSearch), [allActive, matchesSearch])
   const archivedSessions = useMemo(() => sessions.filter((s) => s.isArchived && matchesSearch(s)), [sessions, matchesSearch])
 
   const handleRefresh = async () => {
@@ -95,6 +99,11 @@ export default function SessionList({
     onUnarchiveSession(sessionId)
     onSelectSession(sessionId)
   }, [onUnarchiveSession, onSelectSession])
+
+  // Repo grouping + alphabetical sort + the visible-order view-model.
+  const searching = searchQuery.trim().length > 0
+  const { railColorByKey, collapsedSet, setRepoGroupCollapsed, repoLabelFor, groups, orderedSessions, archivedRollup } =
+    useSessionGrouping(allActive, activeSessions, archivedSessions, repos, searching)
 
   return (
     <div className="flex flex-col h-full">
@@ -163,18 +172,37 @@ export default function SessionList({
 
       {/* Session list */}
       <div className="flex-1 overflow-y-auto p-2">
-        {activeSessions.map((session) => (
+        {/* Search flattens to a filtered list with a neutral repo tag; no grouping. */}
+        {searching && orderedSessions.map((session) => (
           <PanelErrorBoundary key={session.id} name={`Session ${session.branch}`}>
             <SessionCard
               sessionId={session.id}
               onSelect={onSelectSession}
               onDelete={handleDelete}
               onArchive={handleArchive}
+              repoLabel={repoLabelFor(session)}
             />
           </PanelErrorBoundary>
         ))}
 
-        {activeSessions.length === 0 && archivedSessions.length === 0 && !searchQuery && (
+        {/* Grouped view: a section per repo (header + cards behind the vivid rail). */}
+        {!searching && groups.map((group) => {
+          const collapsed = collapsedSet.has(group.key)
+          return (
+            <RepoGroupSection
+              key={group.key}
+              group={group}
+              collapsed={collapsed}
+              rail={railColorByKey.get(group.key) ?? null}
+              onToggle={() => setRepoGroupCollapsed(group.key, !collapsed)}
+              onSelect={onSelectSession}
+              onDelete={handleDelete}
+              onArchive={handleArchive}
+            />
+          )
+        })}
+
+        {activeSessions.length === 0 && archivedSessions.length === 0 && !searching && (
           <div className="text-center text-text-secondary text-sm py-8">
             No sessions yet.
             <br />
@@ -182,47 +210,23 @@ export default function SessionList({
           </div>
         )}
 
-        {activeSessions.length === 0 && archivedSessions.length === 0 && searchQuery && (
+        {activeSessions.length === 0 && archivedSessions.length === 0 && searching && (
           <div className="text-center text-text-secondary text-sm py-8">
             No matching sessions.
           </div>
         )}
 
-        {/* Archived section */}
-        {archivedSessions.length > 0 && (
-          <div className="mt-2">
-            <button
-              onClick={() => setShowArchived(!showArchived)}
-              className="flex items-center gap-1.5 w-full px-2 py-1.5 text-xs text-text-secondary hover:text-text-primary transition-colors"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="10"
-                height="10"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                className={`transition-transform ${showArchived ? 'rotate-90' : ''}`}
-              >
-                <path d="M8 5l8 7-8 7z" />
-              </svg>
-              Archived ({archivedSessions.length})
-            </button>
-            {showArchived && (
-              <div className="mt-1">
-                {archivedSessions.map((session) => (
-                  <PanelErrorBoundary key={session.id} name={`Session ${session.branch}`}>
-                    <SessionCard
-                      sessionId={session.id}
-                      onSelect={handleSelectArchived}
-                      onDelete={handleDelete}
-                      onArchive={handleUnarchive}
-                    />
-                  </PanelErrorBoundary>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        <ArchivedSection
+          sessions={archivedSessions}
+          rollup={archivedRollup}
+          show={showArchived}
+          searching={searching}
+          repoLabel={repoLabelFor}
+          onToggle={() => setShowArchived(!showArchived)}
+          onSelect={handleSelectArchived}
+          onDelete={handleDelete}
+          onArchive={handleUnarchive}
+        />
       </div>
 
       {pendingDeleteSession && (

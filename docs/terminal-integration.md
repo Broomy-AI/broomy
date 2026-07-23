@@ -276,6 +276,38 @@ The PTY ID `user-${sessionId}-${tab.id}` keeps each tab's PTY distinct from the 
 | `closeOtherTerminalTabs(sessionId, tabId)` | Close all except one |
 | `closeTerminalTabsToRight(sessionId, tabId)` | Close tabs to the right |
 
+## Terminal Links
+
+Terminal output is untrusted (an agent, or any command it runs, can print anything), so both
+kinds of link are gated on an explicit **⌘-click** (⌃-click on Windows/Linux) with the primary
+button. A plain click still positions the cursor. `terminalLinkHandler.ts` owns that gate
+(`hasOpenModifier`) and is shared by both paths so they can never disagree.
+
+| Kind | Detected by | Opened via | Wired in |
+|---|---|---|---|
+| URLs (#149) | `@xterm/addon-web-links` + xterm's OSC 8 `linkHandler` | `shell:openExternal` | `terminalLinks.ts` |
+| File paths (#153) | `FilePathLinkProvider` (hand-written `ILinkProvider`) | `shell:openPath` | `terminalPathLinkProvider.ts` |
+
+Both share the hover hint from `terminalLinkHint.ts` ("⌘click to open"), because xterm underlines
+a link and shows a pointer cursor whether or not the modifier is held — without the hint, a plain
+click is a dead end with no feedback.
+
+Notes specific to file-path links:
+
+- **Existence-gated**, like iTerm2's Semantic History: a candidate only underlines once
+  `shell:pathExists` confirms it resolves. This is also what stops every `word/word` token from
+  linkifying. Results are cached in the renderer (10s positive / 2s negative TTL); a `null` reply
+  means main declined to probe under load and is deliberately *not* cached.
+- **Relative paths resolve against the session's worktree dir**, which is how agent-printed
+  relatives are meant. Paths relative to a `cd`-ed subdirectory need live-CWD tracking, which
+  needs shell integration Broomy does not have yet.
+- **Open vs reveal is decided in main**, the trust boundary: `lstat` (never `stat`, so a symlink
+  is never followed) → a regular file with a document/media extension opens in the OS default
+  app; everything else reveals in the file manager.
+- **Host terminals only** — an isolated/devcontainer session's paths are container-side.
+- The provider reconstructs both xterm **soft wraps** and Claude Code's **hard wraps** (a real
+  `\n` plus a hanging indent) before detecting, so a path split across rows is still one link.
+
 ## E2E Test Mode
 
 In tests, the main process uses controlled shells:

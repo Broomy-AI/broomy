@@ -8,6 +8,7 @@ import { extname, isAbsolute, resolve } from 'path'
 import { getExecShell, normalizePath, getAvailableShells, getDefaultShell } from '../platform'
 import { HandlerContext, expandHomePath } from './types'
 import { zoomMenuItems } from './settings'
+import { toHttpUrl } from '../externalUrl'
 import type { OpenPathResult } from '../../shared/openPath'
 
 const isDev = process.env.ELECTRON_RENDERER_URL !== undefined
@@ -62,36 +63,22 @@ const FS_PROBE_LIMIT = 8
 let activeProbes = 0
 const probeQueue: (() => void)[] = []
 async function withProbeSlot<T>(fn: () => Promise<T>): Promise<T> {
+  // Take the slot BEFORE any await, and on release either HAND IT DIRECTLY to a waiter or give
+  // it back — never both. Decrementing first and resolving a waiter afterwards would leave the
+  // slot momentarily unowned: the waiter resumes on a later microtask, so a caller arriving in
+  // between sees the lower count, takes the "free" slot, and both run — overshooting the limit.
   if (activeProbes >= FS_PROBE_LIMIT) {
     await new Promise<void>((r) => probeQueue.push(r))
+    // Resumed by a releaser that transferred its slot; `activeProbes` already counts us.
+  } else {
+    activeProbes++
   }
-  activeProbes++
   try {
     return await fn()
   } finally {
-    activeProbes--
-    probeQueue.shift()?.()
-  }
-}
-
-/**
- * External URLs cross an untrusted boundary — agent terminal output, repo content, review
- * markdown — so the privileged side only ever hands http(s) URLs to the OS. Everything else
- * (file:, mailto:, custom app protocols, malformed input) is refused. Every in-app caller
- * already passes http(s), so this narrows the attack surface without changing behaviour.
- *
- * Requires a literal `http(s)://` prefix (rejecting `http:\\host`, whitespace-prefixed, and
- * scheme-only inputs) and returns the WHATWG-normalized form, so the OS receives exactly the
- * URL that was validated rather than a variant its own parser might read differently.
- */
-function toHttpUrl(url: unknown): string | null {
-  if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return null
-  try {
-    const parsed = new URL(url)
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
-    return parsed.href
-  } catch {
-    return null
+    const next = probeQueue.shift()
+    if (next) next() // transfer the slot; the count stays as-is
+    else activeProbes--
   }
 }
 
@@ -101,12 +88,14 @@ function toHttpUrl(url: unknown): string | null {
  */
 const MAX_INFLIGHT_PROBES = 256
 const inFlightProbes = new Map<string, Promise<boolean>>()
-function probeExists(abs: string): Promise<boolean> {
+function probeExists(abs: string): Promise<boolean | null> {
   const existing = inFlightProbes.get(abs)
   if (existing) return existing
-  // Bound total distinct in-flight probes: under heavy load on a slow volume, skip (treat as
-  // absent) rather than growing the queue unboundedly. The path is re-probed on a later hover.
-  if (inFlightProbes.size >= MAX_INFLIGHT_PROBES) return Promise.resolve(false)
+  // Bound total distinct in-flight probes: under heavy load on a slow volume, decline rather than
+  // growing the queue unboundedly. `null` (NOT false) says "didn't look" — reporting a declined
+  // probe as absent would be a wrong answer the renderer then caches for a whole negative TTL,
+  // hiding a link on an existing file well after the pressure cleared.
+  if (inFlightProbes.size >= MAX_INFLIGHT_PROBES) return Promise.resolve(null)
   const p = withProbeSlot(async () => {
     try {
       await lstat(abs)
@@ -121,9 +110,17 @@ function probeExists(abs: string): Promise<boolean> {
 
 /**
  * Read-only existence probe for the terminal file-path link provider (#153): it only underlines
- * paths that actually exist. Returns one boolean per input, in input order.
+ * paths that actually exist. Returns one entry per input, in input order — `true`/`false` for a
+ * completed probe, `null` when the path was unusable or main declined to probe under load, which
+ * the renderer treats as "ask again" rather than caching as absent.
+ *
+ * This is an arbitrary-path existence oracle for the renderer. That is acceptable here because
+ * the renderer is first-party app code, not a web view of untrusted content — but it is the only
+ * handler of its kind, so the boundary is stated rather than assumed. It never reads file
+ * CONTENT, and every path is re-resolved here from `baseCwd`; the renderer's own resolution is
+ * never trusted.
  */
-async function pathExistsHandler(ctx: HandlerContext, paths: unknown, baseCwd: unknown): Promise<boolean[]> {
+async function pathExistsHandler(ctx: HandlerContext, paths: unknown, baseCwd: unknown): Promise<(boolean | null)[]> {
   if (!Array.isArray(paths)) return []
   const inputs = paths.slice(0, MAX_PATHS_PER_CALL)
   if (ctx.isE2ETest) return inputs.map(() => false)
@@ -132,7 +129,7 @@ async function pathExistsHandler(ctx: HandlerContext, paths: unknown, baseCwd: u
   const unique = [...new Set(resolved.filter((p): p is string => p !== null))]
   const results = await Promise.all(unique.map((abs) => probeExists(abs)))
   const existsByAbs = new Map(unique.map((abs, i) => [abs, results[i]]))
-  return resolved.map((abs) => (abs !== null && existsByAbs.get(abs)) || false)
+  return resolved.map((abs) => (abs === null ? false : existsByAbs.get(abs) ?? null))
 }
 
 /**
@@ -195,9 +192,11 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
       return
     }
     // Refuse anything that isn't http(s): agent output / repo content is untrusted, and
-    // every in-app caller already passes http(s). Silent, like the other guarded handlers.
+    // every in-app caller already passes http(s). Silent in production, like the other
+    // guarded handlers, but noisy in dev so a mis-formed caller isn't a button that does nothing.
     const safeUrl = toHttpUrl(url)
     if (!safeUrl) {
+      if (isDev) console.warn('[shell] refused to open non-http(s) URL:', url)
       return
     }
     await shell.openExternal(safeUrl)

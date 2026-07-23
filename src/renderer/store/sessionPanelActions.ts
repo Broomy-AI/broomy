@@ -17,6 +17,7 @@ type StoreGet = () => {
   globalPanelVisibility: PanelVisibility
   sidebarWidth: number
   toolbarPanels: string[]
+  collapsedRepoGroups: string[]
 }
 type StoreSet = (partial: Partial<{
   sessions: Session[]
@@ -25,6 +26,9 @@ type StoreSet = (partial: Partial<{
   showSettings: boolean
   sidebarWidth: number
   toolbarPanels: string[]
+  collapsedRepoGroups: string[]
+  sidebarFullOrder: string[]
+  sidebarVisibleOrder: string[]
 }>) => void
 
 export function createPanelActions(get: StoreGet, set: StoreSet) {
@@ -80,6 +84,21 @@ export function createPanelActions(get: StoreGet, set: StoreSet) {
     setToolbarPanels: (panels: string[]) => {
       set({ toolbarPanels: panels })
       debouncedSave()
+    },
+
+    setRepoGroupCollapsed: (key: string, collapsed: boolean) => {
+      const current = get().collapsedRepoGroups
+      const has = current.includes(key)
+      if (collapsed === has) return // no-op — nothing changed
+      set({ collapsedRepoGroups: collapsed ? [...current, key] : current.filter((k) => k !== key) })
+      debouncedSave()
+    },
+
+    // Runtime only: the grouped/sorted display order for keyboard Next/Prev. Published
+    // by SessionList; never persisted. `full` = every active session in display order;
+    // `visible` excludes collapsed groups / search non-matches.
+    setSidebarOrder: (full: string[], visible: string[]) => {
+      set({ sidebarFullOrder: full, sidebarVisibleOrder: visible })
     },
 
     toggleSidebar: () => {

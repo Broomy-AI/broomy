@@ -189,6 +189,9 @@ function usePrAutoRefresh({ isLoading, sessions, refreshPrStatus, updatePrState,
 
 function AppContent() {
   const sessions = useSessionStore(s => s.sessions)
+  const sidebarVisibleOrder = useSessionStore(s => s.sidebarVisibleOrder)
+  const sidebarFullOrder = useSessionStore(s => s.sidebarFullOrder)
+  const setRepoGroupCollapsed = useSessionStore(s => s.setRepoGroupCollapsed)
   const activeSessionId = useSessionStore(s => s.activeSessionId)
   const isLoading = useSessionStore(s => s.isLoading)
   const configLoadError = useSessionStore(s => s.configLoadError)
@@ -269,7 +272,8 @@ function AppContent() {
     handleFocusSessionSearch, handleArchiveSession, handleToggleSettings, handleShowShortcuts,
     handleNextTerminalTab, handlePrevTerminalTab,
   } = useSessionKeyboardCallbacks({
-    sessions, activeSessionId: activeSessionId ?? null, globalPanelVisibility,
+    sessions, repos, visibleOrder: sidebarVisibleOrder, fullOrder: sidebarFullOrder, setRepoGroupCollapsed,
+    activeSessionId: activeSessionId ?? null, globalPanelVisibility,
     toggleGlobalPanel, archiveSession, unarchiveSession, handleSelectSession, setShowShortcutsModal,
     setActiveTerminalTab,
   })

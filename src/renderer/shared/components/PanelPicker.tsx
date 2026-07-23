@@ -9,6 +9,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { usePanelRegistry, MAX_SHORTCUT_PANELS } from '../../panels'
 import type { PanelDefinition } from '../../panels'
+import { modifierSymbol } from '../utils/platform'
 
 interface PanelPickerProps {
   toolbarPanels: string[]
@@ -16,12 +17,7 @@ interface PanelPickerProps {
   onClose: () => void
 }
 
-// Detect if we're on Mac for keyboard shortcut display
-const isMac = navigator.userAgent.includes('Mac')
-const formatShortcut = (key: string) => {
-  const modifier = isMac ? '⌘' : 'Ctrl+'
-  return `${modifier}${key}`
-}
+const formatShortcut = (key: string) => `${modifierSymbol}${key}`
 
 function ToolbarPanelRow({
   panel,

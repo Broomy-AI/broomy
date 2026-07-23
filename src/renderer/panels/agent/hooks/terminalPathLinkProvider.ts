@@ -18,11 +18,18 @@
  * `@xterm/addon-web-links` `LinkComputer` (MIT © 2019 The xterm.js authors).
  */
 import type { Terminal, ILink, ILinkProvider, IDisposable, IBuffer, IBufferLine, IBufferCell } from '@xterm/xterm'
-import { hasOpenModifier, type TerminalLinkClick } from './terminalLinkHandler'
+import { isMac } from '../../../shared/utils/platform'
+import { hasOpenModifier, type TerminalLinkClick, type TerminalLinkHint } from './terminalLinkHandler'
 
 const MAX_PATH_LEN = 4096
 /** Matches the main `shell:pathExists` per-call cap; larger candidate sets are chunked. */
 const PATHS_PER_BATCH = 64
+/**
+ * Most distinct paths one hover will probe. A 128-row soft-wrapped line dense in `word/word`
+ * tokens would otherwise fan out into many concurrent IPC calls; main's semaphore contains the
+ * damage either way, but the renderer should state its own bound rather than lean on that.
+ */
+const MAX_PROBES_PER_HOVER = 128
 /** Most unused display cells a row may have and still count as "wrapped at the right edge". */
 const WRAP_MARGIN_TOL = 1
 /** Hard-wrap logical units we'll stitch into one block before giving up (a scan bound, not a proof). */
@@ -259,10 +266,15 @@ export interface FilePathLinkDeps {
   isMac: boolean
   /** Session worktree dir; relative paths resolve against it (in main). Part of the cache key. */
   baseCwd: string
-  /** Batch existence check (main resolves + lstats). One boolean per input, in input order. */
-  pathExists: (paths: string[]) => Promise<boolean[]>
+  /**
+   * Batch existence check (main resolves + lstats). One entry per input, in input order:
+   * `true`/`false` for a completed probe, `null` when main declined to probe under load.
+   */
+  pathExists: (paths: string[]) => Promise<(boolean | null)[]>
   /** Open (or reveal) the clicked path. */
   openPath: (path: string) => void
+  /** The hover affordance shared with URL links; optional so tests can omit it. */
+  hint?: TerminalLinkHint
 }
 
 /**
@@ -325,8 +337,16 @@ export class FilePathLinkProvider implements ILinkProvider {
     }
 
     // Emit the existing links. Guarded by `stale()`: a superseded (newer hover), disposed, or
-    // buffer-mutated request must NOT touch the cache or call cb — a stale cb writes into xterm's
-    // current reply map and would clobber the newer request's result.
+    // buffer-mutated request must NOT call cb — a stale cb writes into xterm's current reply map
+    // and would clobber the newer request's result.
+    //
+    // The CACHE is deliberately outside that guard. An `lstat` answer is a fact about the
+    // filesystem; it does not depend on which hover asked or on what the buffer did meanwhile,
+    // and its freshness is already bounded by the TTLs below. Dropping it on staleness caused a
+    // livelock: an agent repaints its status line several times a second, so `onWriteParsed`
+    // superseded every probe before its IPC round-trip returned, the cache never warmed, and a
+    // path printed by a still-running agent stayed un-clickable — precisely the case the feature
+    // exists for. Writing through means the next hover emits synchronously from cache.
     const stale = (): boolean => this._disposed || myEpoch !== this._epoch
     const emit = (): void => {
       const links = mapped.filter((l) => this._cacheGet(l.text, Date.now()) === true)
@@ -335,6 +355,7 @@ export class FilePathLinkProvider implements ILinkProvider {
 
     const now = Date.now()
     const needed = [...new Set(mapped.map((l) => l.text).filter((t) => this._cacheGet(t, now) === undefined))]
+      .slice(0, MAX_PROBES_PER_HOVER)
     if (needed.length === 0) {
       if (!stale()) emit()
       return
@@ -344,11 +365,12 @@ export class FilePathLinkProvider implements ILinkProvider {
     for (let i = 0; i < needed.length; i += PATHS_PER_BATCH) batches.push(needed.slice(i, i + PATHS_PER_BATCH))
     Promise.all(batches.map((b) => this._deps.pathExists(b)))
       .then((results) => {
-        if (stale()) return
         const flat = results.flat()
         const stamp = Date.now()
-        needed.forEach((t, i) => this._cacheSet(t, flat[i] ?? false, stamp))
-        emit()
+        // `null` means main declined to probe (backpressure), not "absent" — leave it uncached
+        // so the next hover asks again rather than showing no link for a whole negative TTL.
+        needed.forEach((t, i) => { if (typeof flat[i] === 'boolean') this._cacheSet(t, flat[i], stamp) })
+        if (!stale()) emit()
       })
       .catch(() => {
         if (!stale()) callback(undefined)
@@ -372,10 +394,18 @@ export class FilePathLinkProvider implements ILinkProvider {
     let range: ILink['range']
     if (block) {
       // spans has one entry per code unit of `text`, so every offset in a detected candidate maps.
-      // The one wrapped payload starts after the anchor's `(`, inside the anchor unit, and crosses the
-      // first hard boundary. `first` exists because a block always has ≥1 continuation unit.
+      // A linkable candidate must start after the anchor's `(` and inside the anchor unit — i.e.
+      // in real, contiguous buffer text, not in a continuation row whose join we only INFERRED.
+      // `first` exists because a block always has ≥1 continuation unit.
+      //
+      // It may then either cross the first boundary (the wrapped payload — uniquely selected,
+      // since only one token can start in the anchor payload and span that seam) or end before it
+      // (an ordinary unwrapped path sharing the anchor row, e.g. the first argument of
+      // `● Read(/a/short.txt, /a/very/long/…`). The latter crosses no seam, so it carries none of
+      // the mis-join risk the boundary rule guards against, and refusing it would have made a path
+      // linkable or not depending on whether an unrelated argument happened to wrap.
       const first = block.boundaries[0]
-      if (c.start <= block.parenOff || c.start >= first || c.end <= first) return null
+      if (c.start <= block.parenOff || c.start >= first) return null
       if (!text.includes(')', c.end)) return null // the tool call closes after the path
       let x1 = Infinity
       let x2 = -Infinity
@@ -395,8 +425,16 @@ export class FilePathLinkProvider implements ILinkProvider {
       range,
       decorations: { underline: true, pointerCursor: true },
       activate: (event: MouseEvent, uri: string) => {
-        if (hasOpenModifier(event as TerminalLinkClick, this._deps.isMac)) this._deps.openPath(uri)
+        if (!hasOpenModifier(event as TerminalLinkClick, this._deps.isMac)) return
+        // Hide first: focus leaves for the opened app and xterm fires no `leave` for a link the
+        // pointer never left, so the hint would otherwise stay on screen (same as the URL path).
+        this._deps.hint?.hide()
+        this._deps.openPath(uri)
       },
+      // Same affordance as URL links: xterm underlines and shows a pointer cursor whether or not
+      // the modifier is held, so without the hint a plain click is a dead end with no feedback.
+      hover: (event: MouseEvent) => this._deps.hint?.show(event, c.text),
+      leave: () => this._deps.hint?.hide(),
     }
   }
 
@@ -416,11 +454,15 @@ export class FilePathLinkProvider implements ILinkProvider {
   }
 
   private _cacheSet(rawToken: string, exists: boolean, ts: number): void {
+    const key = this._key(rawToken)
+    // Delete before set: `Map.set` on an existing key keeps its original insertion position, so
+    // without this a hot, repeatedly-refreshed path would be evicted ahead of colder later ones.
+    this._cache.delete(key)
     if (this._cache.size >= CACHE_MAX) {
       const oldest = this._cache.keys().next().value
       if (oldest !== undefined) this._cache.delete(oldest)
     }
-    this._cache.set(this._key(rawToken), { exists, ts })
+    this._cache.set(key, { exists, ts })
   }
 }
 
@@ -428,11 +470,14 @@ export class FilePathLinkProvider implements ILinkProvider {
  * Register the file-path link provider on a terminal, wired to `window.shell`. Returns a single
  * disposable that tears down both the provider (stopping late callbacks) and its registration.
  * `baseCwd` is the session's worktree dir — relative paths resolve against it (in main).
+ * `hint` is the affordance created by `createLinkWiring`, shared so path and URL links look and
+ * behave the same; it is owned (and disposed) by that wiring, not by this provider.
  */
-export function registerFilePathLinks(terminal: Terminal, baseCwd: string): IDisposable {
+export function registerFilePathLinks(terminal: Terminal, baseCwd: string, hint?: TerminalLinkHint): IDisposable {
   const provider = new FilePathLinkProvider(terminal, {
-    isMac: navigator.userAgent.includes('Mac'),
+    isMac,
     baseCwd,
+    hint,
     pathExists: (paths) => window.shell.pathExists(paths, baseCwd),
     openPath: (p) => {
       window.shell
