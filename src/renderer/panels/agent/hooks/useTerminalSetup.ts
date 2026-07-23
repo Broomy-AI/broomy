@@ -15,14 +15,13 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { Terminal as XTerm, type ILinkHandler } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SerializeAddon } from '@xterm/addon-serialize'
-import { WebLinksAddon } from '@xterm/addon-web-links'
 
 import { useSessionStore } from '../../../store/sessions'
 import { useRepoStore } from '../../../store/repos'
 import { terminalBufferRegistry } from '../../../shared/utils/terminalBufferRegistry'
 import { ptyCaptureRegistry } from '../../../shared/utils/ptyCaptureRegistry'
 import { useTerminalKeyboard } from './useTerminalKeyboard'
-import { createTerminalLinkHandlers } from './terminalLinkHandler'
+import { createLinkWiring } from './terminalLinks'
 import { usePlanDetection } from '../../../features/git/hooks/usePlanDetection'
 import { createPtyDataHandler } from './ptyDataHandler'
 import { ScrollLog, scrollLogRegistry } from '../utils/scrollLog'
@@ -403,6 +402,7 @@ function createConfiguredTerminal(linkHandler: ILinkHandler): XTerm {
   })
 }
 
+
 export function useTerminalSetup(
   config: TerminalConfig,
   containerRef: React.RefObject<HTMLDivElement | null>,
@@ -425,20 +425,8 @@ export function useTerminalSetup(
     // as a hook dependency. THIS EFFECT'S CLEANUP KILLS THE PTY — adding theme or
     // fontSize to its deps would destroy the running agent on every appearance
     // change. The separate effect below applies changes to the live terminal instead.
-    // ⌘-click (⌃-click on Win/Linux) an http(s) URL to open it externally (#149). One gated
-    // handler serves both detected URL text (web-links addon) and OSC 8 hyperlinks (xterm's
-    // linkHandler), on every terminal. The gate requires the platform modifier + primary button
-    // and re-checks the scheme (main further restricts shell.openExternal to http(s)).
-    const linkHandling = createTerminalLinkHandlers({
-      isMac: navigator.userAgent.includes('Mac'),
-      openExternal: (uri) => {
-        window.shell.openExternal(uri).catch((err: unknown) => {
-          console.error('[terminal] failed to open link', err)
-        })
-      },
-    })
-
-    const terminal = createConfiguredTerminal(linkHandling.linkHandler)
+    const links = createLinkWiring(containerRef.current)
+    const terminal = createConfiguredTerminal(links.linkHandler)
 
     const fitAddon = new FitAddon()
     terminal.loadAddon(fitAddon)
@@ -447,7 +435,7 @@ export function useTerminalSetup(
     terminal.loadAddon(serializeAddon)
     s.serializeAddonRef.current = serializeAddon
 
-    terminal.loadAddon(new WebLinksAddon(linkHandling.onClick))
+    terminal.loadAddon(links.addon)
 
     terminal.open(containerRef.current)
 
@@ -620,6 +608,7 @@ export function useTerminalSetup(
       if (s.ptyIdRef.current) { void window.pty.kill(s.ptyIdRef.current); s.ptyIdRef.current = null }
       s.shellKindRef.current = null
       terminal.dispose()
+      links.dispose()
       if (s.updateTimeoutRef.current) clearTimeout(s.updateTimeoutRef.current)
       if (s.idleTimeoutRef.current) clearTimeout(s.idleTimeoutRef.current)
       if (isAgent && s.sessionIdRef.current && s.lastStatusRef.current === 'working') {

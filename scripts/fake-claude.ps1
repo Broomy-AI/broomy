@@ -35,6 +35,7 @@ Write-Host "`r* Generating response...  "
 
 Write-Host ""
 Write-Host "Done! This is a simulated Claude response."
+Write-Host "View the PR at https://github.com/Broomy-AI/broomy/pull/149"
 Write-Host ""
 
 Write-Host "FAKE_CLAUDE_IDLE"

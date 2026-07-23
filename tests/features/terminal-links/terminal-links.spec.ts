@@ -6,11 +6,14 @@
  * them in the default browser through `window.shell.openExternal`. A plain click still
  * positions the cursor, and only http(s) URLs are opened.
  *
+ * Hovering shows a "⌘click to open" hint, because xterm underlines a link whether or not
+ * the modifier is held.
+ *
  * The browser-open itself is not observable in E2E (`shell:openExternal` no-ops under
  * E2E_TEST), so the interaction logic — modifier gating, primary-button-only, http(s)
  * scheme filtering — is verified in the unit tests
- * (`src/renderer/panels/agent/hooks/terminalLinkHandler.test.ts`). This walkthrough
- * documents the visible state: a real URL rendered in the terminal.
+ * (`src/renderer/panels/agent/hooks/terminalLinkHandler.test.ts`, `terminalLinkHint.test.ts`).
+ * This walkthrough documents the visible state: a real URL rendered in the terminal.
  *
  * Run with: pnpm test:feature-docs terminal-links
  */
@@ -87,7 +90,9 @@ test.describe.serial('Feature: Click a URL in the Terminal', () => {
       description:
         'Agents constantly print URLs — PR links from `gh pr create`, docs, localhost dev ' +
         'servers. The web-links addon detects the URL (and xterm handles OSC 8 hyperlinks) and ' +
-        'underlines it on hover. ⌘-click (⌃-click on Windows/Linux) opens it via ' +
+        'underlines it on hover, alongside a "⌘click to open" hint — xterm underlines a link ' +
+        'whether or not the modifier is held, so without the hint a plain click would be a dead ' +
+        'end with no explanation. ⌘-click (⌃-click on Windows/Linux) opens it via ' +
         'window.shell.openExternal — the same external-browser path the rest of the app uses, so ' +
         'the Electron window never navigates away. A plain click still positions the cursor, and ' +
         'only http(s) URLs open (file:, javascript:, mailto: and scheme-less text are ignored). ' +

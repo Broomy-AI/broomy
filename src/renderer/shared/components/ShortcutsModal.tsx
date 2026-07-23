@@ -1,13 +1,11 @@
 /**
  * Modal displaying all keyboard shortcuts grouped by category.
  */
+import { isMac, modifierName as modKey } from '../utils/platform'
+
 interface ShortcutsModalProps {
   onClose: () => void
 }
-
-// Detect if we're on Mac for keyboard shortcut display
-const isMac = typeof navigator !== 'undefined' && navigator.userAgent.toUpperCase().includes('MAC')
-const modKey = isMac ? 'Cmd' : 'Ctrl'
 
 interface ShortcutGroup {
   title: string
