@@ -26,6 +26,7 @@ import { resolveShellEnv } from './shellEnv'
 import { writeCrashLog, appendErrorLog } from './crashLog'
 import { disposePtyListenersForWindow, disposeAllPtyListeners } from './handlers/pty'
 import { navigationAction } from './navigation'
+import { toHttpUrl } from './externalUrl'
 import { treeKill } from './treeKill'
 import { sweepOrphanedPtys, clearOwnMarkers } from './ptyMarkers'
 
@@ -254,9 +255,13 @@ function createWindow(profileId?: string): BrowserWindow {
     if (action === 'external') void shell.openExternal(url)
   })
 
-  // Intercept window.open() calls and redirect to external browser
+  // Intercept window.open() calls and redirect to external browser. Nothing in the app
+  // calls window.open — this is a safety net for content the renderer merely displays —
+  // so it is held to the same http(s)-only rule as shell:openExternal. (will-navigate
+  // above stays unrestricted: mailto: links there are a deliberate, documented behaviour.)
   window.webContents.setWindowOpenHandler(({ url }: { url: string }) => {
-    void shell.openExternal(url)
+    const safeUrl = toHttpUrl(url)
+    if (safeUrl) void shell.openExternal(safeUrl)
     return { action: 'deny' }
   })
 

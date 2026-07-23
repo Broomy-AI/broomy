@@ -178,8 +178,35 @@ describe('shell handlers', () => {
       register(mockIpcMain as never, ctx)
 
       mockShellOpenExternal.mockResolvedValue(undefined)
-      await handlers['shell:openExternal'](mockEvent, 'https://example.com')
-      expect(mockShellOpenExternal).toHaveBeenCalledWith('https://example.com')
+      // A URL with a path is passed through unchanged (normalized href === input).
+      await handlers['shell:openExternal'](mockEvent, 'https://github.com/Broomy-AI/broomy/pull/149')
+      expect(mockShellOpenExternal).toHaveBeenCalledWith('https://github.com/Broomy-AI/broomy/pull/149')
+    })
+
+    // The validation table itself lives in externalUrl.test.ts (toHttpUrl) — these two cover
+    // only the handler's contract: it dispatches the *normalized* URL, and refuses what the
+    // guard rejects rather than passing it through.
+    it('dispatches the normalized href, not the raw string (parser-differential guard)', async () => {
+      const { register } = await import('./shell')
+      const ctx = createCtx()
+      register(mockIpcMain as never, ctx)
+
+      mockShellOpenExternal.mockResolvedValue(undefined)
+      // WHATWG normalizes a bare host to a trailing slash; the OS must never re-parse the raw form.
+      await handlers['shell:openExternal'](mockEvent, 'http://localhost:5173')
+      expect(mockShellOpenExternal).toHaveBeenCalledExactlyOnceWith('http://localhost:5173/')
+    })
+
+    it('refuses anything the http(s) guard rejects', async () => {
+      const { register } = await import('./shell')
+      const ctx = createCtx()
+      register(mockIpcMain as never, ctx)
+
+      for (const url of ['file:///etc/passwd', 'javascript:alert(1)', 'mailto:a@b.com', 'https://github.com@evil.example', 'not a url', '']) {
+        await handlers['shell:openExternal'](mockEvent, url)
+      }
+      await handlers['shell:openExternal'](mockEvent, undefined as never)
+      expect(mockShellOpenExternal).not.toHaveBeenCalled()
     })
   })
 

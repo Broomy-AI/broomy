@@ -6,6 +6,7 @@ import { exec } from 'child_process'
 import { getExecShell, normalizePath, getAvailableShells, getDefaultShell } from '../platform'
 import { HandlerContext, expandHomePath } from './types'
 import { zoomMenuItems } from './settings'
+import { toHttpUrl } from '../externalUrl'
 
 const isDev = process.env.ELECTRON_RENDERER_URL !== undefined
 
@@ -32,7 +33,15 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     if (ctx.isE2ETest) {
       return
     }
-    await shell.openExternal(url)
+    // Refuse anything that isn't http(s): agent output / repo content is untrusted, and
+    // every in-app caller already passes http(s). Silent in production, like the other
+    // guarded handlers, but noisy in dev so a mis-formed caller isn't a button that does nothing.
+    const safeUrl = toHttpUrl(url)
+    if (!safeUrl) {
+      if (isDev) console.warn('[shell] refused to open non-http(s) URL:', url)
+      return
+    }
+    await shell.openExternal(safeUrl)
   })
 
   ipcMain.handle('shells:list', (_event) => {
