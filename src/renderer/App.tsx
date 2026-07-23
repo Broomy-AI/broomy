@@ -272,7 +272,7 @@ function AppContent() {
     handleFocusSessionSearch, handleArchiveSession, handleToggleSettings, handleShowShortcuts,
     handleNextTerminalTab, handlePrevTerminalTab,
   } = useSessionKeyboardCallbacks({
-    sessions, visibleOrder: sidebarVisibleOrder, fullOrder: sidebarFullOrder, setRepoGroupCollapsed,
+    sessions, repos, visibleOrder: sidebarVisibleOrder, fullOrder: sidebarFullOrder, setRepoGroupCollapsed,
     activeSessionId: activeSessionId ?? null, globalPanelVisibility,
     toggleGlobalPanel, archiveSession, unarchiveSession, handleSelectSession, setShowShortcutsModal,
     setActiveTerminalTab,

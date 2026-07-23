@@ -87,6 +87,29 @@ describe('SessionList — repo grouping', () => {
     expect(screen.getByRole('button', { name: /Unknown repository/ })).toBeTruthy()
   })
 
+  it('clusters a legacy "main" session with its repo instead of "No repo"', () => {
+    // Sessions predating `repoId` (in practice the per-repo main worktree) carry only a
+    // directory under the repo's rootDir.
+    useSessionStore.setState({ sessions: [
+      makeSession({ id: '1', repoId: undefined, directory: '/b/main', branch: 'main' }),
+      makeSession({ id: '2', repoId: 'r-b', branch: 'feat/x' }),
+    ] })
+    render(<SessionList {...makeProps()} />)
+    const labels = headerButtons().map((h) => h.getAttribute('aria-label') ?? '')
+    expect(labels).toHaveLength(1)
+    expect(labels[0]).toContain('broomy')
+    expect(labels[0]).toContain('2 sessions')
+    expect(screen.queryByRole('button', { name: /No repo/ })).toBeNull()
+  })
+
+  it('still shows "No repo" when the directory matches no repo root', () => {
+    useSessionStore.setState({ sessions: [
+      makeSession({ id: '1', repoId: undefined, directory: '/somewhere/else', branch: 'main' }),
+    ] })
+    render(<SessionList {...makeProps()} />)
+    expect(screen.getByRole('button', { name: /No repo/ })).toBeTruthy()
+  })
+
   it('clears the published order when the sidebar unmounts', () => {
     useSessionStore.setState({ sessions: [makeSession({ id: '1', repoId: 'r-a', branch: 'a' })] })
     const { unmount } = render(<SessionList {...makeProps()} />)

@@ -44,9 +44,47 @@ export interface Rollup {
   total: number
 }
 
-/** Stable group key — depends only on whether a repoId exists, not on whether it resolves. */
-export function groupKeyForSession(session: Pick<Session, 'repoId'>): string {
-  return session.repoId ? `repo:${session.repoId}` : UNGROUPED_KEY
+/**
+ * The repo a session belongs to.
+ *
+ * An explicit `repoId` always wins. Sessions created before `repoId` existed don't carry one —
+ * in practice the per-repo "main" worktree — so fall back to the directory layout every repo
+ * uses (`<rootDir>/main` for main, `<rootDir>/<branch>` for worktrees), the same
+ * `startsWith(rootDir + '/')` rule already used in NewBranchView. Longest matching rootDir wins,
+ * so a repo checked out inside another repo's root resolves to the inner one.
+ *
+ * A session whose `repoId` IS set but no longer resolves keeps that id: that's a deleted repo
+ * ("Unknown repository"), and it must not be silently re-homed by its path.
+ */
+export function resolveRepoId(
+  session: Pick<Session, 'repoId' | 'directory'>,
+  repos: ManagedRepo[],
+): string | undefined {
+  if (session.repoId) return session.repoId
+  const dir = session.directory
+  if (!dir) return undefined
+  let bestId: string | undefined
+  let bestLen = -1
+  for (const repo of repos) {
+    // `|| ''` also covers a persisted repo that predates rootDir, which the type doesn't admit.
+    const root = (repo.rootDir || '').replace(/\/+$/, '')
+    if (!root) continue
+    if (dir !== root && !dir.startsWith(`${root}/`)) continue
+    if (root.length > bestLen) {
+      bestLen = root.length
+      bestId = repo.id
+    }
+  }
+  return bestId
+}
+
+/** Stable group key — depends only on whether a repo resolves, not on whether it still exists. */
+export function groupKeyForSession(
+  session: Pick<Session, 'repoId' | 'directory'>,
+  repos: ManagedRepo[],
+): string {
+  const repoId = resolveRepoId(session, repos)
+  return repoId ? `repo:${repoId}` : UNGROUPED_KEY
 }
 
 function rankForKind(kind: RepoGroupKind): number {
@@ -63,16 +101,17 @@ export function groupSessionsByRepo(sessions: Session[], repos: ManagedRepo[]): 
 
   for (const session of sessions) {
     if (session.isArchived) continue
-    const key = groupKeyForSession(session)
+    const repoId = resolveRepoId(session, repos)
+    const key = repoId ? `repo:${repoId}` : UNGROUPED_KEY
     let group = groups.get(key)
     if (!group) {
       let kind: RepoGroupKind
       let label: string
-      if (!session.repoId) {
+      if (!repoId) {
         kind = 'ungrouped'
         label = 'No repo'
       } else {
-        const repo = repoById.get(session.repoId)
+        const repo = repoById.get(repoId)
         if (repo) {
           kind = 'repo'
           label = repo.name
@@ -81,7 +120,7 @@ export function groupSessionsByRepo(sessions: Session[], repos: ManagedRepo[]): 
           label = 'Unknown repository'
         }
       }
-      group = { key, label, kind, repoId: session.repoId, sessions: [] }
+      group = { key, label, kind, repoId, sessions: [] }
       groups.set(key, group)
     }
     group.sessions.push(session)

@@ -7,7 +7,7 @@ import { useSessionStore } from '../../store/sessions'
 import { useSettingsStore } from '../../store/settings'
 import type { Session } from '../../store/sessions'
 import type { ManagedRepo } from '../../../preload/index'
-import { groupSessionsByRepo, rollUpStatus } from './repoGroups'
+import { groupSessionsByRepo, resolveRepoId, rollUpStatus } from './repoGroups'
 import { railColorsForGroups } from './repoRail'
 
 export function useSessionGrouping(
@@ -25,9 +25,14 @@ export function useSessionGrouping(
   const collapsedSet = useMemo(() => new Set(collapsedRepoGroups), [collapsedRepoGroups])
 
   const repoById = useMemo(() => new Map(repos.map((r) => [r.id, r])), [repos])
+  // Resolved the same way as the grouped view, so a session tagged in search mode lands under
+  // the same repo name it clusters under when grouped.
   const repoLabelFor = useCallback(
-    (s: Session) => (!s.repoId ? 'No repo' : repoById.get(s.repoId)?.name ?? 'Unknown repository'),
-    [repoById],
+    (s: Session) => {
+      const repoId = resolveRepoId(s, repos)
+      return !repoId ? 'No repo' : repoById.get(repoId)?.name ?? 'Unknown repository'
+    },
+    [repoById, repos],
   )
 
   // Grouped view is built from ALL non-archived sessions; the search render uses the

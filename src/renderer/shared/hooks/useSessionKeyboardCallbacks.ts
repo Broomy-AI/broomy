@@ -4,12 +4,15 @@
 import { useCallback } from 'react'
 import { PANEL_IDS } from '../../panels'
 import type { Session } from '../../store/sessions'
+import type { ManagedRepo } from '../../../preload/index'
 import { groupKeyForSession } from '../../panels/sidebar/repoGroups'
 
 const AGENT_TAB_ID = '__agent__'
 
 interface SessionKeyboardCallbacksDeps {
   sessions: Session[]
+  /** Needed to derive a session's group key the same way the sidebar does. */
+  repos?: ManagedRepo[]
   /** The visible grouped/sorted/filtered session-id order (excludes collapsed groups). */
   visibleOrder?: string[]
   /** Every active session in display order (for directional Next/Prev scanning). */
@@ -28,6 +31,7 @@ interface SessionKeyboardCallbacksDeps {
 
 export function useSessionKeyboardCallbacks({
   sessions,
+  repos = [],
   visibleOrder = [],
   fullOrder = [],
   setRepoGroupCollapsed,
@@ -77,7 +81,7 @@ export function useSessionKeyboardCallbacks({
     // If the active session sits in a collapsed group, expand it so its card can be focused.
     const active = sessions.find((s) => s.id === activeSessionId)
     if (active && !active.isArchived && setRepoGroupCollapsed) {
-      setRepoGroupCollapsed(groupKeyForSession(active), false)
+      setRepoGroupCollapsed(groupKeyForSession(active, repos), false)
     }
     requestAnimationFrame(() => {
       const activeCard = document.querySelector<HTMLElement>(`[data-panel-id="${PANEL_IDS.SIDEBAR}"] [tabindex="0"].bg-accent\\/15`)
@@ -88,7 +92,7 @@ export function useSessionKeyboardCallbacks({
         firstCard?.focus()
       }
     })
-  }, [globalPanelVisibility, toggleGlobalPanel, sessions, activeSessionId, setRepoGroupCollapsed])
+  }, [globalPanelVisibility, toggleGlobalPanel, sessions, repos, activeSessionId, setRepoGroupCollapsed])
 
   const handleFocusSessionSearch = useCallback(() => {
     if (!globalPanelVisibility[PANEL_IDS.SIDEBAR]) {

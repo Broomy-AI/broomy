@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   groupSessionsByRepo,
   groupKeyForSession,
+  resolveRepoId,
   rollUpStatus,
   flattenGroupOrder,
 } from './repoGroups'
@@ -28,8 +29,55 @@ function repo(id: string, name: string): ManagedRepo {
 
 describe('groupKeyForSession', () => {
   it('is stable for a defined repoId regardless of resolution', () => {
-    expect(groupKeyForSession({ repoId: 'r1' })).toBe('repo:r1')
-    expect(groupKeyForSession({ repoId: undefined })).toBe('ungrouped')
+    expect(groupKeyForSession({ repoId: 'r1', directory: '' }, [])).toBe('repo:r1')
+    expect(groupKeyForSession({ repoId: undefined, directory: '' }, [])).toBe('ungrouped')
+  })
+
+  it('agrees with the grouped view for a repoId-less session resolved by directory', () => {
+    const repos = [repo('r-b', 'broomy')]
+    const s = { repoId: undefined, directory: '/broomy/main' }
+    expect(groupKeyForSession(s, repos)).toBe('repo:r-b')
+  })
+})
+
+describe('resolveRepoId', () => {
+  const repos = [repo('r-b', 'broomy'), repo('r-a', 'acme-web')]
+
+  it('prefers an explicit repoId over the directory', () => {
+    expect(resolveRepoId({ repoId: 'r-a', directory: '/broomy/main' }, repos)).toBe('r-a')
+  })
+
+  it('keeps an unresolvable repoId instead of re-homing by path (deleted repo stays unknown)', () => {
+    expect(resolveRepoId({ repoId: 'gone', directory: '/broomy/main' }, repos)).toBe('gone')
+  })
+
+  it('falls back to the repo rootDir for a legacy "main" session with no repoId', () => {
+    expect(resolveRepoId({ repoId: undefined, directory: '/broomy/main' }, repos)).toBe('r-b')
+  })
+
+  it('matches a worktree directory and the rootDir itself', () => {
+    expect(resolveRepoId({ repoId: undefined, directory: '/broomy/feat/x' }, repos)).toBe('r-b')
+    expect(resolveRepoId({ repoId: undefined, directory: '/broomy' }, repos)).toBe('r-b')
+  })
+
+  it('does not match a sibling repo that merely shares a name prefix', () => {
+    // '/broomy-other' must NOT match rootDir '/broomy' — the separator guard.
+    expect(resolveRepoId({ repoId: undefined, directory: '/broomy-other/main' }, repos)).toBeUndefined()
+  })
+
+  it('picks the LONGEST matching rootDir when one repo nests inside another', () => {
+    const nested = [repo('outer', 'outer'), { ...repo('inner', 'inner'), rootDir: '/outer/inner' }]
+    expect(resolveRepoId({ repoId: undefined, directory: '/outer/inner/main' }, nested)).toBe('inner')
+  })
+
+  it('tolerates a trailing slash on rootDir', () => {
+    const trailing = [{ ...repo('r-b', 'broomy'), rootDir: '/broomy/' }]
+    expect(resolveRepoId({ repoId: undefined, directory: '/broomy/main' }, trailing)).toBe('r-b')
+  })
+
+  it('returns undefined for a session with no repoId and no matching root', () => {
+    expect(resolveRepoId({ repoId: undefined, directory: '/elsewhere/main' }, repos)).toBeUndefined()
+    expect(resolveRepoId({ repoId: undefined, directory: '' }, repos)).toBeUndefined()
   })
 })
 
