@@ -36,6 +36,20 @@ interface AppearanceSettingsProps {
 
 const pct = (n: number) => `${Math.round(n * 100)}%`
 
+/**
+ * Name the automatic floor for the theme in play. A floor of 1 is xterm's "disabled"
+ * value, and telling a user it is set to "1:1" reads as a setting rather than as off.
+ */
+const autoContrastLabel = (theme: ThemeName): string => {
+  const floor = resolveTerminalContrast('auto', theme)
+  return floor === 1 ? 'Automatic (off for this theme)' : `Automatic (${floor}:1 for this theme)`
+}
+
+const contrastOptionLabel = (c: (typeof TERMINAL_CONTRASTS)[number], theme: ThemeName): string => {
+  if (c === 'auto') return autoContrastLabel(theme)
+  return c === 21 ? 'Maximum (21:1)' : `${c}:1`
+}
+
 export function AppearanceSettings({
   appearance,
   resolvedTheme,
@@ -201,18 +215,14 @@ export function AppearanceSettings({
           >
             {TERMINAL_CONTRASTS.map((c) => (
               <option key={c} value={c}>
-                {c === 'auto'
-                  ? `Automatic (${resolveTerminalContrast('auto', resolvedTheme)}:1 for this theme)`
-                  : c === 21
-                    ? 'Maximum (21:1)'
-                    : `${c}:1`}
+                {contrastOptionLabel(c, resolvedTheme)}
               </option>
             ))}
           </select>
           <p className="text-xs text-text-tertiary">
-            Forces agent output to stay legible when a tool prints colours tuned for a different
-            background. Automatic is theme-aware — the light palette is already legible, so raising
-            its floor only muddies the colours.
+            A floor forces agent output to stay legible when a tool prints colours tuned for a
+            different background. Automatic turns it off for standard Light (faithful colours), uses
+            4.5:1 for High-contrast light, and keeps 7:1 on dark themes.
           </p>
         </div>
       </div>

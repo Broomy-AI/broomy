@@ -33,14 +33,18 @@ export interface Appearance {
   /**
    * xterm's minimumContrastRatio floor.
    *
-   * 'auto' is theme-aware and is what you want: 7 on dark, 4.5 on light.
+   * 'auto' is theme-aware and is what you want: off (1) on standard light (so the
+   * palette renders as authored — faithful colours), 4.5 on hc-light, 7 on dark/hc.
    *
    * A single fixed number cannot serve both. The DARK ANSI palette is bright
    * pastels, where 7 is a useful safety net for tools that print colours tuned for
-   * some other background. But the LIGHT palette is designed to clear 4.5 natively
-   * (its slots land at 4.5-5.9:1), so a floor of 7 forces xterm to darken every
-   * single one of them until they hit 7 — cyan, yellow, blue, green and red all
-   * collapse into the same muddy brown, and the hues stop meaning anything.
+   * some other background. But MOST of the LIGHT palette already clears 4.5 natively
+   * (those slots land at 4.5-5.9:1). A floor of 4.5 would darken only the two green
+   * exceptions (which sit below it); a floor of 7 would push nearly every slot down to
+   * reach it, so cyan, yellow, blue, green and red all collapse into the same muddy
+   * brown. Standard light therefore turns the floor OFF entirely: its green/brightGreen
+   * sit deliberately below 4.5, for a faithful, iTerm-like look — a fidelity choice, not
+   * a legibility one. hc-light keeps 4.5 for users who want the extra floor.
    */
   terminalContrast: number | 'auto'
   /** The accent HUE. Fitted per theme — see deriveAccent. */
@@ -139,17 +143,36 @@ export function deriveAccent(accentHex: string, theme: ThemeName) {
 export const themeIsLight = (theme: ThemeName): boolean => IS_LIGHT[theme]
 
 /**
+ * The automatic floor, stated per theme rather than derived from themeIsLight.
+ *
+ * The four outcomes are genuinely four decisions, not two rules — deriving them
+ * would mean a fifth theme silently inherits a floor nobody chose for it.
+ *
+ * - light     1   OFF (xterm's disabled value). The ANSI palette renders as authored,
+ *                 which is the whole point: its greens sit below 4.5 for fidelity.
+ * - hc-light  4.5 Its users asked for the extra floor, and its palette clears it natively.
+ * - dark/hc   7   The safety net dark has always had, for tools printing foreign colours.
+ */
+const AUTO_TERMINAL_CONTRAST: Record<ThemeName, number> = {
+  light: 1,
+  'hc-light': 4.5,
+  dark: 7,
+  hc: 7,
+}
+
+/**
  * The actual floor to hand xterm.
  *
- * On a light ground the palette already clears 4.5:1, so raising the floor to 7
- * only destroys it. On dark, 7 remains the safety net it has always been.
+ * A floor above what the palette natively achieves does not clamp — on a light ground
+ * xterm DARKENS every foreground until it reaches the floor, so 7 on light collapses
+ * cyan, yellow, blue and green into the same muddy brown.
  */
 export function resolveTerminalContrast(
   setting: number | 'auto',
   theme: ThemeName
 ): number {
   if (setting !== 'auto') return setting
-  return themeIsLight(theme) ? 4.5 : 7
+  return AUTO_TERMINAL_CONTRAST[theme]
 }
 
 const clampToSteps = (value: unknown, steps: readonly number[], fallback: number): number => {
