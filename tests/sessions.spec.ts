@@ -59,8 +59,9 @@ test.describe('New Session Dialog', () => {
     await expect(page.locator('button:has-text("Add Repo")')).toBeVisible()
     await expect(page.locator('button:has-text("Folder")')).toBeVisible()
 
-    // The "demo-project" repo should be visible from mock data
-    await expect(page.locator('text=demo-project')).toBeVisible()
+    // The "demo-project" repo should be visible from mock data (scope to the dialog —
+    // the sidebar now shows repo names in group headers too).
+    await expect(page.locator('[role="dialog"]').getByText('demo-project')).toBeVisible()
 
     // Each repo row should have action buttons using title attributes for reliable selection
     await expect(page.locator('button[title="Create a new branch worktree"]')).toBeVisible()

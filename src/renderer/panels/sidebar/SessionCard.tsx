@@ -13,61 +13,13 @@ import { formatElapsedTime } from '../../shared/utils/formatTime'
 import { useElapsedSeconds } from '../../shared/hooks/useElapsedSeconds'
 import { branchStatusBadge } from '../../features/git/explorerHelpers'
 import { ReviewStatusChip } from '../../shared/components/ReviewStatusChip'
+import { StatusIndicator } from './StatusIndicator'
 
 const statusLabels: Record<SessionStatus, string> = {
   working: 'Working',
   idle: 'Idle',
   error: 'Error',
   initializing: 'Setting up...',
-}
-
-function Spinner({ className = '' }: { className?: string }) {
-  return (
-    <svg
-      className={`animate-spin ${className}`}
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <circle
-        className="opacity-[var(--spinner-track-opacity)]"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-      />
-      <path
-        className="opacity-[var(--spinner-arc-opacity)]"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-      />
-    </svg>
-  )
-}
-
-function StatusIndicator({ status, isUnread }: { status: SessionStatus; isUnread: boolean }) {
-  if (status === 'initializing') {
-    return <Spinner className="text-accent" />
-  }
-
-  if (status === 'working') {
-    return <Spinner className="text-status-working" />
-  }
-
-  if (status === 'error') {
-    return <span className="w-2 h-2 rounded-full bg-status-error" />
-  }
-
-  // idle
-  if (isUnread) {
-    return (
-      <span className="w-3 h-3 rounded-full bg-success-fg shadow-[0_0_6px_1px_rgba(74,222,128,0.5)]" />
-    )
-  }
-  return <span className="w-2 h-2 rounded-full bg-status-idle" />
 }
 
 function StatusChipBadge({ status }: { status: StatusChip }) {
@@ -85,11 +37,14 @@ export default memo(function SessionCard({
   onSelect,
   onDelete,
   onArchive,
+  repoLabel,
 }: {
   sessionId: string
   onSelect: (sessionId: string) => void
   onDelete: (e: React.MouseEvent | React.KeyboardEvent, sessionId: string) => void
   onArchive?: (e: React.MouseEvent, sessionId: string) => void
+  /** Search mode only: a neutral repo tag (grouped mode shows the repo on the header). */
+  repoLabel?: string
 }) {
   // Subscribe to only the fields this card renders, with shallow equality.
   // This prevents re-renders when unrelated session fields (or other sessions) change.
@@ -139,19 +94,19 @@ export default memo(function SessionCard({
 
   return (
     <div
+      data-session-card
+      data-session-id={sessionId}
       tabIndex={0}
       onClick={() => onSelect(sessionId)}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
           onSelect(sessionId)
-        } else if (e.key === 'ArrowDown') {
+        } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          // Traverse ALL cards across groups (siblings break once cards nest in groups).
           e.preventDefault()
-          const next = (e.currentTarget as HTMLElement).nextElementSibling as HTMLElement | null
-          if (next && next.tabIndex >= 0) next.focus()
-        } else if (e.key === 'ArrowUp') {
-          e.preventDefault()
-          const prev = (e.currentTarget as HTMLElement).previousElementSibling as HTMLElement | null
-          if (prev && prev.tabIndex >= 0) prev.focus()
+          const cards = Array.from(document.querySelectorAll<HTMLElement>('[data-session-card]'))
+          const idx = cards.indexOf(e.currentTarget as HTMLElement)
+          cards[e.key === 'ArrowDown' ? idx + 1 : idx - 1]?.focus()
         } else if (e.key === 'Delete' || e.key === 'Backspace') {
           onDelete(e, sessionId)
         }
@@ -214,6 +169,11 @@ export default memo(function SessionCard({
         </div>
       </div>
       <div className="flex items-center gap-2 text-xs text-text-secondary">
+        {repoLabel && (
+          <span className="text-3xs px-1.5 py-0.5 rounded bg-bg-tertiary text-text-secondary font-medium leading-none flex-shrink-0">
+            {repoLabel}
+          </span>
+        )}
         <span className="truncate flex-1">{session.name}</span>
         {session.sessionType === 'review' ? (
           <ReviewStatusChip status={session.reviewStatus ?? 'pending'} />

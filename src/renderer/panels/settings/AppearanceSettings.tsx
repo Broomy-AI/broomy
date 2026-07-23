@@ -117,6 +117,31 @@ export function AppearanceSettings({
         </p>
       </div>
 
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <span className="text-xs text-text-secondary">Repo rail colour</span>
+          <p className="text-xs text-text-tertiary">
+            A colour-coded line beside each repo group in the sidebar. Off = a neutral grey rail.
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={appearance.sidebarRailColored}
+          aria-label="Repo rail colour"
+          onClick={() => onChange({ sidebarRailColored: !appearance.sidebarRailColored })}
+          className={`relative inline-flex h-5 w-9 flex-none items-center rounded-full transition-colors ${
+            appearance.sidebarRailColored ? 'bg-accent' : 'bg-bg-tertiary'
+          }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-on-accent shadow transition-transform ${
+              appearance.sidebarRailColored ? 'translate-x-[18px]' : 'translate-x-0.5'
+            }`}
+          />
+        </button>
+      </div>
+
       <Stepper
         id="app-text-size"
         label="App text size"
