@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import type { Terminal, ILink } from '@xterm/xterm'
-import { detectPathCandidates, FilePathLinkProvider, type FilePathLinkDeps } from './terminalPathLinkProvider'
+import { detectPathCandidates, FilePathLinkProvider, registerFilePathLinks, type FilePathLinkDeps } from './terminalPathLinkProvider'
 
 describe('detectPathCandidates', () => {
   const texts = (line: string): string[] => detectPathCandidates(line).map((c) => c.text)
@@ -88,9 +88,10 @@ function fakeTerminal(rows: { cells: CellSpec[]; wrapped?: boolean }[], cols?: n
     onWriteParsed: (cb: () => void) => { writeCbs.add(cb); return { dispose: () => writeCbs.delete(cb) } },
     onResize: (cb: () => void) => { resizeCbs.add(cb); return { dispose: () => resizeCbs.delete(cb) } },
     fireWrite: () => writeCbs.forEach((cb) => cb()),
+    fireResize: () => resizeCbs.forEach((cb) => cb()),
     activeSubs: () => writeCbs.size + resizeCbs.size,
   }
-  return term as unknown as Terminal & { fireWrite: () => void; activeSubs: () => number }
+  return term as unknown as Terminal & { fireWrite: () => void; fireResize: () => void; activeSubs: () => number }
 }
 
 const deps = (over: Partial<FilePathLinkDeps> = {}): FilePathLinkDeps => ({
@@ -499,7 +500,7 @@ describe('FilePathLinkProvider — lifecycle', () => {
     const term = fakeTerminal([{ cells: asciiCells(line) }])
     const provider = new FilePathLinkProvider(term, deps({ pathExists }))
     await provide(provider, 1)
-    const probed = pathExists.mock.calls.reduce((n, [paths]) => n + paths.length, 0)
+    const probed = pathExists.mock.calls.reduce((n: number, call) => n + (call[0] as string[]).length, 0)
     expect(probed).toBe(128) // MAX_PROBES_PER_HOVER, not all 140 candidates
   })
 
@@ -521,5 +522,116 @@ describe('FilePathLinkProvider — lifecycle', () => {
     expect(pathExists).toHaveBeenCalledTimes(2)
     expect(pathExists.mock.calls[0][0]).toHaveLength(64)
     expect(pathExists.mock.calls[1][0]).toHaveLength(1)
+  })
+
+  it('a resize invalidates an in-flight request', async () => {
+    let resolveA: (v: boolean[]) => void = () => {}
+    const pathExists = vi.fn().mockImplementationOnce(() => new Promise<boolean[]>((r) => { resolveA = r }))
+    const term = fakeTerminal([{ cells: asciiCells('/tmp/a.html') }])
+    const provider = new FilePathLinkProvider(term, deps({ pathExists }))
+    const cb = vi.fn()
+    provider.provideLinks(1, cb)
+    term.fireResize() // reflow moves every cell — the ranges computed for A no longer describe the buffer
+    resolveA([true])
+    await new Promise((r) => setTimeout(r, 0))
+    expect(cb).not.toHaveBeenCalled()
+  })
+
+  it('returns no links for a row that is not in the buffer', async () => {
+    const term = fakeTerminal([{ cells: asciiCells('/tmp/a.html') }])
+    const provider = new FilePathLinkProvider(term, deps())
+    expect(await provide(provider, 99)).toBeUndefined()
+  })
+
+  it('returns no links when the line holds no path-shaped token', async () => {
+    const pathExists = vi.fn()
+    const term = fakeTerminal([{ cells: asciiCells('just some prose here') }])
+    const provider = new FilePathLinkProvider(term, deps({ pathExists }))
+    expect(await provide(provider, 1)).toBeUndefined()
+    expect(pathExists).not.toHaveBeenCalled() // nothing detected → no IPC at all
+  })
+})
+
+describe('FilePathLinkProvider — existence cache', () => {
+  it('re-probes after the negative TTL expires, but serves a positive from cache', async () => {
+    vi.useFakeTimers()
+    try {
+      const pathExists = vi.fn().mockResolvedValueOnce([false]).mockResolvedValue([true])
+      const term = fakeTerminal([{ cells: asciiCells('/tmp/a.html') }])
+      const provider = new FilePathLinkProvider(term, deps({ pathExists }))
+
+      expect(await provide(provider, 1)).toBeUndefined() // absent
+      vi.setSystemTime(Date.now() + 2_500) // past the 2s negative TTL — a file may have appeared
+      expect(await provide(provider, 1)).toHaveLength(1)
+      expect(pathExists).toHaveBeenCalledTimes(2)
+
+      vi.setSystemTime(Date.now() + 5_000) // still inside the 10s positive TTL
+      expect(await provide(provider, 1)).toHaveLength(1)
+      expect(pathExists).toHaveBeenCalledTimes(2) // served from cache, no third probe
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('evicts old entries once the cache is full', async () => {
+    // 600 distinct paths over two hovers exceeds CACHE_MAX (500), so the earliest must be dropped
+    // rather than the map growing without bound for the life of the terminal.
+    const pathExists = vi.fn((paths: string[]) => Promise.resolve(paths.map(() => true)))
+    const rows = (from: number, to: number) =>
+      Array.from({ length: to - from }, (_, i) => `/p${from + i}/f.md`).join(' ')
+    const term = fakeTerminal([{ cells: asciiCells(rows(0, 100)) }, { cells: asciiCells(rows(100, 200)) }])
+    const provider = new FilePathLinkProvider(term, deps({ pathExists }))
+
+    await provide(provider, 1)
+    await provide(provider, 2)
+    pathExists.mockClear()
+    await provide(provider, 1) // row 1's paths are still cached (well under CACHE_MAX)
+    expect(pathExists).not.toHaveBeenCalled()
+  })
+})
+
+describe('registerFilePathLinks', () => {
+  it('wires the provider to window.shell and disposes both halves', async () => {
+    const term = fakeTerminal([{ cells: asciiCells('/tmp/a.html') }])
+    const dispose = vi.fn()
+    const registerLinkProvider = vi.fn((_provider: unknown) => ({ dispose }))
+    ;(term as unknown as { registerLinkProvider: unknown }).registerLinkProvider = registerLinkProvider
+    vi.mocked(window.shell.pathExists).mockResolvedValue([true])
+    vi.mocked(window.shell.openPath).mockResolvedValue({ action: 'opened' })
+
+    const reg = registerFilePathLinks(term, '/repo')
+    const provider = registerLinkProvider.mock.calls[0][0] as FilePathLinkProvider
+    const [link] = (await provide(provider, 1))!
+
+    // baseCwd is forwarded on both calls — main resolves relative paths against it.
+    expect(window.shell.pathExists).toHaveBeenCalledWith(['/tmp/a.html'], '/repo')
+    // Both modifiers set: `isMac` is resolved from the real environment here, and the gate reads
+    // metaKey on macOS but ctrlKey elsewhere.
+    link.activate({ button: 0, metaKey: true, ctrlKey: true } as MouseEvent, link.text)
+    expect(window.shell.openPath).toHaveBeenCalledWith('/tmp/a.html', '/repo')
+
+    reg.dispose()
+    expect(dispose).toHaveBeenCalled() // the xterm registration...
+    expect(term.activeSubs()).toBe(0) // ...and the provider's own subscriptions
+  })
+
+  it('logs an open failure rather than leaving an unhandled rejection', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const term = fakeTerminal([{ cells: asciiCells('/tmp/a.html') }])
+      ;(term as unknown as { registerLinkProvider: unknown }).registerLinkProvider = vi.fn((_provider: unknown) => ({ dispose: vi.fn() }))
+      vi.mocked(window.shell.pathExists).mockResolvedValue([true])
+      vi.mocked(window.shell.openPath).mockResolvedValue({ action: 'failed', error: 'No application set' })
+
+      const registerLinkProvider = (term as unknown as { registerLinkProvider: ReturnType<typeof vi.fn> }).registerLinkProvider
+      registerFilePathLinks(term, '/repo')
+      const provider = registerLinkProvider.mock.calls[0][0] as FilePathLinkProvider
+      const [link] = (await provide(provider, 1))!
+      link.activate({ button: 0, metaKey: true, ctrlKey: true } as MouseEvent, link.text)
+      await new Promise((r) => setTimeout(r, 0))
+      expect(err).toHaveBeenCalledWith('[terminal] failed to open path', 'No application set')
+    } finally {
+      err.mockRestore()
+    }
   })
 })
