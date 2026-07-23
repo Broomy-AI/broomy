@@ -9,7 +9,7 @@
  */
 import { useSettingsStore } from '../../store/settings'
 import type { SessionStatus } from '../../store/sessions'
-import { ledSpec, type LedState, type LedSpec } from './statusLed'
+import { ledSpec, type LedState } from './statusLed'
 
 const LABELS: Record<LedState, string> = {
   working: 'working',
@@ -29,25 +29,6 @@ function toLedState(status: SessionStatus, isUnread: boolean): LedState {
 const SPINNER_ARC =
   'M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'
 
-/**
- * Resolve the fill / bezel / glow to concrete CSS.
- *
- * The status LED is a single fixed colour per state (from `statusLed.ts`). For the green
- * "active" states (working + done/unread) the dot's bezel + glow are derived from the fill
- * by mixing it darker / translucent, so they always track the fill. error / idle /
- * setting-up keep their own semantic bezel + glow.
- */
-function ledCss(state: LedState, spec: LedSpec): { fill: string; bezel?: string; glow?: string } {
-  const accented = state === 'working' || state === 'unread'
-  if (!accented) return { fill: spec.fill, bezel: spec.bezel, glow: spec.glow }
-  const base = spec.fill
-  return {
-    fill: base,
-    bezel: spec.bezel ? `color-mix(in srgb, ${base} 62%, #000)` : undefined,
-    glow: spec.glow ? `color-mix(in srgb, ${base} 55%, transparent)` : undefined,
-  }
-}
-
 export function StatusIndicator({
   status,
   isUnread,
@@ -59,7 +40,9 @@ export function StatusIndicator({
 }) {
   const theme = useSettingsStore((s) => s.resolvedTheme)
   const state = toLedState(status, isUnread)
-  const { fill, bezel, glow } = ledCss(state, ledSpec(theme, state))
+  // Rendered verbatim from `statusLed.ts` — the exact values statusLed.test.ts asserts the
+  // 3:1 non-text floor against, so the contrast test judges what actually reaches the DOM.
+  const { fill, bezel, glow } = ledSpec(theme, state)
   const label = LABELS[state]
 
   // Live states keep the app's original animated spinner; the rest are dots.
