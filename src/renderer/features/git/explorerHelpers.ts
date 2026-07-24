@@ -100,7 +100,9 @@ export function prStateBadgeClass(state: string): string {
 export const branchStatusBadge: Record<string, { label: string; classes: string }> = {
   pushed: { label: 'PUSHED', classes: 'bg-info-base/20 text-info-fg' },
   empty: { label: 'EMPTY', classes: 'bg-muted/20 text-text-secondary' },
-  open: { label: 'PR OPEN', classes: 'bg-success-base/20 text-success-fg' },
+  open: { label: 'PR OPEN', classes: 'bg-info-base/20 text-info-fg' },
+  waiting: { label: 'WAITING', classes: 'bg-muted/20 text-text-secondary' },
+  approved: { label: 'APPROVED', classes: 'bg-success-base/20 text-success-fg' },
   feedback: { label: 'FEEDBACK', classes: 'bg-attention-base/20 text-attention-fg' },
   failed: { label: 'FAILED', classes: 'bg-danger-base/20 text-danger-fg' },
   merged: { label: 'MERGED', classes: 'bg-review-base/20 text-review-fg' },

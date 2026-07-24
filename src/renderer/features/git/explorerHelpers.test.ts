@@ -218,3 +218,17 @@ describe('prStateBadgeClass', () => {
     expect(prStateBadgeClass('UNKNOWN')).toBe('bg-danger-base/20 text-danger-fg')
   })
 })
+
+import { branchStatusBadge } from './explorerHelpers'
+
+describe('branchStatusBadge — waiting/approved', () => {
+  it('has a WAITING entry', () => {
+    expect(branchStatusBadge.waiting.label).toBe('WAITING')
+  })
+  it('has an APPROVED entry', () => {
+    expect(branchStatusBadge.approved.label).toBe('APPROVED')
+  })
+  it('APPROVED is visually distinct from PR OPEN', () => {
+    expect(branchStatusBadge.approved.classes).not.toBe(branchStatusBadge.open.classes)
+  })
+})
