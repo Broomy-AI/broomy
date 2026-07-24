@@ -312,7 +312,7 @@ function AppContent() {
     handleToggleFileViewer, handleFileViewerPositionChange,
     fetchGitStatus, getAgentCommand, getAgentEnv, getRepoIsolation, getAgentConnectionMode, getAgentModel, getAgentEffort, getAgentSkipApproval,
     globalPanelVisibility, toggleGlobalPanel, selectFile, setExplorerFilter,
-    updatePrState, updateFeedbackStatus, updateChecksStatus,
+    updatePrState, updateFeedbackStatus, updateChecksStatus, updateReviewState,
     setPanelVisibility, setToolbarPanels, closeCommandsEditor, repos,
   })
 

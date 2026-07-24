@@ -111,6 +111,7 @@ function makeConfig(overrides: Partial<PanelsMapConfig> = {}): PanelsMapConfig {
     updatePrState: vi.fn(),
     updateFeedbackStatus: vi.fn(),
     updateChecksStatus: vi.fn(),
+    updateReviewState: vi.fn(),
     setPanelVisibility: vi.fn(),
     setToolbarPanels: vi.fn(),
     closeCommandsEditor: vi.fn(),

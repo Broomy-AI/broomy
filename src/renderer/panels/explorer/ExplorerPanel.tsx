@@ -33,6 +33,7 @@ export default function Explorer({
   onUpdatePrState,
   onUpdateFeedbackStatus,
   onUpdateChecksStatus,
+  onUpdateReviewState,
   repoId,
   agentPtyId,
   session,
@@ -146,6 +147,7 @@ export default function Explorer({
               onUpdatePrState={onUpdatePrState}
               onUpdateFeedbackStatus={onUpdateFeedbackStatus}
               onUpdateChecksStatus={onUpdateChecksStatus}
+              onUpdateReviewState={onUpdateReviewState}
               issueNumber={issueNumber}
               issueTitle={issueTitle}
               issueUrl={issueUrl}

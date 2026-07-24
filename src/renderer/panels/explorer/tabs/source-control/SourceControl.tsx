@@ -33,6 +33,7 @@ interface SourceControlProps {
   onUpdatePrState?: (prState: PrState, prNumber?: number, prUrl?: string) => void
   onUpdateFeedbackStatus?: (hasFeedback: boolean) => void
   onUpdateChecksStatus?: (checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
+  onUpdateReviewState?: (reviewState: import('../../../../features/git/reviewState').ReviewState) => void
   issueNumber?: number
   issueTitle?: string
   issueUrl?: string
@@ -57,6 +58,7 @@ export function SourceControl({
   onUpdatePrState,
   onUpdateFeedbackStatus,
   onUpdateChecksStatus,
+  onUpdateReviewState,
   issueNumber,
   issueTitle,
   issueUrl,
@@ -88,7 +90,7 @@ export function SourceControl({
 
   const data = useSourceControlData({
     directory, gitStatus, syncStatus, branchStatus, onUpdatePrState,
-    onUpdateFeedbackStatus, onUpdateChecksStatus, repoId, scView,
+    onUpdateFeedbackStatus, onUpdateChecksStatus, onUpdateReviewState, repoId, scView,
   })
 
   // Check if repo has isolation enabled but no devcontainer config
