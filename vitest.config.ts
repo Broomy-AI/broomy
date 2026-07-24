@@ -31,6 +31,9 @@ export default defineConfig({
         'src/test/**',
         'src/renderer/main.tsx',
         'src/main/index.ts',
+        // Impure <webview> context-menu wiring (Menu/clipboard/shell on the guest
+        // webContents); its item logic lives in the unit-tested webviewContextMenu.ts.
+        'src/main/webviewMenu.ts',
         'src/preload/index.ts',
         'src/renderer/vite-env.d.ts',
         'src/preload/apis/types.ts',

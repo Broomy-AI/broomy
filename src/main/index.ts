@@ -27,6 +27,7 @@ import { writeCrashLog, appendErrorLog } from './crashLog'
 import { disposePtyListenersForWindow, disposeAllPtyListeners } from './handlers/pty'
 import { navigationAction } from './navigation'
 import { toHttpUrl } from './externalUrl'
+import { showWebviewContextMenu } from './webviewMenu'
 import { treeKill } from './treeKill'
 import { sweepOrphanedPtys, clearOwnMarkers } from './ptyMarkers'
 
@@ -179,6 +180,11 @@ function createWindow(profileId?: string): BrowserWindow {
         window.webContents.send('webview:find-in-page')
       }
     })
+
+    // Guest pages render no context menu on their own — build and pop up a
+    // native one for the standard right-click actions (copy/paste, links,
+    // navigation). See webviewMenu.ts.
+    webContents.on('context-menu', (_e, params) => showWebviewContextMenu(webContents, window, params))
   })
 
   // Track the first window as mainWindow for backwards compat
