@@ -38,6 +38,50 @@ interface AppCallbacksDeps {
   onError: (msg: string) => void
 }
 
+/**
+ * Refresh one session's PR-derived state (PR state, checks, feedback, review
+ * state, and the reviewer status) from GitHub. Extracted from useAppCallbacks so
+ * the hook stays within the per-function line limit. Called only on user action.
+ */
+async function refreshSessionPrState(
+  session: Session,
+  repos: { id: string; approvalPolicy?: 'one' | 'all' }[],
+  actions: {
+    updatePrState: (sessionId: string, prState: PrState, prNumber?: number, prUrl?: string) => void
+    updateChecksStatus: (sessionId: string, checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
+    updateFeedbackStatus: (sessionId: string, hasFeedback: boolean) => void
+    updateReviewState: (sessionId: string, reviewState: ReviewState) => void
+    updateReviewStatus: (sessionId: string, reviewStatus: 'pending' | 'reviewed') => void
+  },
+): Promise<void> {
+  const { updatePrState, updateChecksStatus, updateFeedbackStatus, updateReviewState, updateReviewStatus } = actions
+  const prResult = await window.gh.prStatus(session.directory)
+  if (prResult) {
+    updatePrState(session.id, prResult.state, prResult.number, prResult.url)
+    if (prResult.state === 'OPEN') {
+      const [checks, feedback, approval] = await Promise.all([
+        window.gh.prChecksStatus(session.directory).catch(() => 'none' as const),
+        window.gh.prFeedbackStatus(session.directory, prResult.number).catch(() => false),
+        window.gh.prApprovalStatus(session.directory, prResult.number).catch(() => ({ approved: 0, pending: 0, otherReviews: 0 })),
+      ])
+      updateChecksStatus(session.id, checks)
+      updateFeedbackStatus(session.id, feedback)
+      const policy = repos.find((r) => r.id === session.repoId)?.approvalPolicy ?? 'one'
+      updateReviewState(session.id, computeReviewState(approval, policy))
+    } else {
+      updateChecksStatus(session.id, 'none')
+      updateFeedbackStatus(session.id, false)
+      updateReviewState(session.id, 'none')
+    }
+  } else {
+    updatePrState(session.id, null)
+    updateChecksStatus(session.id, 'none')
+    updateFeedbackStatus(session.id, false)
+    updateReviewState(session.id, 'none')
+  }
+  await fetchReviewStatus(session, updateReviewStatus)
+}
+
 export function useAppCallbacks({
   sessions,
   activeSessionId,
@@ -87,33 +131,11 @@ export function useAppCallbacks({
   }, [setShowNewSessionDialog])
 
   const refreshPrStatus = useCallback(async () => {
-    await Promise.allSettled(sessions.map(async (session) => {
-      const prResult = await window.gh.prStatus(session.directory)
-      if (prResult) {
-        updatePrState(session.id, prResult.state, prResult.number, prResult.url)
-        if (prResult.state === 'OPEN') {
-          const [checks, feedback, approval] = await Promise.all([
-            window.gh.prChecksStatus(session.directory).catch(() => 'none' as const),
-            window.gh.prFeedbackStatus(session.directory, prResult.number).catch(() => false),
-            window.gh.prApprovalStatus(session.directory, prResult.number).catch(() => ({ approved: 0, pending: 0, otherReviews: 0 })),
-          ])
-          updateChecksStatus(session.id, checks)
-          updateFeedbackStatus(session.id, feedback)
-          const policy = repos.find((r) => r.id === session.repoId)?.approvalPolicy ?? 'one'
-          updateReviewState(session.id, computeReviewState(approval, policy))
-        } else {
-          updateChecksStatus(session.id, 'none')
-          updateFeedbackStatus(session.id, false)
-          updateReviewState(session.id, 'none')
-        }
-      } else {
-        updatePrState(session.id, null)
-        updateChecksStatus(session.id, 'none')
-        updateFeedbackStatus(session.id, false)
-        updateReviewState(session.id, 'none')
-      }
-      await fetchReviewStatus(session, updateReviewStatus)
-    }))
+    await Promise.allSettled(sessions.map((session) =>
+      refreshSessionPrState(session, repos, {
+        updatePrState, updateChecksStatus, updateFeedbackStatus, updateReviewState, updateReviewStatus,
+      })
+    ))
   }, [sessions, repos, updatePrState, updateFeedbackStatus, updateChecksStatus, updateReviewStatus, updateReviewState])
 
   const getAgentCommand = useCallback((session: Session) => {

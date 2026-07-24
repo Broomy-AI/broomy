@@ -20,6 +20,6 @@ export function deriveDisplayedChip(
   const chipBadge = chipKey ? branchStatusBadge[chipKey] : undefined
   const isPrAware = chipKey !== undefined && PR_AWARE_CHIPS.includes(chipKey as StatusChip)
   if (isPrAware && chipBadge) return chipBadge
-  if (prState && prStateBadge[prState]) return prStateBadge[prState]
+  if (prState) return prStateBadge[prState]
   return chipBadge ?? null
 }

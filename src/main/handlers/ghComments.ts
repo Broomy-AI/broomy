@@ -194,33 +194,36 @@ async function fetchMyReviewStatus(repoDir: string, prNumber: number): Promise<'
   }
 }
 
+/** E2E mock data for the gh:prComments handler. */
+const E2E_PR_COMMENTS = [
+  {
+    id: 1,
+    body: 'This looks good, but could you add a comment explaining this logic?',
+    path: 'src/index.ts',
+    line: 10,
+    side: 'RIGHT',
+    author: 'reviewer',
+    createdAt: '2024-01-15T10:30:00Z',
+    url: 'https://github.com/user/demo-project/pull/123#discussion_r1',
+    reactions: [{ content: '+1', count: 2 }],
+  },
+  {
+    id: 2,
+    body: 'Consider using a more descriptive variable name here.',
+    path: 'src/utils.ts',
+    line: 25,
+    side: 'RIGHT',
+    author: 'reviewer',
+    createdAt: '2024-01-15T11:00:00Z',
+    url: 'https://github.com/user/demo-project/pull/123#discussion_r2',
+    reactions: [],
+  },
+]
+
 export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   ipcMain.handle('gh:prComments', async (_event, repoDir: string, prNumber: number) => {
     if (ctx.isE2ETest) {
-      return [
-        {
-          id: 1,
-          body: 'This looks good, but could you add a comment explaining this logic?',
-          path: 'src/index.ts',
-          line: 10,
-          side: 'RIGHT',
-          author: 'reviewer',
-          createdAt: '2024-01-15T10:30:00Z',
-          url: 'https://github.com/user/demo-project/pull/123#discussion_r1',
-          reactions: [{ content: '+1', count: 2 }],
-        },
-        {
-          id: 2,
-          body: 'Consider using a more descriptive variable name here.',
-          path: 'src/utils.ts',
-          line: 25,
-          side: 'RIGHT',
-          author: 'reviewer',
-          createdAt: '2024-01-15T11:00:00Z',
-          url: 'https://github.com/user/demo-project/pull/123#discussion_r2',
-          reactions: [],
-        },
-      ]
+      return E2E_PR_COMMENTS
     }
 
     try {
