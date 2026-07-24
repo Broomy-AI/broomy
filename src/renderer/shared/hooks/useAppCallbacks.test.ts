@@ -25,6 +25,7 @@ function makeDeps(overrides: Partial<Parameters<typeof useAppCallbacks>[0]> = {}
     updateFeedbackStatus: vi.fn(),
     updateChecksStatus: vi.fn(),
     updateReviewStatus: vi.fn(),
+    updateReviewState: vi.fn(),
     setShowNewSessionDialog: vi.fn(),
     onSessionAlreadyExists: vi.fn(),
     onError: vi.fn(),

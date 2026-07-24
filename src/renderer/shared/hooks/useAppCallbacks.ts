@@ -10,13 +10,15 @@ import type { DuplicateSessionResult } from '../../store/sessionCoreActions'
 import { restoreSessionFocus } from '../utils/focusHelpers'
 import { fetchReviewStatus } from '../utils/reviewStatus'
 import { useBackgroundInit } from '../../panels/settings/useBackgroundInit'
+import { computeReviewState } from '../../features/git/reviewState'
+import type { ReviewState } from '../../features/git/reviewState'
 
 
 interface AppCallbacksDeps {
   sessions: Session[]
   activeSessionId: string | null
   agents: AgentConfig[]
-  repos: { id: string; rootDir: string; defaultBranch: string; isolated?: boolean; skipApproval?: boolean; name?: string; defaultAgentId?: string }[]
+  repos: { id: string; rootDir: string; defaultBranch: string; isolated?: boolean; skipApproval?: boolean; name?: string; defaultAgentId?: string; approvalPolicy?: 'one' | 'all' }[]
   addSession: (directory: string, agentId: string | null, extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; issueUrl?: string; name?: string; sessionType?: 'default' | 'review'; prNumber?: number; prTitle?: string; prUrl?: string; prBaseBranch?: string }) => Promise<DuplicateSessionResult | undefined>
   addInitializingSession: (params: { directory: string; branch: string; agentId: string | null; extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; issueUrl?: string; name?: string } }) => string
   finalizeSession: (id: string) => void
@@ -30,6 +32,7 @@ interface AppCallbacksDeps {
   updateFeedbackStatus: (sessionId: string, hasFeedback: boolean) => void
   updateChecksStatus: (sessionId: string, checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
   updateReviewStatus: (sessionId: string, reviewStatus: 'pending' | 'reviewed') => void
+  updateReviewState: (sessionId: string, reviewState: ReviewState) => void
   setShowNewSessionDialog: (show: boolean) => void
   onSessionAlreadyExists?: (info: { name: string; wasArchived: boolean }) => void
   onError: (msg: string) => void
@@ -53,6 +56,7 @@ export function useAppCallbacks({
   updateFeedbackStatus,
   updateChecksStatus,
   updateReviewStatus,
+  updateReviewState,
   setShowNewSessionDialog,
   onSessionAlreadyExists,
   onError,
@@ -87,26 +91,30 @@ export function useAppCallbacks({
       const prResult = await window.gh.prStatus(session.directory)
       if (prResult) {
         updatePrState(session.id, prResult.state, prResult.number, prResult.url)
-        // Fetch feedback and checks in parallel for open PRs
         if (prResult.state === 'OPEN') {
-          const [checks, feedback] = await Promise.all([
+          const [checks, feedback, approval] = await Promise.all([
             window.gh.prChecksStatus(session.directory).catch(() => 'none' as const),
             window.gh.prFeedbackStatus(session.directory, prResult.number).catch(() => false),
+            window.gh.prApprovalStatus(session.directory, prResult.number).catch(() => ({ approved: 0, pending: 0, otherReviews: 0 })),
           ])
           updateChecksStatus(session.id, checks)
           updateFeedbackStatus(session.id, feedback)
+          const policy = repos.find((r) => r.id === session.repoId)?.approvalPolicy ?? 'one'
+          updateReviewState(session.id, computeReviewState(approval, policy))
         } else {
           updateChecksStatus(session.id, 'none')
           updateFeedbackStatus(session.id, false)
+          updateReviewState(session.id, 'none')
         }
       } else {
         updatePrState(session.id, null)
         updateChecksStatus(session.id, 'none')
         updateFeedbackStatus(session.id, false)
+        updateReviewState(session.id, 'none')
       }
       await fetchReviewStatus(session, updateReviewStatus)
     }))
-  }, [sessions, updatePrState, updateFeedbackStatus, updateChecksStatus, updateReviewStatus])
+  }, [sessions, repos, updatePrState, updateFeedbackStatus, updateChecksStatus, updateReviewStatus, updateReviewState])
 
   const getAgentCommand = useCallback((session: Session) => {
     if (!session.agentId) return undefined
