@@ -12,6 +12,7 @@
 import { create } from 'zustand'
 import { PANEL_IDS, DEFAULT_TOOLBAR_PANELS } from '../panels/system/types'
 import type { BranchStatus, PrState, StatusChip } from '../features/git/branchStatus'
+import type { ReviewState } from '../features/git/reviewState'
 import {
   debouncedSave,
   syncLegacyFields,
@@ -22,6 +23,7 @@ import { createBranchActions } from './sessionBranchActions'
 import { createCoreActions, DEFAULT_SIDEBAR_WIDTH } from './sessionCoreActions'
 
 export type { BranchStatus, PrState, StatusChip }
+export type { ReviewState } from '../features/git/reviewState'
 
 export type SessionStatus = 'working' | 'idle' | 'error' | 'initializing'
 export type FileViewerPosition = 'top' | 'left'
@@ -102,6 +104,8 @@ export interface Session {
   // PR metadata (runtime, derived from GitHub API)
   hasFeedback: boolean
   checksStatus: 'passed' | 'failed' | 'pending' | 'none'
+  // PR review state (runtime, derived from GitHub reviews + repo approvalPolicy)
+  reviewState: ReviewState
   // Unified status chip (runtime, derived) — single source of truth for both sidebar and SCM
   statusChip: StatusChip
   // PR state tracking (persisted)
@@ -195,6 +199,7 @@ interface SessionStore {
   updateReviewStatus: (sessionId: string, reviewStatus: 'pending' | 'reviewed') => void
   updateFeedbackStatus: (sessionId: string, hasFeedback: boolean) => void
   updateChecksStatus: (sessionId: string, checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
+  updateReviewState: (sessionId: string, reviewState: ReviewState) => void
   // Stage state machine
   setSessionStage: (sessionId: string, stage: string) => void
   // Search history actions

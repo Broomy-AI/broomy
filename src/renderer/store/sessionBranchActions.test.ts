@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
-import { useSessionStore, type StatusChip } from './sessions'
+import { useSessionStore, type StatusChip, type Session } from './sessions'
 import { PANEL_IDS, DEFAULT_TOOLBAR_PANELS } from '../panels/system/types'
 import { setLoadedCounts } from './configPersistence'
 
@@ -27,8 +27,14 @@ describe('sessionBranchActions', () => {
     vi.useRealTimers()
   })
 
-  function addTestSession(id = 'test-session') {
-    const session = {
+  function addTestSession(id = 'test-session', overrides: Partial<Session> = {}) {
+    const session = { ...buildSession(id), ...overrides }
+    useSessionStore.setState({ sessions: [session], activeSessionId: id })
+    return session
+  }
+
+  function buildSession(id = 'test-session') {
+    return {
       id,
       name: 'test',
       directory: '/test',
@@ -54,13 +60,12 @@ describe('sessionBranchActions', () => {
       branchStatus: 'in-progress' as const,
       hasFeedback: false,
       checksStatus: 'none' as const,
+      reviewState: 'none' as const,
       statusChip: 'in-progress' as StatusChip,
       isArchived: false,
       stage: 'planning',
       isRestored: false,
     }
-    useSessionStore.setState({ sessions: [session], activeSessionId: id })
-    return session
   }
 
   describe('markHasHadCommits', () => {
@@ -198,6 +203,27 @@ describe('sessionBranchActions', () => {
       useSessionStore.getState().updateReviewStatus('test-session', 'reviewed')
       useSessionStore.getState().updateReviewStatus('test-session', 'pending')
       expect(useSessionStore.getState().sessions[0].reviewStatus).toBe('pending')
+    })
+  })
+
+  describe('updateReviewState', () => {
+    it('sets statusChip to approved when open PR and reviewState approved', () => {
+      addTestSession('test-session', { branchStatus: 'open', hasFeedback: false, checksStatus: 'none' })
+      useSessionStore.getState().updateReviewState('test-session', 'approved')
+      expect(useSessionStore.getState().sessions[0].reviewState).toBe('approved')
+      expect(useSessionStore.getState().sessions[0].statusChip).toBe('approved')
+    })
+
+    it('sets statusChip to waiting when open PR and reviewState waiting', () => {
+      addTestSession('test-session', { branchStatus: 'open', hasFeedback: false, checksStatus: 'none' })
+      useSessionStore.getState().updateReviewState('test-session', 'waiting')
+      expect(useSessionStore.getState().sessions[0].statusChip).toBe('waiting')
+    })
+
+    it('feedback still outranks approved', () => {
+      addTestSession('test-session', { branchStatus: 'open', hasFeedback: true, checksStatus: 'none' })
+      useSessionStore.getState().updateReviewState('test-session', 'approved')
+      expect(useSessionStore.getState().sessions[0].statusChip).toBe('feedback')
     })
   })
 })

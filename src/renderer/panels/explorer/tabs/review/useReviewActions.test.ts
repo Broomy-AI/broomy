@@ -41,6 +41,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     branchStatus: 'in-progress',
     hasFeedback: false,
     checksStatus: 'none' as const,
+    reviewState: 'none' as const,
     statusChip: 'in-progress' as StatusChip,
     isArchived: false,
     isRestored: false,
