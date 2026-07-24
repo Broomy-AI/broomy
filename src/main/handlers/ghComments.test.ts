@@ -469,4 +469,29 @@ describe('ghComments handlers', () => {
       expect(await handlers['gh:prFeedbackStatus'](null, '/repo', 42)).toBe(false)
     })
   })
+
+  describe('gh:prApprovalStatus', () => {
+    it('returns neutral counts in E2E mode', async () => {
+      const handlers = setupHandlers(createMockCtx({ isE2ETest: true }))
+      const result = await handlers['gh:prApprovalStatus'](null, '/repo', 1)
+      expect(result).toEqual({ approved: 0, pending: 0, otherReviews: 0 })
+    })
+
+    it('counts approvals, pending re-requests, and other reviews', async () => {
+      vi.mocked(execFile)
+        .mockReturnValueOnce({ stdout: 'user/repo\n', stderr: '' } as never)
+        .mockReturnValueOnce({
+          stdout: JSON.stringify([
+            { author: 'a', state: 'APPROVED' },
+            { author: 'b', state: 'CHANGES_REQUESTED' },
+          ]),
+          stderr: '',
+        } as never)
+        .mockReturnValueOnce({ stdout: JSON.stringify(['c']), stderr: '' } as never)
+
+      const handlers = setupHandlers()
+      const result = await handlers['gh:prApprovalStatus'](null, '/repo', 1)
+      expect(result).toEqual({ approved: 1, pending: 1, otherReviews: 1 })
+    })
+  })
 })
