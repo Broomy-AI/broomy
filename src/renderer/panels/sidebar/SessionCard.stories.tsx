@@ -84,6 +84,28 @@ const allSessions = [
     name: 'my-app',
     lastMessage: 'Writing unit tests...',
   }),
+  makeSession({
+    id: 'session-10',
+    status: 'idle',
+    branch: 'feature/waiting-review',
+    name: 'my-app',
+    prNumber: 111,
+    branchStatus: 'open',
+    reviewState: 'waiting',
+    statusChip: 'waiting',
+    lastMessage: 'PR created and awaiting review',
+  }),
+  makeSession({
+    id: 'session-11',
+    status: 'idle',
+    branch: 'feature/approved-pr',
+    name: 'my-app',
+    prNumber: 222,
+    branchStatus: 'open',
+    reviewState: 'approved',
+    statusChip: 'approved',
+    lastMessage: 'PR approved and ready to merge',
+  }),
 ]
 
 const meta: Meta<typeof SessionCard> = {
@@ -139,4 +161,12 @@ export const ReviewSessionReviewed: Story = {
 
 export const Active: Story = {
   args: { sessionId: 'session-active' },
+}
+
+export const WaitingChip: Story = {
+  args: { sessionId: 'session-10' },
+}
+
+export const ApprovedChip: Story = {
+  args: { sessionId: 'session-11' },
 }
