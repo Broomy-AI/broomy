@@ -225,5 +225,88 @@ describe('sessionBranchActions', () => {
       useSessionStore.getState().updateReviewState('test-session', 'approved')
       expect(useSessionStore.getState().sessions[0].statusChip).toBe('feedback')
     })
+
+    it('is a no-op when reviewState is unchanged', () => {
+      addTestSession('test-session', { branchStatus: 'open', hasFeedback: false, checksStatus: 'none', reviewState: 'waiting', statusChip: 'waiting' })
+      useSessionStore.getState().updateReviewState('test-session', 'waiting')
+      expect(useSessionStore.getState().sessions[0].statusChip).toBe('waiting')
+    })
+
+    it('is a no-op for a non-existent session', () => {
+      addTestSession('test-session', { branchStatus: 'open' })
+      useSessionStore.getState().updateReviewState('missing', 'approved')
+      expect(useSessionStore.getState().sessions[0].reviewState).toBe('none')
+    })
+  })
+
+  describe('updateSessionBranch', () => {
+    it('changes branch and resets PR/commit tracking', () => {
+      addTestSession('test-session', {
+        branch: 'old', hasHadCommits: true, branchStatus: 'open',
+        lastKnownPrState: 'OPEN', lastKnownPrNumber: 7, lastKnownPrUrl: 'http://pr/7',
+      })
+      useSessionStore.getState().updateSessionBranch('test-session', 'new')
+      const s = useSessionStore.getState().sessions[0]
+      expect(s.branch).toBe('new')
+      expect(s.hasHadCommits).toBe(false)
+      expect(s.lastKnownPrState).toBeUndefined()
+      expect(s.lastKnownPrNumber).toBeUndefined()
+      expect(s.lastKnownPrUrl).toBeUndefined()
+      expect(s.branchStatus).toBe('none')
+    })
+
+    it('is a no-op when the branch is unchanged', () => {
+      addTestSession('test-session', { branch: 'main', hasHadCommits: true })
+      useSessionStore.getState().updateSessionBranch('test-session', 'main')
+      expect(useSessionStore.getState().sessions[0].hasHadCommits).toBe(true)
+    })
+
+    it('is a no-op for a non-existent session', () => {
+      addTestSession('test-session', { branch: 'main' })
+      useSessionStore.getState().updateSessionBranch('missing', 'new')
+      expect(useSessionStore.getState().sessions[0].branch).toBe('main')
+    })
+  })
+
+  describe('updateFeedbackStatus', () => {
+    it('sets statusChip to feedback when open PR has feedback', () => {
+      addTestSession('test-session', { branchStatus: 'open', hasFeedback: false, checksStatus: 'none' })
+      useSessionStore.getState().updateFeedbackStatus('test-session', true)
+      expect(useSessionStore.getState().sessions[0].hasFeedback).toBe(true)
+      expect(useSessionStore.getState().sessions[0].statusChip).toBe('feedback')
+    })
+
+    it('is a no-op when hasFeedback is unchanged', () => {
+      addTestSession('test-session', { branchStatus: 'open', hasFeedback: false, statusChip: 'open' })
+      useSessionStore.getState().updateFeedbackStatus('test-session', false)
+      expect(useSessionStore.getState().sessions[0].statusChip).toBe('open')
+    })
+
+    it('is a no-op for a non-existent session', () => {
+      addTestSession('test-session', { branchStatus: 'open', hasFeedback: false })
+      useSessionStore.getState().updateFeedbackStatus('missing', true)
+      expect(useSessionStore.getState().sessions[0].hasFeedback).toBe(false)
+    })
+  })
+
+  describe('updateChecksStatus', () => {
+    it('sets statusChip to failed when open PR checks fail', () => {
+      addTestSession('test-session', { branchStatus: 'open', hasFeedback: false, checksStatus: 'none' })
+      useSessionStore.getState().updateChecksStatus('test-session', 'failed')
+      expect(useSessionStore.getState().sessions[0].checksStatus).toBe('failed')
+      expect(useSessionStore.getState().sessions[0].statusChip).toBe('failed')
+    })
+
+    it('is a no-op when checksStatus is unchanged', () => {
+      addTestSession('test-session', { branchStatus: 'open', checksStatus: 'none', statusChip: 'open' })
+      useSessionStore.getState().updateChecksStatus('test-session', 'none')
+      expect(useSessionStore.getState().sessions[0].statusChip).toBe('open')
+    })
+
+    it('is a no-op for a non-existent session', () => {
+      addTestSession('test-session', { branchStatus: 'open', checksStatus: 'none' })
+      useSessionStore.getState().updateChecksStatus('missing', 'failed')
+      expect(useSessionStore.getState().sessions[0].checksStatus).toBe('none')
+    })
   })
 })

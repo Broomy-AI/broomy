@@ -127,6 +127,52 @@ describe('useAppCallbacks', () => {
     expect(deps.updatePrState).toHaveBeenCalledWith('s2', null)
   })
 
+  it('refreshPrStatus derives reviewState for an OPEN PR using the repo approval policy', async () => {
+    const sessions = [{ id: 's1', directory: '/d1', repoId: 'r1' }] as Parameters<typeof useAppCallbacks>[0]['sessions']
+    const repos = [{ id: 'r1', rootDir: '/d1', defaultBranch: 'main', approvalPolicy: 'one' as const }]
+    const deps = makeDeps({ sessions, repos })
+    vi.mocked(window.gh.prStatus).mockResolvedValue({ state: 'OPEN', number: 10, url: 'http://pr/10' } as never)
+    vi.mocked(window.gh.prChecksStatus).mockResolvedValue('failed')
+    vi.mocked(window.gh.prFeedbackStatus).mockResolvedValue(false)
+    vi.mocked(window.gh.prApprovalStatus).mockResolvedValue({ approved: 1, pending: 0, otherReviews: 0 })
+    const { result } = renderHook(() => useAppCallbacks(deps))
+    await act(() => result.current.refreshPrStatus())
+    expect(deps.updateChecksStatus).toHaveBeenCalledWith('s1', 'failed')
+    expect(deps.updateFeedbackStatus).toHaveBeenCalledWith('s1', false)
+    // policy 'one' + one approval → 'approved'
+    expect(deps.updateReviewState).toHaveBeenCalledWith('s1', 'approved')
+  })
+
+  it('refreshPrStatus clears reviewState to none for a non-open PR', async () => {
+    const sessions = [{ id: 's1', directory: '/d1' }] as Parameters<typeof useAppCallbacks>[0]['sessions']
+    const deps = makeDeps({ sessions })
+    vi.mocked(window.gh.prStatus).mockResolvedValue({ state: 'MERGED', number: 3, url: 'http://pr/3' } as never)
+    const { result } = renderHook(() => useAppCallbacks(deps))
+    await act(() => result.current.refreshPrStatus())
+    expect(deps.updateReviewState).toHaveBeenCalledWith('s1', 'none')
+    expect(deps.updateChecksStatus).toHaveBeenCalledWith('s1', 'none')
+  })
+
+  it('refreshPrStatus falls back to defaults when checks/feedback/approval fetches reject', async () => {
+    const sessions = [{ id: 's1', directory: '/d1', repoId: 'r1' }] as Parameters<typeof useAppCallbacks>[0]['sessions']
+    const repos = [{ id: 'r1', rootDir: '/d1', defaultBranch: 'main', approvalPolicy: 'one' as const }]
+    const deps = makeDeps({ sessions, repos })
+    vi.mocked(window.gh.prStatus).mockResolvedValue({ state: 'OPEN', number: 10, url: 'http://pr/10' } as never)
+    vi.mocked(window.gh.prChecksStatus).mockRejectedValue(new Error('checks'))
+    vi.mocked(window.gh.prFeedbackStatus).mockRejectedValue(new Error('feedback'))
+    vi.mocked(window.gh.prApprovalStatus).mockRejectedValue(new Error('approval'))
+    const { result } = renderHook(() => useAppCallbacks(deps))
+    await act(() => result.current.refreshPrStatus())
+    expect(deps.updateChecksStatus).toHaveBeenCalledWith('s1', 'none')
+    expect(deps.updateFeedbackStatus).toHaveBeenCalledWith('s1', false)
+    // approval fetch rejected → {0,0,0} → 'none'
+    expect(deps.updateReviewState).toHaveBeenCalledWith('s1', 'none')
+    // Restore setup defaults so later tests aren't affected (beforeEach only clears call history).
+    vi.mocked(window.gh.prChecksStatus).mockResolvedValue('none')
+    vi.mocked(window.gh.prFeedbackStatus).mockResolvedValue(false)
+    vi.mocked(window.gh.prApprovalStatus).mockResolvedValue({ approved: 0, pending: 0, otherReviews: 0 })
+  })
+
   it('refreshPrStatus ignores errors from individual sessions', async () => {
     const sessions = [{ id: 's1', directory: '/d1' }] as Parameters<typeof useAppCallbacks>[0]['sessions']
     const deps = makeDeps({ sessions })
@@ -170,6 +216,35 @@ describe('useAppCallbacks', () => {
     const deps = makeDeps()
     const { result } = renderHook(() => useAppCallbacks(deps))
     expect(result.current.getAgentEnv({ agentId: null } as never)).toBeUndefined()
+  })
+
+  // --- getAgentConnectionMode / getAgentModel / getAgentEffort / getAgentSkipApproval ---
+  it('getAgentConnectionMode / getAgentModel / getAgentEffort return the matching agent fields', () => {
+    const agents = [{ id: 'a1', name: 'Agent', command: 'claude', connectionMode: 'api', model: 'opus', effort: 'high' }] as Parameters<typeof useAppCallbacks>[0]['agents']
+    const deps = makeDeps({ agents })
+    const { result } = renderHook(() => useAppCallbacks(deps))
+    expect(result.current.getAgentConnectionMode({ agentId: 'a1' } as never)).toBe('api')
+    expect(result.current.getAgentModel({ agentId: 'a1' } as never)).toBe('opus')
+    expect(result.current.getAgentEffort({ agentId: 'a1' } as never)).toBe('high')
+  })
+
+  it('getAgentConnectionMode / getAgentModel / getAgentEffort return undefined without an agentId', () => {
+    const deps = makeDeps()
+    const { result } = renderHook(() => useAppCallbacks(deps))
+    expect(result.current.getAgentConnectionMode({ agentId: null } as never)).toBeUndefined()
+    expect(result.current.getAgentModel({ agentId: null } as never)).toBeUndefined()
+    expect(result.current.getAgentEffort({ agentId: null } as never)).toBeUndefined()
+  })
+
+  it('getAgentSkipApproval reflects the repo skipApproval flag (by repoId and by directory)', () => {
+    const repos = [{ id: 'r1', rootDir: '/work', defaultBranch: 'main', skipApproval: true }]
+    const deps = makeDeps({ repos })
+    const { result } = renderHook(() => useAppCallbacks(deps))
+    expect(result.current.getAgentSkipApproval({ repoId: 'r1', directory: '/work/feat' } as never)).toBe(true)
+    // fall back to directory matching when repoId is absent
+    expect(result.current.getAgentSkipApproval({ directory: '/work/feat' } as never)).toBe(true)
+    // no matching repo → false
+    expect(result.current.getAgentSkipApproval({ directory: '/other' } as never)).toBe(false)
   })
 
   // --- handleLayoutSizeChange ---
