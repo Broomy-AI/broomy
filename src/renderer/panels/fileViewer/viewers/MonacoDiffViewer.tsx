@@ -7,9 +7,12 @@
  * at the requested line on mount and when the scrollToLine prop changes.
  */
 import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { DiffEditor, loader } from '@monaco-editor/react'
 import * as monacoEditor from 'monaco-editor'
 import { useMonacoComments } from '../hooks/useMonacoComments'
+import { useCommentBox } from '../hooks/useCommentBox'
+import InlineCommentBox from '../components/InlineCommentBox'
 import { useSettingsStore } from '../../../store/settings'
 import { MONACO_THEMES } from '../../../shared/theme/monacoTheme'
 
@@ -23,7 +26,7 @@ interface MonacoDiffViewerProps {
   language?: string
   sideBySide?: boolean
   scrollToLine?: number
-  reviewContext?: { sessionDirectory: string; commentsFilePath: string }
+  commentsContext?: { sessionDirectory: string; commentsFilePath: string }
   onEditorReady?: (actions: import('./types').EditorActions | null) => void
 }
 
@@ -88,7 +91,7 @@ export default function MonacoDiffViewer({
   language,
   sideBySide = true,
   scrollToLine,
-  reviewContext,
+  commentsContext,
   onEditorReady,
 }: MonacoDiffViewerProps) {
   const resolvedTheme = useSettingsStore((s) => s.resolvedTheme)
@@ -97,31 +100,33 @@ export default function MonacoDiffViewer({
   const diffEditorRef = useRef<monacoEditor.editor.IStandaloneDiffEditor | null>(null)
   const modifiedEditorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null)
 
-  const {
-    commentLine,
-    setCommentLine,
-    commentText,
-    setCommentText,
-    handleAddComment,
-  } = useMonacoComments({
-    filePath,
-    reviewContext,
-    editorRef: modifiedEditorRef,
-  })
+  const { addCommentAt } = useMonacoComments({ filePath, commentsContext, editorRef: modifiedEditorRef })
+  const { boxLine, boxNode, openBox, closeBox } = useCommentBox(modifiedEditorRef)
 
   const handleDiffEditorMount = (editor: monacoEditor.editor.IStandaloneDiffEditor) => {
     diffEditorRef.current = editor
     const modifiedEditor = editor.getModifiedEditor()
     modifiedEditorRef.current = modifiedEditor
-    // Enable glyph margin for comment clicks when review context is present
-    if (reviewContext) {
+    // Comment gutter: hover shows an "add comment" affordance; click opens the box.
+    if (commentsContext) {
       modifiedEditor.updateOptions({ glyphMargin: true })
+      const hoverDecorations = modifiedEditor.createDecorationsCollection([])
+      modifiedEditor.onMouseMove((e) => {
+        const line = e.target.position?.lineNumber
+        if (line && e.target.type === monacoEditor.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
+          hoverDecorations.set([{
+            range: new monacoEditor.Range(line, 1, line, 1),
+            options: { glyphMarginClassName: 'add-comment-glyph', glyphMarginHoverMessage: { value: 'Add comment' } },
+          }])
+        } else {
+          hoverDecorations.clear()
+        }
+      })
+      modifiedEditor.onMouseLeave(() => hoverDecorations.clear())
       modifiedEditor.onMouseDown((e) => {
         if (e.target.type === monacoEditor.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
           const lineNumber = e.target.position.lineNumber
-          if (lineNumber) {
-            setCommentLine(lineNumber)
-          }
+          if (lineNumber) openBox(lineNumber)
         }
       })
     }
@@ -165,41 +170,14 @@ export default function MonacoDiffViewer({
 
   return (
     <div className="h-full flex flex-col">
-      {/* Inline comment input */}
-      {reviewContext && commentLine !== null && (
-        <div className="flex-shrink-0 px-3 py-2 bg-bg-secondary border-b border-border">
-          <div className="text-xs text-text-secondary mb-1">Comment on line {commentLine}:</div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && commentText.trim()) {
-                  void handleAddComment()
-                } else if (e.key === 'Escape') {
-                  setCommentLine(null)
-                }
-              }}
-              placeholder="Type your comment..."
-              className="flex-1 px-2 py-1 text-xs rounded border border-border bg-bg-primary text-text-primary focus:outline-none focus:border-accent"
-              autoFocus
-            />
-            <button
-              onClick={handleAddComment}
-              disabled={!commentText.trim()}
-              className="px-2 py-1 text-xs rounded bg-review-solid text-on-solid hover:bg-review-base disabled:opacity-50 transition-colors"
-            >
-              Add
-            </button>
-            <button
-              onClick={() => setCommentLine(null)}
-              className="px-2 py-1 text-xs rounded text-text-secondary hover:text-text-primary transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
+      {boxNode && boxLine !== null && createPortal(
+        <InlineCommentBox
+          line={boxLine}
+          quotedText={modifiedEditorRef.current?.getModel()?.getLineContent(boxLine) ?? ''}
+          onAdd={(body) => { addCommentAt(boxLine, body); closeBox() }}
+          onCancel={closeBox}
+        />,
+        boxNode,
       )}
       {/* Diff Editor */}
       <div className="flex-1 min-h-0">
@@ -234,7 +212,7 @@ export default function MonacoDiffViewer({
             scrollBeyondLastLine: false,
             automaticLayout: true,
             padding: { top: 8, bottom: 8 },
-            glyphMargin: !!reviewContext,
+            glyphMargin: !!commentsContext,
             // Show unchanged regions collapsed by default with expand option
             hideUnchangedRegions: {
               enabled: true,
@@ -250,6 +228,36 @@ export default function MonacoDiffViewer({
           }}
         />
       </div>
+      {commentsContext && (
+        <style>{`
+          .review-comment-glyph {
+            background-color: rgb(var(--color-warning-base));
+            border-radius: 50%;
+            width: 8px !important;
+            height: 8px !important;
+            margin-top: 6px;
+            margin-left: 4px;
+          }
+          .review-comment-line {
+            /* 0.05 is invisible on a light ground; the token carries the theme. */
+            background-color: rgb(var(--color-warning-base) / 0.12);
+          }
+          .margin-view-overlays .cgmr {
+            cursor: pointer;
+          }
+          .add-comment-glyph {
+            color: rgb(var(--color-accent));
+            cursor: pointer;
+          }
+          .add-comment-glyph::before {
+            content: '+';
+            display: block;
+            text-align: center;
+            font-weight: 700;
+            line-height: 1;
+          }
+        `}</style>
+      )}
     </div>
   )
 }

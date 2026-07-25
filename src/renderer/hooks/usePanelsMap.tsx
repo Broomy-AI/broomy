@@ -245,7 +245,7 @@ function useFileViewerPanel(config: PanelsMapConfig) {
                 diffLabel={isActive ? diffLabel : undefined}
                 navigationToken={isActive ? navigationToken : undefined}
                 isActive={isActive}
-                reviewContext={session.sessionType === 'review' ? {
+                commentsContext={session.sessionType === 'review' ? {
                   sessionDirectory: session.directory,
                   commentsFilePath: `${session.directory}/.broomy/comments.json`,
                 } : undefined}

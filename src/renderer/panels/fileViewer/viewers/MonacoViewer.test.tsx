@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, cleanup, act } from '@testing-library/react'
 import '../../../../test/react-setup'
 
 // Mock Monaco editor and workers to avoid loading real Monaco
@@ -35,12 +35,8 @@ vi.mock('monaco-editor/esm/vs/language/typescript/ts.worker?worker', () => ({ de
 
 vi.mock('../hooks/useMonacoComments', () => ({
   useMonacoComments: vi.fn().mockReturnValue({
-    commentLine: null,
-    setCommentLine: vi.fn(),
-    commentText: '',
-    setCommentText: vi.fn(),
     existingComments: [],
-    handleAddComment: vi.fn(),
+    addCommentAt: vi.fn(),
   }),
 }))
 
@@ -55,6 +51,47 @@ afterEach(() => {
 beforeEach(() => {
   vi.clearAllMocks()
 })
+
+function getLastEditorProps() {
+  const calls = mockEditor.mock.calls
+  return calls[calls.length - 1][0] as Record<string, unknown>
+}
+
+function makeMockEditorInstance() {
+  return {
+    addCommand: vi.fn(),
+    onMouseDown: vi.fn(),
+    onMouseMove: vi.fn(),
+    onMouseLeave: vi.fn(),
+    changeViewZones: vi.fn((cb: (accessor: { addZone: () => string; removeZone: () => void }) => void) =>
+      cb({ addZone: () => 'zone-1', removeZone: vi.fn() })),
+    focus: vi.fn(),
+    trigger: vi.fn(),
+    getValue: vi.fn().mockReturnValue('content'),
+    revealLineInCenter: vi.fn(),
+    getModel: vi.fn().mockReturnValue({
+      getLineContent: vi.fn().mockReturnValue('some line content'),
+    }),
+    setSelection: vi.fn(),
+    createDecorationsCollection: vi.fn().mockReturnValue({ clear: vi.fn(), set: vi.fn() }),
+  }
+}
+
+function makeMockMonaco() {
+  return {
+    KeyMod: { CtrlCmd: 2048 },
+    KeyCode: { KeyS: 49 },
+    editor: { MouseTargetType: { GUTTER_GLYPH_MARGIN: 2 } },
+    Range: class Range {
+      constructor(
+        public startLineNumber: number,
+        public startColumn: number,
+        public endLineNumber: number,
+        public endColumn: number,
+      ) {}
+    },
+  }
+}
 
 describe('MonacoViewer plugin', () => {
   it('has correct id and name', () => {
@@ -155,11 +192,11 @@ describe('MonacoViewerComponent', () => {
     )
   })
 
-  it('does not render comment input when no reviewContext', () => {
+  it('does not render an inline comment box when no commentsContext', () => {
     const { container } = render(
       <MonacoViewerComponent filePath="/test/file.ts" content="" />
     )
-    expect(container.querySelector('input[placeholder="Type your comment..."]')).toBeNull()
+    expect(container.querySelector('textarea[placeholder="Add a comment..."]')).toBeNull()
   })
 
   it('calls onDirtyChange via onChange handler', () => {
@@ -188,44 +225,87 @@ describe('MonacoViewerComponent', () => {
     expect(onDirtyChange).toHaveBeenCalledWith(true, '')
   })
 
-  it('renders comment input when reviewContext and commentLine are set', async () => {
-    const { useMonacoComments } = await import('../hooks/useMonacoComments')
-    vi.mocked(useMonacoComments).mockReturnValue({
-      commentLine: 5,
-      setCommentLine: vi.fn(),
-      commentText: 'test comment',
-      setCommentText: vi.fn(),
-      existingComments: [],
-      handleAddComment: vi.fn(),
-    })
-
-    const { container } = render(
-      <MonacoViewerComponent
-        filePath="/test/file.ts"
-        content=""
-        reviewContext={{ sessionDirectory: '/test', commentsFilePath: '/test/.broomy/comments.json' }}
-      />
-    )
-    expect(container.querySelector('input[placeholder="Type your comment..."]')).toBeTruthy()
-    expect(screen.getByText('Comment on line 5:')).toBeTruthy()
-
-    // Reset the mock
-    vi.mocked(useMonacoComments).mockReturnValue({
-      commentLine: null,
-      setCommentLine: vi.fn(),
-      commentText: '',
-      setCommentText: vi.fn(),
-      existingComments: [],
-      handleAddComment: vi.fn(),
-    })
-  })
-
-  it('enables glyphMargin when reviewContext is provided', () => {
+  it('opens the inline comment box in a Monaco view zone when the gutter is clicked', () => {
     render(
       <MonacoViewerComponent
         filePath="/test/file.ts"
         content=""
-        reviewContext={{ sessionDirectory: '/test', commentsFilePath: '/test/.broomy/comments.json' }}
+        commentsContext={{ sessionDirectory: '/test', commentsFilePath: '/test/.broomy/comments.json' }}
+      />
+    )
+    const props = getLastEditorProps()
+    const onMount = props.onMount as (editor: unknown, monaco: unknown) => void
+    const editor = makeMockEditorInstance()
+    let capturedZone: { afterLineNumber: number; domNode: HTMLDivElement } | undefined
+    editor.changeViewZones = vi.fn((cb: (accessor: { addZone: (z: { afterLineNumber: number; domNode: HTMLDivElement }) => string; removeZone: () => void }) => void) => {
+      cb({
+        addZone: (zone) => { capturedZone = zone; return 'zone-1' },
+        removeZone: vi.fn(),
+      })
+    }) as never
+    const monacoInst = makeMockMonaco()
+
+    onMount(editor, monacoInst)
+
+    const mouseDownHandler = editor.onMouseDown.mock.calls[0][0]
+    act(() => {
+      mouseDownHandler({
+        target: { type: monacoInst.editor.MouseTargetType.GUTTER_GLYPH_MARGIN, position: { lineNumber: 7 } },
+      })
+    })
+
+    expect(editor.changeViewZones).toHaveBeenCalled()
+    expect(capturedZone).toBeDefined()
+    expect(capturedZone!.afterLineNumber).toBe(7)
+    // The InlineCommentBox is portaled into the view-zone's DOM node, quoting
+    // the line's content read from the editor model.
+    expect(capturedZone!.domNode.textContent).toContain('Line 7')
+    expect(capturedZone!.domNode.textContent).toContain('some line content')
+    expect(capturedZone!.domNode.querySelector('textarea[placeholder="Add a comment..."]')).toBeTruthy()
+  })
+
+  it('shows a hover "add comment" affordance on the glyph margin and clears it on mouse leave', () => {
+    render(
+      <MonacoViewerComponent
+        filePath="/test/file.ts"
+        content=""
+        commentsContext={{ sessionDirectory: '/test', commentsFilePath: '/test/.broomy/comments.json' }}
+      />
+    )
+    const props = getLastEditorProps()
+    const onMount = props.onMount as (editor: unknown, monaco: unknown) => void
+    const editor = makeMockEditorInstance()
+    const hoverCollection = { set: vi.fn(), clear: vi.fn() }
+    editor.createDecorationsCollection = vi.fn().mockReturnValue(hoverCollection)
+    const monacoInst = makeMockMonaco()
+
+    onMount(editor, monacoInst)
+
+    const mouseMoveHandler = editor.onMouseMove.mock.calls[0][0]
+    mouseMoveHandler({
+      target: { type: monacoInst.editor.MouseTargetType.GUTTER_GLYPH_MARGIN, position: { lineNumber: 3 } },
+    })
+    expect(hoverCollection.set).toHaveBeenCalledWith([
+      expect.objectContaining({
+        options: expect.objectContaining({ glyphMarginClassName: 'add-comment-glyph' }),
+      }),
+    ])
+
+    // Moving off the glyph margin clears the hover decoration.
+    mouseMoveHandler({ target: { type: 0, position: { lineNumber: 3 } } })
+    expect(hoverCollection.clear).toHaveBeenCalled()
+
+    const mouseLeaveHandler = editor.onMouseLeave.mock.calls[0][0]
+    mouseLeaveHandler()
+    expect(hoverCollection.clear).toHaveBeenCalledTimes(2)
+  })
+
+  it('enables glyphMargin when commentsContext is provided', () => {
+    render(
+      <MonacoViewerComponent
+        filePath="/test/file.ts"
+        content=""
+        commentsContext={{ sessionDirectory: '/test', commentsFilePath: '/test/.broomy/comments.json' }}
       />
     )
     expect(mockEditor).toHaveBeenCalledWith(
@@ -237,20 +317,21 @@ describe('MonacoViewerComponent', () => {
     )
   })
 
-  it('renders review comment CSS when reviewContext is provided', () => {
+  it('renders review comment CSS when commentsContext is provided', () => {
     const { container } = render(
       <MonacoViewerComponent
         filePath="/test/file.ts"
         content=""
-        reviewContext={{ sessionDirectory: '/test', commentsFilePath: '/test/.broomy/comments.json' }}
+        commentsContext={{ sessionDirectory: '/test', commentsFilePath: '/test/.broomy/comments.json' }}
       />
     )
     const style = container.querySelector('style')
     expect(style).toBeTruthy()
     expect(style!.textContent).toContain('review-comment-glyph')
+    expect(style!.textContent).toContain('add-comment-glyph')
   })
 
-  it('does not render review comment CSS without reviewContext', () => {
+  it('does not render review comment CSS without commentsContext', () => {
     const { container } = render(
       <MonacoViewerComponent filePath="/test/file.ts" content="" />
     )
@@ -369,35 +450,6 @@ describe('MonacoViewerComponent', () => {
 })
 
 describe('MonacoViewerComponent onMount lifecycle', () => {
-  function getLastEditorProps() {
-    const calls = mockEditor.mock.calls
-    return calls[calls.length - 1][0] as Record<string, unknown>
-  }
-
-  function makeMockEditorInstance() {
-    return {
-      addCommand: vi.fn(),
-      onMouseDown: vi.fn(),
-      focus: vi.fn(),
-      trigger: vi.fn(),
-      getValue: vi.fn().mockReturnValue('content'),
-      revealLineInCenter: vi.fn(),
-      getModel: vi.fn().mockReturnValue({
-        getLineContent: vi.fn().mockReturnValue('some line content'),
-      }),
-      setSelection: vi.fn(),
-      createDecorationsCollection: vi.fn().mockReturnValue({ clear: vi.fn() }),
-    }
-  }
-
-  function makeMockMonaco() {
-    return {
-      KeyMod: { CtrlCmd: 2048 },
-      KeyCode: { KeyS: 49 },
-      editor: { MouseTargetType: { GUTTER_GLYPH_MARGIN: 2 } },
-    }
-  }
-
   it('calls onMount and registers Cmd+S handler', () => {
     const onSave = vi.fn().mockResolvedValue(true)
     render(
@@ -541,12 +593,12 @@ describe('MonacoViewerComponent onMount lifecycle', () => {
     })
   })
 
-  it('registers glyph margin click handler when reviewContext is provided', () => {
+  it('registers glyph margin hover and click handlers when commentsContext is provided', () => {
     render(
       <MonacoViewerComponent
         filePath="/test/file.ts"
         content=""
-        reviewContext={{ sessionDirectory: '/test', commentsFilePath: '/test/.broomy/comments.json' }}
+        commentsContext={{ sessionDirectory: '/test', commentsFilePath: '/test/.broomy/comments.json' }}
       />
     )
     const props = getLastEditorProps()
@@ -557,9 +609,11 @@ describe('MonacoViewerComponent onMount lifecycle', () => {
     onMount(editor, monacoInst)
 
     expect(editor.onMouseDown).toHaveBeenCalled()
+    expect(editor.onMouseMove).toHaveBeenCalled()
+    expect(editor.onMouseLeave).toHaveBeenCalled()
   })
 
-  it('does not register glyph margin handler without reviewContext', () => {
+  it('does not register glyph margin handlers without commentsContext', () => {
     render(
       <MonacoViewerComponent filePath="/test/file.ts" content="" />
     )
@@ -571,6 +625,8 @@ describe('MonacoViewerComponent onMount lifecycle', () => {
     onMount(editor, monacoInst)
 
     expect(editor.onMouseDown).not.toHaveBeenCalled()
+    expect(editor.onMouseMove).not.toHaveBeenCalled()
+    expect(editor.onMouseLeave).not.toHaveBeenCalled()
   })
 
   it('calls onEditorReady with showOutline and showFind actions', () => {

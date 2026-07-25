@@ -8,6 +8,7 @@
  * fallback viewer, accepting any file with a known text extension or text-like content.
  */
 import { useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import Editor, { loader, Monaco } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor'
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
@@ -18,6 +19,8 @@ import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import type { FileViewerPlugin, FileViewerComponentProps } from './types'
 import { getFileExtension } from './types'
 import { useMonacoComments } from '../hooks/useMonacoComments'
+import { useCommentBox } from '../hooks/useCommentBox'
+import InlineCommentBox from '../components/InlineCommentBox'
 import { useSettingsStore } from '../../../store/settings'
 import { MONACO_THEMES } from '../../../shared/theme/monacoTheme'
 
@@ -184,7 +187,7 @@ function scrollAndHighlight(
   }
 }
 
-function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrollToLine, searchHighlight, reviewContext, onEditorReady, onOpenFile }: FileViewerComponentProps) {
+function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrollToLine, searchHighlight, commentsContext, onEditorReady, onOpenFile }: FileViewerComponentProps) {
   // One source for both editors: Monaco's setTheme is global, so they cannot disagree.
   const resolvedTheme = useSettingsStore((s) => s.resolvedTheme)
   const editorFontSize = useSettingsStore((s) => s.appearance.editorFontSize)
@@ -205,11 +208,8 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
   onSaveRef.current = onSave
   onDirtyChangeRef.current = onDirtyChange
 
-  const { commentLine, setCommentLine, commentText, setCommentText, handleAddComment } = useMonacoComments({
-    filePath,
-    reviewContext,
-    editorRef,
-  })
+  const { addCommentAt } = useMonacoComments({ filePath, commentsContext, editorRef })
+  const { boxLine, boxNode, openBox, closeBox } = useCommentBox(editorRef)
 
   // Keep refs in sync
   scrollToLineRef.current = scrollToLine
@@ -284,15 +284,25 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
       }
     })
 
-    // Add glyph margin click handler for review comments
-    if (reviewContext) {
+    // Comment gutter: hover shows an "add comment" affordance; click opens the box.
+    if (commentsContext) {
+      const hoverDecorations = editor.createDecorationsCollection([])
+      editor.onMouseMove((e) => {
+        const line = e.target.position?.lineNumber
+        if (line && e.target.type === monacoInstance.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
+          hoverDecorations.set([{
+            range: new monacoInstance.Range(line, 1, line, 1),
+            options: { glyphMarginClassName: 'add-comment-glyph', glyphMarginHoverMessage: { value: 'Add comment' } },
+          }])
+        } else {
+          hoverDecorations.clear()
+        }
+      })
+      editor.onMouseLeave(() => hoverDecorations.clear())
       editor.onMouseDown((e) => {
         if (e.target.type === monacoInstance.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
           const lineNumber = e.target.position?.lineNumber
-          if (lineNumber) {
-            setCommentLine(lineNumber)
-            setCommentText('')
-          }
+          if (lineNumber) openBox(lineNumber)
         }
       })
     }
@@ -348,41 +358,14 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
 
   return (
     <div className="h-full flex flex-col">
-      {/* Inline comment input */}
-      {reviewContext && commentLine !== null && (
-        <div className="flex-shrink-0 px-3 py-2 bg-bg-secondary border-b border-border">
-          <div className="text-xs text-text-secondary mb-1">Comment on line {commentLine}:</div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && commentText.trim()) {
-                  void handleAddComment()
-                } else if (e.key === 'Escape') {
-                  setCommentLine(null)
-                }
-              }}
-              placeholder="Type your comment..."
-              className="flex-1 px-2 py-1 text-xs rounded border border-border bg-bg-primary text-text-primary focus:outline-none focus:border-accent"
-              autoFocus
-            />
-            <button
-              onClick={handleAddComment}
-              disabled={!commentText.trim()}
-              className="px-2 py-1 text-xs rounded bg-review-solid text-on-solid hover:bg-review-base disabled:opacity-50 transition-colors"
-            >
-              Add
-            </button>
-            <button
-              onClick={() => setCommentLine(null)}
-              className="px-2 py-1 text-xs rounded text-text-secondary hover:text-text-primary transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
+      {boxNode && boxLine !== null && createPortal(
+        <InlineCommentBox
+          line={boxLine}
+          quotedText={editorRef.current?.getModel()?.getLineContent(boxLine) ?? ''}
+          onAdd={(body) => { addCommentAt(boxLine, body); closeBox() }}
+          onCancel={closeBox}
+        />,
+        boxNode,
       )}
       <div className="flex-1 min-h-0">
         <Editor
@@ -403,12 +386,12 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
             wordWrap: 'on',
             automaticLayout: true,
             padding: { top: 8, bottom: 8 },
-            glyphMargin: !!reviewContext,
+            glyphMargin: !!commentsContext,
           }}
         />
       </div>
       {/* Add CSS for review comment decorations */}
-      {reviewContext && (
+      {commentsContext && (
         <style>{`
           .review-comment-glyph {
             background-color: rgb(var(--color-warning-base));
@@ -424,6 +407,17 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
           }
           .margin-view-overlays .cgmr {
             cursor: pointer;
+          }
+          .add-comment-glyph {
+            color: rgb(var(--color-accent));
+            cursor: pointer;
+          }
+          .add-comment-glyph::before {
+            content: '+';
+            display: block;
+            text-align: center;
+            font-weight: 700;
+            line-height: 1;
           }
         `}</style>
       )}
