@@ -33,15 +33,16 @@ describe('useCommentsStore', () => {
     expect(useCommentsStore.getState().commentsByDir[DIR]).toEqual([])
   })
 
-  it('addComment appends and persists to the .broomy path', () => {
+  it('addComment appends and persists to the .broomy path', async () => {
     const c = useCommentsStore.getState().addComment(DIR, { file: FILE, line: 5, quotedText: 'q', body: 'hi' })
     expect(c.id).toBeTruthy()
     expect(c.createdAt).toBeTruthy()
     expect(useCommentsStore.getState().commentsByDir[DIR]).toHaveLength(1)
-    expect(window.fs.writeFile).toHaveBeenCalledWith(
+    // Persistence is fire-and-forget: mkdir is awaited before writeFile.
+    await vi.waitFor(() => expect(window.fs.writeFile).toHaveBeenCalledWith(
       '/repo/.broomy/comments.json',
       expect.stringContaining('"body": "hi"'),
-    )
+    ))
   })
 
   it('updateComment edits an existing body', () => {
@@ -56,11 +57,11 @@ describe('useCommentsStore', () => {
     expect(useCommentsStore.getState().commentsByDir[DIR]).toEqual([])
   })
 
-  it('clearComments empties the dir and persists an empty list', () => {
+  it('clearComments empties the dir and persists an empty list', async () => {
     useCommentsStore.getState().addComment(DIR, { file: FILE, line: 5, quotedText: 'q', body: 'hi' })
     vi.clearAllMocks()
     useCommentsStore.getState().clearComments(DIR)
     expect(useCommentsStore.getState().commentsByDir[DIR]).toEqual([])
-    expect(window.fs.writeFile).toHaveBeenCalledWith('/repo/.broomy/comments.json', '[]')
+    await vi.waitFor(() => expect(window.fs.writeFile).toHaveBeenCalledWith('/repo/.broomy/comments.json', '[]'))
   })
 })

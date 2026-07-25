@@ -23,9 +23,13 @@ export default function CommentsDock({ directory, agentPtyId, onNavigate }: Comm
   const comments = useCommentsStore((s) => s.commentsByDir[directory] ?? [])
   const loadComments = useCommentsStore((s) => s.loadComments)
   const resolveComment = useCommentsStore((s) => s.resolveComment)
+  const updateComment = useCommentsStore((s) => s.updateComment)
   const clearComments = useCommentsStore((s) => s.clearComments)
   const loaded = useCommentsStore((s) => s.commentsByDir[directory] !== undefined)
 
+  // The comment currently being edited inline, and its draft text.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editText, setEditText] = useState('')
   const [collapsed, setCollapsed] = useState(false)
   const [height, setHeight] = useState(() => {
     const saved = Number(localStorage.getItem(HEIGHT_KEY))
@@ -90,21 +94,67 @@ export default function CommentsDock({ directory, agentPtyId, onNavigate }: Comm
               </div>
             ) : (
               comments.map((c) => (
-                <div key={c.id} className="group flex items-start gap-2 border-b border-border px-3 py-1.5 text-xs">
-                  <button
-                    onClick={() => onNavigate(c.file, c.line)}
-                    className="min-w-0 flex-1 text-left"
-                  >
-                    <span className="text-accent">{toRelativePath(c.file, directory)}:{c.line}</span>
-                    <span className="ml-1 text-text-secondary truncate"> — {c.body}</span>
-                  </button>
-                  <button
-                    onClick={() => resolveComment(directory, c.id)}
-                    aria-label="Resolve comment"
-                    className="opacity-0 transition-opacity group-hover:opacity-100 text-text-secondary hover:text-text-primary"
-                  >
-                    ✕
-                  </button>
+                <div key={c.id} className="group border-b border-border px-3 py-1.5 text-xs">
+                  {editingId === c.id ? (
+                    <div className="flex flex-col gap-1">
+                      <span className="text-accent">{toRelativePath(c.file, directory)}:{c.line}</span>
+                      <textarea
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && editText.trim()) {
+                            updateComment(directory, c.id, editText)
+                            setEditingId(null)
+                          } else if (e.key === 'Escape') {
+                            setEditingId(null)
+                          }
+                        }}
+                        rows={2}
+                        autoFocus
+                        aria-label="Edit comment"
+                        className="w-full resize-y rounded border border-border bg-bg-primary px-2 py-1 text-xs text-text-primary focus:border-accent focus:outline-none"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => setEditingId(null)}
+                          className="rounded px-2 py-0.5 text-text-secondary hover:text-text-primary"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => { updateComment(directory, c.id, editText); setEditingId(null) }}
+                          disabled={!editText.trim()}
+                          className="rounded bg-accent px-2 py-0.5 text-on-accent hover:bg-accent/80 disabled:opacity-50"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-2">
+                      <button
+                        onClick={() => onNavigate(c.file, c.line)}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <span className="text-accent">{toRelativePath(c.file, directory)}:{c.line}</span>
+                        <span className="ml-1 text-text-secondary truncate"> — {c.body}</span>
+                      </button>
+                      <button
+                        onClick={() => { setEditingId(c.id); setEditText(c.body) }}
+                        aria-label="Edit comment"
+                        className="opacity-0 transition-opacity group-hover:opacity-100 text-text-secondary hover:text-text-primary"
+                      >
+                        ✎
+                      </button>
+                      <button
+                        onClick={() => resolveComment(directory, c.id)}
+                        aria-label="Resolve comment"
+                        className="opacity-0 transition-opacity group-hover:opacity-100 text-text-secondary hover:text-text-primary"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))
             )}

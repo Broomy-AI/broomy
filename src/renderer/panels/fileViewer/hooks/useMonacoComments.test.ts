@@ -127,7 +127,7 @@ describe('useMonacoComments', () => {
       expect(window.fs.writeFile).not.toHaveBeenCalled()
     })
 
-    it('reads the line text from the editor model and calls store addComment with it as quotedText', () => {
+    it('reads the line text from the editor model and calls store addComment with it as quotedText', async () => {
       const mockModel = { getLineContent: vi.fn().mockReturnValue('  const total = a + b') }
       const mockEditor = {
         getModel: vi.fn().mockReturnValue(mockModel),
@@ -154,10 +154,10 @@ describe('useMonacoComments', () => {
         quotedText: '  const total = a + b',
         body: 'Fix this line',
       })
-      expect(window.fs.writeFile).toHaveBeenCalledWith(
+      await vi.waitFor(() => expect(window.fs.writeFile).toHaveBeenCalledWith(
         '/tmp/session/.broomy/comments.json',
         expect.stringContaining('"Fix this line"'),
-      )
+      ))
     })
 
     it('uses an empty quotedText when the editor has no model yet', () => {

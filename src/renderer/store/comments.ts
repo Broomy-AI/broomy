@@ -15,9 +15,15 @@ export function commentsFilePathFor(dir: string): string {
   return `${dir}/.broomy/comments.json`
 }
 
-function persist(dir: string, comments: Comment[]): void {
-  window.fs.mkdir(`${dir}/.broomy`).catch(() => {})
-  window.fs.writeFile(commentsFilePathFor(dir), JSON.stringify(comments, null, 2)).catch(() => {})
+async function persist(dir: string, comments: Comment[]): Promise<void> {
+  try {
+    // Ensure the .broomy directory exists before writing, so the very first
+    // comment in a fresh session can't lose a race to a missing directory.
+    await window.fs.mkdir(`${dir}/.broomy`)
+    await window.fs.writeFile(commentsFilePathFor(dir), JSON.stringify(comments, null, 2))
+  } catch {
+    // Persistence failure is non-fatal; in-memory state remains authoritative.
+  }
 }
 
 interface CommentsStore {
@@ -55,7 +61,7 @@ export const useCommentsStore = create<CommentsStore>((set, get) => ({
     }
     const next = [...(get().commentsByDir[sessionDir] ?? []), comment]
     set((s) => ({ commentsByDir: { ...s.commentsByDir, [sessionDir]: next } }))
-    persist(sessionDir, next)
+    void persist(sessionDir, next)
     return comment
   },
 
@@ -64,17 +70,17 @@ export const useCommentsStore = create<CommentsStore>((set, get) => ({
       c.id === id ? { ...c, body: body.trim() } : c,
     )
     set((s) => ({ commentsByDir: { ...s.commentsByDir, [sessionDir]: next } }))
-    persist(sessionDir, next)
+    void persist(sessionDir, next)
   },
 
   resolveComment: (sessionDir, id) => {
     const next = (get().commentsByDir[sessionDir] ?? []).filter((c) => c.id !== id)
     set((s) => ({ commentsByDir: { ...s.commentsByDir, [sessionDir]: next } }))
-    persist(sessionDir, next)
+    void persist(sessionDir, next)
   },
 
   clearComments: (sessionDir) => {
     set((s) => ({ commentsByDir: { ...s.commentsByDir, [sessionDir]: [] } }))
-    persist(sessionDir, [])
+    void persist(sessionDir, [])
   },
 }))

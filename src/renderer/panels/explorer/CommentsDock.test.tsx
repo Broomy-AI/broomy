@@ -69,6 +69,57 @@ describe('CommentsDock', () => {
     expect(useCommentsStore.getState().commentsByDir[DIR]).toEqual([])
   })
 
+  it('edits a comment inline and saves it via the store', () => {
+    useCommentsStore.setState({ commentsByDir: { [DIR]: [
+      { id: 'c1', file: '/repo/src/a.ts', line: 42, quotedText: 'x', body: 'original', createdAt: 't' },
+    ] } })
+    render(<CommentsDock directory={DIR} agentPtyId="pty1" onNavigate={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /edit comment/i }))
+    const textarea = screen.getByRole('textbox', { name: /edit comment/i })
+    fireEvent.change(textarea, { target: { value: 'revised' } })
+    fireEvent.click(screen.getByRole('button', { name: /^Save$/ }))
+
+    expect(useCommentsStore.getState().commentsByDir[DIR]![0].body).toBe('revised')
+    // The edit form is dismissed after saving.
+    expect(screen.queryByRole('textbox', { name: /edit comment/i })).not.toBeInTheDocument()
+  })
+
+  it('saves an inline edit with Cmd+Enter and cancels with Escape', () => {
+    useCommentsStore.setState({ commentsByDir: { [DIR]: [
+      { id: 'c1', file: '/repo/src/a.ts', line: 42, quotedText: 'x', body: 'original', createdAt: 't' },
+    ] } })
+    render(<CommentsDock directory={DIR} agentPtyId="pty1" onNavigate={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /edit comment/i }))
+    const ta = screen.getByRole('textbox', { name: /edit comment/i })
+    fireEvent.change(ta, { target: { value: 'kbd revised' } })
+    fireEvent.keyDown(ta, { key: 'Enter', metaKey: true })
+    expect(useCommentsStore.getState().commentsByDir[DIR]![0].body).toBe('kbd revised')
+
+    // Re-open, type, then Escape — the change is discarded.
+    fireEvent.click(screen.getByRole('button', { name: /edit comment/i }))
+    const ta2 = screen.getByRole('textbox', { name: /edit comment/i })
+    fireEvent.change(ta2, { target: { value: 'discarded' } })
+    fireEvent.keyDown(ta2, { key: 'Escape' })
+    expect(useCommentsStore.getState().commentsByDir[DIR]![0].body).toBe('kbd revised')
+    expect(screen.queryByRole('textbox', { name: /edit comment/i })).not.toBeInTheDocument()
+  })
+
+  it('cancels an inline edit without changing the comment', () => {
+    useCommentsStore.setState({ commentsByDir: { [DIR]: [
+      { id: 'c1', file: '/repo/src/a.ts', line: 42, quotedText: 'x', body: 'original', createdAt: 't' },
+    ] } })
+    render(<CommentsDock directory={DIR} agentPtyId="pty1" onNavigate={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /edit comment/i }))
+    fireEvent.change(screen.getByRole('textbox', { name: /edit comment/i }), { target: { value: 'revised' } })
+    fireEvent.click(screen.getByRole('button', { name: /^Cancel$/ }))
+
+    expect(useCommentsStore.getState().commentsByDir[DIR]![0].body).toBe('original')
+    expect(screen.queryByRole('textbox', { name: /edit comment/i })).not.toBeInTheDocument()
+  })
+
   it('collapses and expands when the header is clicked', () => {
     render(<CommentsDock directory={DIR} agentPtyId="pty1" onNavigate={vi.fn()} />)
     // The header button's accessible name starts with "Comments"; the submit
@@ -86,20 +137,20 @@ describe('CommentsDock', () => {
 
   it('persists a dragged height to localStorage and applies it to the body', () => {
     const { container } = render(<CommentsDock directory={DIR} agentPtyId="pty1" onNavigate={vi.fn()} />)
-    const handle = container.querySelector('.cursor-row-resize') as HTMLElement
+    const handle = container.querySelector<HTMLElement>('.cursor-row-resize')!
     expect(handle).toBeTruthy()
     // Dragging up so the height-from-bottom is 200px (within the [80,420] clamp).
     fireEvent.mouseDown(handle)
     fireEvent.mouseMove(window, { clientY: window.innerHeight - 200 })
     fireEvent.mouseUp(window)
     expect(localStorage.getItem('broomy.commentsDock.height')).toBe('200')
-    const body = container.querySelector('div[style*="height"]') as HTMLElement
+    const body = container.querySelector<HTMLElement>('div[style*="height"]')!
     expect(body.style.height).toBe('200px')
   })
 
   it('clamps a dragged height to the maximum', () => {
     const { container } = render(<CommentsDock directory={DIR} agentPtyId="pty1" onNavigate={vi.fn()} />)
-    const handle = container.querySelector('.cursor-row-resize') as HTMLElement
+    const handle = container.querySelector<HTMLElement>('.cursor-row-resize')!
     fireEvent.mouseDown(handle)
     // Drag far past the top: from-bottom would be huge, must clamp to 420.
     fireEvent.mouseMove(window, { clientY: -10000 })
@@ -110,7 +161,7 @@ describe('CommentsDock', () => {
   it('initializes its height from a previously saved localStorage value', () => {
     localStorage.setItem('broomy.commentsDock.height', '250')
     const { container } = render(<CommentsDock directory={DIR} agentPtyId="pty1" onNavigate={vi.fn()} />)
-    const body = container.querySelector('div[style*="height"]') as HTMLElement
+    const body = container.querySelector<HTMLElement>('div[style*="height"]')!
     expect(body.style.height).toBe('250px')
   })
 })
