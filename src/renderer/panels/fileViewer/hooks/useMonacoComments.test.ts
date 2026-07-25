@@ -146,7 +146,7 @@ describe('useMonacoComments', () => {
       act(() => { result.current.addCommentAt(10, 'Fix this line') })
 
       expect(mockModel.getLineContent).toHaveBeenCalledWith(10)
-      const stored = useCommentsStore.getState().commentsByDir['/tmp/session']
+      const stored = useCommentsStore.getState().commentsByDir['/tmp/session']!
       expect(stored).toHaveLength(1)
       expect(stored[0]).toMatchObject({
         file: 'src/foo.ts',
@@ -174,7 +174,7 @@ describe('useMonacoComments', () => {
 
       act(() => { result.current.addCommentAt(3, 'No model available') })
 
-      const stored = useCommentsStore.getState().commentsByDir['/tmp/session']
+      const stored = useCommentsStore.getState().commentsByDir['/tmp/session']!
       expect(stored[0].quotedText).toBe('')
     })
 
@@ -199,7 +199,7 @@ describe('useMonacoComments', () => {
 
       act(() => { result.current.addCommentAt(20, 'New comment') })
 
-      const stored = useCommentsStore.getState().commentsByDir['/tmp/session']
+      const stored = useCommentsStore.getState().commentsByDir['/tmp/session']!
       expect(stored).toHaveLength(2)
       expect(stored[0].body).toBe('Old comment')
       expect(stored[1].body).toBe('New comment')

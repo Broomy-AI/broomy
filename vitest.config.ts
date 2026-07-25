@@ -56,6 +56,8 @@ export default defineConfig({
         'src/renderer/panels/agent/AgentPermissionRequest.tsx',
         // Viewer components needing browser canvas/DOM APIs
         'src/renderer/panels/fileViewer/viewers/ImageDiffViewer.tsx',
+        // Monaco view-zone glue (addZone/removeZone) — needs a real editor, tested via E2E
+        'src/renderer/panels/fileViewer/hooks/useCommentBox.ts',
       ],
       thresholds: {
         lines: 90,

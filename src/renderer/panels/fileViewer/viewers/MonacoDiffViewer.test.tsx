@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, cleanup } from '@testing-library/react'
+import { render, cleanup, act } from '@testing-library/react'
 import '../../../../test/react-setup'
 
 // Mock @monaco-editor/react and monaco-editor to avoid loading real Monaco
@@ -16,6 +16,10 @@ vi.mock('@monaco-editor/react', () => ({
 vi.mock('monaco-editor', () => ({
   editor: {
     defineTheme: vi.fn(),
+    MouseTargetType: { GUTTER_GLYPH_MARGIN: 2 },
+  },
+  Range: class {
+    constructor(public startLineNumber: number, public startColumn: number, public endLineNumber: number, public endColumn: number) {}
   },
 }))
 
@@ -222,6 +226,77 @@ describe('MonacoDiffViewer', () => {
     onMountHandler(mockEditorInstance)
 
     expect(mockModifiedEditor.revealLineInCenter).not.toHaveBeenCalled()
+  })
+
+  describe('inline comments', () => {
+    const COMMENTS_CONTEXT = { sessionDirectory: '/test', commentsFilePath: '/test/.broomy/comments.json' }
+
+    const makeModifiedEditor = () => ({
+      updateOptions: vi.fn(),
+      revealLineInCenter: vi.fn(),
+      setPosition: vi.fn(),
+      createDecorationsCollection: vi.fn().mockReturnValue({ set: vi.fn(), clear: vi.fn() }),
+      onMouseMove: vi.fn(),
+      onMouseLeave: vi.fn(),
+      onMouseDown: vi.fn(),
+      changeViewZones: vi.fn(),
+      getModel: vi.fn().mockReturnValue({ getLineContent: vi.fn().mockReturnValue('  const total = a + b') }),
+    })
+
+    const mountWith = (modifiedEditor: ReturnType<typeof makeModifiedEditor>) => {
+      const onMountHandler = mockDiffEditor.mock.calls[0][0].onMount as (e: unknown) => void
+      onMountHandler({
+        getModifiedEditor: vi.fn().mockReturnValue(modifiedEditor),
+        onDidUpdateDiff: vi.fn(() => ({ dispose: vi.fn() })),
+      })
+    }
+
+    it('opens the inline comment box in a view zone when the modified gutter is clicked', () => {
+      render(
+        <MonacoDiffViewer filePath="/test/file.ts" originalContent="" modifiedContent="" commentsContext={COMMENTS_CONTEXT} />
+      )
+      const modifiedEditor = makeModifiedEditor()
+      let capturedZone: { afterLineNumber: number; domNode: HTMLDivElement } | undefined
+      modifiedEditor.changeViewZones = vi.fn((cb: (a: { addZone: (z: { afterLineNumber: number; domNode: HTMLDivElement }) => string; removeZone: () => void }) => void) => {
+        cb({ addZone: (zone) => { capturedZone = zone; return 'zone-1' }, removeZone: vi.fn() })
+      })
+      mountWith(modifiedEditor)
+
+      expect(modifiedEditor.updateOptions).toHaveBeenCalledWith({ glyphMargin: true })
+      const mouseDownHandler = modifiedEditor.onMouseDown.mock.calls[0][0]
+      act(() => {
+        mouseDownHandler({ target: { type: 2, position: { lineNumber: 9 } } })
+      })
+
+      expect(capturedZone).toBeDefined()
+      expect(capturedZone!.afterLineNumber).toBe(9)
+      expect(capturedZone!.domNode.textContent).toContain('Line 9')
+      expect(capturedZone!.domNode.textContent).toContain('const total = a + b')
+      expect(capturedZone!.domNode.querySelector('textarea[placeholder="Add a comment..."]')).toBeTruthy()
+    })
+
+    it('shows the hover affordance on the modified gutter and clears it off-margin and on leave', () => {
+      render(
+        <MonacoDiffViewer filePath="/test/file.ts" originalContent="" modifiedContent="" commentsContext={COMMENTS_CONTEXT} />
+      )
+      const modifiedEditor = makeModifiedEditor()
+      const hoverCollection = { set: vi.fn(), clear: vi.fn() }
+      modifiedEditor.createDecorationsCollection = vi.fn().mockReturnValue(hoverCollection)
+      mountWith(modifiedEditor)
+
+      const mouseMoveHandler = modifiedEditor.onMouseMove.mock.calls[0][0]
+      mouseMoveHandler({ target: { type: 2, position: { lineNumber: 4 } } })
+      expect(hoverCollection.set).toHaveBeenCalledWith([
+        expect.objectContaining({ options: expect.objectContaining({ glyphMarginClassName: 'add-comment-glyph' }) }),
+      ])
+
+      mouseMoveHandler({ target: { type: 0, position: { lineNumber: 4 } } })
+      expect(hoverCollection.clear).toHaveBeenCalled()
+
+      const mouseLeaveHandler = modifiedEditor.onMouseLeave.mock.calls[0][0]
+      mouseLeaveHandler()
+      expect(hoverCollection.clear).toHaveBeenCalledTimes(2)
+    })
   })
 
   it('defaults sideBySide to true', () => {

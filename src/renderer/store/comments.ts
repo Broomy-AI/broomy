@@ -21,7 +21,9 @@ function persist(dir: string, comments: Comment[]): void {
 }
 
 interface CommentsStore {
-  commentsByDir: Record<string, Comment[]>
+  // Values are undefined until a dir's comments have been loaded from disk,
+  // which is how the dock distinguishes "not loaded yet" from "loaded, empty".
+  commentsByDir: Record<string, Comment[] | undefined>
   loadComments: (sessionDir: string) => Promise<void>
   addComment: (sessionDir: string, input: { file: string; line: number; quotedText: string; body: string }) => Comment
   updateComment: (sessionDir: string, id: string, body: string) => void

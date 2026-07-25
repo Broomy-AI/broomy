@@ -47,7 +47,7 @@ describe('useCommentsStore', () => {
   it('updateComment edits an existing body', () => {
     const c = useCommentsStore.getState().addComment(DIR, { file: FILE, line: 5, quotedText: 'q', body: 'hi' })
     useCommentsStore.getState().updateComment(DIR, c.id, 'edited')
-    expect(useCommentsStore.getState().commentsByDir[DIR][0].body).toBe('edited')
+    expect(useCommentsStore.getState().commentsByDir[DIR]![0].body).toBe('edited')
   })
 
   it('resolveComment removes one comment', () => {

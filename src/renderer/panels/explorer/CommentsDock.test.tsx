@@ -20,7 +20,8 @@ describe('CommentsDock', () => {
   beforeEach(() => {
     useCommentsStore.setState({ commentsByDir: { [DIR]: [] } })
     vi.clearAllMocks()
-    vi.mocked(window.pty.write).mockResolvedValue(undefined as unknown as void)
+    localStorage.clear()
+    vi.mocked(window.pty.write).mockResolvedValue(undefined)
   })
 
   it('shows an empty state when there are no comments', () => {
@@ -66,5 +67,50 @@ describe('CommentsDock', () => {
     render(<CommentsDock directory={DIR} agentPtyId="pty1" onNavigate={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: /resolve comment/i }))
     expect(useCommentsStore.getState().commentsByDir[DIR]).toEqual([])
+  })
+
+  it('collapses and expands when the header is clicked', () => {
+    render(<CommentsDock directory={DIR} agentPtyId="pty1" onNavigate={vi.fn()} />)
+    // The header button's accessible name starts with "Comments"; the submit
+    // button ("Submit ... comments to agent") does not, so /^Comments/ targets it.
+    const header = () => screen.getByRole('button', { name: /^Comments/ })
+    expect(screen.getByText(/no comments/i)).toBeInTheDocument()
+    fireEvent.click(header())
+    // Collapsed: the body (and its empty state) is gone; the chevron flips to ▲.
+    expect(screen.queryByText(/no comments/i)).not.toBeInTheDocument()
+    expect(header()).toHaveTextContent('▲')
+    fireEvent.click(header())
+    expect(screen.getByText(/no comments/i)).toBeInTheDocument()
+    expect(header()).toHaveTextContent('▼')
+  })
+
+  it('persists a dragged height to localStorage and applies it to the body', () => {
+    const { container } = render(<CommentsDock directory={DIR} agentPtyId="pty1" onNavigate={vi.fn()} />)
+    const handle = container.querySelector('.cursor-row-resize') as HTMLElement
+    expect(handle).toBeTruthy()
+    // Dragging up so the height-from-bottom is 200px (within the [80,420] clamp).
+    fireEvent.mouseDown(handle)
+    fireEvent.mouseMove(window, { clientY: window.innerHeight - 200 })
+    fireEvent.mouseUp(window)
+    expect(localStorage.getItem('broomy.commentsDock.height')).toBe('200')
+    const body = container.querySelector('div[style*="height"]') as HTMLElement
+    expect(body.style.height).toBe('200px')
+  })
+
+  it('clamps a dragged height to the maximum', () => {
+    const { container } = render(<CommentsDock directory={DIR} agentPtyId="pty1" onNavigate={vi.fn()} />)
+    const handle = container.querySelector('.cursor-row-resize') as HTMLElement
+    fireEvent.mouseDown(handle)
+    // Drag far past the top: from-bottom would be huge, must clamp to 420.
+    fireEvent.mouseMove(window, { clientY: -10000 })
+    fireEvent.mouseUp(window)
+    expect(localStorage.getItem('broomy.commentsDock.height')).toBe('420')
+  })
+
+  it('initializes its height from a previously saved localStorage value', () => {
+    localStorage.setItem('broomy.commentsDock.height', '250')
+    const { container } = render(<CommentsDock directory={DIR} agentPtyId="pty1" onNavigate={vi.fn()} />)
+    const body = container.querySelector('div[style*="height"]') as HTMLElement
+    expect(body.style.height).toBe('250px')
   })
 })

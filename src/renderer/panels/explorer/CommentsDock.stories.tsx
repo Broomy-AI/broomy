@@ -16,7 +16,7 @@ const meta: Meta<typeof CommentsDock> = {
   title: 'Explorer/CommentsDock',
   component: CommentsDock,
   decorators: [(Story, ctx) => {
-    useEffect(() => { seed((ctx.parameters.seed as Comment[]) ?? []) }, [ctx.parameters.seed])
+    useEffect(() => { seed((ctx.parameters.seed as Comment[] | undefined) ?? []) }, [ctx.parameters.seed])
     return <div style={{ width: 320 }}><Story /></div>
   }],
 }
