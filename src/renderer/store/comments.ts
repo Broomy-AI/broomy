@@ -53,7 +53,7 @@ export const useCommentsStore = create<CommentsStore>((set, get) => ({
     }
     const next = [...(get().commentsByDir[sessionDir] ?? []), comment]
     set((s) => ({ commentsByDir: { ...s.commentsByDir, [sessionDir]: next } }))
-    void persist(sessionDir, next)
+    persist(sessionDir, next)
     return comment
   },
 
@@ -62,17 +62,17 @@ export const useCommentsStore = create<CommentsStore>((set, get) => ({
       c.id === id ? { ...c, body: body.trim() } : c,
     )
     set((s) => ({ commentsByDir: { ...s.commentsByDir, [sessionDir]: next } }))
-    void persist(sessionDir, next)
+    persist(sessionDir, next)
   },
 
   resolveComment: (sessionDir, id) => {
     const next = (get().commentsByDir[sessionDir] ?? []).filter((c) => c.id !== id)
     set((s) => ({ commentsByDir: { ...s.commentsByDir, [sessionDir]: next } }))
-    void persist(sessionDir, next)
+    persist(sessionDir, next)
   },
 
   clearComments: (sessionDir) => {
     set((s) => ({ commentsByDir: { ...s.commentsByDir, [sessionDir]: [] } }))
-    void persist(sessionDir, [])
+    persist(sessionDir, [])
   },
 }))
