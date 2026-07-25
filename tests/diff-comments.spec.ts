@@ -89,15 +89,20 @@ test.describe('Comments Dock', () => {
     const fileViewer = page.locator('[data-panel-id="fileViewer"]')
     await expect(fileViewer.locator('.monaco-editor').first()).toBeVisible({ timeout: 10000 })
     await expect(fileViewer.locator('.view-lines')).toBeVisible({ timeout: 5000 })
-    await expect(fileViewer.locator('.view-line').first()).toBeVisible({ timeout: 5000 })
-    await page.waitForTimeout(500)
+    // Wait for the line-number gutter to have real geometry before hovering it.
+    await expect.poll(async () => {
+      const b = await fileViewer.locator('.margin .line-numbers').first().boundingBox()
+      return b ? b.height : 0
+    }, { timeout: 8000 }).toBeGreaterThan(0)
 
-    // Hover over the editor content (two moves so Monaco registers the mousemove);
-    // the "+" affordance appears over the hovered line's number.
-    const ed = await fileViewer.locator('.monaco-editor').first().boundingBox()
-    if (!ed) throw new Error('no editor box')
-    await page.mouse.move(ed.x + 100, ed.y + 70)
-    await page.mouse.move(ed.x + 120, ed.y + 70)
+    // Hover the line-number gutter (two moves so Monaco registers the mousemove);
+    // the affordance appears over the hovered line's number — gutter-only, not over code.
+    const ln = await fileViewer.locator('.margin .line-numbers').first().boundingBox()
+    if (!ln) throw new Error('no line-numbers')
+    const gx = ln.x + ln.width / 2
+    const gy = ln.y + 40
+    await page.mouse.move(gx - 8, gy)
+    await page.mouse.move(gx, gy)
 
     const plusButton = fileViewer.locator('button[aria-label^="Comment on line"]')
     await expect(plusButton).toBeVisible({ timeout: 5000 })

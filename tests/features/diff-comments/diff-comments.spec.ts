@@ -60,17 +60,20 @@ test.describe.serial('Feature: Inline diff/file comments', () => {
 
     await expect(fileViewer().locator('.monaco-editor').first()).toBeVisible({ timeout: 10000 })
     await expect(fileViewer().locator('.view-lines')).toBeVisible({ timeout: 5000 })
-    // Let Monaco finish laying out the view lines before hovering.
-    await expect(fileViewer().locator('.view-line').first()).toBeVisible({ timeout: 5000 })
-    await page.waitForTimeout(500)
+    // Wait for the line-number gutter to have real geometry before hovering it.
+    await expect.poll(async () => {
+      const b = await fileViewer().locator('.margin .line-numbers').first().boundingBox()
+      return b ? b.height : 0
+    }, { timeout: 8000 }).toBeGreaterThan(0)
 
-    // Hover over a line in the editor content (two moves so Monaco registers it).
-    const ed = await fileViewer().locator('.monaco-editor').first().boundingBox()
-    if (!ed) throw new Error('no editor box')
-    const hx = ed.x + 120
-    const hy = ed.y + 70
-    await page.mouse.move(hx - 20, hy)
-    await page.mouse.move(hx, hy)
+    // Hover the line-number gutter (two moves so Monaco registers it); the "+"
+    // appears only over the gutter, never over the code text.
+    const ln = await fileViewer().locator('.margin .line-numbers').first().boundingBox()
+    if (!ln) throw new Error('no line-numbers')
+    const gx = ln.x + ln.width / 2
+    const gy = ln.y + 40
+    await page.mouse.move(gx - 8, gy)
+    await page.mouse.move(gx, gy)
     await expect(fileViewer().locator('button[aria-label^="Comment on line"]')).toBeVisible({ timeout: 5000 })
 
     await screenshotElement(page, fileViewer(), path.join(SCREENSHOTS, '01-plus-affordance.png'), { maxHeight: 320 })

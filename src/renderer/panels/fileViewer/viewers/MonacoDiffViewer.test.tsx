@@ -17,6 +17,7 @@ vi.mock('monaco-editor', () => ({
   editor: {
     defineTheme: vi.fn(),
     EditorOption: { lineHeight: 66 },
+    MouseTargetType: { UNKNOWN: 0 },
   },
   Range: class {
     constructor(public startLineNumber: number, public startColumn: number, public endLineNumber: number, public endColumn: number) {}
@@ -246,6 +247,7 @@ describe('MonacoDiffViewer', () => {
         updateOptions: vi.fn(),
         revealLineInCenter: vi.fn(),
         setPosition: vi.fn(),
+        addAction: vi.fn(),
         createDecorationsCollection: vi.fn().mockReturnValue({ set: vi.fn(), clear: vi.fn() }),
         // Real Monaco event registration methods return an IDisposable; attach()
         // stores these and calls .dispose() on unmount, so the mocks must too.
@@ -286,7 +288,7 @@ describe('MonacoDiffViewer', () => {
 
       const mouseMoveHandler = modifiedEditor.onMouseMove.mock.calls[0][0]
       act(() => {
-        mouseMoveHandler({ target: { position: { lineNumber: 9 } } })
+        mouseMoveHandler({ target: { type: 1, position: { lineNumber: 9 } }, event: { browserEvent: { clientX: 10 } } })
       })
       const plusButton = container.querySelector<HTMLButtonElement>('button[aria-label="Comment on line 9"]')!
       expect(plusButton).toBeTruthy()
@@ -311,19 +313,19 @@ describe('MonacoDiffViewer', () => {
 
       const mouseMoveHandler = modifiedEditor.onMouseMove.mock.calls[0][0]
       act(() => {
-        mouseMoveHandler({ target: { position: { lineNumber: 4 } } })
+        mouseMoveHandler({ target: { type: 1, position: { lineNumber: 4 } }, event: { browserEvent: { clientX: 10 } } })
       })
       expect(container.querySelector('button[aria-label="Comment on line 4"]')).toBeTruthy()
 
       // Hovering off any line (no position) hides it.
       act(() => {
-        mouseMoveHandler({ target: { position: null } })
+        mouseMoveHandler({ target: { type: 1, position: null }, event: { browserEvent: { clientX: 10 } } })
       })
       expect(container.querySelector('button[aria-label^="Comment on line"]')).toBeNull()
 
       // Re-show it, then hide via mouse leave.
       act(() => {
-        mouseMoveHandler({ target: { position: { lineNumber: 4 } } })
+        mouseMoveHandler({ target: { type: 1, position: { lineNumber: 4 } }, event: { browserEvent: { clientX: 10 } } })
       })
       expect(container.querySelector('button[aria-label^="Comment on line"]')).toBeTruthy()
       const mouseLeaveHandler = modifiedEditor.onMouseLeave.mock.calls[0][0]

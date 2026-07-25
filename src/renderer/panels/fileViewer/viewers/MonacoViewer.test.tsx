@@ -74,6 +74,7 @@ function makeMockEditorInstance() {
   const domNode = document.createElement('div')
   return {
     addCommand: vi.fn(),
+    addAction: vi.fn(),
     // Real Monaco event registration methods return an IDisposable; attach()
     // stores these and calls .dispose() on unmount, so the mocks must too.
     onMouseMove: vi.fn().mockReturnValue({ dispose: vi.fn() }),
@@ -102,7 +103,7 @@ function makeMockMonaco() {
   return {
     KeyMod: { CtrlCmd: 2048 },
     KeyCode: { KeyS: 49 },
-    editor: { EditorOption: { lineHeight: 66 } },
+    editor: { EditorOption: { lineHeight: 66 }, MouseTargetType: { UNKNOWN: 0 } },
     Range: class Range {
       constructor(
         public startLineNumber: number,
@@ -274,7 +275,7 @@ describe('MonacoViewerComponent', () => {
     // Hover line 7 to reveal the "+" affordance over its line number.
     const mouseMoveHandler = editor.onMouseMove.mock.calls[0][0]
     act(() => {
-      mouseMoveHandler({ target: { position: { lineNumber: 7 } } })
+      mouseMoveHandler({ target: { type: 1, position: { lineNumber: 7 } }, event: { browserEvent: { clientX: 10 } } })
     })
     const plusButton = container.querySelector<HTMLButtonElement>('button[aria-label="Comment on line 7"]')!
     expect(plusButton).toBeTruthy()
@@ -311,7 +312,7 @@ describe('MonacoViewerComponent', () => {
 
     const mouseMoveHandler = editor.onMouseMove.mock.calls[0][0]
     act(() => {
-      mouseMoveHandler({ target: { position: { lineNumber: 3 } } })
+      mouseMoveHandler({ target: { type: 1, position: { lineNumber: 3 } }, event: { browserEvent: { clientX: 10 } } })
     })
     const plusButton = container.querySelector<HTMLElement>('button[aria-label="Comment on line 3"]')!
     expect(plusButton).toBeTruthy()
@@ -322,13 +323,13 @@ describe('MonacoViewerComponent', () => {
 
     // Hovering off any line (no position) hides it.
     act(() => {
-      mouseMoveHandler({ target: { position: null } })
+      mouseMoveHandler({ target: { type: 1, position: null }, event: { browserEvent: { clientX: 10 } } })
     })
     expect(container.querySelector('button[aria-label^="Comment on line"]')).toBeNull()
 
     // Re-show it, then hide via mouse leave.
     act(() => {
-      mouseMoveHandler({ target: { position: { lineNumber: 3 } } })
+      mouseMoveHandler({ target: { type: 1, position: { lineNumber: 3 } }, event: { browserEvent: { clientX: 10 } } })
     })
     expect(container.querySelector('button[aria-label^="Comment on line"]')).toBeTruthy()
     const mouseLeaveHandler = editor.onMouseLeave.mock.calls[0][0]
@@ -351,7 +352,7 @@ describe('MonacoViewerComponent', () => {
       cb({ addZone: (z) => { zoneNode = z.domNode; mountInto.appendChild(z.domNode); return 'zone-1' }, removeZone: vi.fn() })) as never
     onMount(editor, makeMockMonaco())
     act(() => {
-      editor.onMouseMove.mock.calls[0][0]({ target: { position: { lineNumber: line } } })
+      editor.onMouseMove.mock.calls[0][0]({ target: { type: 1, position: { lineNumber: line } }, event: { browserEvent: { clientX: 10 } } })
     })
     const plusButton = mountInto.querySelector<HTMLButtonElement>(`button[aria-label="Comment on line ${line}"]`)!
     act(() => {
@@ -403,6 +404,30 @@ describe('MonacoViewerComponent', () => {
     expect(addCommentAtSpy).toHaveBeenCalledWith(5, 'please fix')
     // The box closes after adding.
     expect(zoneNode.querySelector('textarea')).toBeNull()
+  })
+
+  it('registers a "Comment" context-menu action that opens the box on the current line', () => {
+    const { container } = render(
+      <MonacoViewerComponent
+        filePath="/test/file.ts"
+        content=""
+        commentsContext={{ sessionDirectory: '/test', commentsFilePath: '/test/.broomy/comments.json' }}
+      />
+    )
+    const onMount = getLastEditorProps().onMount as (editor: unknown, monaco: unknown) => void
+    const editor = makeMockEditorInstance()
+    container.appendChild(editor.getDomNode())
+    let zoneNode: HTMLDivElement | undefined
+    editor.changeViewZones = vi.fn((cb: (a: { addZone: (z: { domNode: HTMLDivElement }) => string; removeZone: () => void }) => void) =>
+      cb({ addZone: (z) => { zoneNode = z.domNode; container.appendChild(z.domNode); return 'zone-1' }, removeZone: vi.fn() })) as never
+    onMount(editor, makeMockMonaco())
+
+    const action = editor.addAction.mock.calls[0][0] as { label: string; run: (ed: unknown) => void }
+    expect(action.label).toBe('Comment')
+
+    // Right-clicking sets the cursor, so run() comments on the current position's line.
+    act(() => { action.run({ getPosition: () => ({ lineNumber: 4 }) }) })
+    expect(zoneNode!.querySelector('textarea[placeholder="Add a comment..."]')).toBeTruthy()
   })
 
   it('provides a Monaco worker for each language label', () => {
@@ -465,6 +490,9 @@ describe('MonacoViewerComponent', () => {
     expect(editor.onMouseMove).toHaveBeenCalled()
     expect(editor.onMouseLeave).toHaveBeenCalled()
     expect(editor.onDidScrollChange).toHaveBeenCalled()
+    expect(editor.addAction).toHaveBeenCalledWith(
+      expect.objectContaining({ label: 'Comment' }),
+    )
   })
 
   it('renders review comment CSS when commentsContext is provided', () => {
@@ -760,7 +788,7 @@ describe('MonacoViewerComponent onMount lifecycle', () => {
     onMount(editor, monacoInst)
 
     act(() => {
-      editor.onMouseMove.mock.calls[0][0]({ target: { position: { lineNumber: 4 } } })
+      editor.onMouseMove.mock.calls[0][0]({ target: { type: 1, position: { lineNumber: 4 } }, event: { browserEvent: { clientX: 10 } } })
     })
     const plusButton = container.querySelector<HTMLButtonElement>('button[aria-label="Comment on line 4"]')!
     expect(plusButton).toBeTruthy()

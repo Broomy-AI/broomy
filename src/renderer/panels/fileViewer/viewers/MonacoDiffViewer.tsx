@@ -114,6 +114,13 @@ export default function MonacoDiffViewer({
     // margin, so the gutter keeps its width). Clicking it opens the comment box.
     if (commentsContext) {
       attachCommentPlus(modifiedEditor, monacoEditor)
+      modifiedEditor.addAction({
+        id: 'broomy.addComment',
+        label: 'Comment',
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 1.5,
+        run: (ed) => { const pos = ed.getPosition(); if (pos) openBox(pos.lineNumber) },
+      })
     }
 
     if (scrollToLine) {

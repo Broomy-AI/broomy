@@ -291,6 +291,13 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
     // margin, so the gutter keeps its width). Clicking it opens the comment box.
     if (commentsContext) {
       attachCommentPlus(editor, monacoInstance)
+      editor.addAction({
+        id: 'broomy.addComment',
+        label: 'Comment',
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 1.5,
+        run: (ed) => { const pos = ed.getPosition(); if (pos) openBox(pos.lineNumber) },
+      })
     }
 
     // Notify parent of available editor actions

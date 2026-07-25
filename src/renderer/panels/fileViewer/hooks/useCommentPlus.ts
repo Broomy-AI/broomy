@@ -40,10 +40,23 @@ export function useCommentPlus() {
 
       disposablesRef.current.push(
         editor.onMouseMove((e) => {
+          // When the mouse is over our own overlay button, Monaco can't hit-test
+          // through it and reports UNKNOWN with no position. Keep the current
+          // state in that case — hiding here is exactly what caused the flicker
+          // (hide → button gone → gutter re-detected → show → …).
+          if (e.target.type === monacoNs.editor.MouseTargetType.UNKNOWN) return
+
+          // Only show the affordance over the gutter (the line-number column,
+          // width = layoutInfo.contentLeft) — never over the code text. A
+          // coordinate test covers the whole gutter reliably.
+          const domNode = editor.getDomNode()
           const line = e.target.position?.lineNumber ?? null
-          if (line === lastLineRef.current) return
-          lastLineRef.current = line
-          setPlus(line ? positionFor(line) : null)
+          const contentLeft = editor.getLayoutInfo().contentLeft
+          const relX = domNode ? e.event.browserEvent.clientX - domNode.getBoundingClientRect().left : Infinity
+          const shown = line !== null && relX >= 0 && relX < contentLeft ? line : null
+          if (shown === lastLineRef.current) return
+          lastLineRef.current = shown
+          setPlus(shown ? positionFor(shown) : null)
         }),
         editor.onMouseLeave(() => {
           lastLineRef.current = null
