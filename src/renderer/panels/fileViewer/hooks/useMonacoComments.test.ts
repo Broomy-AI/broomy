@@ -236,8 +236,8 @@ describe('useMonacoComments', () => {
       const decorations = mockCreateDecorationsCollection.mock.calls[0][0]
       expect(decorations).toHaveLength(1)
       expect(decorations[0].options.isWholeLine).toBe(true)
-      expect(decorations[0].options.glyphMarginClassName).toBe('review-comment-glyph')
-      expect(decorations[0].options.glyphMarginHoverMessage.value).toBe('Comment here')
+      expect(decorations[0].options.className).toBe('review-comment-line')
+      expect(decorations[0].options.hoverMessage.value).toBe('Comment here')
     })
 
     it('skips decorations when editor has no model', () => {

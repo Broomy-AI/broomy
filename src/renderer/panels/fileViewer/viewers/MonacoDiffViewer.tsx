@@ -12,7 +12,9 @@ import { DiffEditor, loader } from '@monaco-editor/react'
 import * as monacoEditor from 'monaco-editor'
 import { useMonacoComments } from '../hooks/useMonacoComments'
 import { useCommentBox } from '../hooks/useCommentBox'
+import { useCommentPlus } from '../hooks/useCommentPlus'
 import InlineCommentBox from '../components/InlineCommentBox'
+import CommentPlusButton from '../components/CommentPlusButton'
 import { useSettingsStore } from '../../../store/settings'
 import { MONACO_THEMES } from '../../../shared/theme/monacoTheme'
 
@@ -102,33 +104,16 @@ export default function MonacoDiffViewer({
 
   const { addCommentAt } = useMonacoComments({ filePath, commentsContext, editorRef: modifiedEditorRef })
   const { boxLine, boxNode, openBox, closeBox } = useCommentBox(modifiedEditorRef)
+  const { plus, hostNode: plusHost, attach: attachCommentPlus, hide: hideCommentPlus } = useCommentPlus()
 
   const handleDiffEditorMount = (editor: monacoEditor.editor.IStandaloneDiffEditor) => {
     diffEditorRef.current = editor
     const modifiedEditor = editor.getModifiedEditor()
     modifiedEditorRef.current = modifiedEditor
-    // Comment gutter: hover shows an "add comment" affordance; click opens the box.
+    // Comment affordance: a "+" appears over the hovered line's number (no glyph
+    // margin, so the gutter keeps its width). Clicking it opens the comment box.
     if (commentsContext) {
-      modifiedEditor.updateOptions({ glyphMargin: true })
-      const hoverDecorations = modifiedEditor.createDecorationsCollection([])
-      modifiedEditor.onMouseMove((e) => {
-        const line = e.target.position?.lineNumber
-        if (line && e.target.type === monacoEditor.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
-          hoverDecorations.set([{
-            range: new monacoEditor.Range(line, 1, line, 1),
-            options: { glyphMarginClassName: 'add-comment-glyph', glyphMarginHoverMessage: { value: 'Add comment' } },
-          }])
-        } else {
-          hoverDecorations.clear()
-        }
-      })
-      modifiedEditor.onMouseLeave(() => hoverDecorations.clear())
-      modifiedEditor.onMouseDown((e) => {
-        if (e.target.type === monacoEditor.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
-          const lineNumber = e.target.position.lineNumber
-          if (lineNumber) openBox(lineNumber)
-        }
-      })
+      attachCommentPlus(modifiedEditor, monacoEditor)
     }
 
     if (scrollToLine) {
@@ -180,7 +165,7 @@ export default function MonacoDiffViewer({
         boxNode,
       )}
       {/* Diff Editor */}
-      <div className="flex-1 min-h-0">
+      <div className="relative flex-1 min-h-0">
         <DiffEditor
           key={`${filePath}:${sideBySide ? 'sbs' : 'inline'}`}
           height="100%"
@@ -212,7 +197,6 @@ export default function MonacoDiffViewer({
             scrollBeyondLastLine: false,
             automaticLayout: true,
             padding: { top: 8, bottom: 8 },
-            glyphMargin: !!commentsContext,
             // Show unchanged regions collapsed by default with expand option
             hideUnchangedRegions: {
               enabled: true,
@@ -227,34 +211,17 @@ export default function MonacoDiffViewer({
             ignoreTrimWhitespace: false,
           }}
         />
+        {commentsContext && plus && plusHost && createPortal(
+          <CommentPlusButton plus={plus} onClick={() => { openBox(plus.line); hideCommentPlus() }} />,
+          plusHost,
+        )}
       </div>
+      {/* Whole-line tint marking lines that already have a comment. */}
       {commentsContext && (
         <style>{`
-          .review-comment-glyph {
-            background-color: rgb(var(--color-warning-base));
-            border-radius: 50%;
-            width: 8px !important;
-            height: 8px !important;
-            margin-top: 6px;
-            margin-left: 4px;
-          }
           .review-comment-line {
             /* 0.05 is invisible on a light ground; the token carries the theme. */
             background-color: rgb(var(--color-warning-base) / 0.12);
-          }
-          .margin-view-overlays .cgmr {
-            cursor: pointer;
-          }
-          .add-comment-glyph {
-            color: rgb(var(--color-accent));
-            cursor: pointer;
-          }
-          .add-comment-glyph::before {
-            content: '+';
-            display: block;
-            text-align: center;
-            font-weight: 700;
-            line-height: 1;
           }
         `}</style>
       )}

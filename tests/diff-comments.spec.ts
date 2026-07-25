@@ -77,4 +77,47 @@ test.describe('Comments Dock', () => {
     await expect(commentsHeader).toContainText('▼')
     await expect(emptyState).toBeVisible()
   })
+
+  test('full flow: hover a source line, add a comment via "+", see it in the dock, submit', async () => {
+    const explorerPanel = page.locator('[data-panel-id="explorer"]')
+
+    // Open a source file (Monaco code viewer) — src/index.ts.
+    await explorerPanel.locator('button[title="Files"]').click()
+    await explorerPanel.locator('text=src').first().click()
+    await explorerPanel.locator('text=index.ts').first().click()
+
+    const fileViewer = page.locator('[data-panel-id="fileViewer"]')
+    await expect(fileViewer.locator('.monaco-editor').first()).toBeVisible({ timeout: 10000 })
+    await expect(fileViewer.locator('.view-lines')).toBeVisible({ timeout: 5000 })
+    await expect(fileViewer.locator('.view-line').first()).toBeVisible({ timeout: 5000 })
+    await page.waitForTimeout(500)
+
+    // Hover over the editor content (two moves so Monaco registers the mousemove);
+    // the "+" affordance appears over the hovered line's number.
+    const ed = await fileViewer.locator('.monaco-editor').first().boundingBox()
+    if (!ed) throw new Error('no editor box')
+    await page.mouse.move(ed.x + 100, ed.y + 70)
+    await page.mouse.move(ed.x + 120, ed.y + 70)
+
+    const plusButton = fileViewer.locator('button[aria-label^="Comment on line"]')
+    await expect(plusButton).toBeVisible({ timeout: 5000 })
+    await plusButton.click()
+
+    // The inline comment box opens under the line and is actually editable.
+    const textarea = fileViewer.locator('textarea[placeholder="Add a comment..."]')
+    await expect(textarea).toBeVisible({ timeout: 5000 })
+    await textarea.click()
+    await textarea.fill('Is this the right default?')
+    await fileViewer.locator('button[aria-label="Add comment"]').click()
+
+    // The comment shows up as a one-line summary in the dock.
+    const dockRow = explorerPanel.locator('button', { hasText: /index\.ts:\d+/ })
+    await expect(dockRow.first()).toBeVisible({ timeout: 5000 })
+
+    // Submit sends the comment to the agent and clears the dock.
+    const submitButton = explorerPanel.getByRole('button', { name: /Submit \d+ comment/ })
+    await expect(submitButton).toBeEnabled()
+    await submitButton.click()
+    await expect(explorerPanel.getByText('No comments yet. Hover a line in a file and click + to add one.')).toBeVisible({ timeout: 5000 })
+  })
 })

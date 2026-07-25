@@ -58,6 +58,8 @@ export default defineConfig({
         'src/renderer/panels/fileViewer/viewers/ImageDiffViewer.tsx',
         // Monaco view-zone glue (addZone/removeZone) — needs a real editor, tested via E2E
         'src/renderer/panels/fileViewer/hooks/useCommentBox.ts',
+        // Monaco mouse/scroll glue for the "+" affordance — needs a real editor, tested via E2E
+        'src/renderer/panels/fileViewer/hooks/useCommentPlus.ts',
       ],
       thresholds: {
         lines: 90,

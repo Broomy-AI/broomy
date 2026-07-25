@@ -18,7 +18,6 @@ const mockRegisterEditorOpener = vi.fn().mockReturnValue({ dispose: vi.fn() })
 vi.mock('monaco-editor', () => ({
   editor: {
     registerEditorOpener: (...args: unknown[]) => mockRegisterEditorOpener(...args),
-    MouseTargetType: { GUTTER_GLYPH_MARGIN: 2 },
     // shared/theme/monacoTheme.ts calls this at module scope — it has to, or
     // setTheme() would silently fall back to the builtin light 'vs'.
     defineTheme: vi.fn(),
@@ -34,16 +33,26 @@ vi.mock('monaco-editor/esm/vs/language/css/css.worker?worker', () => ({ default:
 vi.mock('monaco-editor/esm/vs/language/html/html.worker?worker', () => ({ default: vi.fn() }))
 vi.mock('monaco-editor/esm/vs/language/typescript/ts.worker?worker', () => ({ default: vi.fn() }))
 
+const { addCommentAtSpy } = vi.hoisted(() => ({ addCommentAtSpy: vi.fn() }))
 vi.mock('../hooks/useMonacoComments', () => ({
   useMonacoComments: vi.fn().mockReturnValue({
     existingComments: [],
-    addCommentAt: vi.fn(),
+    addCommentAt: addCommentAtSpy,
   }),
 }))
 
 import { MonacoViewer } from './MonacoViewer'
 
 const MonacoViewerComponent = MonacoViewer.component
+
+// jsdom has no ResizeObserver; useCommentBox uses one to keep the view zone's
+// height in sync with the rendered box, so opening the box needs a stub.
+class MockResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal('ResizeObserver', MockResizeObserver)
 
 afterEach(() => {
   cleanup()
@@ -59,11 +68,22 @@ function getLastEditorProps() {
 }
 
 function makeMockEditorInstance() {
+  // A single stable DOM node — attach() calls getDomNode() once and stores the
+  // result, so repeated calls (including from the test itself) must return the
+  // same element for the "+" button's portal target to be found.
+  const domNode = document.createElement('div')
   return {
     addCommand: vi.fn(),
-    onMouseDown: vi.fn(),
-    onMouseMove: vi.fn(),
-    onMouseLeave: vi.fn(),
+    // Real Monaco event registration methods return an IDisposable; attach()
+    // stores these and calls .dispose() on unmount, so the mocks must too.
+    onMouseMove: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+    onMouseLeave: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+    onDidScrollChange: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+    getDomNode: vi.fn(() => domNode),
+    getTopForLineNumber: vi.fn(() => 100),
+    getScrollTop: vi.fn(() => 0),
+    getOption: vi.fn(() => 18),
+    getLayoutInfo: vi.fn(() => ({ contentLeft: 64 })),
     changeViewZones: vi.fn((cb: (accessor: { addZone: () => string; removeZone: () => void }) => void) =>
       cb({ addZone: () => 'zone-1', removeZone: vi.fn() })),
     focus: vi.fn(),
@@ -82,7 +102,7 @@ function makeMockMonaco() {
   return {
     KeyMod: { CtrlCmd: 2048 },
     KeyCode: { KeyS: 49 },
-    editor: { MouseTargetType: { GUTTER_GLYPH_MARGIN: 2 } },
+    editor: { EditorOption: { lineHeight: 66 } },
     Range: class Range {
       constructor(
         public startLineNumber: number,
@@ -226,8 +246,8 @@ describe('MonacoViewerComponent', () => {
     expect(onDirtyChange).toHaveBeenCalledWith(true, '')
   })
 
-  it('opens the inline comment box in a Monaco view zone when the gutter is clicked', () => {
-    render(
+  it('opens the inline comment box in a Monaco view zone when the "+" button is clicked', () => {
+    const { container } = render(
       <MonacoViewerComponent
         filePath="/test/file.ts"
         content=""
@@ -237,6 +257,9 @@ describe('MonacoViewerComponent', () => {
     const props = getLastEditorProps()
     const onMount = props.onMount as (editor: unknown, monaco: unknown) => void
     const editor = makeMockEditorInstance()
+    // The "+" button is portaled into editor.getDomNode() — attach it to the
+    // render tree so React's delegated events (click) fire on it.
+    container.appendChild(editor.getDomNode())
     let capturedZone: { afterLineNumber: number; domNode: HTMLDivElement } | undefined
     editor.changeViewZones = vi.fn((cb: (accessor: { addZone: (z: { afterLineNumber: number; domNode: HTMLDivElement }) => string; removeZone: () => void }) => void) => {
       cb({
@@ -248,11 +271,16 @@ describe('MonacoViewerComponent', () => {
 
     onMount(editor, monacoInst)
 
-    const mouseDownHandler = editor.onMouseDown.mock.calls[0][0]
+    // Hover line 7 to reveal the "+" affordance over its line number.
+    const mouseMoveHandler = editor.onMouseMove.mock.calls[0][0]
     act(() => {
-      mouseDownHandler({
-        target: { type: monacoInst.editor.MouseTargetType.GUTTER_GLYPH_MARGIN, position: { lineNumber: 7 } },
-      })
+      mouseMoveHandler({ target: { position: { lineNumber: 7 } } })
+    })
+    const plusButton = container.querySelector<HTMLButtonElement>('button[aria-label="Comment on line 7"]')!
+    expect(plusButton).toBeTruthy()
+
+    act(() => {
+      fireEvent.click(plusButton)
     })
 
     expect(editor.changeViewZones).toHaveBeenCalled()
@@ -265,8 +293,8 @@ describe('MonacoViewerComponent', () => {
     expect(capturedZone!.domNode.querySelector('textarea[placeholder="Add a comment..."]')).toBeTruthy()
   })
 
-  it('shows a hover "add comment" affordance on the glyph margin and clears it on mouse leave', () => {
-    render(
+  it('shows a "+" comment affordance over the hovered line and clears it on mouse leave', () => {
+    const { container } = render(
       <MonacoViewerComponent
         filePath="/test/file.ts"
         content=""
@@ -276,29 +304,38 @@ describe('MonacoViewerComponent', () => {
     const props = getLastEditorProps()
     const onMount = props.onMount as (editor: unknown, monaco: unknown) => void
     const editor = makeMockEditorInstance()
-    const hoverCollection = { set: vi.fn(), clear: vi.fn() }
-    editor.createDecorationsCollection = vi.fn().mockReturnValue(hoverCollection)
+    container.appendChild(editor.getDomNode())
     const monacoInst = makeMockMonaco()
 
     onMount(editor, monacoInst)
 
     const mouseMoveHandler = editor.onMouseMove.mock.calls[0][0]
-    mouseMoveHandler({
-      target: { type: monacoInst.editor.MouseTargetType.GUTTER_GLYPH_MARGIN, position: { lineNumber: 3 } },
+    act(() => {
+      mouseMoveHandler({ target: { position: { lineNumber: 3 } } })
     })
-    expect(hoverCollection.set).toHaveBeenCalledWith([
-      expect.objectContaining({
-        options: expect.objectContaining({ glyphMarginClassName: 'add-comment-glyph' }),
-      }),
-    ])
+    const plusButton = container.querySelector<HTMLElement>('button[aria-label="Comment on line 3"]')!
+    expect(plusButton).toBeTruthy()
+    // Positioned from getTopForLineNumber/getScrollTop/getOption(lineHeight)/getLayoutInfo().contentLeft.
+    expect(plusButton.style.top).toBe('100px')
+    expect(plusButton.style.height).toBe('18px')
+    expect(plusButton.style.width).toBe('64px')
 
-    // Moving off the glyph margin clears the hover decoration.
-    mouseMoveHandler({ target: { type: 0, position: { lineNumber: 3 } } })
-    expect(hoverCollection.clear).toHaveBeenCalled()
+    // Hovering off any line (no position) hides it.
+    act(() => {
+      mouseMoveHandler({ target: { position: null } })
+    })
+    expect(container.querySelector('button[aria-label^="Comment on line"]')).toBeNull()
 
+    // Re-show it, then hide via mouse leave.
+    act(() => {
+      mouseMoveHandler({ target: { position: { lineNumber: 3 } } })
+    })
+    expect(container.querySelector('button[aria-label^="Comment on line"]')).toBeTruthy()
     const mouseLeaveHandler = editor.onMouseLeave.mock.calls[0][0]
-    mouseLeaveHandler()
-    expect(hoverCollection.clear).toHaveBeenCalledTimes(2)
+    act(() => {
+      mouseLeaveHandler()
+    })
+    expect(container.querySelector('button[aria-label^="Comment on line"]')).toBeNull()
   })
 
   // Opens the comment box for a line and returns the view-zone DOM node the
@@ -308,12 +345,17 @@ describe('MonacoViewerComponent', () => {
   function openCommentBox(line: number, mountInto: HTMLElement): HTMLDivElement {
     const onMount = getLastEditorProps().onMount as (editor: unknown, monaco: unknown) => void
     const editor = makeMockEditorInstance()
+    mountInto.appendChild(editor.getDomNode())
     let zoneNode: HTMLDivElement | undefined
     editor.changeViewZones = vi.fn((cb: (a: { addZone: (z: { domNode: HTMLDivElement }) => string; removeZone: () => void }) => void) =>
       cb({ addZone: (z) => { zoneNode = z.domNode; mountInto.appendChild(z.domNode); return 'zone-1' }, removeZone: vi.fn() })) as never
     onMount(editor, makeMockMonaco())
     act(() => {
-      editor.onMouseDown.mock.calls[0][0]({ target: { type: 2, position: { lineNumber: line } } })
+      editor.onMouseMove.mock.calls[0][0]({ target: { position: { lineNumber: line } } })
+    })
+    const plusButton = mountInto.querySelector<HTMLButtonElement>(`button[aria-label="Comment on line ${line}"]`)!
+    act(() => {
+      fireEvent.click(plusButton)
     })
     return zoneNode!
   }
@@ -335,6 +377,32 @@ describe('MonacoViewerComponent', () => {
 
     expect(zoneNode.querySelector('textarea')).toBeNull()
     expect(useCommentsStore.getState().commentsByDir['/test']).toEqual([])
+  })
+
+  it('calls addCommentAt with the line and typed body when Add is clicked', () => {
+    const { container } = render(
+      <MonacoViewerComponent
+        filePath="/test/file.ts"
+        content=""
+        commentsContext={{ sessionDirectory: '/test', commentsFilePath: '/test/.broomy/comments.json' }}
+      />
+    )
+    const zoneNode = openCommentBox(5, container)
+    const textarea = zoneNode.querySelector('textarea')!
+    // Set the controlled textarea value the React-friendly way so onChange runs
+    // and the Add button enables.
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!
+      setter.call(textarea, 'please fix')
+      textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    act(() => {
+      fireEvent.click(zoneNode.querySelector('button[aria-label="Add comment"]')!)
+    })
+
+    expect(addCommentAtSpy).toHaveBeenCalledWith(5, 'please fix')
+    // The box closes after adding.
+    expect(zoneNode.querySelector('textarea')).toBeNull()
   })
 
   it('provides a Monaco worker for each language label', () => {
@@ -370,7 +438,7 @@ describe('MonacoViewerComponent', () => {
     }
   })
 
-  it('enables glyphMargin when commentsContext is provided', () => {
+  it('wires up the comment "+" hover affordance (no glyph margin) when commentsContext is provided', () => {
     render(
       <MonacoViewerComponent
         filePath="/test/file.ts"
@@ -378,13 +446,25 @@ describe('MonacoViewerComponent', () => {
         commentsContext={{ sessionDirectory: '/test', commentsFilePath: '/test/.broomy/comments.json' }}
       />
     )
+    // The gutter width is unchanged — no glyphMargin option is set.
     expect(mockEditor).toHaveBeenCalledWith(
       expect.objectContaining({
-        options: expect.objectContaining({
+        options: expect.not.objectContaining({
           glyphMargin: true,
         }),
       })
     )
+    const props = getLastEditorProps()
+    const onMount = props.onMount as (editor: unknown, monaco: unknown) => void
+    const editor = makeMockEditorInstance()
+    const monacoInst = makeMockMonaco()
+
+    onMount(editor, monacoInst)
+
+    expect(editor.getDomNode).toHaveBeenCalled()
+    expect(editor.onMouseMove).toHaveBeenCalled()
+    expect(editor.onMouseLeave).toHaveBeenCalled()
+    expect(editor.onDidScrollChange).toHaveBeenCalled()
   })
 
   it('renders review comment CSS when commentsContext is provided', () => {
@@ -397,8 +477,9 @@ describe('MonacoViewerComponent', () => {
     )
     const style = container.querySelector('style')
     expect(style).toBeTruthy()
-    expect(style!.textContent).toContain('review-comment-glyph')
-    expect(style!.textContent).toContain('add-comment-glyph')
+    expect(style!.textContent).toContain('review-comment-line')
+    expect(style!.textContent).not.toContain('review-comment-glyph')
+    expect(style!.textContent).not.toContain('add-comment-glyph')
   })
 
   it('does not render review comment CSS without commentsContext', () => {
@@ -487,7 +568,6 @@ describe('MonacoViewerComponent', () => {
     const normalizedValue = '{"key": "value"}\n'
     const editor = {
       addCommand: vi.fn(),
-      onMouseDown: vi.fn(),
       focus: vi.fn(),
       trigger: vi.fn(),
       getValue: vi.fn().mockReturnValue(normalizedValue),
@@ -496,7 +576,7 @@ describe('MonacoViewerComponent', () => {
       setSelection: vi.fn(),
       createDecorationsCollection: vi.fn(),
     }
-    onMount(editor, { KeyMod: { CtrlCmd: 2048 }, KeyCode: { KeyS: 49 }, editor: { MouseTargetType: { GUTTER_GLYPH_MARGIN: 2 } } })
+    onMount(editor, { KeyMod: { CtrlCmd: 2048 }, KeyCode: { KeyS: 49 }, editor: { EditorOption: { lineHeight: 66 } } })
 
     // Monaco's onChange fires with its normalized value (e.g. via the wrapper
     // syncing the model on mount, or any code path that re-emits the value).
@@ -663,8 +743,8 @@ describe('MonacoViewerComponent onMount lifecycle', () => {
     })
   })
 
-  it('registers glyph margin hover and click handlers when commentsContext is provided', () => {
-    render(
+  it('opens the comment box via the "+" button after hovering a line, when commentsContext is provided', () => {
+    const { container } = render(
       <MonacoViewerComponent
         filePath="/test/file.ts"
         content=""
@@ -674,16 +754,27 @@ describe('MonacoViewerComponent onMount lifecycle', () => {
     const props = getLastEditorProps()
     const onMount = props.onMount as (editor: unknown, monaco: unknown) => void
     const editor = makeMockEditorInstance()
+    container.appendChild(editor.getDomNode())
     const monacoInst = makeMockMonaco()
 
     onMount(editor, monacoInst)
 
-    expect(editor.onMouseDown).toHaveBeenCalled()
-    expect(editor.onMouseMove).toHaveBeenCalled()
-    expect(editor.onMouseLeave).toHaveBeenCalled()
+    act(() => {
+      editor.onMouseMove.mock.calls[0][0]({ target: { position: { lineNumber: 4 } } })
+    })
+    const plusButton = container.querySelector<HTMLButtonElement>('button[aria-label="Comment on line 4"]')!
+    expect(plusButton).toBeTruthy()
+
+    act(() => {
+      fireEvent.click(plusButton)
+    })
+
+    // Clicking hides the "+" affordance and opens the box (a view zone is added).
+    expect(container.querySelector('button[aria-label^="Comment on line"]')).toBeNull()
+    expect(editor.changeViewZones).toHaveBeenCalled()
   })
 
-  it('does not register glyph margin handlers without commentsContext', () => {
+  it('does not wire up the comment "+" affordance without commentsContext', () => {
     render(
       <MonacoViewerComponent filePath="/test/file.ts" content="" />
     )
@@ -694,9 +785,10 @@ describe('MonacoViewerComponent onMount lifecycle', () => {
 
     onMount(editor, monacoInst)
 
-    expect(editor.onMouseDown).not.toHaveBeenCalled()
+    expect(editor.getDomNode).not.toHaveBeenCalled()
     expect(editor.onMouseMove).not.toHaveBeenCalled()
     expect(editor.onMouseLeave).not.toHaveBeenCalled()
+    expect(editor.onDidScrollChange).not.toHaveBeenCalled()
   })
 
   it('calls onEditorReady with showOutline and showFind actions', () => {

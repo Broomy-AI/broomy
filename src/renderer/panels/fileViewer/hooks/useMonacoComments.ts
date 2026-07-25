@@ -46,9 +46,10 @@ export function useMonacoComments({ filePath, commentsContext, editorRef }: UseM
       range: new monaco.Range(c.line, 1, c.line, 1),
       options: {
         isWholeLine: true,
-        glyphMarginClassName: 'review-comment-glyph',
-        glyphMarginHoverMessage: { value: c.body },
+        // No glyph margin (it would widen the gutter); mark the line with a
+        // whole-line tint and surface the comment body on hover.
         className: 'review-comment-line',
+        hoverMessage: { value: c.body },
       },
     }))
     decorationsRef.current?.clear()

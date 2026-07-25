@@ -20,7 +20,9 @@ import type { FileViewerPlugin, FileViewerComponentProps } from './types'
 import { getFileExtension } from './types'
 import { useMonacoComments } from '../hooks/useMonacoComments'
 import { useCommentBox } from '../hooks/useCommentBox'
+import { useCommentPlus } from '../hooks/useCommentPlus'
 import InlineCommentBox from '../components/InlineCommentBox'
+import CommentPlusButton from '../components/CommentPlusButton'
 import { useSettingsStore } from '../../../store/settings'
 import { MONACO_THEMES } from '../../../shared/theme/monacoTheme'
 
@@ -210,6 +212,7 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
 
   const { addCommentAt } = useMonacoComments({ filePath, commentsContext, editorRef })
   const { boxLine, boxNode, openBox, closeBox } = useCommentBox(editorRef)
+  const { plus, hostNode: plusHost, attach: attachCommentPlus, hide: hideCommentPlus } = useCommentPlus()
 
   // Keep refs in sync
   scrollToLineRef.current = scrollToLine
@@ -284,27 +287,10 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
       }
     })
 
-    // Comment gutter: hover shows an "add comment" affordance; click opens the box.
+    // Comment affordance: a "+" appears over the hovered line's number (no glyph
+    // margin, so the gutter keeps its width). Clicking it opens the comment box.
     if (commentsContext) {
-      const hoverDecorations = editor.createDecorationsCollection([])
-      editor.onMouseMove((e) => {
-        const line = e.target.position?.lineNumber
-        if (line && e.target.type === monacoInstance.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
-          hoverDecorations.set([{
-            range: new monacoInstance.Range(line, 1, line, 1),
-            options: { glyphMarginClassName: 'add-comment-glyph', glyphMarginHoverMessage: { value: 'Add comment' } },
-          }])
-        } else {
-          hoverDecorations.clear()
-        }
-      })
-      editor.onMouseLeave(() => hoverDecorations.clear())
-      editor.onMouseDown((e) => {
-        if (e.target.type === monacoInstance.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
-          const lineNumber = e.target.position?.lineNumber
-          if (lineNumber) openBox(lineNumber)
-        }
-      })
+      attachCommentPlus(editor, monacoInstance)
     }
 
     // Notify parent of available editor actions
@@ -367,7 +353,7 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
         />,
         boxNode,
       )}
-      <div className="flex-1 min-h-0">
+      <div className="relative flex-1 min-h-0">
         <Editor
           height="100%"
           path={filePath}
@@ -386,38 +372,19 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
             wordWrap: 'on',
             automaticLayout: true,
             padding: { top: 8, bottom: 8 },
-            glyphMargin: !!commentsContext,
           }}
         />
+        {commentsContext && plus && plusHost && createPortal(
+          <CommentPlusButton plus={plus} onClick={() => { openBox(plus.line); hideCommentPlus() }} />,
+          plusHost,
+        )}
       </div>
-      {/* Add CSS for review comment decorations */}
+      {/* Whole-line tint marking lines that already have a comment. */}
       {commentsContext && (
         <style>{`
-          .review-comment-glyph {
-            background-color: rgb(var(--color-warning-base));
-            border-radius: 50%;
-            width: 8px !important;
-            height: 8px !important;
-            margin-top: 6px;
-            margin-left: 4px;
-          }
           .review-comment-line {
             /* 0.05 is invisible on a light ground; the token carries the theme. */
             background-color: rgb(var(--color-warning-base) / 0.12);
-          }
-          .margin-view-overlays .cgmr {
-            cursor: pointer;
-          }
-          .add-comment-glyph {
-            color: rgb(var(--color-accent));
-            cursor: pointer;
-          }
-          .add-comment-glyph::before {
-            content: '+';
-            display: block;
-            text-align: center;
-            font-weight: 700;
-            line-height: 1;
           }
         `}</style>
       )}
