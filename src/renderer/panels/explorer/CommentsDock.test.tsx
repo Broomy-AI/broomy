@@ -5,7 +5,7 @@
  * submission of the full comment block to the agent.
  */
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
 import '../../../test/setup'
 import CommentsDock from './CommentsDock'
 import { useCommentsStore } from '../../store/comments'
@@ -104,6 +104,35 @@ describe('CommentsDock', () => {
     fireEvent.keyDown(ta2, { key: 'Escape' })
     expect(useCommentsStore.getState().commentsByDir[DIR]![0].body).toBe('kbd revised')
     expect(screen.queryByRole('textbox', { name: /edit comment/i })).not.toBeInTheDocument()
+  })
+
+  it('expands and highlights a comment when it is touched (added/edited)', async () => {
+    useCommentsStore.setState({
+      commentsByDir: { [DIR]: [{ id: 'c1', file: '/repo/src/a.ts', line: 42, quotedText: 'x', body: 'b', createdAt: 't' }] },
+      lastTouched: null,
+    })
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+    // Capture the rAF callback (don't run it inline) so we can fire it after the
+    // dock has re-expanded and the row exists.
+    let rafCb: FrameRequestCallback | null = null
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => { rafCb = cb; return 1 })
+    render(<CommentsDock directory={DIR} agentPtyId="pty1" onNavigate={vi.fn()} />)
+
+    // Collapse the dock so the rows are hidden.
+    fireEvent.click(screen.getByRole('button', { name: /^Comments/ }))
+    expect(document.querySelector('[data-comment-id="c1"]')).toBeNull()
+
+    // Touching the comment re-expands the dock and highlights the row.
+    act(() => { useCommentsStore.setState({ lastTouched: { id: 'c1', seq: 1 } }) })
+    const row = document.querySelector('[data-comment-id="c1"]')
+    expect(row).not.toBeNull()
+    expect(row!.className).toContain('bg-accent/20')
+
+    // The scroll-into-view runs on the next frame, once the row is present.
+    act(() => { rafCb?.(0) })
+    expect(scrollIntoView).toHaveBeenCalled()
+    raf.mockRestore()
   })
 
   it('cancels an inline edit without changing the comment', () => {

@@ -206,6 +206,44 @@ describe('useMonacoComments', () => {
     })
   })
 
+  describe('updateCommentBody', () => {
+    it('updates an existing comment body via the store', () => {
+      useCommentsStore.setState({
+        commentsByDir: {
+          '/tmp/session': [
+            { id: 'c1', file: 'src/foo.ts', line: 1, quotedText: 'q', body: 'old', createdAt: '2024-01-01' },
+          ],
+        },
+      })
+      const { result } = renderHook(() =>
+        useMonacoComments({
+          filePath: 'src/foo.ts',
+          commentsContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
+          editorRef: { current: null },
+        }),
+      )
+
+      act(() => { result.current.updateCommentBody('c1', 'new body') })
+
+      expect(useCommentsStore.getState().commentsByDir['/tmp/session']![0].body).toBe('new body')
+    })
+
+    it('does nothing when there is no session dir or the body is blank', () => {
+      useCommentsStore.setState({
+        commentsByDir: { '/tmp/session': [{ id: 'c1', file: 'src/foo.ts', line: 1, quotedText: 'q', body: 'old', createdAt: 't' }] },
+      })
+      const { result } = renderHook(() =>
+        useMonacoComments({
+          filePath: 'src/foo.ts',
+          commentsContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
+          editorRef: { current: null },
+        }),
+      )
+      act(() => { result.current.updateCommentBody('c1', '   ') })
+      expect(useCommentsStore.getState().commentsByDir['/tmp/session']![0].body).toBe('old')
+    })
+  })
+
   describe('comment decorations', () => {
     it('creates decorations for existing comments when the editor has a model', () => {
       const mockClear = vi.fn()

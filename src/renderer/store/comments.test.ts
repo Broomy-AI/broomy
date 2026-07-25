@@ -57,6 +57,18 @@ describe('useCommentsStore', () => {
     expect(useCommentsStore.getState().commentsByDir[DIR]).toEqual([])
   })
 
+  it('records lastTouched (with an incrementing seq) on add and update', () => {
+    const a = useCommentsStore.getState().addComment(DIR, { file: FILE, line: 5, quotedText: 'q', body: 'hi' })
+    const afterAdd = useCommentsStore.getState().lastTouched
+    expect(afterAdd?.id).toBe(a.id)
+
+    useCommentsStore.getState().updateComment(DIR, a.id, 'edited')
+    const afterUpdate = useCommentsStore.getState().lastTouched
+    expect(afterUpdate?.id).toBe(a.id)
+    // seq changes even though the id is the same, so the dock re-reacts.
+    expect(afterUpdate!.seq).toBeGreaterThan(afterAdd!.seq)
+  })
+
   it('clearComments empties the dir and persists an empty list', async () => {
     useCommentsStore.getState().addComment(DIR, { file: FILE, line: 5, quotedText: 'q', body: 'hi' })
     vi.clearAllMocks()

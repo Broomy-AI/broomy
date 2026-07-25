@@ -1,10 +1,16 @@
 /**
- * GitHub-style "add comment" affordance that appears over the line-number
- * gutter of the hovered line — without widening the gutter (no glyph margin).
+ * Gutter overlay affordances for comments, positioned over the line-number
+ * column without widening the gutter (no glyph margin).
  *
- * `attach(editor, monacoNs)` wires the editor's mouse/scroll events and exposes
- * `plus`, the on-screen position of the "+" button, which the viewer renders as
- * an overlay inside the editor. Clicking it opens the comment box on that line.
+ * `attach(editor, monacoNs)` wires the editor's mouse/scroll events. The hook
+ * exposes:
+ *  - `plus`: the on-screen position of the hover "add comment" button (shown
+ *    only when the mouse is over the line-number gutter).
+ *  - `positionFor(line)`: the current on-screen gutter position for any line
+ *    (used to place persistent markers on lines that already have comments), or
+ *    null when the editor isn't ready or the line is scrolled out of view.
+ *  - `scrollRev`: bumps on scroll/layout so callers re-render persistent
+ *    markers at their new positions.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type * as monaco from 'monaco-editor'
@@ -21,22 +27,39 @@ export interface PlusPosition {
 
 export function useCommentPlus() {
   const [plus, setPlus] = useState<PlusPosition | null>(null)
-  // The editor's own DOM node, used as the portal host for the "+" button so
-  // `left: 0` lands on this editor's gutter — correct for both a standalone
-  // editor and the modified (right) pane of a side-by-side diff editor.
+  // The editor's own DOM node, used as the portal host so `left: 0` lands on
+  // this editor's gutter — correct for both a standalone editor and the
+  // modified (right) pane of a side-by-side diff editor.
   const [hostNode, setHostNode] = useState<HTMLElement | null>(null)
+  // Bumps on scroll/layout so callers reposition persistent markers.
+  const [scrollRev, setScrollRev] = useState(0)
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
+  const monacoRef = useRef<typeof monaco | null>(null)
   const disposablesRef = useRef<monaco.IDisposable[]>([])
   const lastLineRef = useRef<number | null>(null)
 
+  // Current gutter position for a line, or null if the editor isn't ready or
+  // the line is scrolled out of the viewport.
+  const positionFor = useCallback((line: number): PlusPosition | null => {
+    const editor = editorRef.current
+    const monacoNs = monacoRef.current
+    if (!editor || !monacoNs) return null
+    const layout = editor.getLayoutInfo()
+    const top = editor.getTopForLineNumber(line) - editor.getScrollTop()
+    if (top < 0 || top >= layout.height) return null
+    return {
+      line,
+      top,
+      height: editor.getOption(monacoNs.editor.EditorOption.lineHeight),
+      width: layout.contentLeft,
+    }
+  }, [])
+
   const attach = useCallback(
     (editor: monaco.editor.IStandaloneCodeEditor, monacoNs: typeof monaco) => {
+      editorRef.current = editor
+      monacoRef.current = monacoNs
       setHostNode(editor.getDomNode() ?? null)
-      const positionFor = (line: number): PlusPosition => ({
-        line,
-        top: editor.getTopForLineNumber(line) - editor.getScrollTop(),
-        height: editor.getOption(monacoNs.editor.EditorOption.lineHeight),
-        width: editor.getLayoutInfo().contentLeft,
-      })
 
       disposablesRef.current.push(
         editor.onMouseMove((e) => {
@@ -63,13 +86,12 @@ export function useCommentPlus() {
           setPlus(null)
         }),
         editor.onDidScrollChange(() => {
-          setPlus((prev) =>
-            prev ? { ...prev, top: editor.getTopForLineNumber(prev.line) - editor.getScrollTop() } : null,
-          )
+          setScrollRev((r) => r + 1)
+          setPlus((prev) => (prev ? positionFor(prev.line) : null))
         }),
       )
     },
-    [],
+    [positionFor],
   )
 
   const hide = useCallback(() => {
@@ -85,5 +107,5 @@ export function useCommentPlus() {
     }
   }, [])
 
-  return { plus, hostNode, attach, hide }
+  return { plus, hostNode, scrollRev, positionFor, attach, hide }
 }

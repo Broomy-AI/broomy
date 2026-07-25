@@ -26,11 +26,15 @@ export default function CommentsDock({ directory, agentPtyId, onNavigate }: Comm
   const updateComment = useCommentsStore((s) => s.updateComment)
   const clearComments = useCommentsStore((s) => s.clearComments)
   const loaded = useCommentsStore((s) => s.commentsByDir[directory] !== undefined)
+  const lastTouched = useCommentsStore((s) => s.lastTouched)
 
   // The comment currently being edited inline, and its draft text.
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editText, setEditText] = useState('')
   const [collapsed, setCollapsed] = useState(false)
+  // The comment to briefly highlight after it was just added/edited.
+  const [highlightedId, setHighlightedId] = useState<string | null>(null)
+  const listRef = useRef<HTMLDivElement>(null)
   const [height, setHeight] = useState(() => {
     const saved = Number(localStorage.getItem(HEIGHT_KEY))
     return saved >= MIN_HEIGHT && saved <= MAX_HEIGHT ? saved : 160
@@ -40,6 +44,23 @@ export default function CommentsDock({ directory, agentPtyId, onNavigate }: Comm
   useEffect(() => {
     if (!loaded) void loadComments(directory)
   }, [loaded, directory, loadComments])
+
+  // When a comment is added or edited, reveal it: expand the dock if collapsed,
+  // scroll the row into view, and highlight it briefly — even if it was below
+  // the fold under other comments.
+  useEffect(() => {
+    if (!lastTouched) return
+    const id = lastTouched.id
+    const dirComments = useCommentsStore.getState().commentsByDir[directory] ?? []
+    if (!dirComments.some((c) => c.id === id)) return
+    setCollapsed(false)
+    setHighlightedId(id)
+    const raf = requestAnimationFrame(() => {
+      listRef.current?.querySelector(`[data-comment-id="${id}"]`)?.scrollIntoView({ block: 'nearest' })
+    })
+    const timer = setTimeout(() => setHighlightedId((cur) => (cur === id ? null : cur)), 1600)
+    return () => { cancelAnimationFrame(raf); clearTimeout(timer) }
+  }, [lastTouched, directory])
 
   // Drag-to-resize: dragging the top handle changes height (grows upward).
   useEffect(() => {
@@ -87,14 +108,18 @@ export default function CommentsDock({ directory, agentPtyId, onNavigate }: Comm
 
       {!collapsed && (
         <div className="flex flex-col" style={{ height }}>
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto">
             {comments.length === 0 ? (
               <div className="px-3 py-4 text-center text-xs text-text-secondary">
                 No comments yet. Hover a line in a file and click + to add one.
               </div>
             ) : (
               comments.map((c) => (
-                <div key={c.id} className="group border-b border-border px-3 py-1.5 text-xs">
+                <div
+                  key={c.id}
+                  data-comment-id={c.id}
+                  className={`group border-b border-border px-3 py-1.5 text-xs transition-colors duration-500 ${highlightedId === c.id ? 'bg-accent/20' : ''}`}
+                >
                   {editingId === c.id ? (
                     <div className="flex flex-col gap-1">
                       <span className="text-accent">{toRelativePath(c.file, directory)}:{c.line}</span>

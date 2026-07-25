@@ -26,10 +26,17 @@ async function persist(dir: string, comments: Comment[]): Promise<void> {
   }
 }
 
+// Monotonic counter so repeated add/update of the same comment still produce a
+// new `lastTouched` value the dock can react to (scroll into view + highlight).
+let touchSeq = 0
+
 interface CommentsStore {
   // Values are undefined until a dir's comments have been loaded from disk,
   // which is how the dock distinguishes "not loaded yet" from "loaded, empty".
   commentsByDir: Record<string, Comment[] | undefined>
+  // The comment most recently added/edited, so the dock can scroll it into view
+  // and highlight it. `seq` changes on every touch, even for the same id.
+  lastTouched: { id: string; seq: number } | null
   loadComments: (sessionDir: string) => Promise<void>
   addComment: (sessionDir: string, input: { file: string; line: number; quotedText: string; body: string }) => Comment
   updateComment: (sessionDir: string, id: string, body: string) => void
@@ -39,6 +46,7 @@ interface CommentsStore {
 
 export const useCommentsStore = create<CommentsStore>((set, get) => ({
   commentsByDir: {},
+  lastTouched: null,
 
   loadComments: async (sessionDir) => {
     let loaded: Comment[] = []
@@ -60,7 +68,7 @@ export const useCommentsStore = create<CommentsStore>((set, get) => ({
       body: input.body.trim(),
     }
     const next = [...(get().commentsByDir[sessionDir] ?? []), comment]
-    set((s) => ({ commentsByDir: { ...s.commentsByDir, [sessionDir]: next } }))
+    set((s) => ({ commentsByDir: { ...s.commentsByDir, [sessionDir]: next }, lastTouched: { id: comment.id, seq: ++touchSeq } }))
     void persist(sessionDir, next)
     return comment
   },
@@ -69,7 +77,7 @@ export const useCommentsStore = create<CommentsStore>((set, get) => ({
     const next = (get().commentsByDir[sessionDir] ?? []).map((c) =>
       c.id === id ? { ...c, body: body.trim() } : c,
     )
-    set((s) => ({ commentsByDir: { ...s.commentsByDir, [sessionDir]: next } }))
+    set((s) => ({ commentsByDir: { ...s.commentsByDir, [sessionDir]: next }, lastTouched: { id, seq: ++touchSeq } }))
     void persist(sessionDir, next)
   },
 

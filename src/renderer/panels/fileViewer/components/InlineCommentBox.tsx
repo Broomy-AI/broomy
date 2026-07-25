@@ -10,10 +10,14 @@ interface InlineCommentBoxProps {
   quotedText: string
   onAdd: (body: string) => void
   onCancel: () => void
+  /** Pre-filled text when editing an existing comment. */
+  initialBody?: string
+  /** Submit button label — "Add" for new, "Save" when editing. */
+  submitLabel?: string
 }
 
-export default function InlineCommentBox({ line, quotedText, onAdd, onCancel }: InlineCommentBoxProps) {
-  const [body, setBody] = useState('')
+export default function InlineCommentBox({ line, quotedText, onAdd, onCancel, initialBody = '', submitLabel = 'Add' }: InlineCommentBoxProps) {
+  const [body, setBody] = useState(initialBody)
   const canAdd = body.trim().length > 0
   return (
     <div className="mx-3 my-1 rounded border border-border bg-bg-secondary p-2 shadow-sm">
@@ -46,7 +50,7 @@ export default function InlineCommentBox({ line, quotedText, onAdd, onCancel }: 
           aria-label="Add comment"
           className="rounded bg-accent px-2 py-1 text-xs text-on-accent transition-colors hover:bg-accent/80 disabled:opacity-50"
         >
-          Add
+          {submitLabel}
         </button>
       </div>
     </div>

@@ -1,7 +1,8 @@
 /**
  * Bridges the Monaco editor to the comments store: loads a session's comments,
- * renders glyph-margin markers for existing comments on the open file, and
- * exposes an add helper that captures the quoted line text at creation time.
+ * renders a whole-line tint for lines that already have comments on the open
+ * file, and exposes add/update helpers (add captures the quoted line text at
+ * creation time).
  */
 import { useEffect, useCallback, useRef } from 'react'
 import * as monaco from 'monaco-editor'
@@ -21,12 +22,14 @@ interface UseMonacoCommentsParams {
 interface UseMonacoCommentsResult {
   existingComments: Comment[]
   addCommentAt: (line: number, body: string) => void
+  updateCommentBody: (id: string, body: string) => void
 }
 
 export function useMonacoComments({ filePath, commentsContext, editorRef }: UseMonacoCommentsParams): UseMonacoCommentsResult {
   const dir = commentsContext?.sessionDirectory
   const loadComments = useCommentsStore((s) => s.loadComments)
   const addComment = useCommentsStore((s) => s.addComment)
+  const updateComment = useCommentsStore((s) => s.updateComment)
   const allForDir = useCommentsStore((s) => (dir ? s.commentsByDir[dir] : undefined))
   const decorationsRef = useRef<monaco.editor.IEditorDecorationsCollection | null>(null)
 
@@ -63,5 +66,10 @@ export function useMonacoComments({ filePath, commentsContext, editorRef }: UseM
     addComment(dir, { file: filePath, line, quotedText, body })
   }, [dir, filePath, addComment, editorRef])
 
-  return { existingComments, addCommentAt }
+  const updateCommentBody = useCallback((id: string, body: string) => {
+    if (!dir || !body.trim()) return
+    updateComment(dir, id, body)
+  }, [dir, updateComment])
+
+  return { existingComments, addCommentAt, updateCommentBody }
 }

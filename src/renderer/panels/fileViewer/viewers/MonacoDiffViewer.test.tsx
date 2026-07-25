@@ -25,6 +25,7 @@ vi.mock('monaco-editor', () => ({
 }))
 
 import MonacoDiffViewer from './MonacoDiffViewer'
+import { useCommentsStore } from '../../../store/comments'
 
 // jsdom has no ResizeObserver; useCommentBox uses one to keep the view zone's
 // height in sync with the rendered box, so opening the box needs a stub.
@@ -271,6 +272,32 @@ describe('MonacoDiffViewer', () => {
         onDidUpdateDiff: vi.fn(() => ({ dispose: vi.fn() })),
       })
     }
+
+    it('shows a persistent marker on a commented line and opens the pre-filled edit box', () => {
+      useCommentsStore.setState({
+        commentsByDir: { '/test': [{ id: 'd1', file: '/test/file.ts', line: 4, quotedText: 'q', body: 'diff note', createdAt: 't' }] },
+      })
+      try {
+        const { container } = render(
+          <MonacoDiffViewer filePath="/test/file.ts" originalContent="" modifiedContent="" commentsContext={COMMENTS_CONTEXT} />
+        )
+        const modifiedEditor = makeModifiedEditor()
+        container.appendChild(modifiedEditor.getDomNode())
+        let capturedZone: { domNode: HTMLDivElement } | undefined
+        modifiedEditor.changeViewZones = vi.fn((cb: (a: { addZone: (z: { domNode: HTMLDivElement }) => string; removeZone: () => void }) => void) => {
+          cb({ addZone: (zone) => { capturedZone = zone; container.appendChild(zone.domNode); return 'zone-1' }, removeZone: vi.fn() })
+        })
+        act(() => { mountWith(modifiedEditor) })
+
+        const marker = container.querySelector<HTMLButtonElement>('button[aria-label="Edit comment on line 4"]')!
+        expect(marker).toBeTruthy()
+        act(() => { fireEvent.click(marker) })
+        const textarea = capturedZone!.domNode.querySelector('textarea')!
+        expect(textarea.value).toBe('diff note')
+      } finally {
+        useCommentsStore.setState({ commentsByDir: {} })
+      }
+    })
 
     it('opens the inline comment box in a view zone when the "+" button is clicked', () => {
       const { container } = render(

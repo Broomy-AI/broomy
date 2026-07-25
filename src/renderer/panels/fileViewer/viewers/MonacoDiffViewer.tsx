@@ -15,6 +15,7 @@ import { useCommentBox } from '../hooks/useCommentBox'
 import { useCommentPlus } from '../hooks/useCommentPlus'
 import InlineCommentBox from '../components/InlineCommentBox'
 import CommentPlusButton from '../components/CommentPlusButton'
+import CommentMarkerButton from '../components/CommentMarkerButton'
 import { useSettingsStore } from '../../../store/settings'
 import { MONACO_THEMES } from '../../../shared/theme/monacoTheme'
 
@@ -102,9 +103,12 @@ export default function MonacoDiffViewer({
   const diffEditorRef = useRef<monacoEditor.editor.IStandaloneDiffEditor | null>(null)
   const modifiedEditorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null)
 
-  const { addCommentAt } = useMonacoComments({ filePath, commentsContext, editorRef: modifiedEditorRef })
-  const { boxLine, boxNode, openBox, closeBox } = useCommentBox(modifiedEditorRef)
-  const { plus, hostNode: plusHost, attach: attachCommentPlus, hide: hideCommentPlus } = useCommentPlus()
+  const { existingComments, addCommentAt, updateCommentBody } = useMonacoComments({ filePath, commentsContext, editorRef: modifiedEditorRef })
+  const { boxLine, boxNode, editingComment, openBox, openEditBox, closeBox } = useCommentBox(modifiedEditorRef)
+  // useCommentPlus bumps internal scroll state on scroll/layout, re-rendering
+  // this component so the persistent markers reposition via positionFor.
+  const { plus, hostNode: plusHost, positionFor, attach: attachCommentPlus, hide: hideCommentPlus } = useCommentPlus()
+  const commentByLine = new Map(existingComments.map((c) => [c.line, c]))
 
   const handleDiffEditorMount = (editor: monacoEditor.editor.IStandaloneDiffEditor) => {
     diffEditorRef.current = editor
@@ -165,8 +169,14 @@ export default function MonacoDiffViewer({
       {boxNode && boxLine !== null && createPortal(
         <InlineCommentBox
           line={boxLine}
-          quotedText={modifiedEditorRef.current?.getModel()?.getLineContent(boxLine) ?? ''}
-          onAdd={(body) => { addCommentAt(boxLine, body); closeBox() }}
+          quotedText={editingComment ? editingComment.quotedText : (modifiedEditorRef.current?.getModel()?.getLineContent(boxLine) ?? '')}
+          initialBody={editingComment?.body ?? ''}
+          submitLabel={editingComment ? 'Save' : 'Add'}
+          onAdd={(body) => {
+            if (editingComment) updateCommentBody(editingComment.id, body)
+            else addCommentAt(boxLine, body)
+            closeBox()
+          }}
           onCancel={closeBox}
         />,
         boxNode,
@@ -218,7 +228,13 @@ export default function MonacoDiffViewer({
             ignoreTrimWhitespace: false,
           }}
         />
-        {commentsContext && plus && plusHost && createPortal(
+        {/* Persistent markers on lines that already have a comment. */}
+        {commentsContext && plusHost && [...commentByLine.values()].map((c) => {
+          const pos = positionFor(c.line)
+          return pos ? createPortal(<CommentMarkerButton key={c.id} pos={pos} onClick={() => openEditBox(c)} />, plusHost) : null
+        })}
+        {/* Hover "add" affordance — suppressed on lines that already have a comment. */}
+        {commentsContext && plus && plusHost && !commentByLine.has(plus.line) && createPortal(
           <CommentPlusButton plus={plus} onClick={() => { openBox(plus.line); hideCommentPlus() }} />,
           plusHost,
         )}

@@ -13,6 +13,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type * as monaco from 'monaco-editor'
+import type { Comment } from '../../../store/comments'
 
 const INITIAL_HEIGHT_PX = 110
 
@@ -21,6 +22,8 @@ export function useCommentBox(
 ) {
   const [boxLine, setBoxLine] = useState<number | null>(null)
   const [boxNode, setBoxNode] = useState<HTMLDivElement | null>(null)
+  // Non-null when the box is editing an existing comment (vs. adding a new one).
+  const [editingComment, setEditingComment] = useState<Comment | null>(null)
   const zoneRef = useRef<{ id: string; viewZone: monaco.editor.IViewZone } | null>(null)
 
   const removeZone = useCallback(() => {
@@ -36,9 +39,10 @@ export function useCommentBox(
     removeZone()
     setBoxNode(null)
     setBoxLine(null)
+    setEditingComment(null)
   }, [removeZone])
 
-  const openBox = useCallback((line: number) => {
+  const openAt = useCallback((line: number) => {
     const editor = editorRef.current
     if (!editor) return
     removeZone()
@@ -61,6 +65,18 @@ export function useCommentBox(
     setBoxNode(domNode)
     setBoxLine(line)
   }, [editorRef, removeZone])
+
+  // Open the box to add a new comment on `line`.
+  const openBox = useCallback((line: number) => {
+    setEditingComment(null)
+    openAt(line)
+  }, [openAt])
+
+  // Open the box to edit an existing comment (pre-filled), on its line.
+  const openEditBox = useCallback((comment: Comment) => {
+    setEditingComment(comment)
+    openAt(comment.line)
+  }, [openAt])
 
   // Keep the view zone exactly as tall as the rendered box (including the box's
   // own margins), so following lines are pushed down by the right amount and
@@ -88,5 +104,5 @@ export function useCommentBox(
     return () => observer.disconnect()
   }, [boxNode, editorRef])
 
-  return { boxLine, boxNode, openBox, closeBox }
+  return { boxLine, boxNode, editingComment, openBox, openEditBox, closeBox }
 }

@@ -42,6 +42,7 @@ vi.mock('../hooks/useMonacoComments', () => ({
 }))
 
 import { MonacoViewer } from './MonacoViewer'
+import { useMonacoComments } from '../hooks/useMonacoComments'
 
 const MonacoViewerComponent = MonacoViewer.component
 
@@ -428,6 +429,39 @@ describe('MonacoViewerComponent', () => {
     // Right-clicking sets the cursor, so run() comments on the current position's line.
     act(() => { action.run({ getPosition: () => ({ lineNumber: 4 }) }) })
     expect(zoneNode!.querySelector('textarea[placeholder="Add a comment..."]')).toBeTruthy()
+  })
+
+  it('shows a persistent marker on a commented line and opens the pre-filled edit box when clicked', () => {
+    const comment = { id: 'x1', file: '/test/file.ts', line: 4, quotedText: 'const total = a + b', body: 'why 3?', createdAt: 't' }
+    const useMC = vi.mocked(useMonacoComments)
+    useMC.mockReturnValue({ existingComments: [comment], addCommentAt: addCommentAtSpy, updateCommentBody: vi.fn() })
+    try {
+      const { container } = render(
+        <MonacoViewerComponent
+          filePath="/test/file.ts"
+          content=""
+          commentsContext={{ sessionDirectory: '/test', commentsFilePath: '/test/.broomy/comments.json' }}
+        />
+      )
+      const onMount = getLastEditorProps().onMount as (editor: unknown, monaco: unknown) => void
+      const editor = makeMockEditorInstance()
+      container.appendChild(editor.getDomNode())
+      let zoneNode: HTMLDivElement | undefined
+      editor.changeViewZones = vi.fn((cb: (a: { addZone: (z: { domNode: HTMLDivElement }) => string; removeZone: () => void }) => void) =>
+        cb({ addZone: (z) => { zoneNode = z.domNode; container.appendChild(z.domNode); return 'zone-1' }, removeZone: vi.fn() })) as never
+      act(() => { onMount(editor, makeMockMonaco()) })
+
+      // A persistent "Edit comment" marker is shown over the commented line.
+      const marker = container.querySelector<HTMLButtonElement>('button[aria-label="Edit comment on line 4"]')!
+      expect(marker).toBeTruthy()
+
+      // Clicking it opens the box pre-filled with the existing comment body.
+      act(() => { fireEvent.click(marker) })
+      const textarea = zoneNode!.querySelector('textarea')!
+      expect(textarea.value).toBe('why 3?')
+    } finally {
+      useMC.mockReturnValue({ existingComments: [], addCommentAt: addCommentAtSpy, updateCommentBody: vi.fn() })
+    }
   })
 
   it('provides a Monaco worker for each language label', () => {

@@ -18,7 +18,7 @@ export default function CommentPlusButton({ plus, onClick }: CommentPlusButtonPr
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       aria-label={`Comment on line ${plus.line}`}
-      title="Add comment"
+      title="Comment on this line to send it to the agent"
       className="absolute z-10 flex items-center justify-center rounded bg-accent text-on-accent hover:bg-accent/80"
       style={{ top: plus.top, left: 0, width: plus.width, height: plus.height }}
     >

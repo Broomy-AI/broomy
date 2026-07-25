@@ -23,6 +23,7 @@ import { useCommentBox } from '../hooks/useCommentBox'
 import { useCommentPlus } from '../hooks/useCommentPlus'
 import InlineCommentBox from '../components/InlineCommentBox'
 import CommentPlusButton from '../components/CommentPlusButton'
+import CommentMarkerButton from '../components/CommentMarkerButton'
 import { useSettingsStore } from '../../../store/settings'
 import { MONACO_THEMES } from '../../../shared/theme/monacoTheme'
 
@@ -210,9 +211,14 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
   onSaveRef.current = onSave
   onDirtyChangeRef.current = onDirtyChange
 
-  const { addCommentAt } = useMonacoComments({ filePath, commentsContext, editorRef })
-  const { boxLine, boxNode, openBox, closeBox } = useCommentBox(editorRef)
-  const { plus, hostNode: plusHost, attach: attachCommentPlus, hide: hideCommentPlus } = useCommentPlus()
+  const { existingComments, addCommentAt, updateCommentBody } = useMonacoComments({ filePath, commentsContext, editorRef })
+  const { boxLine, boxNode, editingComment, openBox, openEditBox, closeBox } = useCommentBox(editorRef)
+  // useCommentPlus bumps internal scroll state on scroll/layout, re-rendering
+  // this component so the persistent markers below reposition via positionFor.
+  const { plus, hostNode: plusHost, positionFor, attach: attachCommentPlus, hide: hideCommentPlus } = useCommentPlus()
+  // Lines that already have a comment get a persistent marker (and suppress the
+  // hover "add" affordance).
+  const commentByLine = new Map(existingComments.map((c) => [c.line, c]))
 
   // Keep refs in sync
   scrollToLineRef.current = scrollToLine
@@ -354,8 +360,14 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
       {boxNode && boxLine !== null && createPortal(
         <InlineCommentBox
           line={boxLine}
-          quotedText={editorRef.current?.getModel()?.getLineContent(boxLine) ?? ''}
-          onAdd={(body) => { addCommentAt(boxLine, body); closeBox() }}
+          quotedText={editingComment ? editingComment.quotedText : (editorRef.current?.getModel()?.getLineContent(boxLine) ?? '')}
+          initialBody={editingComment?.body ?? ''}
+          submitLabel={editingComment ? 'Save' : 'Add'}
+          onAdd={(body) => {
+            if (editingComment) updateCommentBody(editingComment.id, body)
+            else addCommentAt(boxLine, body)
+            closeBox()
+          }}
           onCancel={closeBox}
         />,
         boxNode,
@@ -381,7 +393,13 @@ function MonacoViewerComponent({ filePath, content, onSave, onDirtyChange, scrol
             padding: { top: 8, bottom: 8 },
           }}
         />
-        {commentsContext && plus && plusHost && createPortal(
+        {/* Persistent markers on lines that already have a comment. */}
+        {commentsContext && plusHost && [...commentByLine.values()].map((c) => {
+          const pos = positionFor(c.line)
+          return pos ? createPortal(<CommentMarkerButton key={c.id} pos={pos} onClick={() => openEditBox(c)} />, plusHost) : null
+        })}
+        {/* Hover "add" affordance — suppressed on lines that already have a comment. */}
+        {commentsContext && plus && plusHost && !commentByLine.has(plus.line) && createPortal(
           <CommentPlusButton plus={plus} onClick={() => { openBox(plus.line); hideCommentPlus() }} />,
           plusHost,
         )}
