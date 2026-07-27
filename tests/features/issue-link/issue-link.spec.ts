@@ -134,7 +134,8 @@ test.describe.serial('Feature: Issue Link in Source Control', () => {
       caption: 'New branch view with issue context',
       description:
         'The new branch form shows the issue details at the top and pre-fills a branch name ' +
-        'derived from the issue title. The issue number, title, and URL will be saved with the session.',
+        'derived from the issue title, namespaced under "issue/<number>-". The issue number, ' +
+        'title, and URL will be saved with the session.',
     })
 
     // Close dialog without creating (we'll use the pre-existing sessions for the next steps)

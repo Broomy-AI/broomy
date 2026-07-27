@@ -30,7 +30,10 @@ export function NewBranchView({
   const sessions = useSessionStore(s => s.sessions)
   const setActiveSession = useSessionStore(s => s.setActiveSession)
 
-  const [branchName, setBranchName] = useState(issue ? issueToBranchName(issue) : '')
+  // Issue-derived sessions default under an `issue/<number>-` prefix so their worktree lands in
+  // `<repo>/issue/…` (like the other prefixed worktrees) rather than the repo root. The number
+  // keeps the branch unique even when two issues slugify to the same words. Editable by the user.
+  const [branchName, setBranchName] = useState(issue ? `issue/${issue.number}-${issueToBranchName(issue)}` : '')
   // Use repo's default agent, or fall back to first agent
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(repo.defaultAgentId || agents[0]?.id || null)
   const [loading, setLoading] = useState(false)
