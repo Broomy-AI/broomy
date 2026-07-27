@@ -109,6 +109,83 @@ async function handleWorktreeAdd(ctx: HandlerContext, repoPath: string, worktree
   }
 }
 
+/**
+ * Whether a name is safe to create a new branch from. Rejects option-like tokens (a leading `-`,
+ * which git would read as a flag — e.g. `-D` → `git branch -D <base>`, deleting the base ref) and
+ * the forms git itself forbids in a ref name (see git-check-ref-format), so untrusted input can
+ * never mutate the wrong ref or reach git as a flag.
+ */
+export function isCreatableBranchName(name: string): boolean {
+  if (!name || name === '@' || name.startsWith('-')) return false
+  // Control chars, space, DEL, and the characters git forbids in a ref name.
+  if (/[\x00-\x1f\x7f\s~^:?*[\\]/.test(name)) return false
+  if (name.includes('..') || name.includes('@{') || name.includes('//')) return false
+  if (name.startsWith('/') || name.endsWith('/') || name.endsWith('.') || name.endsWith('.lock')) return false
+  // No path component may be empty, start with a dot, or end with ".lock".
+  return name.split('/').every((c) => c !== '' && !c.startsWith('.') && !c.endsWith('.lock'))
+}
+
+/**
+ * Create a worktree for a BRAND-NEW branch, so a collision never reuses or clobbers an existing
+ * branch/worktree — unlike `handleWorktreeAdd`, whose DWIM checkout is for the attach flows
+ * (Existing / Review):
+ *   - Reject option-like / malformed names before any mutation; pass the base as a full ref so an
+ *     option-like default branch can't be reinterpreted.
+ *   1. `git branch <branch> refs/heads/<base>` — atomic; if the branch already exists → BRANCH_EXISTS,
+ *      and nothing else is created.
+ *   2. `git worktree add <path> <branch>` — attaches the worktree (with checkout + hook). On ANY
+ *      failure we delete only the branch WE just made and NEVER remove the destination: it may be a
+ *      pre-existing directory/worktree, or ours after a hook failed — either way we must not risk
+ *      clobbering it. An occupied path → WORKTREE_PATH_EXISTS; other errors note any partial worktree.
+ * The remote side (an existing `origin/<branch>`) is guarded separately by `handlePushNewBranch`.
+ */
+async function handleWorktreeAddNewBranch(ctx: HandlerContext, repoPath: string, worktreePath: string, branchName: string, baseBranch: string) {
+  if (ctx.isE2ETest && !ctx.e2eRealRepos) {
+    return { success: true }
+  }
+
+  const expandedRepoPath = expandHomePath(repoPath)
+  if (!existsSync(expandedRepoPath)) {
+    return {
+      success: false,
+      error: `The main worktree directory was not found at "${repoPath}". This can happen if the repo's default branch name (e.g. "master") doesn't match the worktree folder name ("main"). Try removing the repo in Settings and re-adding it.`,
+    }
+  }
+  if (!isCreatableBranchName(branchName) || !isCreatableBranchName(baseBranch)) {
+    return { success: false, error: `Invalid branch name "${!isCreatableBranchName(branchName) ? branchName : baseBranch}".` }
+  }
+  const git = simpleGit(expandedRepoPath)
+  const expandedPath = expandHomePath(worktreePath)
+
+  // Step 1: create the branch ref atomically. Base as a full ref so an option-like default branch
+  // can never be reparsed as a flag.
+  try {
+    await git.raw(['branch', branchName, `refs/heads/${baseBranch}`])
+  } catch (err) {
+    const errStr = String(err)
+    if (errStr.includes('already exists')) {
+      return { success: false, error: `BRANCH_EXISTS:A local branch "${branchName}" already exists. Open that session instead, or pick a different name.` }
+    }
+    return { success: false, error: errStr }
+  }
+
+  // Step 2: attach the worktree. On failure, delete only OUR branch and never remove the path — a
+  // pre-existing directory/worktree (even a stale registration) must never be clobbered.
+  try {
+    await git.raw(['worktree', 'add', expandedPath, branchName])
+  } catch (err) {
+    const errStr = String(err)
+    let leftover = ''
+    try { await git.branch(['-D', branchName]) } catch { leftover += ` The branch "${branchName}" may remain.` }
+    if (errStr.includes('already exists') || errStr.includes('already used') || errStr.includes('already registered')) {
+      return { success: false, error: `WORKTREE_PATH_EXISTS:A folder already exists at "${worktreePath}". Remove or rename it, then try again.${leftover}` }
+    }
+    return { success: false, error: `${errStr} A partial worktree may remain at "${worktreePath}" — remove it if present.${leftover}` }
+  }
+
+  return { success: true }
+}
+
 async function handleWorktreeList(ctx: HandlerContext, repoPath: string) {
   if (ctx.isE2ETest && !ctx.e2eRealRepos) {
     return [
@@ -150,7 +227,15 @@ async function handlePushNewBranch(ctx: HandlerContext, repoPath: string, branch
 
   try {
     const git = withNonInteractive(simpleGit(expandHomePath(repoPath)))
-    await git.push(['--set-upstream', 'origin', branchName])
+    // Empty-expectation lease requires the remote ref to be ABSENT, so a plain fast-forward can
+    // never advance an existing remote branch; the fully-qualified refspec bypasses push.default
+    // (and any tag of the same name).
+    await git.push([
+      '--set-upstream',
+      `--force-with-lease=refs/heads/${branchName}:`,
+      'origin',
+      `refs/heads/${branchName}:refs/heads/${branchName}`,
+    ])
     return { success: true }
   } catch (error) {
     const errorStr = String(error)
@@ -173,12 +258,31 @@ async function handlePushNewBranch(ctx: HandlerContext, repoPath: string, branch
       }
     }
 
-    // Detect non-fast-forward rejection — remote branch with same name has different history
-    if (errorStr.includes('non-fast-forward') || errorStr.includes('rejected')) {
-      return {
-        success: false,
-        error: `BRANCH_EXISTS:The remote branch "${branchName}" has diverged. You can create a session from the remote branch instead.`,
+    // A rejection here is either the lease firing (the remote ref already exists) or a policy/hook
+    // refusing an otherwise-absent ref — both say "rejected". Only the former is a real branch
+    // collision, so confirm with a read-only ls-remote instead of trusting the word.
+    if (errorStr.includes('rejected') || errorStr.includes('stale info') || errorStr.includes('non-fast-forward')) {
+      let remoteExists = false
+      try {
+        // Non-interactive (a credential helper can't prompt/hang here, as with the push above), and
+        // against the PUSH url(s) — push may target different url(s) than fetch. Only classify when
+        // there is exactly one push url; with several, `git push origin` hit them all and a single
+        // probe can't say which rejected, so leave it unclassified and surface the real push error.
+        const g = withNonInteractive(simpleGit(expandHomePath(repoPath)))
+        const urls = (await g.raw(['remote', 'get-url', '--push', '--all', 'origin'])).split(/\r?\n/).map(u => u.trim()).filter(Boolean)
+        if (urls.length === 1) {
+          const refs = await g.listRemote(['--heads', urls[0], `refs/heads/${branchName}`])
+          remoteExists = refs.trim().length > 0
+        }
+      } catch { /* probe failed — fall through and surface the original push error */ }
+      if (remoteExists) {
+        return {
+          success: false,
+          error: `BRANCH_EXISTS:The remote branch "${branchName}" already exists. Create a session from it instead, or pick a different name.`,
+        }
       }
+      // Absent remote ref → a hook or branch-protection policy refused the push; surface it verbatim.
+      return { success: false, error: errorStr }
     }
 
     let url: string | undefined
@@ -426,6 +530,7 @@ async function handleDeleteBranch(ctx: HandlerContext, repoPath: string, branchN
 export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   ipcMain.handle('git:clone', (_event, url: string, targetDir: string) => handleClone(ctx, url, targetDir))
   ipcMain.handle('git:worktreeAdd', (_event, repoPath: string, worktreePath: string, branchName: string, baseBranch: string) => handleWorktreeAdd(ctx, repoPath, worktreePath, branchName, baseBranch))
+  ipcMain.handle('git:worktreeAddNewBranch', (_event, repoPath: string, worktreePath: string, branchName: string, baseBranch: string) => handleWorktreeAddNewBranch(ctx, repoPath, worktreePath, branchName, baseBranch))
   ipcMain.handle('git:worktreeList', (_event, repoPath: string) => handleWorktreeList(ctx, repoPath))
   ipcMain.handle('git:pushNewBranch', (_event, repoPath: string, branchName: string) => handlePushNewBranch(ctx, repoPath, branchName))
   ipcMain.handle('git:defaultBranch', (_event, repoPath: string) => handleDefaultBranch(ctx, repoPath))
