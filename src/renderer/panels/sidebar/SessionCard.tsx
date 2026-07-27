@@ -14,6 +14,7 @@ import { useElapsedSeconds } from '../../shared/hooks/useElapsedSeconds'
 import { branchStatusBadge } from '../../features/git/explorerHelpers'
 import { ReviewStatusChip } from '../../shared/components/ReviewStatusChip'
 import { StatusIndicator } from './StatusIndicator'
+import { fileManagerName } from '../../shared/utils/platform'
 
 const statusLabels: Record<SessionStatus, string> = {
   working: 'Working',
@@ -65,6 +66,7 @@ export default memo(function SessionCard({
         sessionType: sess.sessionType,
         reviewStatus: sess.reviewStatus,
         initError: sess.initError,
+        directory: sess.directory,
       }
     }),
   )
@@ -92,12 +94,25 @@ export default memo(function SessionCard({
     : showWorking ? 'working' : (session.status === 'error' ? 'error' : 'idle')
   const isUnread = session.isUnread
 
+  // Right-click → native context menu → open the session's worktree folder in the OS file manager.
+  const handleContextMenu = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const choice = await window.menu.popup([
+      { id: 'open-in-file-manager', label: `Open in ${fileManagerName}` },
+    ])
+    if (choice === 'open-in-file-manager') {
+      void window.shell.openInFileManager(session.directory)
+    }
+  }
+
   return (
     <div
       data-session-card
       data-session-id={sessionId}
       tabIndex={0}
       onClick={() => onSelect(sessionId)}
+      onContextMenu={handleContextMenu}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
           onSelect(sessionId)

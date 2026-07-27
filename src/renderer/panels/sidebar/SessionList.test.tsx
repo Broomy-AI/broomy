@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import '../../../test/react-setup'
 import SessionList from './SessionList'
 import { useSessionStore } from '../../store/sessions'
@@ -418,6 +418,45 @@ describe('SessionList', () => {
       // Should still show idle, not working
       expect(container.querySelector('.animate-spin')).toBeNull()
       vi.useRealTimers()
+    })
+  })
+
+  describe('context menu', () => {
+    it('right-click opens the session folder in the OS file manager', async () => {
+      vi.mocked(window.menu.popup).mockResolvedValueOnce('open-in-file-manager')
+      setSessions([makeSession({ id: 's1', branch: 'b1', directory: '/repos/proj/issue/42-x' })])
+      const { container } = render(<SessionList {...makeProps()} />)
+
+      fireEvent.contextMenu(container.querySelector('[data-session-card]')!)
+
+      // Offers a single "Open in <file manager>" item…
+      expect(window.menu.popup).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'open-in-file-manager' }),
+      ])
+      // …and opens the session's own directory on selection.
+      await waitFor(() =>
+        expect(window.shell.openInFileManager).toHaveBeenCalledWith('/repos/proj/issue/42-x'),
+      )
+    })
+
+    it('does not open anything when the menu is dismissed', async () => {
+      vi.mocked(window.menu.popup).mockResolvedValueOnce(null)
+      setSessions([makeSession({ id: 's1', branch: 'b1' })])
+      const { container } = render(<SessionList {...makeProps()} />)
+
+      fireEvent.contextMenu(container.querySelector('[data-session-card]')!)
+      await new Promise((r) => setTimeout(r, 0))
+      expect(window.shell.openInFileManager).not.toHaveBeenCalled()
+    })
+
+    it('right-click does not select the session', () => {
+      vi.mocked(window.menu.popup).mockResolvedValueOnce(null)
+      setSessions([makeSession({ id: 's1', branch: 'b1' })])
+      const props = makeProps()
+      const { container } = render(<SessionList {...props} />)
+
+      fireEvent.contextMenu(container.querySelector('[data-session-card]')!)
+      expect(props.onSelectSession).not.toHaveBeenCalled()
     })
   })
 

@@ -34,10 +34,12 @@ vi.mock('electron', () => ({
   },
 }))
 
-// Mock fs/promises (lstat drives the openPath / pathExists file-type checks)
+// Mock fs/promises (lstat drives openPath/pathExists; stat drives openInFileManager)
 const mockLstat = vi.fn()
+const mockStat = vi.fn()
 vi.mock('fs/promises', () => ({
   lstat: (...args: unknown[]) => mockLstat(...args),
+  stat: (...args: unknown[]) => mockStat(...args),
 }))
 
 // Mock platform
@@ -889,6 +891,69 @@ describe('shell handlers', () => {
       mockLstat.mockResolvedValue({ isFile: () => true })
       mockShellOpenPath.mockRejectedValue(new Error('boom'))
       expect((await handlers['shell:openPath'](mockEvent, '/repo/a.html', '/repo')).action).toBe('failed')
+    })
+  })
+
+  describe('shell:openInFileManager', () => {
+    it('opens a directory in the OS file manager', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      mockStat.mockResolvedValue({ isDirectory: () => true })
+      mockShellOpenPath.mockResolvedValue('')
+      expect(await handlers['shell:openInFileManager'](mockEvent, '/repo/session')).toEqual({ action: 'opened' })
+      expect(mockShellOpenPath).toHaveBeenCalledWith('/repo/session')
+      // Opens the folder itself — never the "reveal in parent" path.
+      expect(mockShowItemInFolder).not.toHaveBeenCalled()
+    })
+    it('returns none for a non-directory (a file), without opening it', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      mockStat.mockResolvedValue({ isDirectory: () => false })
+      expect(await handlers['shell:openInFileManager'](mockEvent, '/repo/a.txt')).toEqual({ action: 'none' })
+      expect(mockShellOpenPath).not.toHaveBeenCalled()
+    })
+    it('returns none for a missing path', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      mockStat.mockRejectedValue(Object.assign(new Error('no'), { code: 'ENOENT' }))
+      expect(await handlers['shell:openInFileManager'](mockEvent, '/repo/gone')).toEqual({ action: 'none' })
+    })
+    it('returns failed on a non-ENOENT stat error (e.g. EACCES)', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      mockStat.mockRejectedValue(Object.assign(new Error('denied'), { code: 'EACCES' }))
+      expect((await handlers['shell:openInFileManager'](mockEvent, '/repo/x')).action).toBe('failed')
+    })
+    it('surfaces an openPath error string', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      mockStat.mockResolvedValue({ isDirectory: () => true })
+      mockShellOpenPath.mockResolvedValue('No application set')
+      expect(await handlers['shell:openInFileManager'](mockEvent, '/repo/session')).toEqual({ action: 'failed', error: 'No application set' })
+    })
+    it('returns failed (never rejects) when the OS dispatch throws', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      mockStat.mockResolvedValue({ isDirectory: () => true })
+      mockShellOpenPath.mockRejectedValue(new Error('boom'))
+      expect((await handlers['shell:openInFileManager'](mockEvent, '/repo/session')).action).toBe('failed')
+    })
+    it('is a no-op in E2E mode', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx({ isE2ETest: true }))
+      expect(await handlers['shell:openInFileManager'](mockEvent, '/repo/session')).toEqual({ action: 'none' })
+      expect(mockStat).not.toHaveBeenCalled()
+      expect(mockShellOpenPath).not.toHaveBeenCalled()
+    })
+    it('rejects a non-absolute, empty, non-string, over-long, or control-char path before touching the fs', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      expect(await handlers['shell:openInFileManager'](mockEvent, 'relative/dir')).toEqual({ action: 'none' })
+      expect(await handlers['shell:openInFileManager'](mockEvent, '')).toEqual({ action: 'none' })
+      expect(await handlers['shell:openInFileManager'](mockEvent, 42 as never)).toEqual({ action: 'none' })
+      expect(await handlers['shell:openInFileManager'](mockEvent, `/${'a'.repeat(5000)}`)).toEqual({ action: 'none' })
+      expect(await handlers['shell:openInFileManager'](mockEvent, `/tmp/x${String.fromCharCode(0)}y`)).toEqual({ action: 'none' })
+      expect(mockStat).not.toHaveBeenCalled()
     })
   })
 })
