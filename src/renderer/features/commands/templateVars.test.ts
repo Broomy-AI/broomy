@@ -119,3 +119,11 @@ describe('buildTemplateEnv', () => {
     expect(env.BROOMY_PR_NUMBER).toBe('')
   })
 })
+
+describe('robustness', () => {
+  it('does not throw when directory is absent', () => {
+    const vars = buildTemplateVars({} as never)
+    expect(vars.directory).toBe('')
+    expect(vars.folderName).toBe('')
+  })
+})

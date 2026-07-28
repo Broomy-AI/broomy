@@ -113,3 +113,23 @@ describe('EnvVarEditor', () => {
     expect((keyInput as HTMLInputElement).value).toBe('CLAUDE_CONFIG_DIR')
   })
 })
+
+describe('EnvVarEditor template variables', () => {
+  it('inserts a variable into the focused existing value', async () => {
+    const onChange = vi.fn()
+    render(<EnvVarEditor env={{ MY_VAR: 'x' }} onChange={onChange} command="claude" />)
+    const value = screen.getByDisplayValue('x') as HTMLInputElement
+    fireEvent.focus(value)
+    value.setSelectionRange(1, 1)
+    fireEvent.click(screen.getByTestId('open-template-vars-env'))
+    fireEvent.click(await screen.findByText('{branch}'))
+    expect(onChange).toHaveBeenCalledWith({ MY_VAR: 'x{branch}' })
+  })
+
+  it('inserts into the new-value row when nothing has been focused', async () => {
+    render(<EnvVarEditor env={{}} onChange={vi.fn()} command="claude" />)
+    fireEvent.click(screen.getByTestId('open-template-vars-env'))
+    fireEvent.click(await screen.findByText('{issueNumber}'))
+    expect(screen.getByPlaceholderText('value')).toHaveValue('{issueNumber}')
+  })
+})

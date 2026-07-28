@@ -11,14 +11,21 @@
  * splicing that into a command line is a shell injection.
  */
 import type { Session } from '../../store/sessions'
-import type { ManagedRepo, GitStatusResult } from '../../../preload/index'
+import type { GitStatusResult } from '../../../preload/index'
 
 export type TemplateVarSurface = 'command' | 'agent' | 'envValue' | 'init'
 export type TemplateVarGroup = 'Repo' | 'Branch' | 'Pull request' | 'Issue' | 'Session'
 
+/** Only the repo fields the registry reads, so callers holding a narrower repo type can pass it. */
+export interface TemplateVarRepo {
+  name?: string
+  rootDir?: string
+  defaultBranch?: string
+}
+
 export interface TemplateVarInput {
   session?: Session
-  repo?: ManagedRepo
+  repo?: TemplateVarRepo
   syncStatus?: GitStatusResult | null
   directory: string
   branchBaseName?: string
@@ -43,7 +50,8 @@ function str(v: string | number | undefined | null): string {
   return v === undefined || v === null ? '' : String(v)
 }
 
-function basename(path: string): string {
+function basename(path: string | undefined): string {
+  if (!path) return ''
   const trimmed = path.replace(/\/+$/, '')
   const idx = trimmed.lastIndexOf('/')
   return idx === -1 ? trimmed : trimmed.slice(idx + 1)
@@ -53,7 +61,7 @@ export const TEMPLATE_VARS: TemplateVarDef[] = [
   {
     name: 'directory', envName: 'BROOMY_DIRECTORY', group: 'Repo',
     description: 'Working directory of the session',
-    get: i => i.directory,
+    get: i => str(i.directory),
   },
   {
     name: 'folderName', envName: 'BROOMY_FOLDER_NAME', group: 'Repo',

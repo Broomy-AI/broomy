@@ -11,6 +11,8 @@ import { restoreSessionFocus } from '../utils/focusHelpers'
 import { fetchReviewStatus } from '../utils/reviewStatus'
 import { useBackgroundInit } from '../../panels/settings/useBackgroundInit'
 import { computeReviewState } from '../../features/git/reviewState'
+import { buildTemplateEnv, buildTemplateVars } from '../../features/commands/templateVars'
+import { substituteTemplate } from '../../features/commands/templateSubstitute'
 import type { ReviewState } from '../../features/git/reviewState'
 
 
@@ -159,11 +161,24 @@ export function useAppCallbacks({
     return command
   }, [agents, repos])
 
-  const getAgentEnv = useCallback((session: Session) => {
-    if (!session.agentId) return undefined
-    const agent = agents.find((a) => a.id === session.agentId)
-    return agent?.env
-  }, [agents])
+  const getAgentEnv = useCallback((session: Session): Record<string, string> => {
+    const varInput = {
+      session,
+      repo: repos.find((r) => r.id === session.repoId),
+      directory: session.directory,
+    }
+    // BROOMY_* lets the agent command line reference session state without
+    // splicing GitHub-controlled text into a shell. Configured env values use
+    // {var} instead, because they are passed to spawn unexpanded.
+    const broomyEnv = buildTemplateEnv(varInput, 'agent')
+    const agent = session.agentId ? agents.find((a) => a.id === session.agentId) : undefined
+    const vars = buildTemplateVars(varInput)
+    const resolved: Record<string, string> = {}
+    for (const [k, v] of Object.entries(agent?.env ?? {})) {
+      resolved[k] = substituteTemplate(v, { context: vars, args: {} })
+    }
+    return { ...resolved, ...broomyEnv }
+  }, [agents, repos])
 
   const getRepoIsolation = useCallback((session: Session) => {
     if (!session.repoId) return undefined
