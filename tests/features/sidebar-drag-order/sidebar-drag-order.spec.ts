@@ -5,8 +5,10 @@
  * repo group headers can be dragged to reorder the groups. A 2px accent drop
  * line shows above or below the hovered target depending on which vertical
  * half the cursor is in. Dropping a session card onto a different repo group
- * is rejected — cross-group drops have no unambiguous position. Dragging is
- * disabled while the search box has a query.
+ * is rejected — cross-group drops have no unambiguous position — and, since the
+ * drop will never land, no drop-indicator line appears while hovering over a
+ * card in another group either. Dragging is disabled while the search box has
+ * a query.
  *
  * Playwright can't drive native OS drag-and-drop, so each drag is performed by
  * dispatching synthetic DragEvents (dragstart → dragover → drop → dragend)
@@ -57,6 +59,7 @@ function dispatchDragOverAndCheckIndicator(p: Page, towardTop: boolean): Promise
   }, towardTop)
 }
 
+
 async function dragElement(
   p: Page,
   fromSelector: string,
@@ -102,6 +105,56 @@ async function dragElement(
       }),
     )
     .toBe(false)
+}
+
+/**
+ * Drag `from` onto `to` when `to` belongs to a different repo group: the drop indicator
+ * must never appear over `to`, and the drop itself must be a no-op.
+ *
+ * There's nothing to poll for directly on `to` (a cross-group dragover never shows the
+ * indicator, so there's no "it happened" signal to wait on there, unlike `dragElement`).
+ * Instead this first hovers `decoySelector` — another card in `from`'s own group — and
+ * polls its indicator the same way `dragElement` does; that's the signal that
+ * dragstart's `setDragging` React state has committed. Only then does it redirect the
+ * drag to the real (cross-group) `to` and assert its indicator stays absent.
+ */
+async function dragElementExpectRejected(
+  p: Page,
+  fromSelector: string,
+  decoySelector: string,
+  toSelector: string,
+): Promise<void> {
+  await p.evaluate(
+    ({ fromSelector, decoySelector }) => {
+      const from = document.querySelector(fromSelector) as HTMLElement | null
+      const decoy = document.querySelector(decoySelector) as HTMLElement | null
+      if (!from || !decoy) throw new Error(`drag source/decoy not found: ${fromSelector} / ${decoySelector}`)
+      const dt = new DataTransfer()
+      ;(window as unknown as { __drag: DragHandle }).__drag = { dt, from, to: decoy }
+      from.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }))
+    },
+    { fromSelector, decoySelector },
+  )
+
+  await expect.poll(() => dispatchDragOverAndCheckIndicator(p, true), { timeout: 2000 }).toBe(true)
+
+  const hasIndicator = await p.evaluate((toSelector) => {
+    const to = document.querySelector(toSelector) as HTMLElement | null
+    if (!to) throw new Error(`drag target not found: ${toSelector}`)
+    ;(window as unknown as { __drag: DragHandle }).__drag.to = to
+    const { dt } = (window as unknown as { __drag: DragHandle }).__drag
+    const rect = to.getBoundingClientRect()
+    to.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt, clientY: rect.top + 2 }))
+    return to.className.includes('border-t-accent') || to.className.includes('border-b-accent')
+  }, toSelector)
+  expect(hasIndicator).toBe(false)
+
+  await p.evaluate(() => {
+    const { dt, from, to } = (window as unknown as { __drag: DragHandle }).__drag
+    const rect = to.getBoundingClientRect()
+    to.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt, clientY: rect.top + 2 }))
+    from.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: dt }))
+  })
 }
 
 test.beforeAll(async () => {
@@ -189,7 +242,7 @@ test.describe.serial('Feature: Drag to Reorder Sessions and Repo Groups', () => 
     })
   })
 
-  test('Step 3: Dropping onto a different repo group is rejected', async () => {
+  test('Step 3: Dragging over a different repo group shows no indicator, and the drop is rejected', async () => {
     // broomy is the lone session in the "demo-project" repo group — a different
     // group from the "No repo" sessions dragged above.
     const broomyCard = page.locator('[data-session-id="1"]')
@@ -197,7 +250,13 @@ test.describe.serial('Feature: Drag to Reorder Sessions and Repo Groups', () => 
 
     const beforeOrder = await page.locator('[data-session-id]').evaluateAll((els) => els.map((e) => e.getAttribute('data-session-id')))
 
-    await dragElement(page, '[data-session-id="2"]', '[data-session-id="1"]')
+    // Unlike Step 2, this must NOT show the drop-indicator line while hovering — the
+    // drop it would promise can never land, so the affordance stays off. This is the
+    // regression case: a cross-group dragover used to render the line even though the
+    // drop below was always a no-op. data-session-id="3" (docs-site) is the decoy —
+    // still in the "No repo" group as the dragged backend-api card, used only to detect
+    // that the drag has started before checking the real (cross-group) target.
+    await dragElementExpectRejected(page, '[data-session-id="2"]', '[data-session-id="3"]', '[data-session-id="1"]')
 
     const afterOrder = await page.locator('[data-session-id]').evaluateAll((els) => els.map((e) => e.getAttribute('data-session-id')))
     expect(afterOrder).toEqual(beforeOrder)
@@ -206,10 +265,11 @@ test.describe.serial('Feature: Drag to Reorder Sessions and Repo Groups', () => 
     await screenshotElement(page, sidebar, path.join(SCREENSHOTS, '04-cross-group-rejected.png'), { maxHeight: 500 })
     steps.push({
       screenshotPath: 'screenshots/04-cross-group-rejected.png',
-      caption: 'Dropping backend-api onto the demo-project group does nothing',
+      caption: 'Dragging backend-api over the demo-project group shows no drop line',
       description:
-        'Sessions can only be reordered within their own repo group. Dropping onto a session in a ' +
-        'different group is a no-op — the order shown in Step 2 is unchanged.',
+        'Sessions can only be reordered within their own repo group. Hovering over a session in a ' +
+        'different group shows no drop indicator, and dropping there is a no-op — the order shown ' +
+        'in Step 2 is unchanged.',
     })
   })
 

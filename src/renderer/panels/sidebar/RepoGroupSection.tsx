@@ -1,6 +1,11 @@
 /**
  * One repo group in the sidebar: its collapsible header plus (when expanded) the
  * group's session cards, indented behind the vivid wayfinding rail.
+ *
+ * `draggable` is hardcoded on: SessionList only mounts this component for the grouped
+ * (non-search) view, so drag is always allowed here. Search mode renders a separate
+ * flat branch of plain SessionCards with no drag props at all — that's the real guard
+ * against dragging while searching.
  */
 import type { MouseEvent, KeyboardEvent } from 'react'
 import PanelErrorBoundary from '../../shared/components/PanelErrorBoundary'
@@ -17,7 +22,6 @@ export function RepoGroupSection({
   onSelect,
   onDelete,
   onArchive,
-  dragEnabled,
   sessionDrag,
   groupDrag,
   dropTarget,
@@ -29,7 +33,6 @@ export function RepoGroupSection({
   onSelect: (id: string) => void
   onDelete: (e: MouseEvent | KeyboardEvent, id: string) => void
   onArchive: (e: MouseEvent, id: string) => void
-  dragEnabled: boolean
   sessionDrag: DragHandlers
   groupDrag: DragHandlers
   dropTarget: DropTarget | null
@@ -45,7 +48,7 @@ export function RepoGroupSection({
         group={group}
         collapsed={collapsed}
         onToggle={onToggle}
-        draggable={dragEnabled}
+        draggable
         onDragStart={groupDrag.onDragStart}
         onDragOver={groupDrag.onDragOver}
         onDragLeave={groupDrag.onDragLeave}
@@ -62,7 +65,7 @@ export function RepoGroupSection({
                 onSelect={onSelect}
                 onDelete={onDelete}
                 onArchive={onArchive}
-                draggable={dragEnabled}
+                draggable
                 onDragStart={sessionDrag.onDragStart}
                 onDragOver={sessionDrag.onDragOver}
                 onDragLeave={sessionDrag.onDragLeave}

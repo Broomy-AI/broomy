@@ -148,13 +148,48 @@ describe('useSidebarDrag', () => {
     expect(reorderRepoGroup).not.toHaveBeenCalled()
   })
 
+  it('rejects a session dropped onto a card in a different group: no drop target is set', () => {
+    const canDropSession = vi.fn((draggedId: string, targetId: string) => draggedId === 'a' && targetId === 'b')
+    const { result } = renderHook(() => useSidebarDrag(true, [], canDropSession))
+    act(() => result.current.sessionDrag.onDragStart(dragEvent(0), 'a'))
+    act(() => result.current.sessionDrag.onDragOver(dragEvent(20), 'c'))
+    expect(result.current.dropTarget).toBeNull()
+    expect(canDropSession).toHaveBeenCalledWith('a', 'c')
+  })
+
+  it('shows a drop target when canDropSession allows it', () => {
+    const canDropSession = vi.fn(() => true)
+    const { result } = renderHook(() => useSidebarDrag(true, [], canDropSession))
+    act(() => result.current.sessionDrag.onDragStart(dragEvent(0), 'a'))
+    act(() => result.current.sessionDrag.onDragOver(dragEvent(20), 'b'))
+    expect(result.current.dropTarget).toEqual({ id: 'b', kind: 'session', before: true })
+  })
+
+  it('does not call canDropSession for group dragovers', () => {
+    const canDropSession = vi.fn(() => false)
+    const { result } = renderHook(() => useSidebarDrag(true, ['repo:r1', 'repo:r2'], canDropSession))
+    act(() => result.current.groupDrag.onDragStart(dragEvent(0), 'repo:r1'))
+    act(() => result.current.groupDrag.onDragOver(dragEvent(20), 'repo:r2'))
+    expect(canDropSession).not.toHaveBeenCalled()
+    expect(result.current.dropTarget).toEqual({ id: 'repo:r2', kind: 'group', before: true })
+  })
+
+  it('does not reject cross-group drops when canDropSession is omitted (opt-in behavior)', () => {
+    const { result } = renderHook(() => useSidebarDrag(true, []))
+    act(() => result.current.sessionDrag.onDragStart(dragEvent(0), 'a'))
+    act(() => result.current.sessionDrag.onDragOver(dragEvent(20), 'b'))
+    expect(result.current.dropTarget).toEqual({ id: 'b', kind: 'session', before: true })
+  })
+
   it('keeps sessionDrag and groupDrag handlers referentially stable across a re-render with unchanged inputs', () => {
     // A stable `keys` reference, reused verbatim across the re-render below — mirrors
     // the real caller (Task 6), which `useMemo`s this array. Handler identity is only
-    // guaranteed when the caller holds up their end of that contract.
+    // guaranteed when the caller holds up their end of that contract. Same for
+    // `canDropSession`, which SessionList also memoizes.
     const keys: string[] = []
+    const canDropSession = () => true
     const { result, rerender } = renderHook(
-      ({ enabled }) => useSidebarDrag(enabled, keys),
+      ({ enabled }) => useSidebarDrag(enabled, keys, canDropSession),
       { initialProps: { enabled: true } },
     )
     const before = {

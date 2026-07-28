@@ -4,9 +4,15 @@
  *
  * Sessions and groups are two separate drags that must never cross — the hook tracks
  * which kind is in flight and ignores drop targets of the other kind, so dragging a
- * card over a header (or vice versa) shows nothing and drops nowhere. The cross-repo
- * rejection itself lives in the store action, which owns the session data needed to
- * judge it.
+ * card over a header (or vice versa) shows nothing and drops nowhere.
+ *
+ * A session dragged over a card in a different repo group must show no drop indicator,
+ * since the drop is rejected. The store action is the source of truth for that
+ * rejection — it owns the session data needed to judge it — but the store can't tell
+ * the *visual* affordance not to lie mid-drag, before any drop has happened. So the
+ * caller (which does have session/repo data) injects an optional `canDropSession`
+ * predicate that this hook consults purely to gate `setDropTarget`; it never
+ * duplicates the store's own rejection logic.
  *
  * Drop position is "before or after this item", decided by which vertical half of the
  * target the cursor is in — in a vertical list the meaningful position is the gap
@@ -55,7 +61,20 @@ function isBefore(e: React.DragEvent): boolean {
  * its own `useCallback` (mirroring the `TabbedTerminal.tsx` precedent) keeps them
  * genuinely stable across renders where their dependencies haven't changed.
  */
-export function useSidebarDrag(enabled: boolean, renderedGroupKeys: string[]) {
+/**
+ * @param canDropSession Optional predicate deciding whether a session dragged with id
+ *   `draggedId` may be dropped on the card for `targetId`. Omit it (or return true) to
+ *   allow every session-over-session dragover, which is what plain array reordering
+ *   within a single flat list needs. The caller MUST memoize this so its identity is
+ *   stable across renders where the underlying data hasn't changed — an unstable
+ *   predicate makes `dragOver`, and therefore every drag handler built from it, unstable
+ *   too, defeating `React.memo` on `SessionCard`.
+ */
+export function useSidebarDrag(
+  enabled: boolean,
+  renderedGroupKeys: string[],
+  canDropSession?: (draggedId: string, targetId: string) => boolean,
+) {
   const reorderSession = useSessionStore((s) => s.reorderSession)
   const reorderRepoGroup = useSessionStore((s) => s.reorderRepoGroup)
   const [dragging, setDragging] = useState<{ id: string; kind: DropKind } | null>(null)
@@ -73,8 +92,9 @@ export function useSidebarDrag(enabled: boolean, renderedGroupKeys: string[]) {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
     if (dragging.id === id) { setDropTarget(null); return }
+    if (kind === 'session' && canDropSession && !canDropSession(dragging.id, id)) { setDropTarget(null); return }
     setDropTarget({ id, kind, before: isBefore(e) })
-  }, [enabled, dragging])
+  }, [enabled, dragging, canDropSession])
 
   const leave = useCallback(() => setDropTarget(null), [])
 

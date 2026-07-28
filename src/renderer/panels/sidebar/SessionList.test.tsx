@@ -655,5 +655,33 @@ describe('SessionList', () => {
       fireEvent.drop(other, { dataTransfer })
       expect(useSessionStore.getState().sessions.map((s) => s.id)).toEqual(['s1', 's2'])
     })
+
+    it('shows no drop indicator when dragging over a card in a different repo group', () => {
+      setSessions([
+        makeSession({ id: 's1', branch: 'one', repoId: 'r1' }),
+        makeSession({ id: 's2', branch: 'two', repoId: 'r2' }),
+      ])
+      render(<SessionList {...makeProps()} />)
+      const first = document.querySelector('[data-session-id="s1"]')!
+      const other = document.querySelector('[data-session-id="s2"]')!
+      const dataTransfer = mockDataTransfer()
+      fireEvent.dragStart(first, { dataTransfer })
+      fireEvent.dragOver(other, { dataTransfer })
+      expect(other.className).not.toMatch(/border-t-accent|border-b-accent/)
+    })
+
+    it('shows a drop indicator when dragging over a card in the same repo group', () => {
+      setSessions([
+        makeSession({ id: 's1', branch: 'one', repoId: 'r1' }),
+        makeSession({ id: 's2', branch: 'two', repoId: 'r1' }),
+      ])
+      render(<SessionList {...makeProps()} />)
+      const first = document.querySelector('[data-session-id="s1"]')!
+      const second = document.querySelector('[data-session-id="s2"]')!
+      const dataTransfer = mockDataTransfer()
+      fireEvent.dragStart(first, { dataTransfer })
+      fireEvent.dragOver(second, { dataTransfer })
+      expect(second.className).toMatch(/border-t-accent|border-b-accent/)
+    })
   })
 })

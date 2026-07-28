@@ -1,7 +1,8 @@
 /**
  * Feature Documentation: Session Repo Groups
  *
- * Sessions cluster under collapsible per-repo headers (sorted alphabetically); each
+ * Sessions cluster under collapsible per-repo headers (new repos default to alphabetical
+ * order until dragged; sessions within a group keep their manual drag order); each
  * group can be collapsed, rolling its status onto the header, and search flattens the
  * list. Captures screenshots of each stage.
  *
@@ -35,10 +36,12 @@ test.afterAll(async () => {
     {
       title: 'Session Repo Groups',
       description:
-        'Sessions are grouped by their repository under collapsible headers, sorted alphabetically ' +
-        '(repo name, then branch). A vivid per-repo rail runs beside each group, while colour is ' +
-        'reserved for the status LEDs. Collapsing a group rolls its highest-priority status onto the ' +
-        'header so nothing is hidden, and searching flattens the list with a neutral repo tag.',
+        'Sessions are grouped by their repository under collapsible headers. Group order and each ' +
+        "group's session order are the user's own — dragged in the sidebar, with new repo groups " +
+        'defaulting to alphabetical order until moved. A vivid per-repo rail runs beside each group, ' +
+        'while colour is reserved for the status LEDs. Collapsing a group rolls its highest-priority ' +
+        'status onto the header so nothing is hidden, and searching flattens the list with a neutral ' +
+        'repo tag.',
       steps,
     },
     FEATURE_DIR,
@@ -59,7 +62,7 @@ test.describe.serial('Feature: Session Repo Groups', () => {
     await screenshotElement(page, sidebar, path.join(SCREENSHOTS, '01-grouped.png'), { maxHeight: 600 })
     steps.push({
       screenshotPath: 'screenshots/01-grouped.png',
-      caption: 'Sessions grouped by repo, sorted alphabetically',
+      caption: 'Sessions grouped by repo, in the user\'s drag order',
       description:
         'Each repo is a collapsible header (name + session count) with its sessions indented behind ' +
         'a vivid colour rail. Sessions with no repo fall under a "No repo" group.',

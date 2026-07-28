@@ -21,6 +21,7 @@ import { SessionListHeader } from './SessionListHeader'
 import { useSessionGrouping } from './useSessionGrouping'
 import { sortArchived } from './archivedOrder'
 import { useSidebarDrag } from './useSidebarDrag'
+import { groupKeyForSession } from './repoGroups'
 
 interface SessionListProps {
   repos: ManagedRepo[]
@@ -106,7 +107,7 @@ export default function SessionList({
     onSelectSession(sessionId)
   }, [onUnarchiveSession, onSelectSession])
 
-  // Repo grouping + alphabetical sort + the visible-order view-model.
+  // Repo grouping + manual drag order + the visible-order view-model.
   const searching = searchQuery.trim().length > 0
   const { railColorByKey, collapsedSet, setRepoGroupCollapsed, repoLabelFor, groups, orderedSessions, archivedRollup } =
     useSessionGrouping(allActive, activeSessions, archivedSessions, repos, searching)
@@ -114,7 +115,23 @@ export default function SessionList({
   // Dragging is off while searching: the search view is a filtered projection, so a drop
   // between two visible cards has no unambiguous position in the underlying array.
   const renderedGroupKeys = useMemo(() => groups.map((g) => g.key), [groups])
-  const { dropTarget, sessionDrag, groupDrag } = useSidebarDrag(!searching, renderedGroupKeys)
+
+  // A session may only be dropped onto a card in its own repo group — cross-group drags
+  // are rejected by the store, but the drop indicator must not promise a drop that won't
+  // happen. Memoized on `allActive`/`repos` so the predicate (and therefore every drag
+  // handler built from it) stays referentially stable across unrelated re-renders —
+  // SessionCard is React.memo-wrapped and depends on that stability.
+  const groupKeyById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const session of allActive) map.set(session.id, groupKeyForSession(session, repos))
+    return map
+  }, [allActive, repos])
+  const canDropSession = useCallback(
+    (draggedId: string, targetId: string) => groupKeyById.get(draggedId) === groupKeyById.get(targetId),
+    [groupKeyById],
+  )
+
+  const { dropTarget, sessionDrag, groupDrag } = useSidebarDrag(!searching, renderedGroupKeys, canDropSession)
 
   return (
     <div className="flex flex-col h-full">
@@ -183,7 +200,6 @@ export default function SessionList({
               onSelect={onSelectSession}
               onDelete={handleDelete}
               onArchive={handleArchive}
-              dragEnabled={!searching}
               sessionDrag={sessionDrag}
               groupDrag={groupDrag}
               dropTarget={dropTarget}

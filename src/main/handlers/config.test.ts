@@ -447,6 +447,20 @@ describe('config handlers', () => {
       const written = JSON.parse(vi.mocked(writeFile).mock.calls[0][1] as string)
       expect(written.collapsedRepoGroups).toEqual([])
     })
+
+    it('persists repoGroupOrder', async () => {
+      const handlers = setupHandlers()
+      await handlers['config:save'](null, { profileId: 'default', sessions: [], repoGroupOrder: ['repo:r2', 'repo:r1'] })
+      const written = JSON.parse(vi.mocked(writeFile).mock.calls[0][1] as string)
+      expect(written.repoGroupOrder).toEqual(['repo:r2', 'repo:r1'])
+    })
+
+    it('lets an empty repoGroupOrder clear it on disk', async () => {
+      const handlers = setupHandlers()
+      await handlers['config:save'](null, { profileId: 'default', sessions: [], repoGroupOrder: [] })
+      const written = JSON.parse(vi.mocked(writeFile).mock.calls[0][1] as string)
+      expect(written.repoGroupOrder).toEqual([])
+    })
   })
 
   describe('repos:getInitScript', () => {
