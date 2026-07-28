@@ -214,8 +214,11 @@ async function handleDefaultBranch(ctx: HandlerContext, repoPath: string) {
   }
 
   try {
-    const git = simpleGit(expandHomePath(repoPath))
-    return await getDefaultBranch(git)
+    // allowRemote: this handler runs on explicit user action (adding a repo,
+    // creating a session), not on the git-polling path, so it can afford to
+    // ask origin when refs/remotes/origin/HEAD is missing.
+    const git = withNonInteractive(simpleGit(expandHomePath(repoPath)))
+    return await getDefaultBranch(git, true)
   } catch {
     return 'main'
   }

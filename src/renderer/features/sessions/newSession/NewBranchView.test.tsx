@@ -130,7 +130,7 @@ describe('NewBranchView', () => {
         '/repos/my-project/main',
         '/repos/my-project/feature/auth',
         'feature/auth',
-        'main'
+        'origin/main'
       )
       expect(onComplete).toHaveBeenCalledWith(
         '/repos/my-project/feature/auth',

@@ -17,6 +17,8 @@ describe('useBackgroundInit', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(window.git.pull).mockResolvedValue({ success: true })
+    vi.mocked(window.git.defaultBranch).mockResolvedValue('main')
+    vi.mocked(window.git.fetchBranch).mockResolvedValue({ success: true })
     vi.mocked(window.git.worktreeAdd).mockResolvedValue({ success: true })
     vi.mocked(window.git.pushNewBranch).mockResolvedValue({ success: true })
     vi.mocked(window.git.worktreeRemove).mockResolvedValue({ success: true })
@@ -63,8 +65,48 @@ describe('useBackgroundInit', () => {
       })
 
       expect(window.git.pull).toHaveBeenCalledWith('/repos/proj/main')
-      expect(window.git.worktreeAdd).toHaveBeenCalledWith('/repos/proj/main', '/repos/proj/feature/test', 'feature/test', 'main')
+      expect(window.git.worktreeAdd).toHaveBeenCalledWith('/repos/proj/main', '/repos/proj/feature/test', 'feature/test', 'origin/main')
       expect(window.git.pushNewBranch).toHaveBeenCalledWith('/repos/proj/feature/test', 'feature/test')
+    })
+
+    it('bases the branch on origin/<default> for repos whose default is not "main"', async () => {
+      vi.mocked(window.git.defaultBranch).mockResolvedValue('master')
+      const deps = makeDeps()
+      const { result } = renderHook(() => useBackgroundInit(deps))
+
+      act(() => {
+        result.current.handleStartBranchSession({
+          repo: { id: 'r1', rootDir: '/repos/proj', defaultBranch: 'master' },
+          branchName: 'feat',
+          agentId: null,
+        })
+      })
+
+      await vi.waitFor(() => {
+        expect(deps.finalizeSession).toHaveBeenCalledWith('init-session-1')
+      })
+
+      expect(window.git.fetchBranch).toHaveBeenCalledWith('/repos/proj/main', 'master')
+      expect(window.git.worktreeAdd).toHaveBeenCalledWith('/repos/proj/main', '/repos/proj/feat', 'feat', 'origin/master')
+    })
+
+    it('fails the session rather than branching from stale code when the fetch fails', async () => {
+      vi.mocked(window.git.fetchBranch).mockResolvedValue({ success: false, error: 'network down' })
+      const deps = makeDeps()
+      const { result } = renderHook(() => useBackgroundInit(deps))
+
+      act(() => {
+        result.current.handleStartBranchSession({
+          repo: { id: 'r1', rootDir: '/repos/proj', defaultBranch: 'main' },
+          branchName: 'feat',
+          agentId: null,
+        })
+      })
+
+      await vi.waitFor(() => {
+        expect(deps.failSession).toHaveBeenCalledWith('init-session-1', expect.stringContaining('network down'))
+      })
+      expect(window.git.worktreeAdd).not.toHaveBeenCalled()
     })
 
     it('calls failSession when pull fails', async () => {
