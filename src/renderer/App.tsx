@@ -25,6 +25,7 @@ import ErrorDetailModal from './shared/components/ErrorDetailModal'
 import { useGitPolling } from './features/git/hooks/useGitPolling'
 import { useFileNavigation } from './panels/fileViewer/hooks/useFileNavigation'
 import { useSessionLifecycle } from './features/sessions/hooks/useSessionLifecycle'
+import { sessionErrorMessage } from './features/sessions/sessionErrorMessage'
 import { useAppearance } from './shared/hooks/useAppearance'
 import { useAgentChatStore } from './store/agentChat'
 import { useAppCallbacks } from './shared/hooks/useAppCallbacks'
@@ -339,7 +340,7 @@ function AppContent() {
         layoutSizes={activeSession?.layoutSizes ?? DEFAULT_LAYOUT_SIZES}
         onSidebarWidthChange={setSidebarWidth}
         onLayoutSizeChange={handleLayoutSizeChange}
-        errorMessage={activeSession && !activeDirectoryExists ? `Folder not found: ${activeSession.directory}` : null}
+        errorMessage={sessionErrorMessage(activeSession, activeDirectoryExists)}
         title={activeSession ? activeSession.name : undefined}
         profileChip={<ProfileChip onSwitchProfile={handleSwitchProfile} />}
         activeSessionId={activeSessionId}

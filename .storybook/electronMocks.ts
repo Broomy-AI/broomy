@@ -56,6 +56,7 @@ export function installElectronMocks() {
     pull: successResolved,
     clone: successResolved,
     worktreeAdd: successResolved,
+    worktreeAddNewBranch: successResolved,
     worktreeList: resolved([]),
     worktreeRemove: successResolved,
     deleteBranch: successResolved,

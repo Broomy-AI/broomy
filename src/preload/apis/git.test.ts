@@ -85,6 +85,11 @@ describe('preload git API', () => {
     expect(mockInvoke).toHaveBeenCalledWith('git:clone', 'url', '/dir')
   })
 
+  it('worktreeAddNewBranch invokes git:worktreeAddNewBranch', async () => {
+    await gitApi.worktreeAddNewBranch('/repo', '/wt', 'branch', 'main')
+    expect(mockInvoke).toHaveBeenCalledWith('git:worktreeAddNewBranch', '/repo', '/wt', 'branch', 'main')
+  })
+
   it('worktreeAdd invokes git:worktreeAdd', async () => {
     await gitApi.worktreeAdd('/repo', '/wt', 'branch', 'main')
     expect(mockInvoke).toHaveBeenCalledWith('git:worktreeAdd', '/repo', '/wt', 'branch', 'main')
