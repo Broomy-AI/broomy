@@ -143,6 +143,7 @@ const mockShell: Mocked<ShellApi> = {
   openExternal: vi.fn().mockResolvedValue(undefined),
   pathExists: vi.fn().mockResolvedValue([]),
   openPath: vi.fn().mockResolvedValue({ action: 'none' }),
+  openInFileManager: vi.fn().mockResolvedValue({ action: 'none' }),
   listShells: vi.fn().mockResolvedValue([{ path: '/bin/bash', name: 'Bash', isDefault: true }]),
 }
 
