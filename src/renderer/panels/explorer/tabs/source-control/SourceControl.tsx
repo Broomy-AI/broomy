@@ -16,6 +16,7 @@ import { SCWorkingView } from './SCWorkingView'
 import { CommandsSetupDialog } from './CommandsSetupDialog'
 import { useCommandsConfig } from '../../../../features/commands/hooks/useCommandsConfig'
 import { computeConditionState } from '../../../../features/commands/conditionState'
+import { buildTemplateVars } from '../../../../features/commands/templateVars'
 import { DEFAULT_STAGE } from '../../../../features/commands/commandsConfig'
 import { useSessionStore } from '../../../../store/sessions'
 
@@ -81,6 +82,7 @@ export function SourceControl({
   const stage = useSessionStore(s => s.sessions.find(x => x.id === s.activeSessionId)?.stage ?? DEFAULT_STAGE)
   const setSessionStage = useSessionStore(s => s.setSessionStage)
   const activeSessionId = useSessionStore(s => s.activeSessionId)
+  const activeSession = useSessionStore(s => s.sessions.find(x => x.id === s.activeSessionId))
 
   // Reset view when directory (session) changes
   useEffect(() => {
@@ -145,12 +147,14 @@ export function SourceControl({
   const conditionState = settledConditionState.current
 
   // Template variables for action labels and prompts
-  const templateVars = useMemo(() => ({
-    main: data.branchBaseName || 'main',
-    branch: syncStatus?.current ?? '',
+  const templateVars = useMemo(() => buildTemplateVars({
+    session: activeSession,
+    repo: data.currentRepo,
+    syncStatus,
     directory: directory ?? '',
-    issueNumber: issueNumber ? String(issueNumber) : '',
-  }), [data.branchBaseName, syncStatus?.current, directory, issueNumber])
+    branchBaseName: data.branchBaseName,
+    issue: { number: issueNumber, title: issueTitle, url: issueUrl },
+  }), [activeSession, data.currentRepo, syncStatus, directory, data.branchBaseName, issueNumber, issueTitle, issueUrl])
 
   if (!directory) return null
 
