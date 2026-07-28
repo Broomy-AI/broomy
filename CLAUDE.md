@@ -71,7 +71,7 @@ Agent status is detected by time-based heuristics in `Terminal.tsx`. The detecti
 - **Warmup**: Ignores the first 5 seconds after terminal creation
 - **Input suppression**: Pauses detection for 200ms after user input or window interaction
 - **Working**: Set immediately when terminal data arrives (if not paused)
-- **Idle**: Set after 1 second of no terminal output, with a 300ms debounce for store updates
+- **Idle**: Set after 3 seconds of no terminal output (or 10 seconds of output that never changes the rendered screen), with a 300ms debounce for store updates
 
 When a session transitions from working to idle (after at least 3 seconds of working), it's marked as `isUnread` to alert the user.
 

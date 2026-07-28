@@ -33,6 +33,7 @@ Feature doc specs reuse the shared Electron fixture from `_shared/`, which launc
 | `pr-review-ui/` | PR review panel with markdown rendering, collapsible threads, filters, reactions, and replies. |
 | `push-progress/` | "Working" spinner on session cards during long-running git operations. |
 | `select-all/` | Cmd+A selects within the focused pane (Monaco) rather than the whole page. |
+| `session-open-in-file-manager/` | Right-click a session to open its worktree folder in the OS file manager. |
 | `session-switching/` | Switching between sessions in the sidebar. |
 | `shell-selection/` | Shell selection in Settings and dropdown reset behavior. |
 | `simple-merge-commit/` | Merge commit UI: "Resolve Conflicts" with conflict markers, "Commit Merge" when resolved. |

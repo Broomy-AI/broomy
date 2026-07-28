@@ -102,6 +102,14 @@ describe('Layout', () => {
     expect(screen.getByText('Folder not found: /missing/path')).toBeTruthy()
   })
 
+  it('preserves line breaks in a multi-paragraph error message', () => {
+    // Init failures (e.g. a branch-name clash) carry guidance across paragraphs; collapsing the
+    // breaks would run it together into one unreadable line.
+    renderLayout({ errorMessage: "Can't create \"release/linux\".\n\nDelete the conflicting branch." })
+    const paragraph = screen.getByText(/Can't create/)
+    expect(paragraph.className).toContain('whitespace-pre-wrap')
+  })
+
   it('renders toolbar buttons for each panel', () => {
     renderLayout()
     expect(screen.getByTitle(/Sessions/)).toBeTruthy()

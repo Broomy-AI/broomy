@@ -146,12 +146,12 @@ describe('createPtyDataHandler', () => {
 
       // Then the agent goes idle but repaints the SAME screen every 500ms.
       state.scheduleUpdate.mockClear()
-      for (let i = 0; i < 12; i++) {
+      for (let i = 0; i < 20; i++) {
         vi.advanceTimersByTime(500)
         handler.handleData('\x1b[?2026h working... \x1b[?2026l') // screen unchanged
         vi.advanceTimersByTime(SAMPLE_MS)
       }
-      // Within maxStableOutputMs (3s) of the last real change it must have idled,
+      // Within maxStableOutputMs (10s) of the last real change it must have idled,
       // despite output never stopping.
       expect(state.scheduleUpdate).toHaveBeenCalledWith({ status: 'idle' })
       expect(state.lastStatusRef.current).toBe('idle')
@@ -165,7 +165,7 @@ describe('createPtyDataHandler', () => {
       expect(state.lastStatusRef.current).toBe('working')
 
       state.scheduleUpdate.mockClear()
-      for (let i = 1; i < 12; i++) {
+      for (let i = 1; i < 20; i++) {
         vi.advanceTimersByTime(500)
         terminal.setScreen(['line 1', `stream ${i}`]) // screen changes each time
         handler.handleData(`stream ${i}`)
@@ -183,7 +183,7 @@ describe('createPtyDataHandler', () => {
       expect(state.lastStatusRef.current).toBe('working')
 
       state.scheduleUpdate.mockClear()
-      vi.advanceTimersByTime(1000) // no further output → silence timeout
+      vi.advanceTimersByTime(3000) // no further output → silence timeout
       expect(state.scheduleUpdate).toHaveBeenCalledWith({ status: 'idle' })
       expect(state.lastStatusRef.current).toBe('idle')
     })

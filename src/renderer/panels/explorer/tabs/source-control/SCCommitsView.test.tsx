@@ -175,4 +175,44 @@ describe('SCCommitsView', () => {
       diffLabel: 'hash1: Fix',
     })
   })
+
+  describe('selected file highlight', () => {
+    it('highlights the file row whose path matches selectedFilePath inside an expanded commit', () => {
+      const commit = makeCommit({ hash: 'abc', shortHash: 'abc1234' })
+      render(
+        <SCCommitsView
+          {...defaultProps}
+          branchCommits={[commit]}
+          expandedCommits={new Set(['abc'])}
+          commitFilesByHash={{
+            abc: [
+              { path: 'src/foo.ts', status: 'M' },
+              { path: 'src/bar.ts', status: 'M' },
+            ],
+          }}
+          selectedFilePath="/repos/project/src/bar.ts"
+        />
+      )
+      const fooRow = screen.getByText('src/foo.ts').closest('div[class*="cursor-pointer"]')!
+      const barRow = screen.getByText('src/bar.ts').closest('div[class*="cursor-pointer"]')!
+      expect(barRow.className).toContain('bg-accent/20')
+      expect(barRow.className).toContain('ring-accent/50')
+      expect(fooRow.className).not.toContain('bg-accent/20')
+    })
+
+    it('does not highlight any row when selectedFilePath is null', () => {
+      const commit = makeCommit({ hash: 'abc', shortHash: 'abc1234' })
+      render(
+        <SCCommitsView
+          {...defaultProps}
+          branchCommits={[commit]}
+          expandedCommits={new Set(['abc'])}
+          commitFilesByHash={{ abc: [{ path: 'src/foo.ts', status: 'M' }] }}
+          selectedFilePath={null}
+        />
+      )
+      const fooRow = screen.getByText('src/foo.ts').closest('div[class*="cursor-pointer"]')!
+      expect(fooRow.className).not.toContain('bg-accent/20')
+    })
+  })
 })

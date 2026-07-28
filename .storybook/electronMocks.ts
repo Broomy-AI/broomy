@@ -56,6 +56,7 @@ export function installElectronMocks() {
     pull: successResolved,
     clone: successResolved,
     worktreeAdd: successResolved,
+    worktreeAddNewBranch: successResolved,
     worktreeList: resolved([]),
     worktreeRemove: successResolved,
     deleteBranch: successResolved,
@@ -131,6 +132,7 @@ export function installElectronMocks() {
     openExternal: noopResolved,
     pathExists: resolved([]),
     openPath: resolved({ action: 'none' }),
+    openInFileManager: resolved({ action: 'none' }),
     listShells: resolved([{ path: '/bin/bash', name: 'Bash', isDefault: true }]),
   }
 

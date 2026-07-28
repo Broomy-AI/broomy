@@ -5,6 +5,7 @@ const mockGitInstance: Record<string, ReturnType<typeof vi.fn>> = {
   raw: vi.fn(),
   push: vi.fn(),
   getRemotes: vi.fn(),
+  listRemote: vi.fn(),
   log: vi.fn(),
   branch: vi.fn(),
   fetch: vi.fn(),
@@ -46,7 +47,7 @@ vi.mock('./types', async (importOriginal) => {
   }
 })
 
-import { register } from './gitBranch'
+import { register, isCreatableBranchName } from './gitBranch'
 import { getCloneErrorHint } from '../cloneErrorHint'
 import { E2EScenario, type HandlerContext } from './types'
 
@@ -80,6 +81,21 @@ function setupHandlers(ctx?: HandlerContext) {
   return handlers
 }
 
+describe('isCreatableBranchName', () => {
+  it('accepts ordinary branch names', () => {
+    for (const ok of ['feature/x', 'issue/146-fix', 'main', 'a.b-c_d']) {
+      expect(isCreatableBranchName(ok)).toBe(true)
+    }
+  })
+  it('rejects empty, option-like, and git-forbidden names', () => {
+    for (const bad of ['', '@', '-D', '--force', 'has space', 'a..b', 'a@{0}', 'a~b', 'a^b', 'a:b', 'a?b', 'a*b', 'a[b', 'a\\b', '/lead', 'trail/', 'a//b', 'dot.', 'x.lock', '.hidden', 'a/.hidden', 'x.lock/b']) {
+      expect(isCreatableBranchName(bad)).toBe(false)
+    }
+    expect(isCreatableBranchName(`a${String.fromCharCode(1)}b`)).toBe(false) // control char
+    expect(isCreatableBranchName(`a${String.fromCharCode(0x7f)}b`)).toBe(false) // DEL
+  })
+})
+
 describe('gitBranch handlers', () => {
   beforeEach(() => {
     vi.resetAllMocks()
@@ -91,6 +107,7 @@ describe('gitBranch handlers', () => {
       const handlers = setupHandlers()
       expect(handlers['git:clone']).toBeDefined()
       expect(handlers['git:worktreeAdd']).toBeDefined()
+      expect(handlers['git:worktreeAddNewBranch']).toBeDefined()
       expect(handlers['git:worktreeList']).toBeDefined()
       expect(handlers['git:pushNewBranch']).toBeDefined()
       expect(handlers['git:defaultBranch']).toBeDefined()
@@ -224,6 +241,116 @@ describe('gitBranch handlers', () => {
     })
   })
 
+  describe('git:worktreeAddNewBranch', () => {
+    it('returns success in E2E mode', async () => {
+      const handlers = setupHandlers(createMockCtx({ isE2ETest: true }))
+      expect(await handlers['git:worktreeAddNewBranch'](null, '/repo', '/wt', 'branch', 'main')).toEqual({ success: true })
+    })
+
+    it('errors when the main worktree directory is missing', async () => {
+      const { existsSync } = await import('fs')
+      vi.mocked(existsSync).mockReturnValueOnce(false)
+      const handlers = setupHandlers()
+      const result = await handlers['git:worktreeAddNewBranch'](null, '/repo', '/wt', 'branch', 'main')
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('was not found')
+    })
+
+    it('rejects an option-like branch name before any git mutation', async () => {
+      const handlers = setupHandlers()
+      const result = await handlers['git:worktreeAddNewBranch'](null, '/repo', '/wt', '-D', 'main')
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Invalid branch name')
+      expect(mockGitInstance.raw).not.toHaveBeenCalled()
+      expect(mockGitInstance.branch).not.toHaveBeenCalled()
+    })
+
+    it('rejects an option-like base branch too', async () => {
+      const handlers = setupHandlers()
+      const result = await handlers['git:worktreeAddNewBranch'](null, '/repo', '/wt', 'feature/x', '-M')
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Invalid branch name')
+      expect(mockGitInstance.raw).not.toHaveBeenCalled()
+    })
+
+    it('resolves the base to a commit, creates the branch atomically, then attaches a worktree', async () => {
+      mockGitInstance.raw.mockResolvedValue('abc123\n')
+      const handlers = setupHandlers()
+      const result = await handlers['git:worktreeAddNewBranch'](null, '/repo', '/wt', 'feature/x', 'origin/main')
+      expect(result).toEqual({ success: true })
+      // The base is a remote-tracking ref, so it must be resolved rather than assumed to live
+      // under refs/heads/, and the branch is pinned to the exact commit we verified.
+      expect(mockGitInstance.raw).toHaveBeenCalledWith(['rev-parse', '--verify', 'origin/main^{commit}'])
+      expect(mockGitInstance.raw).toHaveBeenCalledWith(['branch', 'feature/x', 'abc123'])
+      expect(mockGitInstance.raw).toHaveBeenCalledWith(['worktree', 'add', '/wt', 'feature/x'])
+    })
+
+    it('errors without mutating anything when the base ref cannot be resolved', async () => {
+      mockGitInstance.raw.mockRejectedValueOnce(new Error("fatal: Needed a single revision")) // rev-parse
+      const handlers = setupHandlers()
+      const result = await handlers['git:worktreeAddNewBranch'](null, '/repo', '/wt', 'feature/x', 'origin/main')
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('base branch "origin/main" wasn\'t found')
+      expect(mockGitInstance.raw).not.toHaveBeenCalledWith(expect.arrayContaining(['branch']))
+      expect(mockGitInstance.branch).not.toHaveBeenCalled()
+    })
+
+    it('reports BRANCH_EXISTS and creates no worktree when the local branch already exists', async () => {
+      mockGitInstance.raw
+        .mockResolvedValueOnce('abc123\n') // rev-parse
+        .mockRejectedValueOnce(new Error("fatal: a branch named 'feature/x' already exists"))
+      const handlers = setupHandlers()
+      const result = await handlers['git:worktreeAddNewBranch'](null, '/repo', '/wt', 'feature/x', 'origin/main')
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('BRANCH_EXISTS:')
+      expect(mockGitInstance.raw).not.toHaveBeenCalledWith(['worktree', 'add', '/wt', 'feature/x'])
+      expect(mockGitInstance.branch).not.toHaveBeenCalled()
+    })
+
+    it('on an occupied path: WORKTREE_PATH_EXISTS, deletes only our branch, never removes the path', async () => {
+      mockGitInstance.raw
+        .mockResolvedValueOnce('abc123\n') // rev-parse
+        .mockResolvedValueOnce('') // git branch feature/x abc123
+        .mockRejectedValueOnce(new Error("fatal: '/wt' already exists")) // worktree add
+      mockGitInstance.branch.mockResolvedValue(undefined)
+      const handlers = setupHandlers()
+      const result = await handlers['git:worktreeAddNewBranch'](null, '/repo', '/wt', 'feature/x', 'main')
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('WORKTREE_PATH_EXISTS:')
+      // Delete our branch, but NEVER remove the path — it may be a pre-existing/stale worktree.
+      expect(mockGitInstance.branch).toHaveBeenCalledWith(['-D', 'feature/x'])
+      expect(mockGitInstance.raw).not.toHaveBeenCalledWith(['worktree', 'remove', '--force', '/wt'])
+    })
+
+    it('on any other attach failure: deletes our branch, notes a possible partial worktree, removes nothing', async () => {
+      mockGitInstance.raw
+        .mockResolvedValueOnce('abc123\n') // rev-parse
+        .mockResolvedValueOnce('') // git branch
+        .mockRejectedValueOnce(new Error('error: post-checkout hook exited with code 1')) // worktree add
+      mockGitInstance.branch.mockResolvedValue(undefined)
+      const handlers = setupHandlers()
+      const result = await handlers['git:worktreeAddNewBranch'](null, '/repo', '/wt', 'feature/x', 'main')
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('post-checkout hook')
+      expect(result.error).toContain('A partial worktree may remain')
+      expect(mockGitInstance.branch).toHaveBeenCalledWith(['-D', 'feature/x'])
+      expect(mockGitInstance.raw).not.toHaveBeenCalledWith(['worktree', 'remove', '--force', '/wt'])
+    })
+
+    it('surfaces a "may remain" note if deleting our branch also fails', async () => {
+      mockGitInstance.raw
+        .mockResolvedValueOnce('abc123\n') // rev-parse
+        .mockResolvedValueOnce('') // git branch
+        .mockRejectedValueOnce(new Error('boom during attach')) // worktree add
+      mockGitInstance.branch.mockRejectedValue(new Error('delete failed'))
+      const handlers = setupHandlers()
+      const result = await handlers['git:worktreeAddNewBranch'](null, '/repo', '/wt', 'feature/x', 'main')
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('boom during attach')
+      expect(result.error).toContain('The branch "feature/x" may remain')
+    })
+  })
+
   describe('git:worktreeList', () => {
     it('returns mock worktree in E2E mode', async () => {
       const handlers = setupHandlers(createMockCtx({ isE2ETest: true }))
@@ -259,11 +386,16 @@ describe('gitBranch handlers', () => {
       expect(await handlers['git:pushNewBranch'](null, '/repo', 'branch')).toEqual({ success: true })
     })
 
-    it('pushes with upstream in normal mode', async () => {
+    it('pushes with an empty-lease + explicit refspec so it can never advance an existing remote', async () => {
       mockGitInstance.push.mockResolvedValue(undefined)
       const handlers = setupHandlers()
       await handlers['git:pushNewBranch'](null, '/repo', 'feature')
-      expect(mockGitInstance.push).toHaveBeenCalledWith(['--set-upstream', 'origin', 'feature'])
+      expect(mockGitInstance.push).toHaveBeenCalledWith([
+        '--set-upstream',
+        '--force-with-lease=refs/heads/feature:',
+        'origin',
+        'refs/heads/feature:refs/heads/feature',
+      ])
     })
 
     it('returns friendly error on directory file conflict', async () => {
@@ -291,16 +423,40 @@ describe('gitBranch handlers', () => {
       expect(result.error).toContain('Authentication failed')
     })
 
-    it('returns BRANCH_EXISTS error on non-fast-forward rejection', async () => {
+    it('maps a rejection to BRANCH_EXISTS only when ls-remote (against the push url) confirms the ref', async () => {
       mockGitInstance.push.mockRejectedValue(new Error(
-        '! refs/heads/fix/lint:refs/heads/fix/lint [rejected] (non-fast-forward)'
+        '! refs/heads/fix/lint:refs/heads/fix/lint [rejected] (stale info)'
       ))
+      mockGitInstance.raw.mockResolvedValue('git@example.com:org/repo.git') // remote get-url --push origin
+      mockGitInstance.listRemote.mockResolvedValue('abc123\trefs/heads/fix/lint\n')
       const handlers = setupHandlers()
       const result = await handlers['git:pushNewBranch'](null, '/repo', 'fix/lint')
       expect(result.success).toBe(false)
       expect(result.error).toContain('BRANCH_EXISTS:')
       expect(result.error).toContain('"fix/lint"')
-      expect(result.error).toContain('has diverged')
+      // Probed the resolved PUSH url, not necessarily the fetch remote.
+      expect(mockGitInstance.listRemote).toHaveBeenCalledWith(['--heads', 'git@example.com:org/repo.git', 'refs/heads/fix/lint'])
+    })
+
+    it('surfaces the real error when a rejection is NOT a branch collision (absent remote ref)', async () => {
+      mockGitInstance.push.mockRejectedValue(new Error('remote: pre-receive hook declined [remote rejected]'))
+      mockGitInstance.raw.mockResolvedValue('origin-url') // remote get-url --push origin
+      mockGitInstance.listRemote.mockResolvedValue('') // no matching remote ref → a hook/policy refused
+      const handlers = setupHandlers()
+      const result = await handlers['git:pushNewBranch'](null, '/repo', 'feature')
+      expect(result.success).toBe(false)
+      expect(result.error).not.toContain('BRANCH_EXISTS:')
+      expect(result.error).toContain('pre-receive hook declined')
+    })
+
+    it('does not classify (surfaces the real error) when origin has multiple push urls', async () => {
+      mockGitInstance.push.mockRejectedValue(new Error('! [rejected] (stale info)'))
+      mockGitInstance.raw.mockResolvedValue('url-1\nurl-2') // two push urls → ambiguous which rejected
+      const handlers = setupHandlers()
+      const result = await handlers['git:pushNewBranch'](null, '/repo', 'feature')
+      expect(result.success).toBe(false)
+      expect(result.error).not.toContain('BRANCH_EXISTS:')
+      expect(mockGitInstance.listRemote).not.toHaveBeenCalled()
     })
 
     it('returns friendly error on cannot lock ref', async () => {
@@ -326,8 +482,17 @@ describe('gitBranch handlers', () => {
       expect(await handlers['git:defaultBranch'](null, '/repo')).toBe('develop')
     })
 
+    it('asks origin when the symbolic ref is missing', async () => {
+      mockGitInstance.raw
+        .mockRejectedValueOnce(new Error('no ref'))
+        .mockResolvedValueOnce('ref: refs/heads/trunk\tHEAD\nabc123\tHEAD\n') // ls-remote --symref
+      const handlers = setupHandlers()
+      expect(await handlers['git:defaultBranch'](null, '/repo')).toBe('trunk')
+    })
+
     it('falls back to main when symbolic ref fails', async () => {
       mockGitInstance.raw.mockRejectedValueOnce(new Error('no ref'))
+        .mockRejectedValueOnce(new Error('remote unreachable')) // ls-remote --symref
         .mockResolvedValueOnce('') // rev-parse --verify main succeeds
       const handlers = setupHandlers()
       expect(await handlers['git:defaultBranch'](null, '/repo')).toBe('main')
@@ -336,6 +501,7 @@ describe('gitBranch handlers', () => {
     it('falls back to master when main does not exist', async () => {
       mockGitInstance.raw
         .mockRejectedValueOnce(new Error('no ref'))
+        .mockRejectedValueOnce(new Error('remote unreachable')) // ls-remote --symref
         .mockRejectedValueOnce(new Error('no main'))
         .mockResolvedValueOnce('') // rev-parse --verify master succeeds
       const handlers = setupHandlers()

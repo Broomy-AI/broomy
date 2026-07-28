@@ -9,6 +9,7 @@ import type { ManagedRepo, GitHubIssue } from '../../../../preload/index'
 import { issueToBranchName } from '../../../shared/utils/slugify'
 import { DialogErrorBanner } from '../../../shared/components/ErrorBanner'
 import { AuthSetupSection } from '../../../shared/components/AuthSetupSection'
+import { resolveBaseRef } from '../../git/baseRef'
 
 export function NewBranchView({
   repo,
@@ -30,7 +31,10 @@ export function NewBranchView({
   const sessions = useSessionStore(s => s.sessions)
   const setActiveSession = useSessionStore(s => s.setActiveSession)
 
-  const [branchName, setBranchName] = useState(issue ? issueToBranchName(issue) : '')
+  // Issue-derived sessions default under an `issue/<number>-` prefix so their worktree lands in
+  // `<repo>/issue/…` (like the other prefixed worktrees) rather than the repo root. The number
+  // keeps the branch unique even when two issues slugify to the same words. Editable by the user.
+  const [branchName, setBranchName] = useState(issue ? `issue/${issue.number}-${issueToBranchName(issue)}` : '')
   // Use repo's default agent, or fall back to first agent
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(repo.defaultAgentId || agents[0]?.id || null)
   const [loading, setLoading] = useState(false)
@@ -62,13 +66,22 @@ export function NewBranchView({
       const mainDir = `${repo.rootDir}/main`
       const worktreePath = `${repo.rootDir}/${branchName}`
 
-      // Pull latest on main first
+      // Resolve and fetch the base ref first — this is what the new branch is
+      // built on, so it must be current regardless of the main worktree's state.
+      const baseRef = await resolveBaseRef(mainDir, repo.defaultBranch)
+
+      // Best-effort refresh of the main worktree itself.
       await window.git.pull(mainDir)
 
-      // Create worktree with new branch — tolerate "already exists" on retry
-      // (e.g. if worktree was created but push failed on first attempt)
-      const result = await window.git.worktreeAdd(mainDir, worktreePath, branchName, repo.defaultBranch)
-      if (!result.success && !result.error?.includes('already exists')) {
+      // Create the worktree for a brand-new branch, based on the freshly fetched base ref. This
+      // never reuses/clobbers an existing branch or worktree; a collision is terminal and the op
+      // has already cleaned up after itself, so we surface it here without any cleanup of our own.
+      const result = await window.git.worktreeAddNewBranch(mainDir, worktreePath, branchName, baseRef)
+      if (!result.success) {
+        // A creation collision is terminal — the op already cleaned up after itself, so just
+        // surface the clean message (BRANCH_EXISTS / WORKTREE_PATH_EXISTS) without any cleanup.
+        const prefix = ['BRANCH_EXISTS:', 'WORKTREE_PATH_EXISTS:'].find((p) => result.error?.startsWith(p))
+        if (prefix) { setError(result.error!.slice(prefix.length)); setLoading(false); return }
         throw new Error(result.error || 'Failed to create worktree')
       }
 

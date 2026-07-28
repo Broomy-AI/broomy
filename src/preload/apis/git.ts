@@ -21,6 +21,8 @@ export type GitApi = {
   pull: (repoPath: string) => Promise<{ success: boolean; error?: string }>
   clone: (url: string, targetDir: string) => Promise<{ success: boolean; error?: string }>
   worktreeAdd: (repoPath: string, worktreePath: string, branchName: string, baseBranch: string) => Promise<{ success: boolean; error?: string }>
+  /** Create a worktree for a NEW branch only — never reuses/clobbers an existing branch or worktree. */
+  worktreeAddNewBranch: (repoPath: string, worktreePath: string, branchName: string, baseBranch: string) => Promise<{ success: boolean; error?: string }>
   worktreeList: (repoPath: string) => Promise<WorktreeInfo[]>
   worktreeRemove: (repoPath: string, worktreePath: string) => Promise<{ success: boolean; error?: string }>
   deleteBranch: (repoPath: string, branchName: string) => Promise<{ success: boolean; error?: string }>
@@ -62,6 +64,7 @@ export const gitApi: GitApi = {
   pull: (repoPath) => ipcRenderer.invoke('git:pull', repoPath),
   clone: (url, targetDir) => ipcRenderer.invoke('git:clone', url, targetDir),
   worktreeAdd: (repoPath, worktreePath, branchName, baseBranch) => ipcRenderer.invoke('git:worktreeAdd', repoPath, worktreePath, branchName, baseBranch),
+  worktreeAddNewBranch: (repoPath, worktreePath, branchName, baseBranch) => ipcRenderer.invoke('git:worktreeAddNewBranch', repoPath, worktreePath, branchName, baseBranch),
   worktreeList: (repoPath) => ipcRenderer.invoke('git:worktreeList', repoPath),
   worktreeRemove: (repoPath, worktreePath) => ipcRenderer.invoke('git:worktreeRemove', repoPath, worktreePath),
   deleteBranch: (repoPath, branchName) => ipcRenderer.invoke('git:deleteBranch', repoPath, branchName),

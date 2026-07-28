@@ -209,8 +209,9 @@ export default function Layout({
             {/* Error message */}
             {errorMessage && (
               <div className="flex-1 flex items-center justify-center bg-bg-primary text-text-secondary">
-                <div className="text-center">
-                  <p className="text-danger-fg">{errorMessage}</p>
+                <div className="text-center max-w-lg px-6">
+                  {/* Init failures carry multi-paragraph guidance; preserve their line breaks. */}
+                  <p className="text-danger-fg whitespace-pre-wrap">{errorMessage}</p>
                 </div>
               </div>
             )}
