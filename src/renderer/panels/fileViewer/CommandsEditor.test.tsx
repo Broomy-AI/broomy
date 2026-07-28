@@ -282,7 +282,7 @@ describe('CommandsEditor template variable picker', () => {
 
   it('inserts a variable at the caret in the command field', async () => {
     await renderWithCommand('/fix now')
-    const field = screen.getByDisplayValue('/fix now') as HTMLInputElement
+    const field = screen.getByDisplayValue<HTMLInputElement>('/fix now')
     field.setSelectionRange(5, 5)
     fireEvent.click(screen.getByTestId('open-template-vars'))
     fireEvent.click(await screen.findByText('{branch}'))
@@ -292,7 +292,7 @@ describe('CommandsEditor template variable picker', () => {
   it('inserts a variable from the expanded editor', async () => {
     await renderWithCommand('/fix now')
     fireEvent.click(screen.getByTestId('expand-command'))
-    const textarea = await screen.findByTestId('expanded-command-textarea') as HTMLTextAreaElement
+    const textarea = await screen.findByTestId<HTMLTextAreaElement>('expanded-command-textarea')
     textarea.setSelectionRange(5, 5)
     fireEvent.click(await screen.findByTestId('open-template-vars-expanded'))
     fireEvent.click(await screen.findByText('{repoName}'))

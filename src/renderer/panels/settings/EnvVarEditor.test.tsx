@@ -118,7 +118,7 @@ describe('EnvVarEditor template variables', () => {
   it('inserts a variable into the focused existing value', async () => {
     const onChange = vi.fn()
     render(<EnvVarEditor env={{ MY_VAR: 'x' }} onChange={onChange} command="claude" />)
-    const value = screen.getByDisplayValue('x') as HTMLInputElement
+    const value = screen.getByDisplayValue<HTMLInputElement>('x')
     fireEvent.focus(value)
     value.setSelectionRange(1, 1)
     fireEvent.click(screen.getByTestId('open-template-vars-env'))

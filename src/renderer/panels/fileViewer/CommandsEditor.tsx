@@ -18,6 +18,7 @@ import { getUserCommandsConfigPath, userCommandsDir } from '../../features/comma
 import { parseTemplate } from '../../features/commands/templateParser'
 import { ShowWhenPicker } from '../../shared/components/ShowWhenPicker'
 import { TemplateVarsModal } from '../../shared/components/TemplateVarsModal'
+import type { TemplateVarInput } from '../../features/commands/templateVars'
 import { useInsertAtCursor } from '../../shared/hooks/useInsertAtCursor'
 import { useSessionStore } from '../../store/sessions'
 import { useRepoStore } from '../../store/repos'
@@ -303,6 +304,20 @@ function EditorHeader({
 }
 
 
+/**
+ * Live variable values for the picker, taken from the active session, so it
+ * shows what a command would actually resolve to right now.
+ */
+function useActiveSessionVarInput(): TemplateVarInput {
+  const activeSession = useSessionStore(s => s.sessions.find(x => x.id === s.activeSessionId))
+  const repos = useRepoStore(s => s.repos)
+  return useMemo(() => ({
+    session: activeSession,
+    repo: repos.find(r => r.id === activeSession?.repoId),
+    directory: activeSession?.directory ?? '',
+  }), [activeSession, repos])
+}
+
 function Detail({
   selected, onUpdate, onDelete, stageOptions,
 }: {
@@ -319,15 +334,7 @@ function Detail({
   const [showVars, setShowVars] = useState(false)
   const { ref: commandRef, insert } = useInsertAtCursor<HTMLInputElement & HTMLTextAreaElement>()
 
-  // Live variable values come from the active session, so the picker shows what
-  // a command would actually resolve to right now.
-  const activeSession = useSessionStore(s => s.sessions.find(x => x.id === s.activeSessionId))
-  const repos = useRepoStore(s => s.repos)
-  const varInput = useMemo(() => ({
-    session: activeSession,
-    repo: repos.find(r => r.id === activeSession?.repoId),
-    directory: activeSession?.directory ?? '',
-  }), [activeSession, repos])
+  const varInput = useActiveSessionVarInput()
 
   const insertVar = (text: string) => insert(text, selected.template, v => onUpdate({ template: v }))
 

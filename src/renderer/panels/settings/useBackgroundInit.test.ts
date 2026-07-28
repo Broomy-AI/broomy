@@ -238,7 +238,7 @@ describe('useBackgroundInit', () => {
           '/repos/proj/main',
           '/repos/proj/issue/42-fix-login-bug',
           'issue/42-fix-login-bug',
-          'main',
+          'origin/main',
         )
       })
     })

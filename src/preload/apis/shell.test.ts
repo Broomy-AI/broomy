@@ -24,7 +24,12 @@ describe('preload shell API', () => {
   describe('shellApi', () => {
     it('exec invokes shell:exec', async () => {
       await shellApi.exec('ls', '/test')
-      expect(mockInvoke).toHaveBeenCalledWith('shell:exec', 'ls', '/test')
+      expect(mockInvoke).toHaveBeenCalledWith('shell:exec', 'ls', '/test', undefined)
+    })
+
+    it('exec forwards an env map when given one', async () => {
+      await shellApi.exec('ls', '/test', { BROOMY_BRANCH: 'fix/login' })
+      expect(mockInvoke).toHaveBeenCalledWith('shell:exec', 'ls', '/test', { BROOMY_BRANCH: 'fix/login' })
     })
 
     it('openExternal invokes shell:openExternal', async () => {

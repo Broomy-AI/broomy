@@ -34,8 +34,9 @@ export function substituteTemplate(template: string, input: SubInput): string {
   // Substitute reserved context vars. Runs before user args so a context
   // variable always wins a name collision (parseTemplate already excludes
   // reserved names from args, so this is belt and braces).
+  const contextMap = input.context as Record<string, string | undefined>
   s = s.replace(/\{([A-Za-z_][\w]*)\}/g, (full, name: string) => {
-    const v = input.context[name]
+    const v = contextMap[name]
     return v !== undefined ? v : full
   })
 

@@ -23,7 +23,7 @@ describe('runRepoInitScript', () => {
 
   it('omits variables that are not set at init time', async () => {
     await runRepoInitScript(repo, '/repos/broomy/wt/x')
-    const env = vi.mocked(window.shell.exec).mock.calls[0][2] as Record<string, string>
+    const env = vi.mocked(window.shell.exec).mock.calls[0][2]!
     expect(env.BROOMY_PR_NUMBER).toBeUndefined()
     expect(env.BROOMY_PR_TITLE).toBeUndefined()
     expect(env.BROOMY_SESSION_NAME).toBeUndefined()
