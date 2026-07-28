@@ -27,10 +27,21 @@ const meta: Meta<typeof ReviewPrsView> = {
 export default meta
 type Story = StoryObj<typeof ReviewPrsView>
 
+const handlers = {
+  onBack: () => console.log('Back'),
+  onComplete: (dir: string, agentId: string | null, extra?: unknown) => console.log('Complete:', dir, agentId, extra),
+}
+
 export const Default: Story = {
-  args: {
-    repo,
-    onBack: () => console.log('Back'),
-    onComplete: (dir, agentId, extra) => console.log('Complete:', dir, agentId, extra),
-  },
+  args: { repo, ...handlers },
+}
+
+/** Repo whose saved filter shows only PRs the user was asked to review directly. */
+export const MineMode: Story = {
+  args: { repo: { ...repo, prReviewFilter: 'mine' }, ...handlers },
+}
+
+/** Repo whose saved filter shows every open PR, not just review requests. */
+export const AllMode: Story = {
+  args: { repo: { ...repo, prReviewFilter: 'all' }, ...handlers },
 }

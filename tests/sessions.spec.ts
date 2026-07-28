@@ -143,6 +143,24 @@ test.describe('New Session Dialog', () => {
 
     await closeDialog()
   })
+
+  test('should refetch with a different filter when a mode tab is clicked', async () => {
+    await openNewSessionDialog()
+    await page.locator('button[title="Review pull requests"]').click()
+
+    // Team mode is the default and excludes PRs nobody asked us to review
+    await expect(page.locator('text=Add dark mode support').first()).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('text=Bump dependencies')).toHaveCount(0)
+
+    // All mode lists every open PR
+    await page.locator('[role="tab"]:has-text("All")').click()
+    await expect(page.locator('text=Bump dependencies').first()).toBeVisible({ timeout: 5000 })
+
+    await page.keyboard.press('Escape')
+    await expect(page.locator('h2:has-text("New Session")')).toBeVisible()
+
+    await closeDialog()
+  })
 })
 
 // ── Session Search ─────────────────────────────────────────────────────────

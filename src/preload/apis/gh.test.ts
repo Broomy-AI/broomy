@@ -62,7 +62,12 @@ describe('preload gh API', () => {
 
   it('prsToReview invokes gh:prsToReview', async () => {
     await ghApi.prsToReview('/repo')
-    expect(mockInvoke).toHaveBeenCalledWith('gh:prsToReview', '/repo')
+    expect(mockInvoke).toHaveBeenCalledWith('gh:prsToReview', '/repo', undefined)
+  })
+
+  it('prsToReview forwards the filter mode', async () => {
+    await ghApi.prsToReview('/repo', 'mine')
+    expect(mockInvoke).toHaveBeenCalledWith('gh:prsToReview', '/repo', 'mine')
   })
 
   it('submitDraftReview invokes gh:submitDraftReview', async () => {

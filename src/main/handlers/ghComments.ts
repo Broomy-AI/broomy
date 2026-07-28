@@ -5,8 +5,23 @@ import { IpcMain } from 'electron'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { HandlerContext, expandHomePath } from './types'
+import type { PrReviewFilterMode } from '../../preload/apis/types'
 
 const execFileAsync = promisify(execFile)
+
+/**
+ * The `gh pr list` search arguments that select each review filter mode.
+ * `review-requested:@me` matches requests routed through a team the user belongs
+ * to as well as direct ones; `user-review-requested:@me` matches only direct ones.
+ * `all` passes no search argument, so `gh` lists every open PR.
+ */
+function prReviewFilterArgs(mode: PrReviewFilterMode): string[] {
+  switch (mode) {
+    case 'mine': return ['--search', 'user-review-requested:@me']
+    case 'all': return []
+    default: return ['--search', 'review-requested:@me']
+  }
+}
 
 function parseJsonLines(stdout: string): unknown[] {
   return stdout.trim().split(/\r?\n/).filter(line => line.trim()).map(line => {
@@ -324,17 +339,21 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     }
   })
 
-  ipcMain.handle('gh:prsToReview', async (_event, repoDir: string) => {
+  ipcMain.handle('gh:prsToReview', async (_event, repoDir: string, mode: PrReviewFilterMode = 'team') => {
     if (ctx.isE2ETest) {
-      return [
+      const mockPrs = [
         { number: 55, title: 'Add dark mode support', author: 'alice', url: 'https://github.com/user/demo-project/pull/55', headRefName: 'feature/dark-mode', baseRefName: 'main', labels: ['feature'] },
         { number: 48, title: 'Fix memory leak in worker pool', author: 'bob', url: 'https://github.com/user/demo-project/pull/48', headRefName: 'fix/memory-leak', baseRefName: 'main', labels: ['bug', 'performance'] },
       ]
+      // 'all' lists open PRs nobody asked us to review, so it returns a superset
+      return mode === 'all'
+        ? [...mockPrs, { number: 42, title: 'Bump dependencies', author: 'carol', url: 'https://github.com/user/demo-project/pull/42', headRefName: 'chore/deps', baseRefName: 'main', labels: [] }]
+        : mockPrs
     }
 
     try {
       const { stdout } = await execFileAsync('gh', [
-        'pr', 'list', '--search', 'review-requested:@me',
+        'pr', 'list', ...prReviewFilterArgs(mode),
         '--json', 'number,title,author,url,headRefName,baseRefName,labels',
         '--limit', '30',
       ], {

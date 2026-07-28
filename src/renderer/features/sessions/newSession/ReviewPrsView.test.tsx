@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import '../../../../test/react-setup'
 import { useAgentStore } from '../../../store/agents'
+import { useRepoStore } from '../../../store/repos'
 import { ReviewPrsView } from './ReviewPrsView'
 import type { ManagedRepo } from '../../../../preload/index'
 
@@ -436,6 +437,78 @@ describe('ReviewPrsView', () => {
       fireEvent.mouseEnter(thirdButton)
 
       expect(thirdButton.className).toContain('ring-1')
+    })
+  })
+
+  describe('filter modes', () => {
+    beforeEach(() => {
+      useRepoStore.setState({ repos: [mockRepo] })
+    })
+
+    it('defaults to team mode and fetches with it', async () => {
+      vi.mocked(window.gh.prsToReview).mockResolvedValue([])
+      render(<ReviewPrsView repo={mockRepo} onBack={vi.fn()} onComplete={vi.fn()} />)
+
+      await waitFor(() => {
+        expect(window.gh.prsToReview).toHaveBeenCalledWith('/repos/my-project/main', 'team')
+      })
+      expect(screen.getByRole('tab', { name: 'Team' }).getAttribute('aria-selected')).toBe('true')
+    })
+
+    it('starts in the mode saved on the repo', async () => {
+      vi.mocked(window.gh.prsToReview).mockResolvedValue([])
+      render(<ReviewPrsView repo={{ ...mockRepo, prReviewFilter: 'all' }} onBack={vi.fn()} onComplete={vi.fn()} />)
+
+      await waitFor(() => {
+        expect(window.gh.prsToReview).toHaveBeenCalledWith('/repos/my-project/main', 'all')
+      })
+      expect(screen.getByRole('tab', { name: 'All' }).getAttribute('aria-selected')).toBe('true')
+    })
+
+    it('refetches with the new mode when a tab is clicked', async () => {
+      vi.mocked(window.gh.prsToReview).mockResolvedValue([])
+      render(<ReviewPrsView repo={mockRepo} onBack={vi.fn()} onComplete={vi.fn()} />)
+      await waitFor(() => expect(window.gh.prsToReview).toHaveBeenCalledTimes(1))
+
+      fireEvent.click(screen.getByRole('tab', { name: 'Mine' }))
+
+      await waitFor(() => {
+        expect(window.gh.prsToReview).toHaveBeenCalledWith('/repos/my-project/main', 'mine')
+      })
+    })
+
+    it('persists the chosen mode on the repo', async () => {
+      vi.mocked(window.gh.prsToReview).mockResolvedValue([])
+      render(<ReviewPrsView repo={mockRepo} onBack={vi.fn()} onComplete={vi.fn()} />)
+      await waitFor(() => expect(window.gh.prsToReview).toHaveBeenCalled())
+
+      fireEvent.click(screen.getByRole('tab', { name: 'Mine' }))
+
+      await waitFor(() => {
+        expect(useRepoStore.getState().repos[0].prReviewFilter).toBe('mine')
+      })
+    })
+
+    it.each([
+      ['team', undefined, /No PRs pending your review/],
+      ['mine', 'mine' as const, /No PRs personally assigned to you/],
+      ['all', 'all' as const, /No open PRs/],
+    ])('shows the %s empty state', async (_name, savedMode, expected) => {
+      vi.mocked(window.gh.prsToReview).mockResolvedValue([])
+      render(<ReviewPrsView repo={{ ...mockRepo, prReviewFilter: savedMode }} onBack={vi.fn()} onComplete={vi.fn()} />)
+
+      await waitFor(() => expect(screen.getByText(expected)).toBeTruthy())
+    })
+
+    it('clears a previous error when switching modes', async () => {
+      vi.mocked(window.gh.prsToReview).mockRejectedValueOnce(new Error('Auth failed'))
+      render(<ReviewPrsView repo={mockRepo} onBack={vi.fn()} onComplete={vi.fn()} />)
+      await waitFor(() => expect(screen.getByText(/Auth failed/)).toBeTruthy())
+
+      vi.mocked(window.gh.prsToReview).mockResolvedValue([])
+      fireEvent.click(screen.getByRole('tab', { name: 'All' }))
+
+      await waitFor(() => expect(screen.queryByText(/Auth failed/)).toBeNull())
     })
   })
 
