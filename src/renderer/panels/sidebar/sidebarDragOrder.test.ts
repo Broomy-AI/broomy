@@ -37,20 +37,26 @@ describe('moveSessionWithinGroup', () => {
   })
 
   it('rejects a drop onto a session in a different repo group', () => {
-    expect(ids(moveSessionWithinGroup(sessions, repos, 'a', 'x', true)))
-      .toEqual(['a', 'x', 'b', 'y', 'c'])
+    const result = moveSessionWithinGroup(sessions, repos, 'a', 'x', true)
+    expect(ids(result)).toEqual(['a', 'x', 'b', 'y', 'c'])
+    // Callers detect rejection by reference equality — a copy would be treated as a change.
+    expect(result).toBe(sessions)
   })
 
   it('is a no-op when dragged and target are the same session', () => {
-    expect(ids(moveSessionWithinGroup(sessions, repos, 'a', 'a', true)))
-      .toEqual(['a', 'x', 'b', 'y', 'c'])
+    const result = moveSessionWithinGroup(sessions, repos, 'a', 'a', true)
+    expect(ids(result)).toEqual(['a', 'x', 'b', 'y', 'c'])
+    expect(result).toBe(sessions)
   })
 
   it('is a no-op when either id is unknown', () => {
-    expect(ids(moveSessionWithinGroup(sessions, repos, 'nope', 'a', true)))
-      .toEqual(['a', 'x', 'b', 'y', 'c'])
-    expect(ids(moveSessionWithinGroup(sessions, repos, 'a', 'nope', true)))
-      .toEqual(['a', 'x', 'b', 'y', 'c'])
+    const unknownDragged = moveSessionWithinGroup(sessions, repos, 'nope', 'a', true)
+    expect(ids(unknownDragged)).toEqual(['a', 'x', 'b', 'y', 'c'])
+    expect(unknownDragged).toBe(sessions)
+
+    const unknownTarget = moveSessionWithinGroup(sessions, repos, 'a', 'nope', true)
+    expect(ids(unknownTarget)).toEqual(['a', 'x', 'b', 'y', 'c'])
+    expect(unknownTarget).toBe(sessions)
   })
 
   it('does not mutate the input array', () => {
@@ -84,10 +90,21 @@ describe('moveGroupKey', () => {
   })
 
   it('is a no-op when dragged and target are the same key', () => {
-    expect(moveGroupKey(rendered, rendered, 'repo:r1', 'repo:r1', true)).toEqual(rendered)
+    const result = moveGroupKey(rendered, rendered, 'repo:r1', 'repo:r1', true)
+    expect(result).toEqual(rendered)
+    // Callers detect rejection by reference equality — a copy would be treated as a change.
+    expect(result).toBe(rendered)
   })
 
   it('is a no-op when the target is not rendered', () => {
-    expect(moveGroupKey(rendered, rendered, 'repo:r1', 'repo:gone', true)).toEqual(rendered)
+    const result = moveGroupKey(rendered, rendered, 'repo:r1', 'repo:gone', true)
+    expect(result).toEqual(rendered)
+    expect(result).toBe(rendered)
+  })
+
+  it('is a no-op when the dragged key is not rendered', () => {
+    const result = moveGroupKey(rendered, rendered, 'repo:gone', 'repo:r1', true)
+    expect(result).toEqual(rendered)
+    expect(result).toBe(rendered)
   })
 })
