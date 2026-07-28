@@ -14,6 +14,7 @@ import { useElapsedSeconds } from '../../shared/hooks/useElapsedSeconds'
 import { deriveDisplayedChip } from '../../features/git/displayedChip'
 import { ReviewStatusChip } from '../../shared/components/ReviewStatusChip'
 import { StatusIndicator } from './StatusIndicator'
+import { dropEdgeClasses } from './useSidebarDrag'
 import { fileManagerName } from '../../shared/utils/platform'
 import { useErrorStore } from '../../store/errors'
 
@@ -57,6 +58,13 @@ export default memo(function SessionCard({
   onDelete,
   onArchive,
   repoLabel,
+  draggable,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onDragEnd,
+  dropEdge,
 }: {
   sessionId: string
   onSelect: (sessionId: string) => void
@@ -64,6 +72,15 @@ export default memo(function SessionCard({
   onArchive?: (e: React.MouseEvent, sessionId: string) => void
   /** Search mode only: a neutral repo tag (grouped mode shows the repo on the header). */
   repoLabel?: string
+  /** Drag-to-reorder. Omitted (or false) for archived cards and while searching. */
+  draggable?: boolean
+  onDragStart?: (e: React.DragEvent, sessionId: string) => void
+  onDragOver?: (e: React.DragEvent, sessionId: string) => void
+  onDragLeave?: () => void
+  onDrop?: (e: React.DragEvent, sessionId: string) => void
+  onDragEnd?: (e: React.DragEvent) => void
+  /** 'before' | 'after' draws the drop indicator on that edge; null draws none. */
+  dropEdge?: 'before' | 'after' | null
 }) {
   // Subscribe to only the fields this card renders, with shallow equality.
   // This prevents re-renders when unrelated session fields (or other sessions) change.
@@ -137,6 +154,12 @@ export default memo(function SessionCard({
       data-session-card
       data-session-id={sessionId}
       tabIndex={0}
+      draggable={!!draggable}
+      onDragStart={(e) => onDragStart?.(e, sessionId)}
+      onDragOver={(e) => onDragOver?.(e, sessionId)}
+      onDragLeave={onDragLeave}
+      onDrop={(e) => onDrop?.(e, sessionId)}
+      onDragEnd={onDragEnd}
       onClick={() => onSelect(sessionId)}
       onContextMenu={handleContextMenu}
       onKeyDown={(e) => {
@@ -154,7 +177,7 @@ export default memo(function SessionCard({
       }}
       className={`group relative w-full text-left p-3 rounded mb-1 transition-all cursor-pointer outline-none focus:ring-1 focus:ring-accent/50 ${
         isActive ? 'bg-accent/15' : 'hover:bg-bg-tertiary/50'
-      }`}
+      } ${dropEdgeClasses(dropEdge)}`}
     >
       <div className="flex items-center gap-2 mb-1">
         <StatusIndicator status={displayStatus} isUnread={isUnread} />

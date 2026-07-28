@@ -5,6 +5,7 @@
  */
 import { rollUpStatus, type RepoGroup, type RollupStatus } from './repoGroups'
 import { StatusIndicator } from './StatusIndicator'
+import { dropEdgeClasses } from './useSidebarDrag'
 import type { SessionStatus } from '../../store/sessions'
 
 const ROLLUP_LABEL: Record<RollupStatus, string> = {
@@ -29,10 +30,24 @@ export function RepoGroupHeader({
   group,
   collapsed,
   onToggle,
+  draggable,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onDragEnd,
+  dropEdge,
 }: {
   group: RepoGroup
   collapsed: boolean
   onToggle: () => void
+  draggable?: boolean
+  onDragStart?: (e: React.DragEvent, groupKey: string) => void
+  onDragOver?: (e: React.DragEvent, groupKey: string) => void
+  onDragLeave?: () => void
+  onDrop?: (e: React.DragEvent, groupKey: string) => void
+  onDragEnd?: (e: React.DragEvent) => void
+  dropEdge?: 'before' | 'after' | null
 }) {
   const rollup = rollUpStatus(group.sessions)
   const indicator = collapsed ? rollupToIndicator(rollup.status) : null
@@ -49,7 +64,13 @@ export function RepoGroupHeader({
       onClick={onToggle}
       aria-expanded={!collapsed}
       aria-label={accessibleName}
-      className="flex items-center gap-2 w-full px-2 py-1.5 rounded hover:bg-bg-tertiary/40 text-left outline-none focus:ring-1 focus:ring-accent/50"
+      draggable={!!draggable}
+      onDragStart={(e) => onDragStart?.(e, group.key)}
+      onDragOver={(e) => onDragOver?.(e, group.key)}
+      onDragLeave={onDragLeave}
+      onDrop={(e) => onDrop?.(e, group.key)}
+      onDragEnd={onDragEnd}
+      className={`flex items-center gap-2 w-full px-2 py-1.5 rounded hover:bg-bg-tertiary/40 text-left outline-none focus:ring-1 focus:ring-accent/50 ${dropEdgeClasses(dropEdge)}`}
     >
       <svg
         aria-hidden="true"

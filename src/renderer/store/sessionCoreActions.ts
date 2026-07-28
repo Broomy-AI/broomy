@@ -94,8 +94,8 @@ function migrateToolbarPanels(saved: string[] | undefined): string[] {
 
 const generateId = () => `session-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
 
-/** Normalise a persisted collapsed-group list: unique strings, default []. */
-function normalizeCollapsedGroups(value: unknown): string[] {
+/** Normalise a persisted group-key list: unique strings, default []. */
+function normalizeGroupKeys(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   return [...new Set(value.filter((v): v is string => typeof v === 'string'))]
 }
@@ -107,6 +107,7 @@ type StoreGet = () => {
   sidebarWidth: number
   toolbarPanels: string[]
   collapsedRepoGroups: string[]
+  repoGroupOrder: string[]
 }
 type StoreSet = (partial: Partial<{
   sessions: Session[]
@@ -117,6 +118,7 @@ type StoreSet = (partial: Partial<{
   sidebarWidth: number
   toolbarPanels: string[]
   collapsedRepoGroups: string[]
+  repoGroupOrder: string[]
   sidebarFullOrder: string[]
   sidebarVisibleOrder: string[]
   globalPanelVisibility: PanelVisibility
@@ -290,6 +292,7 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
             lastKnownPrNumber: sessionData.lastKnownPrNumber,
             lastKnownPrUrl: sessionData.lastKnownPrUrl,
             isArchived: sessionData.isArchived ?? false,
+            archivedAt: sessionData.archivedAt,
             stage: sessionData.stage ?? DEFAULT_STAGE,
             sdkSessionId: sessionData.sdkSessionId,
             isRestored: true,
@@ -311,13 +314,14 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
           showSidebar: config.showSidebar ?? true,
           sidebarWidth: clampSidebarWidth(config.sidebarWidth ?? DEFAULT_SIDEBAR_WIDTH),
           toolbarPanels: migrateToolbarPanels(config.toolbarPanels),
-          collapsedRepoGroups: normalizeCollapsedGroups(config.collapsedRepoGroups),
+          collapsedRepoGroups: normalizeGroupKeys(config.collapsedRepoGroups),
+          repoGroupOrder: normalizeGroupKeys(config.repoGroupOrder),
           globalPanelVisibility,
         })
       } catch (err) {
         console.warn('[sessions] Failed to load sessions config:', err)
         // Reset collapse prefs too, so a failed profile load can't leak the previous profile's state.
-        set({ sessions: [], activeSessionId: null, isLoading: false, configLoadError: 'Failed to load session config', collapsedRepoGroups: [] })
+        set({ sessions: [], activeSessionId: null, isLoading: false, configLoadError: 'Failed to load session config', collapsedRepoGroups: [], repoGroupOrder: [] })
       }
     },
 

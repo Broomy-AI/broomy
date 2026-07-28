@@ -84,7 +84,7 @@ describe('resolveRepoId', () => {
 describe('groupSessionsByRepo — ordering', () => {
   const repos = [repo('r-b', 'broomy'), repo('r-a', 'acme-web')]
 
-  it('sorts groups A→Z by repo name and sessions A→Z by branch', () => {
+  it('sorts groups A→Z by repo name, keeping sessions within a group in array order', () => {
     const sessions = [
       mk({ id: '1', repoId: 'r-b', branch: 'spike/z' }),
       mk({ id: '2', repoId: 'r-a', branch: 'main' }),
@@ -93,7 +93,7 @@ describe('groupSessionsByRepo — ordering', () => {
     ]
     const groups = groupSessionsByRepo(sessions, repos)
     expect(groups.map((g) => g.label)).toEqual(['acme-web', 'broomy'])
-    expect(groups[1].sessions.map((s) => s.branch)).toEqual(['feat/a', 'spike/z'])
+    expect(groups[1].sessions.map((s) => s.branch)).toEqual(['spike/z', 'feat/a'])
   })
 
   it('places named repos, then Unknown repository, then No repo', () => {
@@ -116,7 +116,7 @@ describe('groupSessionsByRepo — ordering', () => {
     expect(groups).toHaveLength(1)
     expect(groups[0].key).toBe('repo:gone')
     expect(groups[0].label).toBe('Unknown repository')
-    expect(groups[0].sessions.map((s) => s.branch)).toEqual(['a', 'b'])
+    expect(groups[0].sessions.map((s) => s.branch)).toEqual(['b', 'a'])
   })
 
   it('excludes archived sessions', () => {
@@ -135,23 +135,23 @@ describe('groupSessionsByRepo — ordering', () => {
     expect(groups.map((g) => g.repoId)).toEqual(['r-1', 'r-2'])
   })
 
-  it('breaks duplicate branch names by session id', () => {
+  it('keeps sessions with duplicate branch names in array order (no id tiebreak)', () => {
     const sessions = [
       mk({ id: 'z', repoId: 'r-a', branch: 'main' }),
       mk({ id: 'a', repoId: 'r-a', branch: 'main' }),
     ]
     const groups = groupSessionsByRepo(sessions, repos)
-    expect(groups[0].sessions.map((s) => s.id)).toEqual(['a', 'z'])
+    expect(groups[0].sessions.map((s) => s.id)).toEqual(['z', 'a'])
   })
 
-  it('orders numerically and case-insensitively', () => {
+  it('does not reorder sessions by branch, even ones that would sort numerically/case-insensitively', () => {
     const sessions = [
       mk({ id: '1', repoId: 'r-a', branch: 'v10' }),
       mk({ id: '2', repoId: 'r-a', branch: 'v2' }),
       mk({ id: '3', repoId: 'r-a', branch: 'Alpha' }),
     ]
     const groups = groupSessionsByRepo(sessions, repos)
-    expect(groups[0].sessions.map((s) => s.branch)).toEqual(['Alpha', 'v2', 'v10'])
+    expect(groups[0].sessions.map((s) => s.branch)).toEqual(['v10', 'v2', 'Alpha'])
   })
 
   it('does not mutate the input array', () => {
@@ -162,6 +162,36 @@ describe('groupSessionsByRepo — ordering', () => {
     const snapshot = sessions.map((s) => s.id)
     groupSessionsByRepo(sessions, repos)
     expect(sessions.map((s) => s.id)).toEqual(snapshot)
+  })
+})
+
+describe('manual ordering', () => {
+  const repos = [repo('r-b', 'broomy'), repo('r-a', 'acme-web')]
+
+  it('keeps sessions in array order within a group, not alphabetical', () => {
+    const groups = groupSessionsByRepo(
+      [mk({ id: '1', repoId: 'r-a', branch: 'zebra' }), mk({ id: '2', repoId: 'r-a', branch: 'alpha' })],
+      repos,
+    )
+    expect(groups[0].sessions.map((s) => s.branch)).toEqual(['zebra', 'alpha'])
+  })
+
+  it('orders groups by repoGroupOrder, with unlisted groups after', () => {
+    const groups = groupSessionsByRepo(
+      [mk({ id: '1', repoId: 'r-a' }), mk({ id: '2', repoId: 'r-b' }), mk({ id: '3', directory: '/elsewhere' })],
+      repos,
+      ['ungrouped', 'repo:r-b'],
+    )
+    expect(groups.map((g) => g.key)).toEqual(['ungrouped', 'repo:r-b', 'repo:r-a'])
+  })
+
+  it('falls back entirely to the computed order when repoGroupOrder is empty', () => {
+    const groups = groupSessionsByRepo(
+      [mk({ id: '1', repoId: 'r-b' }), mk({ id: '2', repoId: 'r-a' })],
+      repos,
+      [],
+    )
+    expect(groups.map((g) => g.key)).toEqual(['repo:r-a', 'repo:r-b'])
   })
 })
 
@@ -185,7 +215,7 @@ describe('rollUpStatus', () => {
 })
 
 describe('flattenGroupOrder', () => {
-  it('is the alphabetical id order across groups', () => {
+  it('is the group order (by label, no repoGroupOrder) with sessions in array order within each group', () => {
     const repos = [repo('r-b', 'broomy'), repo('r-a', 'acme-web')]
     const sessions = [
       mk({ id: '1', repoId: 'r-b', branch: 'b' }),
@@ -193,7 +223,7 @@ describe('flattenGroupOrder', () => {
       mk({ id: '3', repoId: 'r-b', branch: 'a' }),
     ]
     const order = flattenGroupOrder(groupSessionsByRepo(sessions, repos))
-    // acme-web (id 2) first, then broomy: feat 'a' (id 3), 'b' (id 1)
-    expect(order).toEqual(['2', '3', '1'])
+    // acme-web (id 2) first, then broomy in array order: id 1 ('b'), then id 3 ('a')
+    expect(order).toEqual(['2', '1', '3'])
   })
 })
