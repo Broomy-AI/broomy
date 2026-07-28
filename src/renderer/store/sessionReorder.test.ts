@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { useSessionStore } from './sessions'
 import { useRepoStore } from './repos'
+import { scheduleSave } from './configPersistence'
 import type { Session } from './sessions'
 import type { ManagedRepo } from '../../preload/index'
 
@@ -16,6 +17,7 @@ const ids = () => useSessionStore.getState().sessions.map((s) => s.id)
 
 describe('reorderSession', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     useRepoStore.setState({
       repos: [
         { id: 'r1', name: 'One', rootDir: '/repos/one' },
@@ -31,16 +33,19 @@ describe('reorderSession', () => {
   it('moves a session before its target within the group', () => {
     useSessionStore.getState().reorderSession('c', 'a', true)
     expect(ids()).toEqual(['c', 'a', 'x', 'b'])
+    expect(scheduleSave).toHaveBeenCalled()
   })
 
   it('ignores a drop onto a session in another repo group', () => {
     useSessionStore.getState().reorderSession('a', 'x', true)
     expect(ids()).toEqual(['a', 'x', 'b', 'c'])
+    expect(scheduleSave).not.toHaveBeenCalled()
   })
 })
 
 describe('reorderRepoGroup', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     useSessionStore.setState({ repoGroupOrder: [] })
   })
 
@@ -53,6 +58,7 @@ describe('reorderRepoGroup', () => {
       'repo:r1',
       'ungrouped',
     ])
+    expect(scheduleSave).toHaveBeenCalled()
   })
 
   it('ignores a drag onto a key that is not rendered', () => {
@@ -60,5 +66,6 @@ describe('reorderRepoGroup', () => {
       .getState()
       .reorderRepoGroup('repo:r1', 'repo:gone', ['repo:r1', 'repo:r2'], true)
     expect(useSessionStore.getState().repoGroupOrder).toEqual([])
+    expect(scheduleSave).not.toHaveBeenCalled()
   })
 })
