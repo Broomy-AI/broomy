@@ -5,6 +5,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import type { GitFileStatus, GitStatusResult, GitHubPrStatus, GitCommitInfo } from '../../../../../preload/index'
 import type { BranchStatus, PrState } from '../../../../store/sessions'
 import { useRepoStore } from '../../../../store/repos'
+import { computeReviewState } from '../../../../features/git/reviewState'
+import type { ReviewState } from '../../../../features/git/reviewState'
 
 export interface SourceControlDataProps {
   directory?: string
@@ -14,6 +16,7 @@ export interface SourceControlDataProps {
   onUpdatePrState?: (prState: PrState, prNumber?: number, prUrl?: string) => void
   onUpdateFeedbackStatus?: (hasFeedback: boolean) => void
   onUpdateChecksStatus?: (checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
+  onUpdateReviewState?: (reviewState: ReviewState) => void
   repoId?: string
   scView: 'working' | 'branch' | 'commits'
 }
@@ -25,11 +28,13 @@ interface PrEffectsConfig {
   onUpdatePrState?: (prState: PrState, prNumber?: number, prUrl?: string) => void
   onUpdateFeedbackStatus?: (hasFeedback: boolean) => void
   onUpdateChecksStatus?: (checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
+  onUpdateReviewState?: (reviewState: ReviewState) => void
+  approvalPolicy?: 'one' | 'all'
 }
 
 /** PR data-fetching effects, extracted for function size limits. */
 function usePrEffects(config: PrEffectsConfig) {
-  const { directory, syncStatus, branchStatus, onUpdatePrState, onUpdateFeedbackStatus, onUpdateChecksStatus } = config
+  const { directory, syncStatus, branchStatus, approvalPolicy, onUpdatePrState, onUpdateFeedbackStatus, onUpdateChecksStatus, onUpdateReviewState } = config
   const [prStatus, setPrStatus] = useState<GitHubPrStatus>(null)
   const [isPrLoading, setIsPrLoading] = useState(false)
   const [hasWriteAccess, setHasWriteAccess] = useState(false)
@@ -58,17 +63,20 @@ function usePrEffects(config: PrEffectsConfig) {
 
         // Fetch checks + feedback in parallel only if there's an open PR
         if (prResult?.state === 'OPEN') {
-          const [checks, feedback] = await Promise.all([
+          const [checks, feedback, approval] = await Promise.all([
             window.gh.prChecksStatus(directory).catch(() => 'none' as const),
             window.gh.prFeedbackStatus(directory, prResult.number).catch(() => false),
+            window.gh.prApprovalStatus(directory, prResult.number).catch(() => ({ approved: 0, pending: 0, otherReviews: 0 })),
           ])
           setChecksStatus(checks)
           onUpdateChecksStatus?.(checks)
           onUpdateFeedbackStatus?.(feedback)
+          onUpdateReviewState?.(computeReviewState(approval, approvalPolicy ?? 'one'))
         } else {
           setChecksStatus('none')
           onUpdateChecksStatus?.('none')
           onUpdateFeedbackStatus?.(false)
+          onUpdateReviewState?.('none')
         }
       } catch {
         if (cancelled) return
@@ -77,6 +85,7 @@ function usePrEffects(config: PrEffectsConfig) {
         setChecksStatus('none')
         onUpdateChecksStatus?.('none')
         onUpdateFeedbackStatus?.(false)
+        onUpdateReviewState?.('none')
       } finally {
         if (!cancelled) {
           setIsPrLoading(false)
@@ -139,6 +148,7 @@ export function useSourceControlData({
   onUpdatePrState,
   onUpdateFeedbackStatus,
   onUpdateChecksStatus,
+  onUpdateReviewState,
   repoId,
   scView,
 }: SourceControlDataProps) {
@@ -172,12 +182,16 @@ export function useSourceControlData({
   // Track whether we already asked the agent to resolve conflicts
   const [askedAgentToResolve, setAskedAgentToResolve] = useState(false)
 
-  // PR effects
-  const pr = usePrEffects({ directory, syncStatus, branchStatus, onUpdatePrState, onUpdateFeedbackStatus, onUpdateChecksStatus })
-
   // Repo lookup for allowApproveAndMerge
   const repos = useRepoStore((s) => s.repos)
   const currentRepo = repoId ? repos.find((r) => r.id === repoId) : undefined
+
+  // PR effects
+  const pr = usePrEffects({
+    directory, syncStatus, branchStatus,
+    approvalPolicy: currentRepo?.approvalPolicy,
+    onUpdatePrState, onUpdateFeedbackStatus, onUpdateChecksStatus, onUpdateReviewState,
+  })
 
   // Source control computed values
   const stagedFiles = useMemo(() => gitStatus.filter(f => f.staged), [gitStatus])

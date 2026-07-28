@@ -21,6 +21,7 @@ export function RepoSettingsEditor({
   const [allowMerge, setAllowMerge] = useState(repo.allowApproveAndMerge ?? true)
   const [isolated, setIsolated] = useState(repo.isolated ?? false)
   const [skipApproval, setSkipApproval] = useState(repo.skipApproval ?? false)
+  const [approvalPolicy, setApprovalPolicy] = useState<'one' | 'all'>(repo.approvalPolicy ?? 'one')
   const [devcontainerStatus, setDevcontainerStatus] = useState<DevcontainerStatus | null>(null)
   const [hasDevcontainerConfigState, setHasDevcontainerConfig] = useState<boolean | null>(null)
   const [initScript, setInitScript] = useState('')
@@ -65,6 +66,7 @@ export function RepoSettingsEditor({
         allowApproveAndMerge: allowMerge,
         isolated: isolated || undefined,
         skipApproval: skipApproval || undefined,
+        approvalPolicy,
       })
       await window.repos.saveInitScript(repo.id, initScript)
       onClose()
@@ -128,6 +130,18 @@ export function RepoSettingsEditor({
         {writeAccessError && (
           <div className="text-xs text-danger-fg pl-6">{writeAccessError}</div>
         )}
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-xs text-text-secondary">Waiting status clears when</label>
+        <select
+          value={approvalPolicy}
+          onChange={(e) => setApprovalPolicy(e.target.value as 'one' | 'all')}
+          className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary focus:outline-none focus:border-accent"
+        >
+          <option value="one">At least one reviewer approves</option>
+          <option value="all">All requested reviewers approve</option>
+        </select>
       </div>
 
       <IsolationSettings

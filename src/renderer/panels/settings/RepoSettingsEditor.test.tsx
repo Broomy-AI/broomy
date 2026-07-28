@@ -92,7 +92,7 @@ describe('RepoSettingsEditor', () => {
     })
     fireEvent.click(screen.getByText('Save'))
     await waitFor(() => {
-      expect(onUpdate).toHaveBeenCalledWith({ defaultAgentId: undefined, allowApproveAndMerge: true, isolated: undefined, skipApproval: undefined })
+      expect(onUpdate).toHaveBeenCalledWith({ defaultAgentId: undefined, allowApproveAndMerge: true, isolated: undefined, skipApproval: undefined, approvalPolicy: 'one' })
       expect(onClose).toHaveBeenCalled()
     })
   })
@@ -126,10 +126,11 @@ describe('RepoSettingsEditor', () => {
     await waitFor(() => {
       expect(screen.queryByText('Loading...')).toBeNull()
     })
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'agent-1' } })
+    // First combobox is the Default Agent select (the approvalPolicy select is second).
+    fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'agent-1' } })
     fireEvent.click(screen.getByText('Save'))
     await waitFor(() => {
-      expect(onUpdate).toHaveBeenCalledWith({ defaultAgentId: 'agent-1', allowApproveAndMerge: true, isolated: undefined, skipApproval: undefined })
+      expect(onUpdate).toHaveBeenCalledWith({ defaultAgentId: 'agent-1', allowApproveAndMerge: true, isolated: undefined, skipApproval: undefined, approvalPolicy: 'one' })
     })
   })
 
@@ -183,8 +184,24 @@ describe('RepoSettingsEditor', () => {
     await waitFor(() => {
       expect(screen.queryByText('Loading...')).toBeNull()
     })
-    const select = screen.getByRole('combobox')
+    const select = screen.getAllByRole('combobox')[0]
     expect((select as HTMLSelectElement).value).toBe('agent-2')
+  })
+
+  it('reflects and saves the approval policy select', async () => {
+    const onUpdate = vi.fn()
+    renderEditor({ onUpdate, repo: { ...mockRepo, approvalPolicy: 'all' } })
+    await waitFor(() => {
+      expect(screen.queryByText('Loading...')).toBeNull()
+    })
+    // Second combobox is the approvalPolicy select; it should reflect the repo value.
+    const policySelect = screen.getAllByRole('combobox')[1] as HTMLSelectElement
+    expect(policySelect.value).toBe('all')
+    fireEvent.change(policySelect, { target: { value: 'one' } })
+    fireEvent.click(screen.getByText('Save'))
+    await waitFor(() => {
+      expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ approvalPolicy: 'one' }))
+    })
   })
 
   it('renders isolation checkboxes', async () => {

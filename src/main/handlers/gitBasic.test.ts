@@ -12,12 +12,29 @@ const mockGitInstance: Record<string, ReturnType<typeof vi.fn>> = {
   pull: vi.fn(),
   diff: vi.fn(),
   raw: vi.fn(),
+  getRemotes: vi.fn(),
   env: vi.fn().mockImplementation(() => mockGitInstance),
 }
 
 vi.mock('simple-git', () => ({
   default: vi.fn(() => mockGitInstance),
 }))
+
+// Mock child_process so the auth-hint probe on push/pull failure
+// (appendAuthHint → `gh --version`, `gh auth status`, `git config`) never spawns
+// real subprocesses. Without this, `gh auth status` (5s timeout) can exceed the
+// per-test timeout on slow CI runners and flake the git:push/git:pull error tests.
+vi.mock('child_process', () => ({
+  execFile: vi.fn(),
+}))
+
+vi.mock('util', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('util')>()
+  return {
+    ...actual,
+    promisify: (fn: unknown) => fn,
+  }
+})
 
 const mockReadFile = vi.fn()
 vi.mock('fs/promises', () => ({
@@ -50,6 +67,7 @@ vi.mock('./scenarios', async (importOriginal) => {
   }
 })
 
+import { execFile } from 'child_process'
 import { register } from './gitBasic'
 import { E2EScenario, type HandlerContext } from './types'
 
@@ -546,6 +564,32 @@ describe('gitBasic handlers', () => {
       const result = await handlers['git:push'](null, '/repo')
       expect(result).toEqual({ success: false, error: expect.stringContaining('push error') })
     })
+
+    it('appends an auth hint when push fails with an auth error and gh is unavailable', async () => {
+      mockGitInstance.push.mockRejectedValue(new Error('fatal: Authentication failed for repo'))
+      mockGitInstance.getRemotes.mockResolvedValue([])
+      // gh --version throws (gh unavailable); git config returns no credential helper.
+      vi.mocked(execFile).mockImplementation(((cmd: string) => {
+        if (cmd === 'gh') throw new Error('gh: command not found')
+        return { stdout: '' }
+      }) as never)
+      const handlers = setupHandlers()
+      const result = await handlers['git:push'](null, '/repo')
+      expect(result.success).toBe(false)
+      // The original error survives, and an auth hint is appended (longer than the raw error).
+      expect(result.error).toContain('Authentication failed')
+      expect(result.error!.length).toBeGreaterThan('fatal: Authentication failed for repo'.length)
+    })
+
+    it('resolves the origin push URL when building the auth hint on failure', async () => {
+      mockGitInstance.push.mockRejectedValue(new Error('push error'))
+      mockGitInstance.getRemotes.mockResolvedValue([{ name: 'origin', refs: { push: 'https://github.com/o/r.git' } }])
+      vi.mocked(execFile).mockReturnValue({ stdout: '' } as never)
+      const handlers = setupHandlers()
+      const result = await handlers['git:push'](null, '/repo')
+      expect(result).toEqual({ success: false, error: expect.stringContaining('push error') })
+      expect(mockGitInstance.getRemotes).toHaveBeenCalledWith(true)
+    })
   })
 
   describe('git:pull', () => {
@@ -651,6 +695,22 @@ describe('gitBasic handlers', () => {
 
     it('returns empty string in E2E mode', async () => {
       const handlers = setupHandlers(createMockCtx({ isE2ETest: true }))
+      const result = await handlers['git:showBase64'](null, '/repo', 'image.png')
+      expect(result).toBe('')
+    })
+
+    it('returns base64 of the file contents in normal mode', async () => {
+      const bytes = Buffer.from('hello world')
+      vi.mocked(execFile).mockReturnValue({ stdout: bytes } as never)
+      const handlers = setupHandlers()
+      const result = await handlers['git:showBase64'](null, '/repo', 'image.png', 'abc123')
+      expect(result).toBe(bytes.toString('base64'))
+    })
+
+    it('returns empty string when the git show subprocess fails', async () => {
+      allowConsoleError()
+      vi.mocked(execFile).mockImplementation((() => { throw new Error('no such ref') }) as never)
+      const handlers = setupHandlers()
       const result = await handlers['git:showBase64'](null, '/repo', 'image.png')
       expect(result).toBe('')
     })

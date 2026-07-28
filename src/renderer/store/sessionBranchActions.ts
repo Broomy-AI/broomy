@@ -2,12 +2,13 @@
  * Session store actions for branch status, PR state, and session lifecycle.
  */
 import type { Session, BranchStatus, PrState } from './sessions'
+import type { ReviewState } from '../features/git/reviewState'
 import { computeStatusChip } from '../features/git/branchStatus'
 import { debouncedSave } from './sessionPersistence'
 
 /** Recompute statusChip from current session fields. */
 function recomputeStatusChip(s: Session): Session {
-  const statusChip = computeStatusChip(s.branchStatus, s.hasFeedback, s.checksStatus)
+  const statusChip = computeStatusChip(s.branchStatus, s.hasFeedback, s.checksStatus, s.reviewState)
   return statusChip !== s.statusChip ? { ...s, statusChip } : s
 }
 
@@ -118,6 +119,16 @@ export function createBranchActions(get: StoreGet, set: StoreSet) {
       if (!session || session.checksStatus === checksStatus) return
       const updatedSessions = sessions.map((s) =>
         s.id === sessionId ? recomputeStatusChip({ ...s, checksStatus }) : s
+      )
+      set({ sessions: updatedSessions })
+    },
+
+    updateReviewState: (sessionId: string, reviewState: ReviewState) => {
+      const { sessions } = get()
+      const session = sessions.find((s) => s.id === sessionId)
+      if (!session || session.reviewState === reviewState) return
+      const updatedSessions = sessions.map((s) =>
+        s.id === sessionId ? recomputeStatusChip({ ...s, reviewState }) : s
       )
       set({ sessions: updatedSessions })
     },

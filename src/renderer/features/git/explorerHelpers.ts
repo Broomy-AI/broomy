@@ -86,7 +86,9 @@ export function isPrOpen(prState?: string): boolean {
  */
 export function prStateBadgeClass(state: string): string {
   switch (state) {
-    case 'OPEN': return 'bg-success-base/20 text-success-fg'
+    // PR OPEN uses the informational (blue) family so it stays distinct from the
+    // green APPROVED chip — green is reserved for "review bar met".
+    case 'OPEN': return 'bg-info-base/20 text-info-fg'
     case 'MERGED': return 'bg-review-base/20 text-review-fg'
     default: return 'bg-danger-base/20 text-danger-fg'
   }
@@ -100,7 +102,9 @@ export function prStateBadgeClass(state: string): string {
 export const branchStatusBadge: Record<string, { label: string; classes: string }> = {
   pushed: { label: 'PUSHED', classes: 'bg-info-base/20 text-info-fg' },
   empty: { label: 'EMPTY', classes: 'bg-muted/20 text-text-secondary' },
-  open: { label: 'PR OPEN', classes: 'bg-success-base/20 text-success-fg' },
+  open: { label: 'PR OPEN', classes: 'bg-info-base/20 text-info-fg' },
+  waiting: { label: 'WAITING', classes: 'bg-muted/20 text-text-secondary' },
+  approved: { label: 'APPROVED', classes: 'bg-success-base/20 text-success-fg' },
   feedback: { label: 'FEEDBACK', classes: 'bg-attention-base/20 text-attention-fg' },
   failed: { label: 'FAILED', classes: 'bg-danger-base/20 text-danger-fg' },
   merged: { label: 'MERGED', classes: 'bg-review-base/20 text-review-fg' },
@@ -114,7 +118,7 @@ export const branchStatusBadge: Record<string, { label: string; classes: string 
  * reports the PR).
  */
 export const prStateBadge: Record<'OPEN' | 'MERGED' | 'CLOSED', { label: string; classes: string }> = {
-  OPEN: { label: 'PR OPEN', classes: 'bg-success-base/20 text-success-fg' },
+  OPEN: { label: 'PR OPEN', classes: 'bg-info-base/20 text-info-fg' },
   MERGED: { label: 'MERGED', classes: 'bg-review-base/20 text-review-fg' },
   CLOSED: { label: 'CLOSED', classes: 'bg-danger-base/20 text-danger-fg' },
 }

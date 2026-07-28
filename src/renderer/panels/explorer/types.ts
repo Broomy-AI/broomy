@@ -24,6 +24,7 @@ export interface ExplorerProps {
   onUpdatePrState?: (prState: PrState, prNumber?: number, prUrl?: string) => void
   onUpdateFeedbackStatus?: (hasFeedback: boolean) => void
   onUpdateChecksStatus?: (checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
+  onUpdateReviewState?: (reviewState: import('../../features/git/reviewState').ReviewState) => void
   repoId?: string
   agentPtyId?: string
   // Review tab data

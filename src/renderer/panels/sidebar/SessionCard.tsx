@@ -11,7 +11,7 @@ import { useShallow } from 'zustand/react/shallow'
 import type { SessionStatus, StatusChip } from '../../store/sessions'
 import { formatElapsedTime } from '../../shared/utils/formatTime'
 import { useElapsedSeconds } from '../../shared/hooks/useElapsedSeconds'
-import { branchStatusBadge } from '../../features/git/explorerHelpers'
+import { deriveDisplayedChip } from '../../features/git/displayedChip'
 import { ReviewStatusChip } from '../../shared/components/ReviewStatusChip'
 import { StatusIndicator } from './StatusIndicator'
 
@@ -23,11 +23,11 @@ const statusLabels: Record<SessionStatus, string> = {
 }
 
 function StatusChipBadge({ status }: { status: StatusChip }) {
-  if (status === 'in-progress') return null
-  const { label, classes } = branchStatusBadge[status]
+  const badge = deriveDisplayedChip(status, undefined, undefined)
+  if (!badge) return null
   return (
-    <span className={`text-3xs px-1.5 py-0.5 rounded font-medium leading-none ${classes}`}>
-      {label}
+    <span className={`text-3xs px-1.5 py-0.5 rounded font-medium leading-none ${badge.classes}`}>
+      {badge.label}
     </span>
   )
 }

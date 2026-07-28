@@ -124,6 +124,7 @@ const mockGh: Mocked<GhApi> = {
   hasWriteAccess: vi.fn().mockResolvedValue(false),
   prChecksStatus: vi.fn().mockResolvedValue('none'),
   prFeedbackStatus: vi.fn().mockResolvedValue(false),
+  prApprovalStatus: vi.fn().mockResolvedValue({ approved: 0, pending: 0, otherReviews: 0 }),
   getPrCreateUrl: vi.fn().mockResolvedValue(null),
   prComments: vi.fn().mockResolvedValue([]),
   prDescription: vi.fn().mockResolvedValue(null),

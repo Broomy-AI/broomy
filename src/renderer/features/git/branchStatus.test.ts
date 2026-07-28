@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeBranchStatus, type BranchStatusInput } from './branchStatus'
+import { computeBranchStatus, computeStatusChip, type BranchStatusInput } from './branchStatus'
 
 function makeInput(overrides: Partial<BranchStatusInput> = {}): BranchStatusInput {
   return {
@@ -187,5 +187,35 @@ describe('computeBranchStatus', () => {
       isMergedToMain: true,
       hasHadCommits: true,
     }))).toBe('in-progress')
+  })
+})
+
+describe('computeStatusChip — waiting/approved', () => {
+  it('returns waiting when open, no feedback/failure, reviewState waiting', () => {
+    expect(computeStatusChip('open', false, 'passed', 'waiting')).toBe('waiting')
+  })
+
+  it('returns approved when open, no feedback/failure, reviewState approved', () => {
+    expect(computeStatusChip('open', false, 'passed', 'approved')).toBe('approved')
+  })
+
+  it('feedback outranks approved', () => {
+    expect(computeStatusChip('open', true, 'passed', 'approved')).toBe('feedback')
+  })
+
+  it('failed outranks approved', () => {
+    expect(computeStatusChip('open', false, 'failed', 'approved')).toBe('failed')
+  })
+
+  it('approved outranks waiting is moot; approved shown over plain open', () => {
+    expect(computeStatusChip('open', false, 'none', 'approved')).toBe('approved')
+  })
+
+  it('reviewState is ignored when branch is not open', () => {
+    expect(computeStatusChip('pushed', false, 'none', 'approved')).toBe('pushed')
+  })
+
+  it('defaults reviewState to none (back-compat, no arg)', () => {
+    expect(computeStatusChip('open', false, 'none')).toBe('open')
   })
 })
