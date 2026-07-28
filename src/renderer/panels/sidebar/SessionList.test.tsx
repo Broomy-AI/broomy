@@ -4,6 +4,7 @@ import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/re
 import '../../../test/react-setup'
 import SessionList from './SessionList'
 import { useSessionStore } from '../../store/sessions'
+import { useErrorStore } from '../../store/errors'
 import type { Session, StatusChip } from '../../store/sessions'
 
 function makeSession(overrides: Partial<Session> = {}): Session {
@@ -73,6 +74,7 @@ afterEach(() => {
 beforeEach(() => {
   vi.clearAllMocks()
   useSessionStore.setState({ sessions: [], activeSessionId: null })
+  useErrorStore.setState({ detailError: null })
 })
 
 describe('SessionList', () => {
@@ -447,6 +449,50 @@ describe('SessionList', () => {
       fireEvent.contextMenu(container.querySelector('[data-session-card]')!)
       await new Promise((r) => setTimeout(r, 0))
       expect(window.shell.openInFileManager).not.toHaveBeenCalled()
+    })
+
+    it('surfaces an OS failure instead of silently doing nothing', async () => {
+      vi.mocked(window.menu.popup).mockResolvedValueOnce('open-in-file-manager')
+      vi.mocked(window.shell.openInFileManager).mockResolvedValueOnce({ action: 'failed', error: 'No application set' })
+      setSessions([makeSession({ id: 's1', branch: 'b1', directory: '/repos/proj/gone' })])
+      const { container } = render(<SessionList {...makeProps()} />)
+
+      fireEvent.contextMenu(container.querySelector('[data-session-card]')!)
+
+      await waitFor(() => expect(useErrorStore.getState().detailError?.detail).toBe('No application set'))
+    })
+
+    it('surfaces a missing folder, whose result carries no error string', async () => {
+      vi.mocked(window.menu.popup).mockResolvedValueOnce('open-in-file-manager')
+      vi.mocked(window.shell.openInFileManager).mockResolvedValueOnce({ action: 'none' })
+      setSessions([makeSession({ id: 's1', branch: 'b1', directory: '/repos/proj/gone' })])
+      const { container } = render(<SessionList {...makeProps()} />)
+
+      fireEvent.contextMenu(container.querySelector('[data-session-card]')!)
+
+      await waitFor(() => expect(useErrorStore.getState().detailError?.detail).toContain('/repos/proj/gone'))
+    })
+
+    it('reports nothing when the folder is revealed rather than opened (a bundle)', async () => {
+      vi.mocked(window.menu.popup).mockResolvedValueOnce('open-in-file-manager')
+      vi.mocked(window.shell.openInFileManager).mockResolvedValueOnce({ action: 'revealed' })
+      setSessions([makeSession({ id: 's1', branch: 'b1' })])
+      const { container } = render(<SessionList {...makeProps()} />)
+
+      fireEvent.contextMenu(container.querySelector('[data-session-card]')!)
+      await waitFor(() => expect(window.shell.openInFileManager).toHaveBeenCalled())
+      expect(useErrorStore.getState().detailError).toBeNull()
+    })
+
+    it('surfaces a rejected IPC call rather than leaving an unhandled rejection', async () => {
+      vi.mocked(window.menu.popup).mockResolvedValueOnce('open-in-file-manager')
+      vi.mocked(window.shell.openInFileManager).mockRejectedValueOnce(new Error('ipc down'))
+      setSessions([makeSession({ id: 's1', branch: 'b1' })])
+      const { container } = render(<SessionList {...makeProps()} />)
+
+      fireEvent.contextMenu(container.querySelector('[data-session-card]')!)
+
+      await waitFor(() => expect(useErrorStore.getState().detailError?.detail).toContain('ipc down'))
     })
 
     it('right-click does not select the session', () => {

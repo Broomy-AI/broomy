@@ -15,6 +15,24 @@ import { branchStatusBadge } from '../../features/git/explorerHelpers'
 import { ReviewStatusChip } from '../../shared/components/ReviewStatusChip'
 import { StatusIndicator } from './StatusIndicator'
 import { fileManagerName } from '../../shared/utils/platform'
+import { useErrorStore } from '../../store/errors'
+
+/**
+ * Surface a failed "Open in <file manager>". The user asked for something visible to happen, so a
+ * dropped result would read as a broken menu item; `detail` covers the common case of a worktree
+ * that no longer exists on disk.
+ */
+function reportOpenFailure(directory: string, error?: string): void {
+  useErrorStore.getState().showErrorDetail({
+    id: `open-in-file-manager-${Date.now()}`,
+    message: error ?? `${directory} could not be opened`,
+    displayMessage: `Could not open this session's folder in ${fileManagerName}`,
+    detail: error ?? `${directory} is not a folder on disk — the worktree may have been deleted.`,
+    scope: 'app',
+    dismissed: false,
+    timestamp: Date.now(),
+  })
+}
 
 const statusLabels: Record<SessionStatus, string> = {
   working: 'Working',
@@ -95,15 +113,23 @@ export default memo(function SessionCard({
   const isUnread = session.isUnread
 
   // Right-click → native context menu → open the session's worktree folder in the OS file manager.
-  const handleContextMenu = async (e: React.MouseEvent) => {
+  const directory = session.directory
+  const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    const choice = await window.menu.popup([
-      { id: 'open-in-file-manager', label: `Open in ${fileManagerName}` },
-    ])
-    if (choice === 'open-in-file-manager') {
-      void window.shell.openInFileManager(session.directory)
-    }
+    void (async () => {
+      const choice = await window.menu.popup([
+        { id: 'open-in-file-manager', label: `Open in ${fileManagerName}` },
+      ])
+      if (choice !== 'open-in-file-manager') return
+      const result = await window.shell.openInFileManager(directory)
+      // 'opened'/'revealed' are both successes. Report the rest: 'failed' is an OS error, and
+      // 'none' means the folder is gone (common on an archived session whose worktree was
+      // deleted). Staying silent would make the menu item look dead.
+      if (result.action !== 'opened' && result.action !== 'revealed') {
+        reportOpenFailure(directory, result.error)
+      }
+    })().catch((err: unknown) => reportOpenFailure(directory, String(err)))
   }
 
   return (

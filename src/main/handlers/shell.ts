@@ -169,11 +169,20 @@ async function openPathHandler(ctx: HandlerContext, rawPath: unknown, baseCwd: u
 }
 
 /**
+ * Directories macOS treats as opaque, executable bundles: `shell.openPath` *launches* one instead
+ * of showing its contents. A worktree named `foo.app` (a branch slug can produce that) must never
+ * be a way to run something, so these are revealed in their parent instead. The check is
+ * platform-independent — revealing is harmless on Linux/Windows and keeps behaviour uniform.
+ */
+const BUNDLE_EXTENSIONS = new Set(['.app', '.bundle', '.pkg', '.framework', '.plugin', '.kext', '.dsym'])
+
+/**
  * Open a directory's *contents* in the OS file manager (Finder / Explorer / Files). Used by the
- * session card's right-click "Open in <file manager>". Distinct from `shell:openPath`, which
- * *reveals* a directory (selects it in its parent) — here we open the folder itself. `stat`
- * follows symlinks so a symlinked worktree still opens, and only directories are opened (never a
- * stray file). Returns an `OpenPathResult` so the renderer can surface a real failure.
+ * session card's right-click "Open in <file manager>". Distinct from `shell:openPath` above —
+ * see that handler for the reveal-vs-open split; here we open the folder itself rather than
+ * selecting it in its parent. `stat` follows symlinks so a symlinked worktree still opens, and
+ * only directories are opened (never a stray file, never a bundle). Returns an `OpenPathResult`
+ * so the renderer can surface a real failure.
  */
 async function openInFileManagerHandler(ctx: HandlerContext, rawPath: unknown): Promise<OpenPathResult> {
   if (ctx.isE2ETest) return { action: 'none' }
@@ -194,6 +203,10 @@ async function openInFileManagerHandler(ctx: HandlerContext, rawPath: unknown): 
   if (!stats.isDirectory()) return { action: 'none' }
 
   try {
+    if (BUNDLE_EXTENSIONS.has(extname(abs).toLowerCase())) {
+      shell.showItemInFolder(abs)
+      return { action: 'revealed' }
+    }
     const error = await shell.openPath(abs)
     return error ? { action: 'failed', error } : { action: 'opened' }
   } catch (err) {

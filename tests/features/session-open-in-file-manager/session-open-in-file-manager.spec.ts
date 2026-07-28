@@ -4,8 +4,12 @@
  * Right-clicking a session card opens a native context menu whose "Open in Finder /
  * Explorer / File Manager" item opens that session's worktree folder in the OS file
  * manager. The menu itself is a native OS popup rendered outside the page, so Playwright
- * can neither screenshot nor safely trigger it (doing so would block on a native menu).
- * This walkthrough therefore documents the affordance on the session card.
+ * can neither screenshot nor safely trigger it (doing so would block on a native menu). The
+ * action behind it is not observable here either: `shell:openInFileManager` no-ops under E2E,
+ * exactly as `shell:openPath` does. Both are covered by unit tests instead —
+ * `src/renderer/panels/sidebar/SessionList.test.tsx` for the right-click flow and
+ * `src/main/handlers/shell.test.ts` for the handler. This walkthrough documents the
+ * affordance on the session card.
  *
  * Run with: pnpm test:feature-docs
  */
@@ -47,7 +51,6 @@ test.afterAll(async () => {
     FEATURE_DIR,
   )
   await generateIndex(FEATURES_ROOT)
-
 })
 
 test.describe.serial('Feature: Open Session Folder in File Manager', () => {

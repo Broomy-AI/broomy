@@ -905,6 +905,23 @@ describe('shell handlers', () => {
       // Opens the folder itself — never the "reveal in parent" path.
       expect(mockShowItemInFolder).not.toHaveBeenCalled()
     })
+    it('reveals a bundle directory instead of launching it', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      mockStat.mockResolvedValue({ isDirectory: () => true })
+      // A worktree named `foo.app` is still a directory — but openPath would *run* it on macOS.
+      expect(await handlers['shell:openInFileManager'](mockEvent, '/repo/Foo.App')).toEqual({ action: 'revealed' })
+      expect(mockShowItemInFolder).toHaveBeenCalledWith('/repo/Foo.App')
+      expect(mockShellOpenPath).not.toHaveBeenCalled()
+    })
+    it('opens an ordinary directory whose name merely contains a dot', async () => {
+      const { register } = await import('./shell')
+      register(mockIpcMain as never, createCtx())
+      mockStat.mockResolvedValue({ isDirectory: () => true })
+      mockShellOpenPath.mockResolvedValue('')
+      expect(await handlers['shell:openInFileManager'](mockEvent, '/repo/release-1.2')).toEqual({ action: 'opened' })
+      expect(mockShowItemInFolder).not.toHaveBeenCalled()
+    })
     it('returns none for a non-directory (a file), without opening it', async () => {
       const { register } = await import('./shell')
       register(mockIpcMain as never, createCtx())
