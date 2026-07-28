@@ -20,6 +20,7 @@ export function useSessionGrouping(
   const resolvedTheme = useSettingsStore((s) => s.resolvedTheme)
   const railColored = useSettingsStore((s) => s.appearance.sidebarRailColored)
   const collapsedRepoGroups = useSessionStore((s) => s.collapsedRepoGroups)
+  const repoGroupOrder = useSessionStore((s) => s.repoGroupOrder)
   const setRepoGroupCollapsed = useSessionStore((s) => s.setRepoGroupCollapsed)
   const setSidebarOrder = useSessionStore((s) => s.setSidebarOrder)
   const collapsedSet = useMemo(() => new Set(collapsedRepoGroups), [collapsedRepoGroups])
@@ -37,10 +38,13 @@ export function useSessionGrouping(
 
   // Grouped view is built from ALL non-archived sessions; the search render uses the
   // filtered subset flattened alphabetically.
-  const groups = useMemo(() => groupSessionsByRepo(allActive, repos), [allActive, repos])
+  const groups = useMemo(
+    () => groupSessionsByRepo(allActive, repos, repoGroupOrder),
+    [allActive, repos, repoGroupOrder],
+  )
   const orderedSessions = useMemo(
-    () => groupSessionsByRepo(activeSessions, repos).flatMap((g) => g.sessions),
-    [activeSessions, repos],
+    () => groupSessionsByRepo(activeSessions, repos, repoGroupOrder).flatMap((g) => g.sessions),
+    [activeSessions, repos, repoGroupOrder],
   )
   const archivedRollup = useMemo(() => rollUpStatus(archivedSessions), [archivedSessions])
 
