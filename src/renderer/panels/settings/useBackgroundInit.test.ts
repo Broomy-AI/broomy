@@ -197,7 +197,7 @@ describe('useBackgroundInit', () => {
       })
 
       await vi.waitFor(() => {
-        expect(window.shell.exec).toHaveBeenCalledWith('npm install', '/repos/proj/feat')
+        expect(window.shell.exec).toHaveBeenCalledWith('npm install', '/repos/proj/feat', expect.objectContaining({ BROOMY_BRANCH: expect.any(String) }))
         expect(deps.finalizeSession).toHaveBeenCalled()
       })
     })
@@ -318,7 +318,7 @@ describe('useBackgroundInit', () => {
       })
 
       await vi.waitFor(() => {
-        expect(window.shell.exec).toHaveBeenCalledWith('pnpm install', '/repos/proj/existing')
+        expect(window.shell.exec).toHaveBeenCalledWith('pnpm install', '/repos/proj/existing', expect.objectContaining({ BROOMY_BRANCH: expect.any(String) }))
         expect(deps.finalizeSession).toHaveBeenCalled()
       })
     })

@@ -260,3 +260,23 @@ describe('RepoSettingsEditor', () => {
     expect(screen.getByText('Saving...')).toBeTruthy()
   })
 })
+
+describe('RepoSettingsEditor template variables', () => {
+  it('inserts the $BROOMY_ form into the init script', async () => {
+    render(<RepoSettingsEditor repo={mockRepo} agents={[]} onUpdate={vi.fn()} onClose={vi.fn()} />)
+    const textarea = await screen.findByPlaceholderText(/Commands to run when starting a session/)
+    fireEvent.change(textarea, { target: { value: 'echo ' } })
+    ;(textarea as HTMLTextAreaElement).setSelectionRange(5, 5)
+    fireEvent.click(screen.getByTestId('open-template-vars-init-script'))
+    fireEvent.click(await screen.findByText('$BROOMY_BRANCH'))
+    expect(textarea).toHaveValue('echo $BROOMY_BRANCH')
+  })
+
+  it('dims variables that are not set when the init script runs', async () => {
+    render(<RepoSettingsEditor repo={mockRepo} agents={[]} onUpdate={vi.fn()} onClose={vi.fn()} />)
+    await screen.findByPlaceholderText(/Commands to run when starting a session/)
+    fireEvent.click(screen.getByTestId('open-template-vars-init-script'))
+    expect(await screen.findByText('$BROOMY_PR_TITLE')).toBeInTheDocument()
+    expect(screen.getAllByText('not set when the init script runs').length).toBeGreaterThan(0)
+  })
+})
