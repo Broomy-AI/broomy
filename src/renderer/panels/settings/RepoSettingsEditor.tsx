@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react'
 import type { AgentConfig } from '../../store/agents'
 import type { ManagedRepo, DevcontainerStatus } from '../../../preload/index'
 import { IsolationSettings } from '../../shared/components/IsolationSettings'
-import { TemplateVarsModal } from '../../shared/components/TemplateVarsModal'
+import { TemplateVarsModal, TemplateVarsButton } from '../../shared/components/TemplateVarsModal'
 import { useInsertAtCursor } from '../../shared/hooks/useInsertAtCursor'
 
 export function RepoSettingsEditor({
@@ -163,15 +163,10 @@ export function RepoSettingsEditor({
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <label className="text-xs text-text-secondary">Init Script (runs when session starts)</label>
-          <button
-            type="button"
+          <TemplateVarsButton
             onClick={() => setShowVars(true)}
-            className="text-2xs text-text-tertiary hover:text-text-primary transition-colors"
-            title="Insert a template variable"
-            data-testid="open-template-vars-init-script"
-          >
-            {'{} Vars'}
-          </button>
+            testId="open-template-vars-init-script"
+          />
         </div>
         {loadingScript ? (
           <div className="text-xs text-text-secondary">Loading...</div>

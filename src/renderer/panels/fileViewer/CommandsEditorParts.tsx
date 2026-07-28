@@ -5,7 +5,7 @@ import { useState } from 'react'
 import type { ArgSpec } from '../../features/commands/commandsConfig'
 import type { TemplateArg } from '../../features/commands/templateParser'
 import type { TemplateVarInput } from '../../features/commands/templateVars'
-import { TemplateVarsModal } from '../../shared/components/TemplateVarsModal'
+import { TemplateVarsModal, TemplateVarsButton } from '../../shared/components/TemplateVarsModal'
 import { useInsertAtCursor } from '../../shared/hooks/useInsertAtCursor'
 
 type Tab = 'user' | 'project'
@@ -327,15 +327,11 @@ export function CommandExpandedEditor({
         />
         <div className="px-4 py-2 border-t border-border text-2xs text-text-tertiary flex items-center justify-between gap-2">
           <span>Use {'{name}'} for args; {'--flag {name}'} makes the arg optional. Changes save as you type.</span>
-          <button
-            type="button"
+          <TemplateVarsButton
             onClick={() => setShowVars(true)}
-            className="text-2xs text-text-tertiary hover:text-text-primary transition-colors shrink-0"
-            title="Insert a template variable"
-            data-testid="open-template-vars-expanded"
-          >
-            {'{} Vars'}
-          </button>
+            testId="open-template-vars-expanded"
+            className="shrink-0"
+          />
         </div>
 
         {showVars && (

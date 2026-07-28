@@ -27,7 +27,7 @@ export interface TemplateVarInput {
   session?: Session
   repo?: TemplateVarRepo
   syncStatus?: GitStatusResult | null
-  directory: string
+  directory?: string
   branchBaseName?: string
   /** Issue data for call sites that run before the session exists. */
   issue?: { number?: number; title?: string; url?: string }

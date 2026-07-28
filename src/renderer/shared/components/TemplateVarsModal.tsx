@@ -17,6 +17,27 @@ export function insertionTextFor(def: TemplateVarDef, surface: TemplateVarSurfac
   return surface === 'command' || surface === 'envValue' ? `{${def.name}}` : `$${def.envName}`
 }
 
+/** The affordance that opens the picker. Identical on every surface bar its test id. */
+export function TemplateVarsButton({
+  onClick, testId, className = '',
+}: {
+  onClick: () => void
+  testId: string
+  className?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`text-2xs text-text-tertiary hover:text-text-primary transition-colors ${className}`}
+      title="Insert a template variable"
+      data-testid={testId}
+    >
+      {'{} Vars'}
+    </button>
+  )
+}
+
 interface TemplateVarsModalProps {
   surface: TemplateVarSurface
   varInput: TemplateVarInput

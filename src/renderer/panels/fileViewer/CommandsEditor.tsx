@@ -17,7 +17,7 @@ import {
 import { getUserCommandsConfigPath, userCommandsDir } from '../../features/commands/userConfigPath'
 import { parseTemplate } from '../../features/commands/templateParser'
 import { ShowWhenPicker } from '../../shared/components/ShowWhenPicker'
-import { TemplateVarsModal } from '../../shared/components/TemplateVarsModal'
+import { TemplateVarsModal, TemplateVarsButton } from '../../shared/components/TemplateVarsModal'
 import type { TemplateVarInput } from '../../features/commands/templateVars'
 import { useInsertAtCursor } from '../../shared/hooks/useInsertAtCursor'
 import { useSessionStore } from '../../store/sessions'
@@ -375,15 +375,10 @@ function Detail({
         }
         action={
           <div className="flex items-center gap-2">
-            <button
-              type="button"
+            <TemplateVarsButton
               onClick={() => setShowVars(true)}
-              className="text-2xs text-text-tertiary hover:text-text-primary transition-colors"
-              title="Insert a template variable"
-              data-testid="open-template-vars"
-            >
-              {'{} Vars'}
-            </button>
+              testId="open-template-vars"
+            />
             <button
               type="button"
               onClick={() => setCommandExpanded(true)}

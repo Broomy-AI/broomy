@@ -122,7 +122,7 @@ describe('buildTemplateEnv', () => {
 
 describe('robustness', () => {
   it('does not throw when directory is absent', () => {
-    const vars = buildTemplateVars({} as never)
+    const vars = buildTemplateVars({})
     expect(vars.directory).toBe('')
     expect(vars.folderName).toBe('')
   })

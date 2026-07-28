@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { TemplateVarsModal } from '../../shared/components/TemplateVarsModal'
+import { TemplateVarsModal, TemplateVarsButton } from '../../shared/components/TemplateVarsModal'
 import { useInsertAtCursor } from '../../shared/hooks/useInsertAtCursor'
 
 /**
@@ -28,15 +28,11 @@ export function AgentCommandField({
           placeholder="Command (e.g., claude)"
           className="flex-1 px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent"
         />
-        <button
-          type="button"
+        <TemplateVarsButton
           onClick={() => setShowVars(true)}
-          className="px-2 py-2 text-2xs text-text-tertiary hover:text-text-primary transition-colors shrink-0"
-          title="Insert a template variable"
-          data-testid="open-template-vars-agent-command"
-        >
-          {'{} Vars'}
-        </button>
+          testId="open-template-vars-agent-command"
+          className="px-2 py-2 shrink-0"
+        />
       </div>
       {showVars && (
         <TemplateVarsModal
