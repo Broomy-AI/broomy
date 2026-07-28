@@ -177,6 +177,29 @@ describe('useBackgroundInit', () => {
         extra: expect.objectContaining({ issueNumber: 42, issueTitle: 'Fix bug', issueUrl: 'https://github.com/org/repo/issues/42' }),
       }))
     })
+
+    it('nests the worktree under issue/ for an issue-derived branch name', async () => {
+      const deps = makeDeps()
+      const { result } = renderHook(() => useBackgroundInit(deps))
+
+      act(() => {
+        result.current.handleStartBranchSession({
+          repo: { id: 'r1', rootDir: '/repos/proj', defaultBranch: 'main' },
+          branchName: 'issue/42-fix-login-bug',
+          agentId: null,
+          issue: { number: 42, title: 'Fix login bug', url: 'https://github.com/org/repo/issues/42' },
+        })
+      })
+
+      await vi.waitFor(() => {
+        expect(window.git.worktreeAdd).toHaveBeenCalledWith(
+          '/repos/proj/main',
+          '/repos/proj/issue/42-fix-login-bug',
+          'issue/42-fix-login-bug',
+          'main',
+        )
+      })
+    })
   })
 
   describe('handleStartExistingBranchSession', () => {
