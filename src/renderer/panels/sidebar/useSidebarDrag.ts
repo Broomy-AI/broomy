@@ -37,20 +37,28 @@ function isBefore(e: React.DragEvent): boolean {
   return e.clientY < rect.top + rect.height / 2
 }
 
+/**
+ * Not curried by kind: a curried factory (`useCallback((kind) => (e, id) => {...})`)
+ * only memoizes the outer function — calling it per-render to build `sessionDrag` /
+ * `groupDrag` still returns a fresh inner closure every time, which defeats
+ * `React.memo` on consumers like `SessionCard`. Defining each handler directly with
+ * its own `useCallback` (mirroring the `TabbedTerminal.tsx` precedent) keeps them
+ * genuinely stable across renders where their dependencies haven't changed.
+ */
 export function useSidebarDrag(enabled: boolean, renderedGroupKeys: string[]) {
   const reorderSession = useSessionStore((s) => s.reorderSession)
   const reorderRepoGroup = useSessionStore((s) => s.reorderRepoGroup)
   const [dragging, setDragging] = useState<{ id: string; kind: DropKind } | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
 
-  const start = useCallback((kind: DropKind) => (e: React.DragEvent, id: string) => {
+  const startDrag = useCallback((kind: DropKind, e: React.DragEvent, id: string) => {
     if (!enabled) { e.preventDefault(); return }
     setDragging({ id, kind })
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', id)
   }, [enabled])
 
-  const over = useCallback((kind: DropKind) => (e: React.DragEvent, id: string) => {
+  const dragOver = useCallback((kind: DropKind, e: React.DragEvent, id: string) => {
     if (!enabled || !dragging || dragging.kind !== kind) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
@@ -60,7 +68,7 @@ export function useSidebarDrag(enabled: boolean, renderedGroupKeys: string[]) {
 
   const leave = useCallback(() => setDropTarget(null), [])
 
-  const drop = useCallback((kind: DropKind) => (e: React.DragEvent, id: string) => {
+  const performDrop = useCallback((kind: DropKind, e: React.DragEvent, id: string) => {
     if (!enabled || !dragging || dragging.kind !== kind) return
     e.preventDefault()
     e.stopPropagation()
@@ -77,19 +85,27 @@ export function useSidebarDrag(enabled: boolean, renderedGroupKeys: string[]) {
     setDropTarget(null)
   }, [])
 
+  const handleSessionDragStart = useCallback((e: React.DragEvent, id: string) => startDrag('session', e, id), [startDrag])
+  const handleSessionDragOver = useCallback((e: React.DragEvent, id: string) => dragOver('session', e, id), [dragOver])
+  const handleSessionDrop = useCallback((e: React.DragEvent, id: string) => performDrop('session', e, id), [performDrop])
+
+  const handleGroupDragStart = useCallback((e: React.DragEvent, id: string) => startDrag('group', e, id), [startDrag])
+  const handleGroupDragOver = useCallback((e: React.DragEvent, id: string) => dragOver('group', e, id), [dragOver])
+  const handleGroupDrop = useCallback((e: React.DragEvent, id: string) => performDrop('group', e, id), [performDrop])
+
   const sessionDrag: DragHandlers = {
-    onDragStart: start('session'),
-    onDragOver: over('session'),
+    onDragStart: handleSessionDragStart,
+    onDragOver: handleSessionDragOver,
     onDragLeave: leave,
-    onDrop: drop('session'),
+    onDrop: handleSessionDrop,
     onDragEnd: end,
   }
 
   const groupDrag: DragHandlers = {
-    onDragStart: start('group'),
-    onDragOver: over('group'),
+    onDragStart: handleGroupDragStart,
+    onDragOver: handleGroupDragOver,
     onDragLeave: leave,
-    onDrop: drop('group'),
+    onDrop: handleGroupDrop,
     onDragEnd: end,
   }
 

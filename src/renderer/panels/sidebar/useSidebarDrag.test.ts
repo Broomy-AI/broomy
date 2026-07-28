@@ -147,4 +147,34 @@ describe('useSidebarDrag', () => {
     expect(reorderSession).not.toHaveBeenCalled()
     expect(reorderRepoGroup).not.toHaveBeenCalled()
   })
+
+  it('keeps sessionDrag and groupDrag handlers referentially stable across a re-render with unchanged inputs', () => {
+    // A stable `keys` reference, reused verbatim across the re-render below — mirrors
+    // the real caller (Task 6), which `useMemo`s this array. Handler identity is only
+    // guaranteed when the caller holds up their end of that contract.
+    const keys: string[] = []
+    const { result, rerender } = renderHook(
+      ({ enabled }) => useSidebarDrag(enabled, keys),
+      { initialProps: { enabled: true } },
+    )
+    const before = {
+      sessionDrag: { ...result.current.sessionDrag },
+      groupDrag: { ...result.current.groupDrag },
+    }
+    rerender({ enabled: true })
+    const after = {
+      sessionDrag: { ...result.current.sessionDrag },
+      groupDrag: { ...result.current.groupDrag },
+    }
+    expect(after.sessionDrag.onDragStart).toBe(before.sessionDrag.onDragStart)
+    expect(after.sessionDrag.onDragOver).toBe(before.sessionDrag.onDragOver)
+    expect(after.sessionDrag.onDrop).toBe(before.sessionDrag.onDrop)
+    expect(after.sessionDrag.onDragLeave).toBe(before.sessionDrag.onDragLeave)
+    expect(after.sessionDrag.onDragEnd).toBe(before.sessionDrag.onDragEnd)
+    expect(after.groupDrag.onDragStart).toBe(before.groupDrag.onDragStart)
+    expect(after.groupDrag.onDragOver).toBe(before.groupDrag.onDragOver)
+    expect(after.groupDrag.onDrop).toBe(before.groupDrag.onDrop)
+    expect(after.groupDrag.onDragLeave).toBe(before.groupDrag.onDragLeave)
+    expect(after.groupDrag.onDragEnd).toBe(before.groupDrag.onDragEnd)
+  })
 })
