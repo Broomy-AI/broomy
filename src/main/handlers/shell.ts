@@ -3,7 +3,7 @@
  */
 import { BrowserWindow, IpcMain, dialog, Menu, shell } from 'electron'
 import { exec } from 'child_process'
-import { lstat } from 'fs/promises'
+import { lstat, stat } from 'fs/promises'
 import { extname, isAbsolute, resolve } from 'path'
 import { getExecShell, normalizePath, getAvailableShells, getDefaultShell } from '../platform'
 import { HandlerContext, expandHomePath } from './types'
@@ -168,6 +168,52 @@ async function openPathHandler(ctx: HandlerContext, rawPath: unknown, baseCwd: u
   }
 }
 
+/**
+ * Directories macOS treats as opaque, executable bundles: `shell.openPath` *launches* one instead
+ * of showing its contents. A worktree named `foo.app` (a branch slug can produce that) must never
+ * be a way to run something, so these are revealed in their parent instead. The check is
+ * platform-independent — revealing is harmless on Linux/Windows and keeps behaviour uniform.
+ */
+const BUNDLE_EXTENSIONS = new Set(['.app', '.bundle', '.pkg', '.framework', '.plugin', '.kext', '.dsym'])
+
+/**
+ * Open a directory's *contents* in the OS file manager (Finder / Explorer / Files). Used by the
+ * session card's right-click "Open in <file manager>". Distinct from `shell:openPath` above —
+ * see that handler for the reveal-vs-open split; here we open the folder itself rather than
+ * selecting it in its parent. `stat` follows symlinks so a symlinked worktree still opens, and
+ * only directories are opened (never a stray file, never a bundle). Returns an `OpenPathResult`
+ * so the renderer can surface a real failure.
+ */
+async function openInFileManagerHandler(ctx: HandlerContext, rawPath: unknown): Promise<OpenPathResult> {
+  if (ctx.isE2ETest) return { action: 'none' }
+  if (typeof rawPath !== 'string' || rawPath.length === 0 || rawPath.length > MAX_PATH_LEN || CONTROL_CHARS.test(rawPath)) {
+    return { action: 'none' }
+  }
+  const abs = expandHomePath(rawPath)
+  if (!isAbsolute(abs)) return { action: 'none' }
+
+  let stats
+  try {
+    stats = await stat(abs)
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code
+    if (code === 'ENOENT' || code === 'ENOTDIR') return { action: 'none' }
+    return { action: 'failed', error: String(err) }
+  }
+  if (!stats.isDirectory()) return { action: 'none' }
+
+  try {
+    if (BUNDLE_EXTENSIONS.has(extname(abs).toLowerCase())) {
+      shell.showItemInFolder(abs)
+      return { action: 'revealed' }
+    }
+    const error = await shell.openPath(abs)
+    return error ? { action: 'failed', error } : { action: 'opened' }
+  } catch (err) {
+    return { action: 'failed', error: String(err) }
+  }
+}
+
 export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   ipcMain.handle('shell:exec', async (_event, command: string, cwd: string) => {
     if (ctx.isE2ETest && !ctx.e2eRealRepos) {
@@ -206,6 +252,7 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   // click handler that opens documents/media (default app) or reveals everything else in Finder.
   ipcMain.handle('shell:pathExists', (_event, paths: unknown, baseCwd: unknown) => pathExistsHandler(ctx, paths, baseCwd))
   ipcMain.handle('shell:openPath', (_event, rawPath: unknown, baseCwd: unknown) => openPathHandler(ctx, rawPath, baseCwd))
+  ipcMain.handle('shell:openInFileManager', (_event, rawPath: unknown) => openInFileManagerHandler(ctx, rawPath))
 
   ipcMain.handle('shells:list', (_event) => {
     if (ctx.isE2ETest) {

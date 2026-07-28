@@ -45,6 +45,7 @@ export type ManagedRepo = {
   allowApproveAndMerge?: boolean  // Whether "Merge PR" button is shown for this repo
   isolated?: boolean         // Run sessions in this repo inside a dev container
   skipApproval?: boolean     // Auto-approve agent commands when isolated
+  approvalPolicy?: 'one' | 'all'  // 'one' = waiting clears once anyone approves; 'all' = all requested reviewers must approve. Default 'one'.
 }
 
 export type GitHubIssue = {

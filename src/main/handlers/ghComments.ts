@@ -107,6 +107,61 @@ async function fetchPrFeedbackStatus(repoDir: string, prNumber: number): Promise
   }
 }
 
+export interface PrApprovalCounts {
+  approved: number
+  pending: number
+  otherReviews: number
+}
+
+/**
+ * Counts PR reviews for the waiting/approved chip. Mirrors fetchPrFeedbackStatus's
+ * re-request handling: a reviewer who was re-requested (appears in
+ * requested_reviewers) is counted as pending, not by their stale review state.
+ */
+async function fetchPrApprovalStatus(repoDir: string, prNumber: number): Promise<PrApprovalCounts> {
+  const empty: PrApprovalCounts = { approved: 0, pending: 0, otherReviews: 0 }
+  try {
+    const dir = expandHomePath(repoDir)
+    const slugResult = await execFileAsync('gh', [
+      'repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner',
+    ], { cwd: dir, encoding: 'utf-8', timeout: 10000 })
+    const slug = slugResult.stdout.trim()
+    if (!slug) return empty
+
+    const [reviewsResult, requestedResult] = await Promise.all([
+      execFileAsync('gh', [
+        'api', `repos/${slug}/pulls/${prNumber}/reviews`, '--jq',
+        '[.[] | select(.user.type != "Bot") | {author: .user.login, state: .state}]',
+      ], { cwd: dir, encoding: 'utf-8', timeout: 15000 }),
+      execFileAsync('gh', [
+        'api', `repos/${slug}/pulls/${prNumber}/requested_reviewers`, '--jq',
+        '[.users[].login]',
+      ], { cwd: dir, encoding: 'utf-8', timeout: 10000 }),
+    ])
+
+    const reviews: { author: string; state: string }[] = JSON.parse(reviewsResult.stdout.trim() || '[]')
+    const requestedReviewers: string[] = JSON.parse(requestedResult.stdout.trim() || '[]')
+
+    const latestByAuthor = new Map<string, string>()
+    for (const review of reviews) {
+      if (review.state === 'PENDING') continue
+      latestByAuthor.set(review.author, review.state)
+    }
+
+    let approved = 0
+    let otherReviews = 0
+    for (const [author, state] of latestByAuthor) {
+      if (requestedReviewers.includes(author)) continue // re-requested -> counted as pending
+      if (state === 'APPROVED') approved++
+      else otherReviews++
+    }
+
+    return { approved, pending: requestedReviewers.length, otherReviews }
+  } catch {
+    return empty
+  }
+}
+
 async function fetchMyReviewStatus(repoDir: string, prNumber: number): Promise<'pending' | 'reviewed' | null> {
   try {
     const dir = expandHomePath(repoDir)
@@ -139,33 +194,36 @@ async function fetchMyReviewStatus(repoDir: string, prNumber: number): Promise<'
   }
 }
 
+/** E2E mock data for the gh:prComments handler. */
+const E2E_PR_COMMENTS = [
+  {
+    id: 1,
+    body: 'This looks good, but could you add a comment explaining this logic?',
+    path: 'src/index.ts',
+    line: 10,
+    side: 'RIGHT',
+    author: 'reviewer',
+    createdAt: '2024-01-15T10:30:00Z',
+    url: 'https://github.com/user/demo-project/pull/123#discussion_r1',
+    reactions: [{ content: '+1', count: 2 }],
+  },
+  {
+    id: 2,
+    body: 'Consider using a more descriptive variable name here.',
+    path: 'src/utils.ts',
+    line: 25,
+    side: 'RIGHT',
+    author: 'reviewer',
+    createdAt: '2024-01-15T11:00:00Z',
+    url: 'https://github.com/user/demo-project/pull/123#discussion_r2',
+    reactions: [],
+  },
+]
+
 export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   ipcMain.handle('gh:prComments', async (_event, repoDir: string, prNumber: number) => {
     if (ctx.isE2ETest) {
-      return [
-        {
-          id: 1,
-          body: 'This looks good, but could you add a comment explaining this logic?',
-          path: 'src/index.ts',
-          line: 10,
-          side: 'RIGHT',
-          author: 'reviewer',
-          createdAt: '2024-01-15T10:30:00Z',
-          url: 'https://github.com/user/demo-project/pull/123#discussion_r1',
-          reactions: [{ content: '+1', count: 2 }],
-        },
-        {
-          id: 2,
-          body: 'Consider using a more descriptive variable name here.',
-          path: 'src/utils.ts',
-          line: 25,
-          side: 'RIGHT',
-          author: 'reviewer',
-          createdAt: '2024-01-15T11:00:00Z',
-          url: 'https://github.com/user/demo-project/pull/123#discussion_r2',
-          reactions: [],
-        },
-      ]
+      return E2E_PR_COMMENTS
     }
 
     try {
@@ -330,6 +388,11 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   ipcMain.handle('gh:prFeedbackStatus', async (_event, repoDir: string, prNumber: number) => {
     if (ctx.isE2ETest) return false
     return fetchPrFeedbackStatus(repoDir, prNumber)
+  })
+
+  ipcMain.handle('gh:prApprovalStatus', async (_event, repoDir: string, prNumber: number) => {
+    if (ctx.isE2ETest) return { approved: 0, pending: 0, otherReviews: 0 }
+    return fetchPrApprovalStatus(repoDir, prNumber)
   })
 
   ipcMain.handle('gh:submitDraftReview', async (_event, repoDir: string, prNumber: number, _comments: { path: string; line: number; body: string }[]) => {

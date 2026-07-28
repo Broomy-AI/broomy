@@ -17,6 +17,7 @@ import { useOutputDirWatcher } from '../panels/explorer/hooks/useOutputDirWatche
 import type { FileStatus, ViewMode } from '../panels/fileViewer/FileViewer'
 import type { GitFileStatus, GitStatusResult, ManagedRepo } from '../../preload/index'
 import type { ExplorerFilter, PrState } from '../store/sessions'
+import type { ReviewState } from '../features/git/reviewState'
 import type { NavigationTarget } from '../shared/utils/fileNavigation'
 
 /** Wrapper that subscribes each session terminal to its own visibility from the store. */
@@ -98,6 +99,7 @@ export interface PanelsMapConfig {
   updatePrState: (sessionId: string, prState: PrState, prNumber?: number, prUrl?: string) => void
   updateFeedbackStatus: (sessionId: string, hasFeedback: boolean) => void
   updateChecksStatus: (sessionId: string, checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
+  updateReviewState: (sessionId: string, reviewState: ReviewState) => void
   setPanelVisibility: (sessionId: string, panelId: string, visible: boolean) => void
   setToolbarPanels: (panels: string[]) => void
   closeCommandsEditor: (sessionId: string) => void
@@ -108,7 +110,7 @@ function useExplorerPanel(config: PanelsMapConfig) {
   const {
     activeSessionId, activeSession, activeSessionGitStatus, activeSessionGitStatusResult,
     navigateToFile, fetchGitStatus, setExplorerFilter,
-    updatePrState, updateFeedbackStatus, updateChecksStatus, repos,
+    updatePrState, updateFeedbackStatus, updateChecksStatus, updateReviewState, repos,
   } = config
 
   const { issuePlanExists, suggestGitignore, dismissGitignore } = useOutputDirWatcher(activeSessionId, activeSession?.directory)
@@ -134,6 +136,10 @@ function useExplorerPanel(config: PanelsMapConfig) {
     if (activeSessionId) updateChecksStatus(activeSessionId, checksStatus)
   }, [activeSessionId, updateChecksStatus])
 
+  const handleUpdateReviewState = useCallback((reviewState: ReviewState) => {
+    if (activeSessionId) updateReviewState(activeSessionId, reviewState)
+  }, [activeSessionId, updateReviewState])
+
   return useMemo(() => {
     if (!activeSession?.showExplorer || activeSession.status === 'initializing') return null
     return (
@@ -154,6 +160,7 @@ function useExplorerPanel(config: PanelsMapConfig) {
         onUpdatePrState={handleUpdatePrState}
         onUpdateFeedbackStatus={handleUpdateFeedbackStatus}
         onUpdateChecksStatus={handleUpdateChecksStatus}
+        onUpdateReviewState={handleUpdateReviewState}
         repoId={activeSession.repoId}
         agentPtyId={activeSession.agentPtyId}
         session={activeSession}
@@ -166,7 +173,7 @@ function useExplorerPanel(config: PanelsMapConfig) {
         onDismissGitignore={dismissGitignore}
       />
     )
-  }, [activeSessionId, activeSession, activeSessionGitStatus, activeSessionGitStatusResult, navigateToFile, fetchGitStatus, activeRepo, issuePlanExists, suggestGitignore, dismissGitignore, handleFilterChange, handleUpdatePrState, handleUpdateFeedbackStatus, handleUpdateChecksStatus])
+  }, [activeSessionId, activeSession, activeSessionGitStatus, activeSessionGitStatusResult, navigateToFile, fetchGitStatus, activeRepo, issuePlanExists, suggestGitignore, dismissGitignore, handleFilterChange, handleUpdatePrState, handleUpdateFeedbackStatus, handleUpdateChecksStatus, handleUpdateReviewState])
 }
 
 function useFileViewerPanel(config: PanelsMapConfig) {
@@ -245,10 +252,10 @@ function useFileViewerPanel(config: PanelsMapConfig) {
                 diffLabel={isActive ? diffLabel : undefined}
                 navigationToken={isActive ? navigationToken : undefined}
                 isActive={isActive}
-                reviewContext={session.sessionType === 'review' ? {
+                commentsContext={{
                   sessionDirectory: session.directory,
                   commentsFilePath: `${session.directory}/.broomy/comments.json`,
-                } : undefined}
+                }}
                 prFilesUrl={session.sessionType === 'review' && session.prUrl ? session.prUrl : undefined}
                 onOpenFile={isActive ? (targetPath, line) => navigateToFile({ filePath: targetPath, openInDiffMode: false, scrollToLine: line }) : undefined}
               />

@@ -12,6 +12,14 @@
 export const isMac =
   typeof navigator !== 'undefined' && navigator.userAgent.toUpperCase().includes('MAC')
 
+/** Windows detection, used to name the OS file manager (Explorer). Mac is checked first, so a
+ * "Macintosh" UA that also contained "WIN" could never be misread as Windows. */
+export const isWindows =
+  !isMac && typeof navigator !== 'undefined' && navigator.userAgent.toUpperCase().includes('WIN')
+
+/** The OS file manager's name, for labels like "Open in Finder". */
+export const fileManagerName = isMac ? 'Finder' : isWindows ? 'File Explorer' : 'File Manager'
+
 /** The platform's primary modifier, as a symbol for display: `⌘` on macOS, `Ctrl+` elsewhere. */
 export const modifierSymbol = isMac ? '⌘' : 'Ctrl+'
 

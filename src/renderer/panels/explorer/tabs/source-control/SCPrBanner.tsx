@@ -4,7 +4,8 @@
 import type { GitHubPrStatus } from '../../../../../preload/index'
 import type { BranchStatus, StatusChip } from '../../../../store/sessions'
 import type { NavigationTarget } from '../../../../shared/utils/fileNavigation'
-import { branchStatusBadge, prStateBadge } from '../../../../features/git/explorerHelpers'
+import { prStateBadge } from '../../../../features/git/explorerHelpers'
+import { deriveDisplayedChip } from '../../../../features/git/displayedChip'
 import { DialogErrorBanner } from '../../../../shared/components/ErrorBanner'
 import { useRepoStore } from '../../../../store/repos'
 import { AuthSetupSection, isAuthError } from '../../../../shared/components/AuthSetupSection'
@@ -78,14 +79,7 @@ function computePrBadge(
     (prStatus.state === 'MERGED' || prStatus.state === 'CLOSED') &&
     (branchStatus === 'in-progress' || branchStatus === 'pushed')
 
-  // When branchStatus is PR-aware (open/merged/closed/feedback/failed), use its badge.
-  // Otherwise the branch status hasn't caught up with the live PR data, so derive
-  // the badge directly from the PR state.
-  const chipKey = statusChip ?? branchStatus
-  const branchBadge = chipKey ? branchStatusBadge[chipKey] : undefined
-  const isPrAwareBranch = branchStatus === 'open' || branchStatus === 'merged' || branchStatus === 'closed'
-    || statusChip === 'feedback' || statusChip === 'failed'
-  const badge = (isPrAwareBranch && branchBadge) ? branchBadge : prStateBadge[prStatus.state]
+  const badge = deriveDisplayedChip(statusChip, branchStatus, prStatus.state) ?? prStateBadge[prStatus.state]
 
   return { badge, isStale: isStaleTerminalPr }
 }

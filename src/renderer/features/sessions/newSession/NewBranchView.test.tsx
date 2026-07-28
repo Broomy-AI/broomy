@@ -130,7 +130,7 @@ describe('NewBranchView', () => {
         '/repos/my-project/main',
         '/repos/my-project/feature/auth',
         'feature/auth',
-        'main'
+        'origin/main'
       )
       expect(onComplete).toHaveBeenCalledWith(
         '/repos/my-project/feature/auth',
@@ -284,6 +284,7 @@ describe('NewBranchView', () => {
           branchStatus: 'in-progress' as const,
           hasFeedback: false,
           checksStatus: 'none' as const,
+          reviewState: 'none' as const,
           statusChip: 'in-progress' as StatusChip,
           isArchived: false,
           stage: 'planning',
@@ -459,6 +460,7 @@ describe('NewBranchView', () => {
         branchStatus: 'in-progress' as const,
         hasFeedback: false,
         checksStatus: 'none' as const,
+        reviewState: 'none' as const,
         statusChip: 'in-progress' as StatusChip,
         isArchived: false,
         stage: 'planning',

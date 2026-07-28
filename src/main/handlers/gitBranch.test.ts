@@ -273,19 +273,34 @@ describe('gitBranch handlers', () => {
       expect(mockGitInstance.raw).not.toHaveBeenCalled()
     })
 
-    it('creates the branch atomically (from a full base ref), then attaches a worktree', async () => {
-      mockGitInstance.raw.mockResolvedValue('')
+    it('resolves the base to a commit, creates the branch atomically, then attaches a worktree', async () => {
+      mockGitInstance.raw.mockResolvedValue('abc123\n')
       const handlers = setupHandlers()
-      const result = await handlers['git:worktreeAddNewBranch'](null, '/repo', '/wt', 'feature/x', 'main')
+      const result = await handlers['git:worktreeAddNewBranch'](null, '/repo', '/wt', 'feature/x', 'origin/main')
       expect(result).toEqual({ success: true })
-      expect(mockGitInstance.raw).toHaveBeenCalledWith(['branch', 'feature/x', 'refs/heads/main'])
+      // The base is a remote-tracking ref, so it must be resolved rather than assumed to live
+      // under refs/heads/, and the branch is pinned to the exact commit we verified.
+      expect(mockGitInstance.raw).toHaveBeenCalledWith(['rev-parse', '--verify', 'origin/main^{commit}'])
+      expect(mockGitInstance.raw).toHaveBeenCalledWith(['branch', 'feature/x', 'abc123'])
       expect(mockGitInstance.raw).toHaveBeenCalledWith(['worktree', 'add', '/wt', 'feature/x'])
     })
 
-    it('reports BRANCH_EXISTS and creates no worktree when the local branch already exists', async () => {
-      mockGitInstance.raw.mockRejectedValueOnce(new Error("fatal: a branch named 'feature/x' already exists"))
+    it('errors without mutating anything when the base ref cannot be resolved', async () => {
+      mockGitInstance.raw.mockRejectedValueOnce(new Error("fatal: Needed a single revision")) // rev-parse
       const handlers = setupHandlers()
-      const result = await handlers['git:worktreeAddNewBranch'](null, '/repo', '/wt', 'feature/x', 'main')
+      const result = await handlers['git:worktreeAddNewBranch'](null, '/repo', '/wt', 'feature/x', 'origin/main')
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('base branch "origin/main" wasn\'t found')
+      expect(mockGitInstance.raw).not.toHaveBeenCalledWith(expect.arrayContaining(['branch']))
+      expect(mockGitInstance.branch).not.toHaveBeenCalled()
+    })
+
+    it('reports BRANCH_EXISTS and creates no worktree when the local branch already exists', async () => {
+      mockGitInstance.raw
+        .mockResolvedValueOnce('abc123\n') // rev-parse
+        .mockRejectedValueOnce(new Error("fatal: a branch named 'feature/x' already exists"))
+      const handlers = setupHandlers()
+      const result = await handlers['git:worktreeAddNewBranch'](null, '/repo', '/wt', 'feature/x', 'origin/main')
       expect(result.success).toBe(false)
       expect(result.error).toContain('BRANCH_EXISTS:')
       expect(mockGitInstance.raw).not.toHaveBeenCalledWith(['worktree', 'add', '/wt', 'feature/x'])
@@ -294,7 +309,8 @@ describe('gitBranch handlers', () => {
 
     it('on an occupied path: WORKTREE_PATH_EXISTS, deletes only our branch, never removes the path', async () => {
       mockGitInstance.raw
-        .mockResolvedValueOnce('') // git branch feature/x refs/heads/main
+        .mockResolvedValueOnce('abc123\n') // rev-parse
+        .mockResolvedValueOnce('') // git branch feature/x abc123
         .mockRejectedValueOnce(new Error("fatal: '/wt' already exists")) // worktree add
       mockGitInstance.branch.mockResolvedValue(undefined)
       const handlers = setupHandlers()
@@ -308,6 +324,7 @@ describe('gitBranch handlers', () => {
 
     it('on any other attach failure: deletes our branch, notes a possible partial worktree, removes nothing', async () => {
       mockGitInstance.raw
+        .mockResolvedValueOnce('abc123\n') // rev-parse
         .mockResolvedValueOnce('') // git branch
         .mockRejectedValueOnce(new Error('error: post-checkout hook exited with code 1')) // worktree add
       mockGitInstance.branch.mockResolvedValue(undefined)
@@ -322,6 +339,7 @@ describe('gitBranch handlers', () => {
 
     it('surfaces a "may remain" note if deleting our branch also fails', async () => {
       mockGitInstance.raw
+        .mockResolvedValueOnce('abc123\n') // rev-parse
         .mockResolvedValueOnce('') // git branch
         .mockRejectedValueOnce(new Error('boom during attach')) // worktree add
       mockGitInstance.branch.mockRejectedValue(new Error('delete failed'))
@@ -464,8 +482,17 @@ describe('gitBranch handlers', () => {
       expect(await handlers['git:defaultBranch'](null, '/repo')).toBe('develop')
     })
 
+    it('asks origin when the symbolic ref is missing', async () => {
+      mockGitInstance.raw
+        .mockRejectedValueOnce(new Error('no ref'))
+        .mockResolvedValueOnce('ref: refs/heads/trunk\tHEAD\nabc123\tHEAD\n') // ls-remote --symref
+      const handlers = setupHandlers()
+      expect(await handlers['git:defaultBranch'](null, '/repo')).toBe('trunk')
+    })
+
     it('falls back to main when symbolic ref fails', async () => {
       mockGitInstance.raw.mockRejectedValueOnce(new Error('no ref'))
+        .mockRejectedValueOnce(new Error('remote unreachable')) // ls-remote --symref
         .mockResolvedValueOnce('') // rev-parse --verify main succeeds
       const handlers = setupHandlers()
       expect(await handlers['git:defaultBranch'](null, '/repo')).toBe('main')
@@ -474,6 +501,7 @@ describe('gitBranch handlers', () => {
     it('falls back to master when main does not exist', async () => {
       mockGitInstance.raw
         .mockRejectedValueOnce(new Error('no ref'))
+        .mockRejectedValueOnce(new Error('remote unreachable')) // ls-remote --symref
         .mockRejectedValueOnce(new Error('no main'))
         .mockResolvedValueOnce('') // rev-parse --verify master succeeds
       const handlers = setupHandlers()

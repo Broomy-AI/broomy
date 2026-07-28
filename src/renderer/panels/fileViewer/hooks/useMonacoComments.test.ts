@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook, act } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { renderHook, act, waitFor, cleanup } from '@testing-library/react'
 import { useMonacoComments } from './useMonacoComments'
+import { useCommentsStore } from '../../../store/comments'
 
 // Mock monaco-editor
 vi.mock('monaco-editor', () => ({
@@ -15,10 +16,19 @@ vi.mock('monaco-editor', () => ({
   },
 }))
 
+function resetStore() {
+  useCommentsStore.setState({ commentsByDir: {} })
+}
+
 describe('useMonacoComments', () => {
+  afterEach(() => {
+    cleanup()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(window.fs.exists).mockResolvedValue(true as never)
+    resetStore()
+    vi.mocked(window.fs.exists).mockResolvedValue(false as never)
     vi.mocked(window.fs.readFile).mockResolvedValue('[]')
     vi.mocked(window.fs.writeFile).mockResolvedValue({ success: true } as never)
     vi.mocked(window.fs.mkdir).mockResolvedValue({ success: true } as never)
@@ -26,329 +36,339 @@ describe('useMonacoComments', () => {
 
   const defaultParams = {
     filePath: 'src/foo.ts',
-    reviewContext: undefined,
+    commentsContext: undefined,
     editorRef: { current: null },
   }
 
-  it('returns initial state with null commentLine and empty text', () => {
+  it('returns an empty existingComments array with no commentsContext', () => {
     const { result } = renderHook(() => useMonacoComments(defaultParams))
-    expect(result.current.commentLine).toBeNull()
-    expect(result.current.commentText).toBe('')
     expect(result.current.existingComments).toEqual([])
   })
 
-  it('allows setting commentLine and commentText', () => {
-    const { result } = renderHook(() => useMonacoComments(defaultParams))
-
-    act(() => { result.current.setCommentLine(5) })
-    expect(result.current.commentLine).toBe(5)
-
-    act(() => { result.current.setCommentText('Fix this bug') })
-    expect(result.current.commentText).toBe('Fix this bug')
-  })
-
-  describe('loading existing comments', () => {
-    it('loads and filters comments for the current file', async () => {
-      const comments = [
-        { id: 'c1', file: 'src/foo.ts', line: 10, body: 'Comment on foo', createdAt: '2024-01-01' },
-        { id: 'c2', file: 'src/bar.ts', line: 5, body: 'Comment on bar', createdAt: '2024-01-01' },
-      ]
-      vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify(comments))
+  describe('existingComments', () => {
+    it('returns only comments for the current file in the session dir', async () => {
+      useCommentsStore.setState({
+        commentsByDir: {
+          '/tmp/session': [
+            { id: 'c1', file: 'src/foo.ts', line: 10, quotedText: 'const x = 1', body: 'Comment on foo', createdAt: '2024-01-01' },
+            { id: 'c2', file: 'src/bar.ts', line: 5, quotedText: 'const y = 2', body: 'Comment on bar', createdAt: '2024-01-01' },
+          ],
+        },
+      })
 
       const { result } = renderHook(() =>
         useMonacoComments({
           filePath: 'src/foo.ts',
-          reviewContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
+          commentsContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
           editorRef: { current: null },
         }),
       )
 
-      // Wait for the async load to complete
-      await vi.waitFor(() => {
-        expect(result.current.existingComments).toHaveLength(1)
-      })
+      expect(result.current.existingComments).toHaveLength(1)
       expect(result.current.existingComments[0].id).toBe('c1')
       expect(result.current.existingComments[0].file).toBe('src/foo.ts')
     })
 
-    it('does not load comments when reviewContext is undefined', async () => {
-      const { result } = renderHook(() =>
-        useMonacoComments({
-          filePath: 'src/foo.ts',
-          reviewContext: undefined,
-          editorRef: { current: null },
-        }),
-      )
-
-      // Give it a tick to ensure no load happens
-      await new Promise((r) => setTimeout(r, 10))
-      expect(result.current.existingComments).toEqual([])
-      expect(window.fs.readFile).not.toHaveBeenCalled()
-    })
-
-    it('handles missing comments file gracefully', async () => {
-      vi.mocked(window.fs.exists).mockResolvedValue(false as never)
-
-      const { result } = renderHook(() =>
-        useMonacoComments({
-          filePath: 'src/foo.ts',
-          reviewContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
-          editorRef: { current: null },
-        }),
-      )
-
-      await new Promise((r) => setTimeout(r, 10))
-      expect(result.current.existingComments).toEqual([])
-    })
-
-    it('handles read errors gracefully', async () => {
+    it('loads comments for the session dir when not already loaded', async () => {
       vi.mocked(window.fs.exists).mockResolvedValue(true as never)
-      vi.mocked(window.fs.readFile).mockRejectedValue(new Error('read error'))
+      vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify([
+        { id: 'c1', file: 'src/foo.ts', line: 10, quotedText: 'const x = 1', body: 'Loaded comment', createdAt: '2024-01-01' },
+      ]))
 
       const { result } = renderHook(() =>
         useMonacoComments({
           filePath: 'src/foo.ts',
-          reviewContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
+          commentsContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
+          editorRef: { current: null },
+        }),
+      )
+
+      await waitFor(() => {
+        expect(result.current.existingComments).toHaveLength(1)
+      })
+      expect(result.current.existingComments[0].body).toBe('Loaded comment')
+      expect(window.fs.readFile).toHaveBeenCalledWith('/tmp/session/.broomy/comments.json')
+    })
+
+    it('does not load comments when commentsContext is undefined', async () => {
+      renderHook(() =>
+        useMonacoComments({
+          filePath: 'src/foo.ts',
+          commentsContext: undefined,
           editorRef: { current: null },
         }),
       )
 
       await new Promise((r) => setTimeout(r, 10))
-      expect(result.current.existingComments).toEqual([])
+      expect(window.fs.readFile).not.toHaveBeenCalled()
     })
   })
 
-  describe('handleAddComment', () => {
-    it('does nothing when reviewContext is undefined', async () => {
+  describe('addCommentAt', () => {
+    it('does nothing when commentsContext is undefined (no session dir)', () => {
       const { result } = renderHook(() =>
-        useMonacoComments({ filePath: 'src/foo.ts', reviewContext: undefined, editorRef: { current: null } }),
+        useMonacoComments({ filePath: 'src/foo.ts', commentsContext: undefined, editorRef: { current: null } }),
       )
 
-      act(() => { result.current.setCommentLine(5) })
-      act(() => { result.current.setCommentText('A comment') })
-
-      await act(async () => { await result.current.handleAddComment() })
+      act(() => { result.current.addCommentAt(5, 'A comment') })
       expect(window.fs.writeFile).not.toHaveBeenCalled()
     })
 
-    it('does nothing when commentLine is null', async () => {
+    it('does nothing when body is empty or whitespace', () => {
       const { result } = renderHook(() =>
         useMonacoComments({
           filePath: 'src/foo.ts',
-          reviewContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
+          commentsContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
           editorRef: { current: null },
         }),
       )
 
-      act(() => { result.current.setCommentText('A comment') })
-      // commentLine is still null
-      await act(async () => { await result.current.handleAddComment() })
+      act(() => { result.current.addCommentAt(5, '   ') })
       expect(window.fs.writeFile).not.toHaveBeenCalled()
     })
 
-    it('does nothing when commentText is empty or whitespace', async () => {
-      const { result } = renderHook(() =>
-        useMonacoComments({
-          filePath: 'src/foo.ts',
-          reviewContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
-          editorRef: { current: null },
-        }),
-      )
-
-      act(() => { result.current.setCommentLine(5) })
-      act(() => { result.current.setCommentText('   ') })
-
-      await act(async () => { await result.current.handleAddComment() })
-      expect(window.fs.writeFile).not.toHaveBeenCalled()
-    })
-
-    it('adds a new comment, writes to file, and resets state', async () => {
-      vi.mocked(window.fs.exists).mockResolvedValue(false as never)
-      vi.mocked(window.fs.readFile).mockResolvedValue('[]')
+    it('reads the line text from the editor model and calls store addComment with it as quotedText', async () => {
+      const mockModel = { getLineContent: vi.fn().mockReturnValue('  const total = a + b') }
+      const mockEditor = {
+        getModel: vi.fn().mockReturnValue(mockModel),
+        createDecorationsCollection: vi.fn().mockReturnValue({ clear: vi.fn() }),
+      }
+      const editorRef = { current: mockEditor as never }
 
       const { result } = renderHook(() =>
         useMonacoComments({
           filePath: 'src/foo.ts',
-          reviewContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
-          editorRef: { current: null },
+          commentsContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
+          editorRef,
         }),
       )
 
-      act(() => { result.current.setCommentLine(10) })
-      act(() => { result.current.setCommentText('Fix this line') })
+      act(() => { result.current.addCommentAt(10, 'Fix this line') })
 
-      await act(async () => { await result.current.handleAddComment() })
-
-      // Should have written the file
-      expect(window.fs.mkdir).toHaveBeenCalledWith('/tmp/session')
-      expect(window.fs.writeFile).toHaveBeenCalledWith(
-        '/tmp/session/comments.json',
-        expect.stringContaining('"Fix this line"'),
-      )
-
-      // State should be reset
-      expect(result.current.commentLine).toBeNull()
-      expect(result.current.commentText).toBe('')
-
-      // Existing comments should now include the new one
-      expect(result.current.existingComments).toHaveLength(1)
-      expect(result.current.existingComments[0].body).toBe('Fix this line')
-      expect(result.current.existingComments[0].file).toBe('src/foo.ts')
-      expect(result.current.existingComments[0].line).toBe(10)
-    })
-
-    it('appends to existing comments when file already has comments', async () => {
-      const existingComments = [
-        { id: 'c1', file: 'src/foo.ts', line: 1, body: 'Old comment', createdAt: '2024-01-01' },
-      ]
-      // First call for initial load (exists check), second for add (exists check)
-      vi.mocked(window.fs.exists).mockResolvedValue(true as never)
-      vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify(existingComments))
-
-      const { result } = renderHook(() =>
-        useMonacoComments({
-          filePath: 'src/foo.ts',
-          reviewContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
-          editorRef: { current: null },
-        }),
-      )
-
-      // Wait for initial load
-      await vi.waitFor(() => {
-        expect(result.current.existingComments).toHaveLength(1)
+      expect(mockModel.getLineContent).toHaveBeenCalledWith(10)
+      const stored = useCommentsStore.getState().commentsByDir['/tmp/session']!
+      expect(stored).toHaveLength(1)
+      expect(stored[0]).toMatchObject({
+        file: 'src/foo.ts',
+        line: 10,
+        quotedText: '  const total = a + b',
+        body: 'Fix this line',
       })
-
-      act(() => { result.current.setCommentLine(20) })
-      act(() => { result.current.setCommentText('New comment') })
-
-      await act(async () => { await result.current.handleAddComment() })
-
-      // The written JSON should contain 2 comments
-      const writeCall = vi.mocked(window.fs.writeFile).mock.calls[0]
-      const writtenData = writeCall[1]
-      const writtenComments = JSON.parse(typeof writtenData === 'string' ? writtenData : '')
-      expect(writtenComments).toHaveLength(2)
-      expect(writtenComments[0].body).toBe('Old comment')
-      expect(writtenComments[1].body).toBe('New comment')
+      await vi.waitFor(() => expect(window.fs.writeFile).toHaveBeenCalledWith(
+        '/tmp/session/.broomy/comments.json',
+        expect.stringContaining('"Fix this line"'),
+      ))
     })
 
-    it('handles write errors gracefully', async () => {
-      vi.mocked(window.fs.exists).mockResolvedValue(false as never)
-      vi.mocked(window.fs.mkdir).mockRejectedValue(new Error('mkdir failed'))
+    it('uses an empty quotedText when the editor has no model yet', () => {
+      const mockEditor = { getModel: vi.fn().mockReturnValue(null) }
+      const editorRef = { current: mockEditor as never }
 
       const { result } = renderHook(() =>
         useMonacoComments({
           filePath: 'src/foo.ts',
-          reviewContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
+          commentsContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
+          editorRef,
+        }),
+      )
+
+      act(() => { result.current.addCommentAt(3, 'No model available') })
+
+      const stored = useCommentsStore.getState().commentsByDir['/tmp/session']!
+      expect(stored[0].quotedText).toBe('')
+    })
+
+    it('appends to existing comments for the same session dir', () => {
+      useCommentsStore.setState({
+        commentsByDir: {
+          '/tmp/session': [
+            { id: 'c1', file: 'src/foo.ts', line: 1, quotedText: 'old', body: 'Old comment', createdAt: '2024-01-01' },
+          ],
+        },
+      })
+      const mockEditor = { getModel: vi.fn().mockReturnValue(null) }
+      const editorRef = { current: mockEditor as never }
+
+      const { result } = renderHook(() =>
+        useMonacoComments({
+          filePath: 'src/foo.ts',
+          commentsContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
+          editorRef,
+        }),
+      )
+
+      act(() => { result.current.addCommentAt(20, 'New comment') })
+
+      const stored = useCommentsStore.getState().commentsByDir['/tmp/session']!
+      expect(stored).toHaveLength(2)
+      expect(stored[0].body).toBe('Old comment')
+      expect(stored[1].body).toBe('New comment')
+    })
+  })
+
+  describe('updateCommentBody', () => {
+    it('updates an existing comment body via the store', () => {
+      useCommentsStore.setState({
+        commentsByDir: {
+          '/tmp/session': [
+            { id: 'c1', file: 'src/foo.ts', line: 1, quotedText: 'q', body: 'old', createdAt: '2024-01-01' },
+          ],
+        },
+      })
+      const { result } = renderHook(() =>
+        useMonacoComments({
+          filePath: 'src/foo.ts',
+          commentsContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
           editorRef: { current: null },
         }),
       )
 
-      act(() => { result.current.setCommentLine(10) })
-      act(() => { result.current.setCommentText('A comment') })
+      act(() => { result.current.updateCommentBody('c1', 'new body') })
 
-      // Should not throw
-      await act(async () => { await result.current.handleAddComment() })
+      expect(useCommentsStore.getState().commentsByDir['/tmp/session']![0].body).toBe('new body')
+    })
 
-      // State should NOT be reset when save fails
-      // (the comment was not added because mkdir threw before writeFile)
-      expect(result.current.existingComments).toEqual([])
+    it('does nothing when there is no session dir or the body is blank', () => {
+      useCommentsStore.setState({
+        commentsByDir: { '/tmp/session': [{ id: 'c1', file: 'src/foo.ts', line: 1, quotedText: 'q', body: 'old', createdAt: 't' }] },
+      })
+      const { result } = renderHook(() =>
+        useMonacoComments({
+          filePath: 'src/foo.ts',
+          commentsContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
+          editorRef: { current: null },
+        }),
+      )
+      act(() => { result.current.updateCommentBody('c1', '   ') })
+      expect(useCommentsStore.getState().commentsByDir['/tmp/session']![0].body).toBe('old')
     })
   })
 
   describe('comment decorations', () => {
-    it('creates decorations when existingComments and editor are available', async () => {
+    it('creates decorations for existing comments when the editor has a model', () => {
       const mockClear = vi.fn()
       const mockCreateDecorationsCollection = vi.fn().mockReturnValue({ clear: mockClear })
       const mockEditor = {
         getModel: vi.fn().mockReturnValue({}),
         createDecorationsCollection: mockCreateDecorationsCollection,
       }
-
-      const comments = [
-        { id: 'c1', file: 'src/foo.ts', line: 10, body: 'Comment here', createdAt: '2024-01-01' },
-      ]
-      vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify(comments))
-
-      const editorRef = { current: mockEditor as never }
-
-      const { result } = renderHook(() =>
-        useMonacoComments({
-          filePath: 'src/foo.ts',
-          reviewContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
-          editorRef,
-        }),
-      )
-
-      await vi.waitFor(() => {
-        expect(result.current.existingComments).toHaveLength(1)
+      useCommentsStore.setState({
+        commentsByDir: {
+          '/tmp/session': [
+            { id: 'c1', file: 'src/foo.ts', line: 10, quotedText: 'x', body: 'Comment here', createdAt: '2024-01-01' },
+          ],
+        },
       })
 
-      // Decorations should have been created - check the last call since the
-      // effect may first run with empty comments, then again after loading
-      expect(mockCreateDecorationsCollection).toHaveBeenCalled()
-      const lastCallIndex = mockCreateDecorationsCollection.mock.calls.length - 1
-      const decorations = mockCreateDecorationsCollection.mock.calls[lastCallIndex][0]
-      expect(decorations).toHaveLength(1)
-      expect(decorations[0].options.isWholeLine).toBe(true)
-      expect(decorations[0].options.glyphMarginClassName).toBe('review-comment-glyph')
-      expect(decorations[0].options.glyphMarginHoverMessage.value).toBe('Comment here')
-    })
-
-    it('clears previous decorations when comments change', async () => {
-      const mockClear = vi.fn()
-      const mockCreateDecorationsCollection = vi.fn().mockReturnValue({ clear: mockClear })
-      const mockEditor = {
-        getModel: vi.fn().mockReturnValue({}),
-        createDecorationsCollection: mockCreateDecorationsCollection,
-      }
-
-      vi.mocked(window.fs.exists).mockResolvedValue(false as never)
-
       const editorRef = { current: mockEditor as never }
 
-      const { result } = renderHook(() =>
+      renderHook(() =>
         useMonacoComments({
           filePath: 'src/foo.ts',
-          reviewContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
+          commentsContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
           editorRef,
         }),
       )
 
-      // Add a comment to trigger decoration update
-      act(() => { result.current.setCommentLine(5) })
-      act(() => { result.current.setCommentText('New comment') })
-      await act(async () => { await result.current.handleAddComment() })
-
-      // After the first decoration collection was created and then comments changed,
-      // the old one should have been cleared
-      if (mockCreateDecorationsCollection.mock.calls.length > 1) {
-        expect(mockClear).toHaveBeenCalled()
-      }
+      expect(mockCreateDecorationsCollection).toHaveBeenCalled()
+      const decorations = mockCreateDecorationsCollection.mock.calls[0][0]
+      expect(decorations).toHaveLength(1)
+      expect(decorations[0].options.isWholeLine).toBe(true)
+      expect(decorations[0].options.className).toBe('review-comment-line')
+      expect(decorations[0].options.hoverMessage.value).toBe('Comment here')
     })
 
-    it('skips decorations when editor has no model', async () => {
+    it('skips decorations when editor has no model', () => {
       const mockCreateDecorationsCollection = vi.fn()
       const mockEditor = {
         getModel: vi.fn().mockReturnValue(null),
         createDecorationsCollection: mockCreateDecorationsCollection,
       }
-
-      const comments = [
-        { id: 'c1', file: 'src/foo.ts', line: 10, body: 'Comment', createdAt: '2024-01-01' },
-      ]
-      vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify(comments))
+      useCommentsStore.setState({
+        commentsByDir: {
+          '/tmp/session': [
+            { id: 'c1', file: 'src/foo.ts', line: 10, quotedText: 'x', body: 'Comment', createdAt: '2024-01-01' },
+          ],
+        },
+      })
 
       renderHook(() =>
         useMonacoComments({
           filePath: 'src/foo.ts',
-          reviewContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
+          commentsContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
           editorRef: { current: mockEditor as never },
         }),
       )
 
-      await new Promise((r) => setTimeout(r, 10))
       expect(mockCreateDecorationsCollection).not.toHaveBeenCalled()
+    })
+
+    it('skips decorations entirely when commentsContext is undefined', () => {
+      const mockCreateDecorationsCollection = vi.fn()
+      const mockEditor = {
+        getModel: vi.fn().mockReturnValue({}),
+        createDecorationsCollection: mockCreateDecorationsCollection,
+      }
+
+      renderHook(() =>
+        useMonacoComments({
+          filePath: 'src/foo.ts',
+          commentsContext: undefined,
+          editorRef: { current: mockEditor as never },
+        }),
+      )
+
+      expect(mockCreateDecorationsCollection).not.toHaveBeenCalled()
+    })
+
+    it('clears previous decorations before creating new ones', () => {
+      const mockClear = vi.fn()
+      const mockCreateDecorationsCollection = vi.fn().mockReturnValue({ clear: mockClear })
+      const mockEditor = {
+        getModel: vi.fn().mockReturnValue({}),
+        createDecorationsCollection: mockCreateDecorationsCollection,
+      }
+      useCommentsStore.setState({
+        commentsByDir: {
+          '/tmp/session': [
+            { id: 'c1', file: 'src/foo.ts', line: 10, quotedText: 'x', body: 'Comment', createdAt: '2024-01-01' },
+          ],
+        },
+      })
+      const editorRef = { current: mockEditor as never }
+
+      const { rerender } = renderHook(
+        (props) => useMonacoComments(props),
+        {
+          initialProps: {
+            filePath: 'src/foo.ts',
+            commentsContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
+            editorRef,
+          },
+        },
+      )
+
+      expect(mockClear).not.toHaveBeenCalled()
+
+      // Trigger the store to change so the decoration effect re-runs.
+      useCommentsStore.setState({
+        commentsByDir: {
+          '/tmp/session': [
+            { id: 'c1', file: 'src/foo.ts', line: 10, quotedText: 'x', body: 'Comment', createdAt: '2024-01-01' },
+            { id: 'c2', file: 'src/foo.ts', line: 20, quotedText: 'y', body: 'Second', createdAt: '2024-01-01' },
+          ],
+        },
+      })
+      rerender({
+        filePath: 'src/foo.ts',
+        commentsContext: { sessionDirectory: '/tmp/session', commentsFilePath: '/tmp/session/comments.json' },
+        editorRef,
+      })
+
+      expect(mockClear).toHaveBeenCalled()
+      expect(mockCreateDecorationsCollection.mock.calls.length).toBeGreaterThan(1)
+      const lastCall = mockCreateDecorationsCollection.mock.calls[mockCreateDecorationsCollection.mock.calls.length - 1]
+      expect(lastCall[0]).toHaveLength(2)
     })
   })
 })

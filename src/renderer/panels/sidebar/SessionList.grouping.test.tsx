@@ -14,7 +14,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     layoutSizes: { explorerWidth: 256, fileViewerSize: 300, userTerminalHeight: 192, diffPanelWidth: 320, tutorialPanelWidth: 320 },
     explorerFilter: 'files', lastMessage: null, lastMessageTime: null, isUnread: false, workingStartTime: null,
     recentFiles: [], searchHistory: [], terminalTabs: { tabs: [{ id: 'tab-1', name: 'Terminal' }], activeTabId: 'tab-1' },
-    branchStatus: 'in-progress', hasFeedback: false, checksStatus: 'none', statusChip: 'in-progress',
+    branchStatus: 'in-progress', hasFeedback: false, checksStatus: 'none', reviewState: 'none', statusChip: 'in-progress',
     isArchived: false, stage: 'planning', isRestored: false, ...overrides,
   }
 }

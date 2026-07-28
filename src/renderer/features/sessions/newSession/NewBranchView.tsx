@@ -9,6 +9,7 @@ import type { ManagedRepo, GitHubIssue } from '../../../../preload/index'
 import { issueToBranchName } from '../../../shared/utils/slugify'
 import { DialogErrorBanner } from '../../../shared/components/ErrorBanner'
 import { AuthSetupSection } from '../../../shared/components/AuthSetupSection'
+import { resolveBaseRef } from '../../git/baseRef'
 
 export function NewBranchView({
   repo,
@@ -65,14 +66,17 @@ export function NewBranchView({
       const mainDir = `${repo.rootDir}/main`
       const worktreePath = `${repo.rootDir}/${branchName}`
 
-      // Pull latest on main first
+      // Resolve and fetch the base ref first — this is what the new branch is
+      // built on, so it must be current regardless of the main worktree's state.
+      const baseRef = await resolveBaseRef(mainDir, repo.defaultBranch)
+
+      // Best-effort refresh of the main worktree itself.
       await window.git.pull(mainDir)
 
-      // Create the worktree for a brand-new branch. This never reuses/clobbers an existing branch
-      // or worktree; a collision is terminal and the op has already cleaned up after itself, so we
-      // surface it here (reusing the same recovery affordance as a remote collision) without any
-      // cleanup of our own.
-      const result = await window.git.worktreeAddNewBranch(mainDir, worktreePath, branchName, repo.defaultBranch)
+      // Create the worktree for a brand-new branch, based on the freshly fetched base ref. This
+      // never reuses/clobbers an existing branch or worktree; a collision is terminal and the op
+      // has already cleaned up after itself, so we surface it here without any cleanup of our own.
+      const result = await window.git.worktreeAddNewBranch(mainDir, worktreePath, branchName, baseRef)
       if (!result.success) {
         // A creation collision is terminal — the op already cleaned up after itself, so just
         // surface the clean message (BRANCH_EXISTS / WORKTREE_PATH_EXISTS) without any cleanup.

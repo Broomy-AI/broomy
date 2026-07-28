@@ -36,6 +36,7 @@ import { useMenuButton } from './shared/hooks/useMenuButton'
 import CrashRecoveryBanner from './shared/components/CrashRecoveryBanner'
 import { DialogErrorBanner } from './shared/components/ErrorBanner'
 import ExperimentalPlatformModal from './shared/components/ExperimentalPlatformModal'
+import { computeReviewState } from './features/git/reviewState'
 
 // Re-export types for backwards compatibility
 export type { Session, SessionStatus }
@@ -133,13 +134,15 @@ function TopBanners({ configLoadError, repoLoadError, appError, onDismissAppErro
 }
 
 /** Refresh PR status on startup (once) and whenever an agent finishes work (working → idle). */
-function usePrAutoRefresh({ isLoading, sessions, refreshPrStatus, updatePrState, updateFeedbackStatus, updateChecksStatus }: {
+function usePrAutoRefresh({ isLoading, sessions, repos, refreshPrStatus, updatePrState, updateFeedbackStatus, updateChecksStatus, updateReviewState }: {
   isLoading: boolean
   sessions: Session[]
+  repos: { id: string; approvalPolicy?: 'one' | 'all' }[]
   refreshPrStatus: () => Promise<void>
   updatePrState: (sessionId: string, prState: import('./features/git/branchStatus').PrState, prNumber?: number, prUrl?: string) => void
   updateFeedbackStatus: (sessionId: string, hasFeedback: boolean) => void
   updateChecksStatus: (sessionId: string, checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
+  updateReviewState: (sessionId: string, reviewState: import('./features/git/reviewState').ReviewState) => void
 }) {
   const hasRefreshedOnStartup = useRef(false)
   useEffect(() => {
@@ -164,27 +167,32 @@ function usePrAutoRefresh({ isLoading, sessions, refreshPrStatus, updatePrState,
             if (prResult) {
               updatePrState(session.id, prResult.state, prResult.number, prResult.url)
               if (prResult.state === 'OPEN') {
-                const [checks, feedback] = await Promise.all([
+                const [checks, feedback, approval] = await Promise.all([
                   window.gh.prChecksStatus(session.directory).catch(() => 'none' as const),
                   window.gh.prFeedbackStatus(session.directory, prResult.number).catch(() => false),
+                  window.gh.prApprovalStatus(session.directory, prResult.number).catch(() => ({ approved: 0, pending: 0, otherReviews: 0 })),
                 ])
                 updateChecksStatus(session.id, checks)
                 updateFeedbackStatus(session.id, feedback)
+                const policy = repos.find((r) => r.id === session.repoId)?.approvalPolicy ?? 'one'
+                updateReviewState(session.id, computeReviewState(approval, policy))
               } else {
                 updateChecksStatus(session.id, 'none')
                 updateFeedbackStatus(session.id, false)
+                updateReviewState(session.id, 'none')
               }
             } else {
               updatePrState(session.id, null)
               updateChecksStatus(session.id, 'none')
               updateFeedbackStatus(session.id, false)
+              updateReviewState(session.id, 'none')
             }
           } catch { /* ignore */ }
         })()
       }
       prevUnread.current[session.id] = session.isUnread
     }
-  }, [unreadKey, updatePrState, updateFeedbackStatus, updateChecksStatus])
+  }, [unreadKey, repos, updatePrState, updateFeedbackStatus, updateChecksStatus, updateReviewState])
 }
 
 function AppContent() {
@@ -203,7 +211,7 @@ function AppContent() {
     setActiveSession, togglePanel, toggleGlobalPanel, setSidebarWidth, setToolbarPanels,
     selectFile, setExplorerFilter, setFileViewerPosition, updateLayoutSize, markSessionRead,
     markHasHadCommits, clearHasHadCommits, updateBranchStatus, updateSessionBranch, updatePrState, updateReviewStatus,
-    updateFeedbackStatus, updateChecksStatus, archiveSession,
+    updateFeedbackStatus, updateChecksStatus, updateReviewState, archiveSession,
     unarchiveSession, setPanelVisibility, closeCommandsEditor,
   } = useMemo(() => useSessionStore.getState(), [])
   const { agents, loadAgents } = useAgentStore()
@@ -262,7 +270,7 @@ function AppContent() {
     sessions, activeSessionId, agents, repos, addSession, addInitializingSession,
     finalizeSession, failSession, removeSession, setActiveSession,
     togglePanel, updateLayoutSize, setFileViewerPosition, updatePrState,
-    updateFeedbackStatus, updateChecksStatus, updateReviewStatus,
+    updateFeedbackStatus, updateChecksStatus, updateReviewStatus, updateReviewState,
     setShowNewSessionDialog, onSessionAlreadyExists: setDuplicateSessionInfo, onError: setAppError,
   })
 
@@ -304,12 +312,12 @@ function AppContent() {
     handleToggleFileViewer, handleFileViewerPositionChange,
     fetchGitStatus, getAgentCommand, getAgentEnv, getRepoIsolation, getAgentConnectionMode, getAgentModel, getAgentEffort, getAgentSkipApproval,
     globalPanelVisibility, toggleGlobalPanel, selectFile, setExplorerFilter,
-    updatePrState, updateFeedbackStatus, updateChecksStatus,
+    updatePrState, updateFeedbackStatus, updateChecksStatus, updateReviewState,
     setPanelVisibility, setToolbarPanels, closeCommandsEditor, repos,
   })
 
   // Refresh PR status on startup and when agents finish work
-  usePrAutoRefresh({ isLoading, sessions, refreshPrStatus, updatePrState, updateFeedbackStatus, updateChecksStatus })
+  usePrAutoRefresh({ isLoading, sessions, repos, refreshPrStatus, updatePrState, updateFeedbackStatus, updateChecksStatus, updateReviewState })
 
   if (isLoading) {
     return (

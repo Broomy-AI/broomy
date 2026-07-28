@@ -62,7 +62,7 @@ export function BranchStatusCard({ status }: { status: BranchStatus }) {
     },
     open: {
       label: 'PR OPEN',
-      chipClasses: 'bg-success-base/20 text-success-fg',
+      chipClasses: 'bg-info-base/20 text-info-fg',
       description: 'Pull request is open.',
     },
     merged: {

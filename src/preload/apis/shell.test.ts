@@ -51,6 +51,11 @@ describe('preload shell API', () => {
       await shellApi.openPath('/a/b.html', '/repo')
       expect(mockInvoke).toHaveBeenCalledWith('shell:openPath', '/a/b.html', '/repo')
     })
+
+    it('openInFileManager invokes shell:openInFileManager with the path', async () => {
+      await shellApi.openInFileManager('/repos/proj/issue/42-x')
+      expect(mockInvoke).toHaveBeenCalledWith('shell:openInFileManager', '/repos/proj/issue/42-x')
+    })
   })
 
   describe('dialogApi', () => {

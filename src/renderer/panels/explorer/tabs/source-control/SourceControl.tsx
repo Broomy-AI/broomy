@@ -24,6 +24,7 @@ interface SourceControlProps {
   gitStatus: GitFileStatus[]
   syncStatus?: GitStatusResult | null
   onFileSelect?: (target: NavigationTarget) => void
+  selectedFilePath?: string | null
   onGitStatusRefresh?: () => void
   branchStatus?: BranchStatus
   statusChip?: StatusChip
@@ -33,6 +34,7 @@ interface SourceControlProps {
   onUpdatePrState?: (prState: PrState, prNumber?: number, prUrl?: string) => void
   onUpdateFeedbackStatus?: (hasFeedback: boolean) => void
   onUpdateChecksStatus?: (checksStatus: 'passed' | 'failed' | 'pending' | 'none') => void
+  onUpdateReviewState?: (reviewState: import('../../../../features/git/reviewState').ReviewState) => void
   issueNumber?: number
   issueTitle?: string
   issueUrl?: string
@@ -48,6 +50,7 @@ export function SourceControl({
   gitStatus,
   syncStatus,
   onFileSelect,
+  selectedFilePath,
   onGitStatusRefresh,
   branchStatus,
   statusChip,
@@ -57,6 +60,7 @@ export function SourceControl({
   onUpdatePrState,
   onUpdateFeedbackStatus,
   onUpdateChecksStatus,
+  onUpdateReviewState,
   issueNumber,
   issueTitle,
   issueUrl,
@@ -88,7 +92,7 @@ export function SourceControl({
 
   const data = useSourceControlData({
     directory, gitStatus, syncStatus, branchStatus, onUpdatePrState,
-    onUpdateFeedbackStatus, onUpdateChecksStatus, repoId, scView,
+    onUpdateFeedbackStatus, onUpdateChecksStatus, onUpdateReviewState, repoId, scView,
   })
 
   // Check if repo has isolation enabled but no devcontainer config
@@ -204,6 +208,7 @@ export function SourceControl({
           loadingCommitFiles={data.loadingCommitFiles}
           onToggleCommit={actions.handleToggleCommit}
           onFileSelect={onFileSelect}
+          selectedFilePath={selectedFilePath}
         />
       </div>
     )
@@ -222,6 +227,7 @@ export function SourceControl({
           branchBaseName={data.branchBaseName}
           branchMergeBase={data.branchMergeBase}
           onFileSelect={onFileSelect}
+          selectedFilePath={selectedFilePath}
         />
       </div>
     )
@@ -248,6 +254,7 @@ export function SourceControl({
         onStageAll={actions.handleStageAll}
         onUnstage={actions.handleUnstage}
         onFileSelect={onFileSelect}
+        selectedFilePath={selectedFilePath}
         onSwitchTab={onSwitchTab}
         onGitStatusRefresh={onGitStatusRefresh}
         actions={commandsConfig?.actions ?? null}

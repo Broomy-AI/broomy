@@ -57,6 +57,7 @@ describe('sessionPanelActions', () => {
       branchStatus: 'in-progress' as const,
       hasFeedback: false,
       checksStatus: 'none' as const,
+      reviewState: 'none' as const,
       statusChip: 'in-progress' as StatusChip,
       isArchived: false,
       stage: 'planning',

@@ -1,3 +1,5 @@
+import type { ReviewState } from './reviewState'
+
 /**
  * Branch status computation from git state and persisted PR information.
  *
@@ -22,7 +24,7 @@ export type PrState = 'OPEN' | 'MERGED' | 'CLOSED' | null
  * - 'feedback': PR has requested changes or new comments since last push
  * - 'failed': PR's CI checks have failed
  */
-export type StatusChip = BranchStatus | 'feedback' | 'failed'
+export type StatusChip = BranchStatus | 'feedback' | 'failed' | 'waiting' | 'approved'
 
 export interface BranchStatusInput {
   // From git status polling
@@ -88,17 +90,20 @@ export function computeBranchStatus(input: BranchStatusInput): BranchStatus {
  * Single function that computes the status chip value from branch status + PR metadata.
  * Used by both the sidebar and the source control panel to guarantee consistency.
  *
- * Priority: feedback > failed > base branch status
- * (feedback and failed only apply when the PR is open)
+ * Priority (when the PR is open): feedback > failed > approved > waiting > open.
+ * feedback/failed/approved/waiting only apply when the branch status is 'open'.
  */
 export function computeStatusChip(
   branchStatus: BranchStatus,
   hasFeedback: boolean,
   checksStatus: 'passed' | 'failed' | 'pending' | 'none',
+  reviewState: ReviewState = 'none',
 ): StatusChip {
   if (branchStatus === 'open') {
     if (hasFeedback) return 'feedback'
     if (checksStatus === 'failed') return 'failed'
+    if (reviewState === 'approved') return 'approved'
+    if (reviewState === 'waiting') return 'waiting'
   }
   return branchStatus
 }

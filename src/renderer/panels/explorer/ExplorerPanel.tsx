@@ -9,6 +9,7 @@ import { SourceControl } from './tabs/source-control/SourceControl'
 import { SearchPanel } from './tabs/search/SearchPanel'
 import { RecentFiles } from './tabs/recent/RecentFiles'
 import ReviewPanel from './tabs/review/ReviewPanel'
+import CommentsDock from './CommentsDock'
 import { IssuePlanChip } from './IssuePlanChip'
 import { GitignoreChip } from './GitignoreChip'
 import { focusSearchInput } from '../../shared/utils/focusHelpers'
@@ -33,6 +34,7 @@ export default function Explorer({
   onUpdatePrState,
   onUpdateFeedbackStatus,
   onUpdateChecksStatus,
+  onUpdateReviewState,
   repoId,
   agentPtyId,
   session,
@@ -137,6 +139,7 @@ export default function Explorer({
               gitStatus={gitStatus}
               syncStatus={syncStatus}
               onFileSelect={onFileSelect}
+              selectedFilePath={selectedFilePath}
               onGitStatusRefresh={onGitStatusRefresh}
               branchStatus={branchStatus}
               statusChip={statusChip}
@@ -146,6 +149,7 @@ export default function Explorer({
               onUpdatePrState={onUpdatePrState}
               onUpdateFeedbackStatus={onUpdateFeedbackStatus}
               onUpdateChecksStatus={onUpdateChecksStatus}
+              onUpdateReviewState={onUpdateReviewState}
               issueNumber={issueNumber}
               issueTitle={issueTitle}
               issueUrl={issueUrl}
@@ -195,6 +199,15 @@ export default function Explorer({
           </PanelErrorBoundary>
         )}
       </div>
+
+      {/* Accumulated review comments, pinned across all tabs */}
+      {directory && (
+        <CommentsDock
+          directory={directory}
+          agentPtyId={agentPtyId}
+          onNavigate={(file, line) => onFileSelect?.({ filePath: file, scrollToLine: line, openInDiffMode: false })}
+        />
+      )}
     </div>
   )
 }

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, cleanup } from '@testing-library/react'
+import { render, cleanup, act, fireEvent } from '@testing-library/react'
 import '../../../../test/react-setup'
 
 // Mock @monaco-editor/react and monaco-editor to avoid loading real Monaco
@@ -16,10 +16,25 @@ vi.mock('@monaco-editor/react', () => ({
 vi.mock('monaco-editor', () => ({
   editor: {
     defineTheme: vi.fn(),
+    EditorOption: { lineHeight: 66 },
+    MouseTargetType: { UNKNOWN: 0 },
+  },
+  Range: class {
+    constructor(public startLineNumber: number, public startColumn: number, public endLineNumber: number, public endColumn: number) {}
   },
 }))
 
 import MonacoDiffViewer from './MonacoDiffViewer'
+import { useCommentsStore } from '../../../store/comments'
+
+// jsdom has no ResizeObserver; useCommentBox uses one to keep the view zone's
+// height in sync with the rendered box, so opening the box needs a stub.
+class MockResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal('ResizeObserver', MockResizeObserver)
 
 afterEach(() => {
   cleanup()
@@ -222,6 +237,130 @@ describe('MonacoDiffViewer', () => {
     onMountHandler(mockEditorInstance)
 
     expect(mockModifiedEditor.revealLineInCenter).not.toHaveBeenCalled()
+  })
+
+  describe('inline comments', () => {
+    const COMMENTS_CONTEXT = { sessionDirectory: '/test', commentsFilePath: '/test/.broomy/comments.json' }
+
+    const makeModifiedEditor = () => {
+      const domNode = document.createElement('div')
+      return {
+        updateOptions: vi.fn(),
+        revealLineInCenter: vi.fn(),
+        setPosition: vi.fn(),
+        addAction: vi.fn(),
+        createDecorationsCollection: vi.fn().mockReturnValue({ set: vi.fn(), clear: vi.fn() }),
+        // Real Monaco event registration methods return an IDisposable; attach()
+        // stores these and calls .dispose() on unmount, so the mocks must too.
+        onMouseMove: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+        onMouseLeave: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+        onDidScrollChange: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+        getDomNode: vi.fn(() => domNode),
+        getTopForLineNumber: vi.fn(() => 100),
+        getScrollTop: vi.fn(() => 0),
+        getOption: vi.fn(() => 18),
+        getLayoutInfo: vi.fn(() => ({ contentLeft: 64 })),
+        changeViewZones: vi.fn(),
+        getModel: vi.fn().mockReturnValue({ getLineContent: vi.fn().mockReturnValue('  const total = a + b') }),
+      }
+    }
+
+    const mountWith = (modifiedEditor: ReturnType<typeof makeModifiedEditor>) => {
+      const onMountHandler = mockDiffEditor.mock.calls[0][0].onMount as (e: unknown) => void
+      onMountHandler({
+        getModifiedEditor: vi.fn().mockReturnValue(modifiedEditor),
+        onDidUpdateDiff: vi.fn(() => ({ dispose: vi.fn() })),
+      })
+    }
+
+    it('shows a persistent marker on a commented line and opens the pre-filled edit box', () => {
+      useCommentsStore.setState({
+        commentsByDir: { '/test': [{ id: 'd1', file: '/test/file.ts', line: 4, quotedText: 'q', body: 'diff note', createdAt: 't' }] },
+      })
+      try {
+        const { container } = render(
+          <MonacoDiffViewer filePath="/test/file.ts" originalContent="" modifiedContent="" commentsContext={COMMENTS_CONTEXT} />
+        )
+        const modifiedEditor = makeModifiedEditor()
+        container.appendChild(modifiedEditor.getDomNode())
+        let capturedZone: { domNode: HTMLDivElement } | undefined
+        modifiedEditor.changeViewZones = vi.fn((cb: (a: { addZone: (z: { domNode: HTMLDivElement }) => string; removeZone: () => void }) => void) => {
+          cb({ addZone: (zone) => { capturedZone = zone; container.appendChild(zone.domNode); return 'zone-1' }, removeZone: vi.fn() })
+        })
+        act(() => { mountWith(modifiedEditor) })
+
+        const marker = container.querySelector<HTMLButtonElement>('button[aria-label="Edit comment on line 4"]')!
+        expect(marker).toBeTruthy()
+        act(() => { fireEvent.click(marker) })
+        const textarea = capturedZone!.domNode.querySelector('textarea')!
+        expect(textarea.value).toBe('diff note')
+      } finally {
+        useCommentsStore.setState({ commentsByDir: {} })
+      }
+    })
+
+    it('opens the inline comment box in a view zone when the "+" button is clicked', () => {
+      const { container } = render(
+        <MonacoDiffViewer filePath="/test/file.ts" originalContent="" modifiedContent="" commentsContext={COMMENTS_CONTEXT} />
+      )
+      const modifiedEditor = makeModifiedEditor()
+      // The "+" button is portaled into modifiedEditor.getDomNode() — attach it
+      // to the render tree so React's delegated click event fires on it.
+      container.appendChild(modifiedEditor.getDomNode())
+      let capturedZone: { afterLineNumber: number; domNode: HTMLDivElement } | undefined
+      modifiedEditor.changeViewZones = vi.fn((cb: (a: { addZone: (z: { afterLineNumber: number; domNode: HTMLDivElement }) => string; removeZone: () => void }) => void) => {
+        cb({ addZone: (zone) => { capturedZone = zone; return 'zone-1' }, removeZone: vi.fn() })
+      })
+      mountWith(modifiedEditor)
+
+      const mouseMoveHandler = modifiedEditor.onMouseMove.mock.calls[0][0]
+      act(() => {
+        mouseMoveHandler({ target: { type: 1, position: { lineNumber: 9 } }, event: { browserEvent: { clientX: 10 } } })
+      })
+      const plusButton = container.querySelector<HTMLButtonElement>('button[aria-label="Comment on line 9"]')!
+      expect(plusButton).toBeTruthy()
+      act(() => {
+        fireEvent.click(plusButton)
+      })
+
+      expect(capturedZone).toBeDefined()
+      expect(capturedZone!.afterLineNumber).toBe(9)
+      expect(capturedZone!.domNode.textContent).toContain('Line 9')
+      expect(capturedZone!.domNode.textContent).toContain('const total = a + b')
+      expect(capturedZone!.domNode.querySelector('textarea[placeholder="Add a comment..."]')).toBeTruthy()
+    })
+
+    it('shows the "+" affordance over the hovered line on the modified editor and clears it on mouse leave', () => {
+      const { container } = render(
+        <MonacoDiffViewer filePath="/test/file.ts" originalContent="" modifiedContent="" commentsContext={COMMENTS_CONTEXT} />
+      )
+      const modifiedEditor = makeModifiedEditor()
+      container.appendChild(modifiedEditor.getDomNode())
+      mountWith(modifiedEditor)
+
+      const mouseMoveHandler = modifiedEditor.onMouseMove.mock.calls[0][0]
+      act(() => {
+        mouseMoveHandler({ target: { type: 1, position: { lineNumber: 4 } }, event: { browserEvent: { clientX: 10 } } })
+      })
+      expect(container.querySelector('button[aria-label="Comment on line 4"]')).toBeTruthy()
+
+      // Hovering off any line (no position) hides it.
+      act(() => {
+        mouseMoveHandler({ target: { type: 1, position: null }, event: { browserEvent: { clientX: 10 } } })
+      })
+      expect(container.querySelector('button[aria-label^="Comment on line"]')).toBeNull()
+
+      // Re-show it, then hide via mouse leave.
+      act(() => {
+        mouseMoveHandler({ target: { type: 1, position: { lineNumber: 4 } }, event: { browserEvent: { clientX: 10 } } })
+      })
+      expect(container.querySelector('button[aria-label^="Comment on line"]')).toBeTruthy()
+      const mouseLeaveHandler = modifiedEditor.onMouseLeave.mock.calls[0][0]
+      act(() => {
+        mouseLeaveHandler()
+      })
+      expect(container.querySelector('button[aria-label^="Comment on line"]')).toBeNull()
+    })
   })
 
   it('defaults sideBySide to true', () => {

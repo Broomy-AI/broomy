@@ -202,8 +202,8 @@ describe('isPrOpen', () => {
 })
 
 describe('prStateBadgeClass', () => {
-  it('returns green classes for OPEN', () => {
-    expect(prStateBadgeClass('OPEN')).toBe('bg-success-base/20 text-success-fg')
+  it('returns info (blue) classes for OPEN, distinct from the green APPROVED chip', () => {
+    expect(prStateBadgeClass('OPEN')).toBe('bg-info-base/20 text-info-fg')
   })
 
   it('returns purple classes for MERGED', () => {
@@ -216,5 +216,19 @@ describe('prStateBadgeClass', () => {
 
   it('returns red classes for unknown states', () => {
     expect(prStateBadgeClass('UNKNOWN')).toBe('bg-danger-base/20 text-danger-fg')
+  })
+})
+
+import { branchStatusBadge } from './explorerHelpers'
+
+describe('branchStatusBadge — waiting/approved', () => {
+  it('has a WAITING entry', () => {
+    expect(branchStatusBadge.waiting.label).toBe('WAITING')
+  })
+  it('has an APPROVED entry', () => {
+    expect(branchStatusBadge.approved.label).toBe('APPROVED')
+  })
+  it('APPROVED is visually distinct from PR OPEN', () => {
+    expect(branchStatusBadge.approved.classes).not.toBe(branchStatusBadge.open.classes)
   })
 })

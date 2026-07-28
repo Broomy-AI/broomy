@@ -11,8 +11,15 @@
  * If the preload type changes (e.g. a sync property becomes an async function),
  * TypeScript will flag the mismatch here at compile time.
  */
-import { vi, afterEach, type Mock } from 'vitest'
+import { vi, afterEach, expect, type Mock } from 'vitest'
 import { checkAndReset } from './console-guard'
+
+// Load jest-dom matchers when in a DOM environment
+if (typeof globalThis.window !== 'undefined' && typeof globalThis.document !== 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const matchers = require('@testing-library/jest-dom/matchers')
+  expect.extend(matchers)
+}
 import type { PtyApi } from '../preload/apis/pty'
 import type { FsApi } from '../preload/apis/fs'
 import type { GitApi } from '../preload/apis/git'
@@ -118,6 +125,7 @@ const mockGh: Mocked<GhApi> = {
   hasWriteAccess: vi.fn().mockResolvedValue(false),
   prChecksStatus: vi.fn().mockResolvedValue('none'),
   prFeedbackStatus: vi.fn().mockResolvedValue(false),
+  prApprovalStatus: vi.fn().mockResolvedValue({ approved: 0, pending: 0, otherReviews: 0 }),
   getPrCreateUrl: vi.fn().mockResolvedValue(null),
   prComments: vi.fn().mockResolvedValue([]),
   prDescription: vi.fn().mockResolvedValue(null),
@@ -136,6 +144,7 @@ const mockShell: Mocked<ShellApi> = {
   openExternal: vi.fn().mockResolvedValue(undefined),
   pathExists: vi.fn().mockResolvedValue([]),
   openPath: vi.fn().mockResolvedValue({ action: 'none' }),
+  openInFileManager: vi.fn().mockResolvedValue({ action: 'none' }),
   listShells: vi.fn().mockResolvedValue([{ path: '/bin/bash', name: 'Bash', isDefault: true }]),
 }
 

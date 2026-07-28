@@ -132,6 +132,7 @@ export function installElectronMocks() {
     openExternal: noopResolved,
     pathExists: resolved([]),
     openPath: resolved({ action: 'none' }),
+    openInFileManager: resolved({ action: 'none' }),
     listShells: resolved([{ path: '/bin/bash', name: 'Bash', isDefault: true }]),
   }
 

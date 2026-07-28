@@ -75,3 +75,12 @@ export const AllPushed: Story = {
     ],
   },
 }
+
+export const WithSelectedFile: Story = {
+  args: {
+    branchCommits: WithExpandedCommit.args!.branchCommits,
+    expandedCommits: WithExpandedCommit.args!.expandedCommits,
+    commitFilesByHash: WithExpandedCommit.args!.commitFilesByHash,
+    selectedFilePath: '/Users/test/projects/my-app/src/components/Dashboard.tsx',
+  },
+}

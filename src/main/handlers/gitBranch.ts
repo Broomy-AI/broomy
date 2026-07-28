@@ -129,11 +129,12 @@ export function isCreatableBranchName(name: string): boolean {
  * Create a worktree for a BRAND-NEW branch, so a collision never reuses or clobbers an existing
  * branch/worktree — unlike `handleWorktreeAdd`, whose DWIM checkout is for the attach flows
  * (Existing / Review):
- *   - Reject option-like / malformed names before any mutation; pass the base as a full ref so an
- *     option-like default branch can't be reinterpreted.
- *   1. `git branch <branch> refs/heads/<base>` — atomic; if the branch already exists → BRANCH_EXISTS,
+ *   - Reject option-like / malformed names before any mutation.
+ *   1. `git rev-parse --verify <base>^{commit}` — the caller passes a freshly fetched
+ *      `origin/<default>`, so resolve it to an exact commit rather than assuming a ref namespace.
+ *   2. `git branch <branch> <sha>` — atomic; if the branch already exists → BRANCH_EXISTS,
  *      and nothing else is created.
- *   2. `git worktree add <path> <branch>` — attaches the worktree (with checkout + hook). On ANY
+ *   3. `git worktree add <path> <branch>` — attaches the worktree (with checkout + hook). On ANY
  *      failure we delete only the branch WE just made and NEVER remove the destination: it may be a
  *      pre-existing directory/worktree, or ours after a hook failed — either way we must not risk
  *      clobbering it. An occupied path → WORKTREE_PATH_EXISTS; other errors note any partial worktree.
@@ -157,10 +158,19 @@ async function handleWorktreeAddNewBranch(ctx: HandlerContext, repoPath: string,
   const git = simpleGit(expandedRepoPath)
   const expandedPath = expandHomePath(worktreePath)
 
-  // Step 1: create the branch ref atomically. Base as a full ref so an option-like default branch
-  // can never be reparsed as a flag.
+  // Step 1: resolve the base to an exact commit. Callers pass a freshly fetched remote-tracking
+  // ref (`origin/<default>`), so we can't assume `refs/heads/`; resolving here also pins the new
+  // branch to the commit we verified, and a raw SHA can never be reparsed as a flag.
+  let baseCommit: string
   try {
-    await git.raw(['branch', branchName, `refs/heads/${baseBranch}`])
+    baseCommit = (await git.raw(['rev-parse', '--verify', `${baseBranch}^{commit}`])).trim()
+  } catch {
+    return { success: false, error: `The base branch "${baseBranch}" wasn't found in this repo, so there's nothing to branch from.` }
+  }
+
+  // Step 2: create the branch ref atomically.
+  try {
+    await git.raw(['branch', branchName, baseCommit])
   } catch (err) {
     const errStr = String(err)
     if (errStr.includes('already exists')) {
@@ -318,8 +328,11 @@ async function handleDefaultBranch(ctx: HandlerContext, repoPath: string) {
   }
 
   try {
-    const git = simpleGit(expandHomePath(repoPath))
-    return await getDefaultBranch(git)
+    // allowRemote: this handler runs on explicit user action (adding a repo,
+    // creating a session), not on the git-polling path, so it can afford to
+    // ask origin when refs/remotes/origin/HEAD is missing.
+    const git = withNonInteractive(simpleGit(expandHomePath(repoPath)))
+    return await getDefaultBranch(git, true)
   } catch {
     return 'main'
   }

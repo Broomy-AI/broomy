@@ -469,4 +469,53 @@ describe('ghComments handlers', () => {
       expect(await handlers['gh:prFeedbackStatus'](null, '/repo', 42)).toBe(false)
     })
   })
+
+  describe('gh:prApprovalStatus', () => {
+    it('returns neutral counts in E2E mode', async () => {
+      const handlers = setupHandlers(createMockCtx({ isE2ETest: true }))
+      const result = await handlers['gh:prApprovalStatus'](null, '/repo', 1)
+      expect(result).toEqual({ approved: 0, pending: 0, otherReviews: 0 })
+    })
+
+    it('counts approvals, pending re-requests, and other reviews', async () => {
+      vi.mocked(execFile)
+        .mockReturnValueOnce({ stdout: 'user/repo\n', stderr: '' } as never)
+        .mockReturnValueOnce({
+          stdout: JSON.stringify([
+            { author: 'a', state: 'APPROVED' },
+            { author: 'b', state: 'CHANGES_REQUESTED' },
+          ]),
+          stderr: '',
+        } as never)
+        .mockReturnValueOnce({ stdout: JSON.stringify(['c']), stderr: '' } as never)
+
+      const handlers = setupHandlers()
+      const result = await handlers['gh:prApprovalStatus'](null, '/repo', 1)
+      expect(result).toEqual({ approved: 1, pending: 1, otherReviews: 1 })
+    })
+
+    it('counts a re-requested reviewer as pending, ignoring their stale review state', async () => {
+      vi.mocked(execFile)
+        .mockReturnValueOnce({ stdout: 'user/repo\n', stderr: '' } as never)
+        // 'a' has a stale CHANGES_REQUESTED review but has been re-requested...
+        .mockReturnValueOnce({
+          stdout: JSON.stringify([{ author: 'a', state: 'CHANGES_REQUESTED' }]),
+          stderr: '',
+        } as never)
+        // ...so 'a' appears in requested_reviewers and must be counted as pending only.
+        .mockReturnValueOnce({ stdout: JSON.stringify(['a']), stderr: '' } as never)
+
+      const handlers = setupHandlers()
+      const result = await handlers['gh:prApprovalStatus'](null, '/repo', 1)
+      expect(result).toEqual({ approved: 0, pending: 1, otherReviews: 0 })
+    })
+
+    it('returns neutral counts when the repo slug cannot be resolved', async () => {
+      vi.mocked(execFile).mockReturnValueOnce({ stdout: '\n', stderr: '' } as never)
+
+      const handlers = setupHandlers()
+      const result = await handlers['gh:prApprovalStatus'](null, '/repo', 1)
+      expect(result).toEqual({ approved: 0, pending: 0, otherReviews: 0 })
+    })
+  })
 })
