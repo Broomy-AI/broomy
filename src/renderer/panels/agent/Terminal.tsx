@@ -5,7 +5,7 @@
  * auto-fit on resize and scroll-following with manual disengage.
  * For agent terminals, it runs time-based activity detection: output within
  * a suppression window after user input is ignored, otherwise new data sets status
- * to "working" and 1 second of silence sets it to "idle". Transitions from working
+ * to "working" and 3 seconds of silence sets it to "idle". Transitions from working
  * to idle (after at least 3 seconds) mark the session as unread. Also detects plan
  * file paths in agent output via a rolling buffer regex match.
  */

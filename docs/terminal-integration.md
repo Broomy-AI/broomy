@@ -126,7 +126,8 @@ Agent terminals track whether the agent is "working" or "idle" using time-based 
 export const DEFAULT_CONFIG: ActivityDetectorConfig = {
   warmupMs: 5000,          // Ignore first 5s after terminal creation
   inputSuppressionMs: 200, // Pause detection for 200ms after user input
-  idleTimeoutMs: 1000,     // After 1s of no output, transition to idle
+  idleTimeoutMs: 3000,     // After 3s of no output, transition to idle
+  maxStableOutputMs: 10000, // After 10s of output that never changes the screen, transition to idle
 }
 ```
 
@@ -183,7 +184,7 @@ if (result.scheduleIdle) {
 2. **Input suppression (200ms)**: Echoed characters from user typing are ignored.
 3. **Window interaction suppression (200ms)**: Avoids false positives from focus-related output.
 4. **Working**: Set immediately when data arrives outside suppression windows.
-5. **Idle**: Set after 1s of silence, with a 300ms debounce on the store update.
+5. **Idle**: Set after 3s of silence (or 10s of screen-unchanged repaints), with a 300ms debounce on the store update.
 
 ### Store update debouncing
 

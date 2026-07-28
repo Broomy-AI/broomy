@@ -16,9 +16,10 @@
  * cell attributes, so an agent that genuinely works for longer than
  * `maxStableOutputMs` while displaying byte-identical text (e.g. a static
  * "Thinking…" screen, or an animation expressed only through colours) will be
- * marked idle. This is a deliberate bias toward the far more common failure —
- * an idle TUI repainting forever — and cannot be resolved from the PTY stream
- * alone; a precise signal needs agent-native lifecycle events.
+ * marked idle. That cannot be resolved from the PTY stream alone; a precise
+ * signal needs agent-native lifecycle events. The timeouts are therefore set
+ * generously — calling a working agent "done" is the more annoying error, so
+ * we would rather report idle a few seconds late than a few seconds early.
  */
 
 export type ActivityStatus = 'working' | 'idle'
@@ -37,8 +38,8 @@ export interface ActivityDetectorConfig {
 export const DEFAULT_CONFIG: ActivityDetectorConfig = {
   warmupMs: 5000,
   inputSuppressionMs: 200,
-  idleTimeoutMs: 1000,
-  maxStableOutputMs: 3000,
+  idleTimeoutMs: 3000,
+  maxStableOutputMs: 10000,
 }
 
 export interface ActivityDetectorState {
