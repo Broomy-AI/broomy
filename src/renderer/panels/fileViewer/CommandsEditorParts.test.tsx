@@ -87,34 +87,34 @@ describe('NewStageModal', () => {
 
 describe('CommandExpandedEditor', () => {
   it('renders textarea with initial value', () => {
-    render(<CommandExpandedEditor value="/plan {topic}" onChange={vi.fn()} onClose={vi.fn()} />)
+    render(<CommandExpandedEditor varInput={{ directory: "" }} value="/plan {topic}" onChange={vi.fn()} onClose={vi.fn()} />)
     expect(screen.getByTestId('expanded-command-textarea')).toHaveValue('/plan {topic}')
   })
 
   it('typing in textarea fires onChange', () => {
     const onChange = vi.fn()
-    render(<CommandExpandedEditor value="/plan" onChange={onChange} onClose={vi.fn()} />)
+    render(<CommandExpandedEditor varInput={{ directory: "" }} value="/plan" onChange={onChange} onClose={vi.fn()} />)
     fireEvent.change(screen.getByTestId('expanded-command-textarea'), { target: { value: '/plan updated' } })
     expect(onChange).toHaveBeenCalledWith('/plan updated')
   })
 
   it('close button calls onClose', () => {
     const onClose = vi.fn()
-    render(<CommandExpandedEditor value="x" onChange={vi.fn()} onClose={onClose} />)
+    render(<CommandExpandedEditor varInput={{ directory: "" }} value="x" onChange={vi.fn()} onClose={onClose} />)
     fireEvent.click(screen.getByTestId('close-expanded-command'))
     expect(onClose).toHaveBeenCalled()
   })
 
   it('clicking the backdrop calls onClose', () => {
     const onClose = vi.fn()
-    render(<CommandExpandedEditor value="x" onChange={vi.fn()} onClose={onClose} />)
+    render(<CommandExpandedEditor varInput={{ directory: "" }} value="x" onChange={vi.fn()} onClose={onClose} />)
     fireEvent.click(screen.getByRole('dialog'))
     expect(onClose).toHaveBeenCalled()
   })
 
   it('Escape key on the dialog calls onClose', () => {
     const onClose = vi.fn()
-    render(<CommandExpandedEditor value="x" onChange={vi.fn()} onClose={onClose} />)
+    render(<CommandExpandedEditor varInput={{ directory: "" }} value="x" onChange={vi.fn()} onClose={onClose} />)
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
     expect(onClose).toHaveBeenCalled()
   })

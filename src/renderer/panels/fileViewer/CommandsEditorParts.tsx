@@ -4,6 +4,9 @@
 import { useState } from 'react'
 import type { ArgSpec } from '../../features/commands/commandsConfig'
 import type { TemplateArg } from '../../features/commands/templateParser'
+import type { TemplateVarInput } from '../../features/commands/templateVars'
+import { TemplateVarsModal } from '../../shared/components/TemplateVarsModal'
+import { useInsertAtCursor } from '../../shared/hooks/useInsertAtCursor'
 
 type Tab = 'user' | 'project'
 
@@ -282,12 +285,15 @@ export function ArgsTable({
 // ---- Command expanded editor (full-pane overlay) ----
 
 export function CommandExpandedEditor({
-  value, onChange, onClose,
+  value, varInput, onChange, onClose,
 }: {
   value: string
+  varInput: TemplateVarInput
   onChange: (v: string) => void
   onClose: () => void
 }) {
+  const [showVars, setShowVars] = useState(false)
+  const { ref: textareaRef, insert } = useInsertAtCursor<HTMLTextAreaElement>()
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/60"
@@ -311,6 +317,7 @@ export function CommandExpandedEditor({
           </button>
         </div>
         <textarea
+          ref={textareaRef}
           value={value}
           onChange={e => onChange(e.target.value)}
           className="flex-1 w-full p-4 text-sm font-mono bg-bg-primary text-text-primary resize-none focus:outline-none"
@@ -318,9 +325,27 @@ export function CommandExpandedEditor({
           spellCheck={false}
           data-testid="expanded-command-textarea"
         />
-        <div className="px-4 py-2 border-t border-border text-2xs text-text-tertiary">
-          Use {'{name}'} for args; {'--flag {name}'} makes the arg optional. Changes save as you type.
+        <div className="px-4 py-2 border-t border-border text-2xs text-text-tertiary flex items-center justify-between gap-2">
+          <span>Use {'{name}'} for args; {'--flag {name}'} makes the arg optional. Changes save as you type.</span>
+          <button
+            type="button"
+            onClick={() => setShowVars(true)}
+            className="text-2xs text-text-tertiary hover:text-text-primary transition-colors shrink-0"
+            title="Insert a template variable"
+            data-testid="open-template-vars-expanded"
+          >
+            {'{} Vars'}
+          </button>
         </div>
+
+        {showVars && (
+          <TemplateVarsModal
+            surface="command"
+            varInput={varInput}
+            onInsert={t => insert(t, value, onChange)}
+            onClose={() => setShowVars(false)}
+          />
+        )}
       </div>
     </div>
   )

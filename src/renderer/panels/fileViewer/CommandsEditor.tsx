@@ -17,6 +17,10 @@ import {
 import { getUserCommandsConfigPath, userCommandsDir } from '../../features/commands/userConfigPath'
 import { parseTemplate } from '../../features/commands/templateParser'
 import { ShowWhenPicker } from '../../shared/components/ShowWhenPicker'
+import { TemplateVarsModal } from '../../shared/components/TemplateVarsModal'
+import { useInsertAtCursor } from '../../shared/hooks/useInsertAtCursor'
+import { useSessionStore } from '../../store/sessions'
+import { useRepoStore } from '../../store/repos'
 import { DialogErrorBanner } from '../../shared/components/ErrorBanner'
 import { Field, StageChips, EmptyPane, DeleteButton, UnsavedChangesModal, CommandExpandedEditor, ArgsTable, NewStageModal } from './CommandsEditorParts'
 
@@ -312,6 +316,20 @@ function Detail({
   const mode: 'one-line' | 'block' = selected.template.includes('\n') ? 'block' : 'one-line'
   const [commandExpanded, setCommandExpanded] = useState(false)
   const [addingSetStage, setAddingSetStage] = useState(false)
+  const [showVars, setShowVars] = useState(false)
+  const { ref: commandRef, insert } = useInsertAtCursor<HTMLInputElement & HTMLTextAreaElement>()
+
+  // Live variable values come from the active session, so the picker shows what
+  // a command would actually resolve to right now.
+  const activeSession = useSessionStore(s => s.sessions.find(x => x.id === s.activeSessionId))
+  const repos = useRepoStore(s => s.repos)
+  const varInput = useMemo(() => ({
+    session: activeSession,
+    repo: repos.find(r => r.id === activeSession?.repoId),
+    directory: activeSession?.directory ?? '',
+  }), [activeSession, repos])
+
+  const insertVar = (text: string) => insert(text, selected.template, v => onUpdate({ template: v }))
 
   function updateArgMeta(name: string, patch: Partial<{ description: string; multiline: boolean }>) {
     const existing = argsMeta.find(a => a.name === name)
@@ -349,19 +367,31 @@ function Detail({
             : 'Text-block mode.'
         }
         action={
-          <button
-            type="button"
-            onClick={() => setCommandExpanded(true)}
-            className="text-2xs text-text-tertiary hover:text-text-primary transition-colors"
-            title="Edit in a larger pane"
-            data-testid="expand-command"
-          >
-            ⤢ Expand
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowVars(true)}
+              className="text-2xs text-text-tertiary hover:text-text-primary transition-colors"
+              title="Insert a template variable"
+              data-testid="open-template-vars"
+            >
+              {'{} Vars'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setCommandExpanded(true)}
+              className="text-2xs text-text-tertiary hover:text-text-primary transition-colors"
+              title="Edit in a larger pane"
+              data-testid="expand-command"
+            >
+              ⤢ Expand
+            </button>
+          </div>
         }
       >
         {mode === 'one-line' ? (
           <input
+            ref={commandRef}
             type="text"
             value={selected.template}
             onChange={e => onUpdate({ template: e.target.value })}
@@ -369,6 +399,7 @@ function Detail({
           />
         ) : (
           <textarea
+            ref={commandRef}
             value={selected.template}
             onChange={e => onUpdate({ template: e.target.value })}
             rows={6}
@@ -377,9 +408,19 @@ function Detail({
         )}
       </Field>
 
+      {showVars && (
+        <TemplateVarsModal
+          surface="command"
+          varInput={varInput}
+          onInsert={insertVar}
+          onClose={() => setShowVars(false)}
+        />
+      )}
+
       {commandExpanded && (
         <CommandExpandedEditor
           value={selected.template}
+          varInput={varInput}
           onChange={(v) => onUpdate({ template: v })}
           onClose={() => setCommandExpanded(false)}
         />
