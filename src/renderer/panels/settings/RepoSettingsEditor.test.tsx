@@ -272,11 +272,11 @@ describe('RepoSettingsEditor template variables', () => {
     expect(textarea).toHaveValue('echo $BROOMY_BRANCH')
   })
 
-  it('dims variables that are not set when the init script runs', async () => {
+  it('dims variables that are not set at init time', async () => {
     render(<RepoSettingsEditor repo={mockRepo} agents={[]} onUpdate={vi.fn()} onClose={vi.fn()} />)
     await screen.findByPlaceholderText(/Commands to run when starting a session/)
     fireEvent.click(screen.getByTestId('open-template-vars-init-script'))
     expect(await screen.findByText('$BROOMY_PR_TITLE')).toBeInTheDocument()
-    expect(screen.getAllByText('not set when the init script runs').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('not set at init time').length).toBeGreaterThan(0)
   })
 })

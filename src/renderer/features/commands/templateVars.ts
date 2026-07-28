@@ -142,7 +142,7 @@ export const UNAVAILABLE_REASON: Record<TemplateVarSurface, string> = {
   command: 'not available here',
   agent: 'not available here',
   envValue: 'not available here',
-  init: 'not set when the init script runs',
+  init: 'not set at init time',
 }
 
 export function isAvailableAt(v: TemplateVarDef, surface: TemplateVarSurface): boolean {

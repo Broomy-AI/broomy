@@ -400,6 +400,7 @@ function Detail({
           <input
             ref={commandRef}
             type="text"
+            data-testid="command-template-field"
             value={selected.template}
             onChange={e => onUpdate({ template: e.target.value })}
             className="w-full px-2 py-1.5 text-sm font-mono rounded border border-border bg-bg-secondary text-text-primary focus:outline-none focus:border-accent"
@@ -407,6 +408,7 @@ function Detail({
         ) : (
           <textarea
             ref={commandRef}
+            data-testid="command-template-field"
             value={selected.template}
             onChange={e => onUpdate({ template: e.target.value })}
             rows={6}

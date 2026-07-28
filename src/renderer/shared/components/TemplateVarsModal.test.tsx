@@ -62,7 +62,7 @@ describe('TemplateVarsModal', () => {
   it('does not insert an unavailable variable and explains why', () => {
     const onInsert = vi.fn()
     render(<TemplateVarsModal surface="init" varInput={varInput} onInsert={onInsert} onClose={vi.fn()} />)
-    expect(screen.getAllByText('not set when the init script runs').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('not set at init time').length).toBeGreaterThan(0)
     fireEvent.click(screen.getByText('$BROOMY_PR_TITLE'))
     expect(onInsert).not.toHaveBeenCalled()
   })
