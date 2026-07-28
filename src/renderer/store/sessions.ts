@@ -114,6 +114,9 @@ export interface Session {
   lastKnownPrUrl?: string
   // Archive state (persisted)
   isArchived: boolean
+  // When the session was archived, epoch ms (persisted). Absent on sessions archived
+  // before this field existed — those sort last in the Archived section.
+  archivedAt?: number
   // Stage state machine — drives command visibility (persisted)
   stage: string
   // Agent SDK session ID for resume (persisted)

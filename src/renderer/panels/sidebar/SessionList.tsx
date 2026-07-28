@@ -18,6 +18,7 @@ import UpdateBanner from './UpdateBanner'
 import { RepoGroupSection } from './RepoGroupSection'
 import { ArchivedSection } from './ArchivedSection'
 import { useSessionGrouping } from './useSessionGrouping'
+import { sortArchived } from './archivedOrder'
 
 interface SessionListProps {
   repos: ManagedRepo[]
@@ -62,7 +63,10 @@ export default function SessionList({
 
   const allActive = useMemo(() => sessions.filter((s) => !s.isArchived), [sessions])
   const activeSessions = useMemo(() => allActive.filter(matchesSearch), [allActive, matchesSearch])
-  const archivedSessions = useMemo(() => sessions.filter((s) => s.isArchived && matchesSearch(s)), [sessions, matchesSearch])
+  const archivedSessions = useMemo(
+    () => sortArchived(sessions.filter((s) => s.isArchived && matchesSearch(s))),
+    [sessions, matchesSearch],
+  )
 
   const handleRefresh = async () => {
     if (!onRefreshPrStatus || isRefreshing) return

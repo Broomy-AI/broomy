@@ -126,6 +126,7 @@ async function doSave(): Promise<void> {
       searchHistory: s.searchHistory.length > 0 ? s.searchHistory : undefined,
       // Archive state
       isArchived: s.isArchived || undefined,
+      archivedAt: s.archivedAt,
       // Stage state machine
       stage: s.stage,
       // Agent SDK session ID for resume
