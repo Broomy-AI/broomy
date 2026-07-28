@@ -18,6 +18,8 @@ export type ShellApi = {
   pathExists: (paths: string[], baseCwd: string) => Promise<(boolean | null)[]>
   /** Open (or reveal) a file path clicked in the terminal. Main resolves/validates the path. */
   openPath: (path: string, baseCwd: string) => Promise<OpenPathResult>
+  /** Open a directory's contents in the OS file manager (Finder/Explorer/Files). Main validates it is an absolute directory. */
+  openInFileManager: (path: string) => Promise<OpenPathResult>
   listShells: () => Promise<ShellOption[]>
 }
 
@@ -72,6 +74,7 @@ export const shellApi: ShellApi = {
   pathExists: (paths, baseCwd) =>
     ipcRenderer.invoke('shell:pathExists', (Array.isArray(paths) ? paths : []).filter((p) => typeof p === 'string').slice(0, 64), baseCwd),
   openPath: (path, baseCwd) => ipcRenderer.invoke('shell:openPath', path, baseCwd),
+  openInFileManager: (path) => ipcRenderer.invoke('shell:openInFileManager', path),
   listShells: () => ipcRenderer.invoke('shells:list'),
 }
 

@@ -3,6 +3,7 @@
  * is already visible in the sidebar, so the UI feels instant.
  */
 import { useCallback, useRef } from 'react'
+import { resolveBaseRef } from '../../features/git/baseRef'
 
 interface BackgroundInitDeps {
   addInitializingSession: (params: { directory: string; branch: string; agentId: string | null; extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; issueUrl?: string; name?: string } }) => string
@@ -53,10 +54,16 @@ export function useBackgroundInit({
 
     void (async () => {
       try {
+        const baseRef = await resolveBaseRef(mainDir, repo.defaultBranch)
+        if (isAborted(controller.signal)) return
+
+        // Best-effort: keep the main worktree itself up to date too. It aborts
+        // if that worktree is dirty or diverged, which must not affect the base
+        // the new branch is created from — hence the origin/ ref above.
         await window.git.pull(mainDir)
         if (isAborted(controller.signal)) return
 
-        const result = await window.git.worktreeAdd(mainDir, worktreePath, branchName, repo.defaultBranch)
+        const result = await window.git.worktreeAdd(mainDir, worktreePath, branchName, baseRef)
         if (!result.success && !result.error?.includes('already exists')) {
           throw new Error(result.error || 'Failed to create worktree')
         }

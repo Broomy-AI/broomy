@@ -195,4 +195,58 @@ describe('SCWorkingView', () => {
       expect(btn.hasAttribute('disabled')).toBe(false)
     })
   })
+
+  describe('selected file highlight', () => {
+    it('highlights the staged row whose path matches selectedFilePath', () => {
+      const stagedFiles = [
+        { path: 'src/foo.ts', status: 'modified' as const, staged: true, indexStatus: 'M', workingDirStatus: ' ' },
+        { path: 'src/bar.ts', status: 'modified' as const, staged: true, indexStatus: 'M', workingDirStatus: ' ' },
+      ]
+      render(
+        <SCWorkingView
+          {...defaultProps}
+          gitStatus={stagedFiles}
+          stagedFiles={stagedFiles}
+          selectedFilePath="/repos/project/src/bar.ts"
+        />
+      )
+      const fooRow = screen.getByText('src/foo.ts').closest('div[class*="cursor-pointer"]')!
+      const barRow = screen.getByText('src/bar.ts').closest('div[class*="cursor-pointer"]')!
+      expect(barRow.className).toContain('bg-accent/20')
+      expect(barRow.className).toContain('ring-accent/50')
+      expect(fooRow.className).not.toContain('bg-accent/20')
+    })
+
+    it('highlights the unstaged row whose path matches selectedFilePath', () => {
+      const unstagedFiles = [
+        { path: 'src/baz.ts', status: 'modified' as const, staged: false, indexStatus: ' ', workingDirStatus: 'M' },
+      ]
+      render(
+        <SCWorkingView
+          {...defaultProps}
+          gitStatus={unstagedFiles}
+          unstagedFiles={unstagedFiles}
+          selectedFilePath="/repos/project/src/baz.ts"
+        />
+      )
+      const bazRow = screen.getByText('src/baz.ts').closest('div[class*="cursor-pointer"]')!
+      expect(bazRow.className).toContain('bg-accent/20')
+    })
+
+    it('does not highlight any row when selectedFilePath is null', () => {
+      const stagedFiles = [
+        { path: 'src/foo.ts', status: 'modified' as const, staged: true, indexStatus: 'M', workingDirStatus: ' ' },
+      ]
+      render(
+        <SCWorkingView
+          {...defaultProps}
+          gitStatus={stagedFiles}
+          stagedFiles={stagedFiles}
+          selectedFilePath={null}
+        />
+      )
+      const fooRow = screen.getByText('src/foo.ts').closest('div[class*="cursor-pointer"]')!
+      expect(fooRow.className).not.toContain('bg-accent/20')
+    })
+  })
 })

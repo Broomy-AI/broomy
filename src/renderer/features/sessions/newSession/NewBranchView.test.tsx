@@ -106,7 +106,8 @@ describe('NewBranchView', () => {
       <NewBranchView repo={mockRepo} issue={issue} onBack={vi.fn()} onComplete={vi.fn()} />
     )
     const input = screen.getByPlaceholderText('feature/my-feature')
-    expect((input as HTMLInputElement).value).toContain('login-bug')
+    // Issue-derived default carries the `issue/<number>-` prefix so the worktree lands under issue/.
+    expect((input as HTMLInputElement).value).toBe('issue/42-fix-login-bug')
   })
 
   it('creates branch and calls onComplete on success', async () => {
@@ -129,7 +130,7 @@ describe('NewBranchView', () => {
         '/repos/my-project/main',
         '/repos/my-project/feature/auth',
         'feature/auth',
-        'main'
+        'origin/main'
       )
       expect(onComplete).toHaveBeenCalledWith(
         '/repos/my-project/feature/auth',
@@ -231,11 +232,11 @@ describe('NewBranchView', () => {
         <NewBranchView repo={mockRepo} issue={issue} onBack={vi.fn()} onComplete={vi.fn()} onStartBranch={onStartBranch} />
       )
 
-      const input = screen.getByPlaceholderText('feature/my-feature')
-      fireEvent.change(input, { target: { value: 'fix/login-bug' } })
+      // Do NOT edit the input — the issue-derived default must carry the issue/<number>- prefix.
       fireEvent.click(screen.getByText('Create Branch'))
 
       expect(onStartBranch).toHaveBeenCalledWith(expect.objectContaining({
+        branchName: 'issue/42-fix-login-bug',
         issue: { number: 42, title: 'Fix login bug', url: 'https://github.com/user/my-project/issues/42' },
       }))
     })

@@ -326,8 +326,17 @@ describe('gitBranch handlers', () => {
       expect(await handlers['git:defaultBranch'](null, '/repo')).toBe('develop')
     })
 
+    it('asks origin when the symbolic ref is missing', async () => {
+      mockGitInstance.raw
+        .mockRejectedValueOnce(new Error('no ref'))
+        .mockResolvedValueOnce('ref: refs/heads/trunk\tHEAD\nabc123\tHEAD\n') // ls-remote --symref
+      const handlers = setupHandlers()
+      expect(await handlers['git:defaultBranch'](null, '/repo')).toBe('trunk')
+    })
+
     it('falls back to main when symbolic ref fails', async () => {
       mockGitInstance.raw.mockRejectedValueOnce(new Error('no ref'))
+        .mockRejectedValueOnce(new Error('remote unreachable')) // ls-remote --symref
         .mockResolvedValueOnce('') // rev-parse --verify main succeeds
       const handlers = setupHandlers()
       expect(await handlers['git:defaultBranch'](null, '/repo')).toBe('main')
@@ -336,6 +345,7 @@ describe('gitBranch handlers', () => {
     it('falls back to master when main does not exist', async () => {
       mockGitInstance.raw
         .mockRejectedValueOnce(new Error('no ref'))
+        .mockRejectedValueOnce(new Error('remote unreachable')) // ls-remote --symref
         .mockRejectedValueOnce(new Error('no main'))
         .mockResolvedValueOnce('') // rev-parse --verify master succeeds
       const handlers = setupHandlers()
