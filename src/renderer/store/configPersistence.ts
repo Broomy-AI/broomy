@@ -139,6 +139,7 @@ async function doSave(): Promise<void> {
     sidebarWidth: sessionState.sidebarWidth,
     toolbarPanels: sessionState.toolbarPanels,
     collapsedRepoGroups: sessionState.collapsedRepoGroups,
+    repoGroupOrder: sessionState.repoGroupOrder,
   })
 }
 

@@ -229,6 +229,7 @@ export type ConfigData = {
   sidebarWidth?: number
   toolbarPanels?: string[]
   collapsedRepoGroups?: string[]
+  repoGroupOrder?: string[]
   repos?: ManagedRepo[]
   defaultCloneDir?: string
   defaultShell?: string

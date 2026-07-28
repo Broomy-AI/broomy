@@ -146,6 +146,9 @@ interface SessionStore {
   toolbarPanels: string[]
   // Collapsed repo-group keys in the sidebar (persisted per profile)
   collapsedRepoGroups: string[]
+  // User-dragged repo-group order, by group key (persisted per profile). Sparse: holds
+  // only groups the user has reordered; unlisted groups fall back to the computed order.
+  repoGroupOrder: string[]
   // The grouped/sorted session-id order (runtime only, not persisted), published by
   // SessionList for keyboard Next/Prev. `full` is every active session in display order
   // (used for directional scanning); `visible` excludes collapsed groups / non-matches.
@@ -164,6 +167,8 @@ interface SessionStore {
   setPanelVisibility: (sessionId: string, panelId: string, visible: boolean) => void
   setToolbarPanels: (panels: string[]) => void
   setRepoGroupCollapsed: (key: string, collapsed: boolean) => void
+  reorderSession: (draggedId: string, targetId: string, before: boolean) => void
+  reorderRepoGroup: (draggedKey: string, targetKey: string, renderedKeys: string[], before: boolean) => void
   setSidebarOrder: (full: string[], visible: string[]) => void
   // UI state actions (backwards compat aliases)
   toggleSidebar: () => void
@@ -233,6 +238,7 @@ export const useSessionStore = create<SessionStore>((set, get) => {
   sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
   toolbarPanels: [...DEFAULT_TOOLBAR_PANELS],
   collapsedRepoGroups: [],
+  repoGroupOrder: [],
   sidebarFullOrder: [],
   sidebarVisibleOrder: [],
   globalPanelVisibility: { ...DEFAULT_GLOBAL_PANEL_VISIBILITY },
