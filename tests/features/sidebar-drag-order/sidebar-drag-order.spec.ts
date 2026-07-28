@@ -59,7 +59,6 @@ function dispatchDragOverAndCheckIndicator(p: Page, towardTop: boolean): Promise
   }, towardTop)
 }
 
-
 async function dragElement(
   p: Page,
   fromSelector: string,
@@ -138,16 +137,32 @@ async function dragElementExpectRejected(
 
   await expect.poll(() => dispatchDragOverAndCheckIndicator(p, true), { timeout: 2000 }).toBe(true)
 
-  const hasIndicator = await p.evaluate((toSelector) => {
+  // Redirect the drag to the real (cross-group) target.
+  await p.evaluate((toSelector) => {
     const to = document.querySelector(toSelector) as HTMLElement | null
     if (!to) throw new Error(`drag target not found: ${toSelector}`)
     ;(window as unknown as { __drag: DragHandle }).__drag.to = to
-    const { dt } = (window as unknown as { __drag: DragHandle }).__drag
-    const rect = to.getBoundingClientRect()
-    to.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt, clientY: rect.top + 2 }))
-    return to.className.includes('border-t-accent') || to.className.includes('border-b-accent')
   }, toSelector)
-  expect(hasIndicator).toBe(false)
+
+  // Re-dispatch dragover on the cross-group target across several ticks — the same
+  // opportunity dragElement's positive-path poll (above) gives React to commit a
+  // setDropTarget update — and assert the indicator never shows up. A single
+  // synchronous read (the old approach) trivially passes before React has had any
+  // chance to render, since the state update from a dragover handler is scheduled
+  // at continuous (non-sync) priority. So instead of polling for `false` (which
+  // would also succeed immediately on the very first, pre-render check), poll for
+  // the indicator becoming `true` and require that poll to time out: if it ever
+  // shows up within the polling window, the cross-group drop was wrongly accepted.
+  let indicatorAppeared = false
+  try {
+    await expect
+      .poll(() => dispatchDragOverAndCheckIndicator(p, true), { timeout: 500, intervals: [50, 50, 50, 50] })
+      .toBe(true)
+    indicatorAppeared = true
+  } catch {
+    // Timed out without ever observing the indicator — the expected (rejected) case.
+  }
+  expect(indicatorAppeared).toBe(false)
 
   await p.evaluate(() => {
     const { dt, from, to } = (window as unknown as { __drag: DragHandle }).__drag
