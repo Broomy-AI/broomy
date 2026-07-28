@@ -9,6 +9,7 @@ import type { ManagedRepo, GitHubIssue } from '../../../../preload/index'
 import { issueToBranchName } from '../../../shared/utils/slugify'
 import { DialogErrorBanner } from '../../../shared/components/ErrorBanner'
 import { AuthSetupSection } from '../../../shared/components/AuthSetupSection'
+import { resolveBaseRef } from '../../git/baseRef'
 
 export function NewBranchView({
   repo,
@@ -62,12 +63,16 @@ export function NewBranchView({
       const mainDir = `${repo.rootDir}/main`
       const worktreePath = `${repo.rootDir}/${branchName}`
 
-      // Pull latest on main first
+      // Resolve and fetch the base ref first — this is what the new branch is
+      // built on, so it must be current regardless of the main worktree's state.
+      const baseRef = await resolveBaseRef(mainDir, repo.defaultBranch)
+
+      // Best-effort refresh of the main worktree itself.
       await window.git.pull(mainDir)
 
       // Create worktree with new branch — tolerate "already exists" on retry
       // (e.g. if worktree was created but push failed on first attempt)
-      const result = await window.git.worktreeAdd(mainDir, worktreePath, branchName, repo.defaultBranch)
+      const result = await window.git.worktreeAdd(mainDir, worktreePath, branchName, baseRef)
       if (!result.success && !result.error?.includes('already exists')) {
         throw new Error(result.error || 'Failed to create worktree')
       }
