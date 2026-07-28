@@ -90,4 +90,38 @@ describe('SCBranchView', () => {
     const item = screen.getByTitle('src/index.ts \u2014 Modified')
     expect(item).toBeTruthy()
   })
+
+  describe('selected file highlight', () => {
+    it('highlights the row whose path matches selectedFilePath', () => {
+      const branchChanges = [
+        { path: 'src/foo.ts', status: 'modified' },
+        { path: 'src/bar.ts', status: 'modified' },
+      ]
+      render(
+        <SCBranchView
+          {...defaultProps}
+          branchChanges={branchChanges}
+          selectedFilePath="/repos/project/src/bar.ts"
+        />
+      )
+      const fooRow = screen.getByText('src/foo.ts').closest('div[class*="cursor-pointer"]')!
+      const barRow = screen.getByText('src/bar.ts').closest('div[class*="cursor-pointer"]')!
+      expect(barRow.className).toContain('bg-accent/20')
+      expect(barRow.className).toContain('ring-accent/50')
+      expect(fooRow.className).not.toContain('bg-accent/20')
+    })
+
+    it('does not highlight any row when selectedFilePath is null', () => {
+      const branchChanges = [{ path: 'src/foo.ts', status: 'modified' }]
+      render(
+        <SCBranchView
+          {...defaultProps}
+          branchChanges={branchChanges}
+          selectedFilePath={null}
+        />
+      )
+      const fooRow = screen.getByText('src/foo.ts').closest('div[class*="cursor-pointer"]')!
+      expect(fooRow.className).not.toContain('bg-accent/20')
+    })
+  })
 })
