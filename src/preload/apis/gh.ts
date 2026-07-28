@@ -2,7 +2,7 @@
  * Preload API for GitHub CLI interactions including issues, pull requests, and code reviews.
  */
 import { ipcRenderer } from 'electron'
-import type { GitHubIssue, GitHubPrStatus, GitHubPrComment, GitHubIssueComment, GitHubPrForReview } from './types'
+import type { GitHubIssue, GitHubPrStatus, GitHubPrComment, GitHubIssueComment, GitHubPrForReview, PrReviewFilterMode } from './types'
 
 export type GhApi = {
   isInstalled: () => Promise<boolean>
@@ -18,7 +18,7 @@ export type GhApi = {
   prIssueComments: (repoDir: string, prNumber: number, page?: number, perPage?: number) => Promise<GitHubIssueComment[]>
   replyToComment: (repoDir: string, prNumber: number, commentId: number, body: string) => Promise<{ success: boolean; error?: string }>
   addReaction: (repoDir: string, commentId: number, reaction: string, commentType: 'review' | 'issue') => Promise<{ success: boolean; error?: string }>
-  prsToReview: (repoDir: string) => Promise<GitHubPrForReview[]>
+  prsToReview: (repoDir: string, mode?: PrReviewFilterMode) => Promise<GitHubPrForReview[]>
   submitDraftReview: (repoDir: string, prNumber: number, comments: { path: string; line: number; body: string }[]) => Promise<{ success: boolean; reviewId?: number; error?: string }>
   myReviewStatus: (repoDir: string, prNumber: number) => Promise<'pending' | 'reviewed' | null>
   prFeedbackStatus: (repoDir: string, prNumber: number) => Promise<boolean>
@@ -40,7 +40,7 @@ export const ghApi: GhApi = {
   prIssueComments: (repoDir, prNumber, page, perPage) => ipcRenderer.invoke('gh:prIssueComments', repoDir, prNumber, page, perPage),
   replyToComment: (repoDir, prNumber, commentId, body) => ipcRenderer.invoke('gh:replyToComment', repoDir, prNumber, commentId, body),
   addReaction: (repoDir, commentId, reaction, commentType) => ipcRenderer.invoke('gh:addReaction', repoDir, commentId, reaction, commentType),
-  prsToReview: (repoDir) => ipcRenderer.invoke('gh:prsToReview', repoDir),
+  prsToReview: (repoDir, mode) => ipcRenderer.invoke('gh:prsToReview', repoDir, mode),
   submitDraftReview: (repoDir, prNumber, comments) => ipcRenderer.invoke('gh:submitDraftReview', repoDir, prNumber, comments),
   myReviewStatus: (repoDir, prNumber) => ipcRenderer.invoke('gh:myReviewStatus', repoDir, prNumber),
   prFeedbackStatus: (repoDir, prNumber) => ipcRenderer.invoke('gh:prFeedbackStatus', repoDir, prNumber),

@@ -46,7 +46,16 @@ export type ManagedRepo = {
   isolated?: boolean         // Run sessions in this repo inside a dev container
   skipApproval?: boolean     // Auto-approve agent commands when isolated
   approvalPolicy?: 'one' | 'all'  // 'one' = waiting clears once anyone approves; 'all' = all requested reviewers must approve. Default 'one'.
+  prReviewFilter?: PrReviewFilterMode  // Last-used filter in the "PRs to Review" view. Default 'team'.
 }
+
+/**
+ * Which pull requests the "PRs to Review" view lists.
+ * - 'team' includes reviews requested from the user or from any team they belong to
+ * - 'mine' includes only reviews requested from the user directly
+ * - 'all' includes every open PR
+ */
+export type PrReviewFilterMode = 'team' | 'mine' | 'all'
 
 export type GitHubIssue = {
   number: number
