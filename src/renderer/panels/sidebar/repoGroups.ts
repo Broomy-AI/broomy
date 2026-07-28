@@ -175,7 +175,7 @@ export function rollUpStatus(sessions: Session[]): Rollup {
   return { status: 'idle', count: 0, total }
 }
 
-/** The flat, alphabetically-sorted list of visible session ids across all groups. */
+/** The flat list of visible session ids across all groups, in group order then array order. */
 export function flattenGroupOrder(groups: RepoGroup[]): string[] {
   return groups.flatMap((g) => g.sessions.map((s) => s.id))
 }

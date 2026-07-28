@@ -37,7 +37,7 @@ export function useSessionGrouping(
   )
 
   // Grouped view is built from ALL non-archived sessions; the search render uses the
-  // filtered subset flattened alphabetically.
+  // filtered subset flattened in manual/array order.
   const groups = useMemo(
     () => groupSessionsByRepo(allActive, repos, repoGroupOrder),
     [allActive, repos, repoGroupOrder],

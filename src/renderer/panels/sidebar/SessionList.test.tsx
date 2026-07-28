@@ -632,8 +632,8 @@ describe('SessionList', () => {
         makeSession({ id: 's2', branch: 'two', repoId: 'r1' }),
       ])
       render(<SessionList {...makeProps()} />)
-      const first = document.querySelector('[data-session-id="s1"]') as HTMLElement
-      const second = document.querySelector('[data-session-id="s2"]') as HTMLElement
+      const first = document.querySelector('[data-session-id="s1"]')!
+      const second = document.querySelector('[data-session-id="s2"]')!
       const dataTransfer = mockDataTransfer()
       fireEvent.dragStart(first, { dataTransfer })
       fireEvent.dragOver(second, { dataTransfer })
@@ -647,8 +647,8 @@ describe('SessionList', () => {
         makeSession({ id: 's2', branch: 'two', repoId: 'r2' }),
       ])
       render(<SessionList {...makeProps()} />)
-      const first = document.querySelector('[data-session-id="s1"]') as HTMLElement
-      const other = document.querySelector('[data-session-id="s2"]') as HTMLElement
+      const first = document.querySelector('[data-session-id="s1"]')!
+      const other = document.querySelector('[data-session-id="s2"]')!
       const dataTransfer = mockDataTransfer()
       fireEvent.dragStart(first, { dataTransfer })
       fireEvent.dragOver(other, { dataTransfer })

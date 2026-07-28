@@ -14,6 +14,7 @@ import { useElapsedSeconds } from '../../shared/hooks/useElapsedSeconds'
 import { deriveDisplayedChip } from '../../features/git/displayedChip'
 import { ReviewStatusChip } from '../../shared/components/ReviewStatusChip'
 import { StatusIndicator } from './StatusIndicator'
+import { dropEdgeClasses } from './useSidebarDrag'
 
 const statusLabels: Record<SessionStatus, string> = {
   working: 'Working',
@@ -135,9 +136,7 @@ export default memo(function SessionCard({
       }}
       className={`group relative w-full text-left p-3 rounded mb-1 transition-all cursor-pointer outline-none focus:ring-1 focus:ring-accent/50 ${
         isActive ? 'bg-accent/15' : 'hover:bg-bg-tertiary/50'
-      } ${dropEdge === 'before' ? 'border-t-2 border-t-accent' : ''} ${
-        dropEdge === 'after' ? 'border-b-2 border-b-accent' : ''
-      }`}
+      } ${dropEdgeClasses(dropEdge)}`}
     >
       <div className="flex items-center gap-2 mb-1">
         <StatusIndicator status={displayStatus} isUnread={isUnread} />

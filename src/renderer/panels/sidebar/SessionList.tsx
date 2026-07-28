@@ -17,6 +17,7 @@ import DeleteSessionDialog from './DeleteSessionDialog'
 import UpdateBanner from './UpdateBanner'
 import { RepoGroupSection } from './RepoGroupSection'
 import { ArchivedSection } from './ArchivedSection'
+import { SessionListHeader } from './SessionListHeader'
 import { useSessionGrouping } from './useSessionGrouping'
 import { sortArchived } from './archivedOrder'
 import { useSidebarDrag } from './useSidebarDrag'
@@ -117,38 +118,12 @@ export default function SessionList({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="p-3 border-b border-border flex items-center gap-2">
-        <button
-          onClick={onNewSession}
-          className="flex-1 py-2 px-3 bg-accent hover:bg-accent/80 text-on-accent text-sm font-medium rounded transition-colors"
-        >
-          + New Session
-        </button>
-        {onRefreshPrStatus && (
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="p-2 rounded text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors disabled:opacity-50"
-            title="Refresh PR status for all sessions"
-          >
-            <svg
-              className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M21 2v6h-6" />
-              <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-              <path d="M3 22v-6h6" />
-              <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-            </svg>
-          </button>
-        )}
-      </div>
+      <SessionListHeader
+        onNewSession={onNewSession}
+        onRefreshPrStatus={onRefreshPrStatus}
+        isRefreshing={isRefreshing}
+        onRefresh={handleRefresh}
+      />
 
       {/* Search */}
       <div className="px-2 pt-2 relative">

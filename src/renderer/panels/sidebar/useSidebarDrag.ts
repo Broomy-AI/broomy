@@ -31,6 +31,16 @@ export interface DragHandlers {
   onDragEnd: (e: React.DragEvent) => void
 }
 
+/**
+ * Tailwind classes for the 2px accent drop-indicator line, shared by SessionCard and
+ * RepoGroupHeader so the "before"/"after" edge styling can't drift between the two.
+ */
+export function dropEdgeClasses(dropEdge: 'before' | 'after' | null | undefined): string {
+  if (dropEdge === 'before') return 'border-t-2 border-t-accent'
+  if (dropEdge === 'after') return 'border-b-2 border-b-accent'
+  return ''
+}
+
 /** True when the cursor sits in the top half of the event's target element. */
 function isBefore(e: React.DragEvent): boolean {
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
@@ -59,7 +69,7 @@ export function useSidebarDrag(enabled: boolean, renderedGroupKeys: string[]) {
   }, [enabled])
 
   const dragOver = useCallback((kind: DropKind, e: React.DragEvent, id: string) => {
-    if (!enabled || !dragging || dragging.kind !== kind) return
+    if (!enabled || dragging?.kind !== kind) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
     if (dragging.id === id) { setDropTarget(null); return }
@@ -69,7 +79,7 @@ export function useSidebarDrag(enabled: boolean, renderedGroupKeys: string[]) {
   const leave = useCallback(() => setDropTarget(null), [])
 
   const performDrop = useCallback((kind: DropKind, e: React.DragEvent, id: string) => {
-    if (!enabled || !dragging || dragging.kind !== kind) return
+    if (!enabled || dragging?.kind !== kind) return
     e.preventDefault()
     e.stopPropagation()
     const before = isBefore(e)

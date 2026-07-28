@@ -35,7 +35,7 @@ export function RepoGroupSection({
   dropTarget: DropTarget | null
 }) {
   const edgeFor = (kind: DropKind, id: string): 'before' | 'after' | null =>
-    dropTarget && dropTarget.kind === kind && dropTarget.id === id
+    dropTarget?.kind === kind && dropTarget.id === id
       ? (dropTarget.before ? 'before' : 'after')
       : null
 

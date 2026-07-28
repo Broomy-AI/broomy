@@ -5,6 +5,7 @@
  */
 import { rollUpStatus, type RepoGroup, type RollupStatus } from './repoGroups'
 import { StatusIndicator } from './StatusIndicator'
+import { dropEdgeClasses } from './useSidebarDrag'
 import type { SessionStatus } from '../../store/sessions'
 
 const ROLLUP_LABEL: Record<RollupStatus, string> = {
@@ -69,9 +70,7 @@ export function RepoGroupHeader({
       onDragLeave={onDragLeave}
       onDrop={(e) => onDrop?.(e, group.key)}
       onDragEnd={onDragEnd}
-      className={`flex items-center gap-2 w-full px-2 py-1.5 rounded hover:bg-bg-tertiary/40 text-left outline-none focus:ring-1 focus:ring-accent/50 ${
-        dropEdge === 'before' ? 'border-t-2 border-t-accent' : ''
-      } ${dropEdge === 'after' ? 'border-b-2 border-b-accent' : ''}`}
+      className={`flex items-center gap-2 w-full px-2 py-1.5 rounded hover:bg-bg-tertiary/40 text-left outline-none focus:ring-1 focus:ring-accent/50 ${dropEdgeClasses(dropEdge)}`}
     >
       <svg
         aria-hidden="true"
