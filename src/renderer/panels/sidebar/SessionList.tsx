@@ -19,6 +19,7 @@ import { RepoGroupSection } from './RepoGroupSection'
 import { ArchivedSection } from './ArchivedSection'
 import { useSessionGrouping } from './useSessionGrouping'
 import { sortArchived } from './archivedOrder'
+import { useSidebarDrag } from './useSidebarDrag'
 
 interface SessionListProps {
   repos: ManagedRepo[]
@@ -108,6 +109,11 @@ export default function SessionList({
   const searching = searchQuery.trim().length > 0
   const { railColorByKey, collapsedSet, setRepoGroupCollapsed, repoLabelFor, groups, orderedSessions, archivedRollup } =
     useSessionGrouping(allActive, activeSessions, archivedSessions, repos, searching)
+
+  // Dragging is off while searching: the search view is a filtered projection, so a drop
+  // between two visible cards has no unambiguous position in the underlying array.
+  const renderedGroupKeys = useMemo(() => groups.map((g) => g.key), [groups])
+  const { dropTarget, sessionDrag, groupDrag } = useSidebarDrag(!searching, renderedGroupKeys)
 
   return (
     <div className="flex flex-col h-full">
@@ -202,6 +208,10 @@ export default function SessionList({
               onSelect={onSelectSession}
               onDelete={handleDelete}
               onArchive={handleArchive}
+              dragEnabled={!searching}
+              sessionDrag={sessionDrag}
+              groupDrag={groupDrag}
+              dropTarget={dropTarget}
             />
           )
         })}

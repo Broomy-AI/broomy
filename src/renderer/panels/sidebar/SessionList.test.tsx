@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import '../../../test/react-setup'
 import SessionList from './SessionList'
 import { useSessionStore } from '../../store/sessions'
@@ -64,6 +65,16 @@ function makeProps(overrides: Record<string, unknown> = {}) {
 /** Set sessions in the store before rendering. */
 function setSessions(sessions: Session[]) {
   useSessionStore.setState({ sessions })
+}
+
+/**
+ * jsdom has no DataTransfer implementation (https://github.com/jsdom/jsdom/issues/1568),
+ * so real drag events arrive with `dataTransfer` undefined. The production code (a real
+ * browser) always has one; supply a stand-in here so `fireEvent.drag*` doesn't crash when
+ * `useSidebarDrag` sets `effectAllowed`/`dropEffect` or calls `setData`.
+ */
+function mockDataTransfer() {
+  return { effectAllowed: '', dropEffect: '', setData: vi.fn() }
 }
 
 afterEach(() => {
@@ -582,6 +593,67 @@ describe('SessionList', () => {
 
       // Archived count should reflect filtering
       expect(screen.getByText(/Archived \(1\)/)).toBeTruthy()
+    })
+  })
+
+  describe('drag to reorder', () => {
+    it('makes active session cards draggable', () => {
+      setSessions([
+        makeSession({ id: 's1', branch: 'one', repoId: 'r1' }),
+        makeSession({ id: 's2', branch: 'two', repoId: 'r1' }),
+      ])
+      render(<SessionList {...makeProps()} />)
+      const card = document.querySelector('[data-session-id="s1"]')
+      expect(card).toHaveAttribute('draggable', 'true')
+    })
+
+    it('does not make cards draggable while searching', async () => {
+      setSessions([
+        makeSession({ id: 's1', branch: 'one', repoId: 'r1' }),
+        makeSession({ id: 's2', branch: 'two', repoId: 'r1' }),
+      ])
+      render(<SessionList {...makeProps()} />)
+      await userEvent.type(screen.getByPlaceholderText('Search sessions...'), 'one')
+      const card = document.querySelector('[data-session-id="s1"]')
+      expect(card).toHaveAttribute('draggable', 'false')
+    })
+
+    it('does not make archived cards draggable', () => {
+      setSessions([makeSession({ id: 's1', branch: 'gone', isArchived: true })])
+      render(<SessionList {...makeProps()} />)
+      fireEvent.click(screen.getByRole('button', { name: /Archived/ }))
+      const card = document.querySelector('[data-session-id="s1"]')
+      expect(card).toHaveAttribute('draggable', 'false')
+    })
+
+    it('reorders within a group on drop', () => {
+      setSessions([
+        makeSession({ id: 's1', branch: 'one', repoId: 'r1' }),
+        makeSession({ id: 's2', branch: 'two', repoId: 'r1' }),
+      ])
+      render(<SessionList {...makeProps()} />)
+      const first = document.querySelector('[data-session-id="s1"]') as HTMLElement
+      const second = document.querySelector('[data-session-id="s2"]') as HTMLElement
+      const dataTransfer = mockDataTransfer()
+      fireEvent.dragStart(first, { dataTransfer })
+      fireEvent.dragOver(second, { dataTransfer })
+      fireEvent.drop(second, { dataTransfer })
+      expect(useSessionStore.getState().sessions.map((s) => s.id)).toEqual(['s2', 's1'])
+    })
+
+    it('leaves the order unchanged when dropping onto another repo group', () => {
+      setSessions([
+        makeSession({ id: 's1', branch: 'one', repoId: 'r1' }),
+        makeSession({ id: 's2', branch: 'two', repoId: 'r2' }),
+      ])
+      render(<SessionList {...makeProps()} />)
+      const first = document.querySelector('[data-session-id="s1"]') as HTMLElement
+      const other = document.querySelector('[data-session-id="s2"]') as HTMLElement
+      const dataTransfer = mockDataTransfer()
+      fireEvent.dragStart(first, { dataTransfer })
+      fireEvent.dragOver(other, { dataTransfer })
+      fireEvent.drop(other, { dataTransfer })
+      expect(useSessionStore.getState().sessions.map((s) => s.id)).toEqual(['s1', 's2'])
     })
   })
 })
