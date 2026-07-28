@@ -5,6 +5,8 @@ import { PANEL_IDS } from '../panels/system/types'
 import { BUILTIN_PANELS } from '../panels/system/builtinPanels'
 import type { Session, PanelVisibility } from './sessions'
 import { debouncedSave, syncLegacyFields } from './sessionPersistence'
+import { useRepoStore } from './repos'
+import { moveSessionWithinGroup, moveGroupKey } from '../panels/sidebar/sidebarDragOrder'
 
 function getEffectiveVisibility(panelVisibility: PanelVisibility, panelId: string): boolean {
   if (panelId in panelVisibility) return panelVisibility[panelId]
@@ -18,6 +20,7 @@ type StoreGet = () => {
   sidebarWidth: number
   toolbarPanels: string[]
   collapsedRepoGroups: string[]
+  repoGroupOrder: string[]
 }
 type StoreSet = (partial: Partial<{
   sessions: Session[]
@@ -27,6 +30,7 @@ type StoreSet = (partial: Partial<{
   sidebarWidth: number
   toolbarPanels: string[]
   collapsedRepoGroups: string[]
+  repoGroupOrder: string[]
   sidebarFullOrder: string[]
   sidebarVisibleOrder: string[]
 }>) => void
@@ -91,6 +95,30 @@ export function createPanelActions(get: StoreGet, set: StoreSet) {
       const has = current.includes(key)
       if (collapsed === has) return // no-op — nothing changed
       set({ collapsedRepoGroups: collapsed ? [...current, key] : current.filter((k) => k !== key) })
+      debouncedSave()
+    },
+
+    // Active session order IS the array order, so a drag rewrites the array. Repos come
+    // from the repo store — the session store never holds them.
+    reorderSession: (draggedId: string, targetId: string, before: boolean) => {
+      const { sessions } = get()
+      const next = moveSessionWithinGroup(
+        sessions,
+        useRepoStore.getState().repos,
+        draggedId,
+        targetId,
+        before,
+      )
+      if (next === sessions) return // rejected drop — nothing changed
+      set({ sessions: next })
+      debouncedSave()
+    },
+
+    reorderRepoGroup: (draggedKey: string, targetKey: string, renderedKeys: string[], before: boolean) => {
+      const current = get().repoGroupOrder
+      const next = moveGroupKey(current, renderedKeys, draggedKey, targetKey, before)
+      if (next === current) return
+      set({ repoGroupOrder: next })
       debouncedSave()
     },
 

@@ -224,6 +224,7 @@ export type SessionData = {
   searchHistory?: string[]
   // Archive state
   isArchived?: boolean
+  archivedAt?: number
   // Workflow stage
   stage?: string
   // Agent SDK session ID for resume
@@ -237,6 +238,7 @@ export type ConfigData = {
   sidebarWidth?: number
   toolbarPanels?: string[]
   collapsedRepoGroups?: string[]
+  repoGroupOrder?: string[]
   repos?: ManagedRepo[]
   defaultCloneDir?: string
   defaultShell?: string

@@ -60,6 +60,7 @@ const mockGit: Mocked<GitApi> = {
   pull: vi.fn().mockResolvedValue({ success: true }),
   clone: vi.fn().mockResolvedValue({ success: true }),
   worktreeAdd: vi.fn().mockResolvedValue({ success: true }),
+  worktreeAddNewBranch: vi.fn().mockResolvedValue({ success: true }),
   worktreeList: vi.fn().mockResolvedValue([]),
   worktreeRemove: vi.fn().mockResolvedValue({ success: true }),
   deleteBranch: vi.fn().mockResolvedValue({ success: true }),

@@ -170,3 +170,7 @@ export const WaitingChip: Story = {
 export const ApprovedChip: Story = {
   args: { sessionId: 'session-11' },
 }
+
+export const DropTargetBefore: Story = {
+  args: { sessionId: 'session-1', draggable: true, dropEdge: 'before' },
+}
