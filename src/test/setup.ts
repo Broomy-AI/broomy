@@ -11,8 +11,15 @@
  * If the preload type changes (e.g. a sync property becomes an async function),
  * TypeScript will flag the mismatch here at compile time.
  */
-import { vi, afterEach, type Mock } from 'vitest'
+import { vi, afterEach, expect, type Mock } from 'vitest'
 import { checkAndReset } from './console-guard'
+
+// Load jest-dom matchers when in a DOM environment
+if (typeof globalThis.window !== 'undefined' && typeof globalThis.document !== 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const matchers = require('@testing-library/jest-dom/matchers')
+  expect.extend(matchers)
+}
 import type { PtyApi } from '../preload/apis/pty'
 import type { FsApi } from '../preload/apis/fs'
 import type { GitApi } from '../preload/apis/git'

@@ -664,3 +664,31 @@ function syncLegacyFields(session: Session): Session {
 **Original problem**: Zero error boundaries existed in the application. Any panel rendering error would crash the entire app to a white screen.
 
 **Implementation**: `PanelErrorBoundary.tsx` exists at `src/renderer/components/PanelErrorBoundary.tsx` with a co-located test file. Panels are wrapped with error boundaries in `Layout.tsx` to isolate rendering crashes.
+
+---
+
+## Low Priority
+
+### Extract shared comment-gutter wiring from the two Monaco viewers
+
+**Problem**: `MonacoViewer.tsx` and `MonacoDiffViewer.tsx` duplicate ~50 lines
+near-verbatim for the inline-comment feature: the hover-"+"/click gutter wiring
+(`onMouseMove`/`onMouseLeave`/`onMouseDown` building the `add-comment-glyph`
+decoration and opening the comment box) and the review-comment CSS `<style>`
+string. This matches the two files' pre-existing duplication convention (they
+already duplicate helpers like `getLanguageFromPath`), and the diff-comments v1
+plan deliberately instructed copying the block into both, so it is not a
+regression — but it is a maintenance hazard.
+
+**Current state**: The wiring lives inline in both viewers' mount handlers; the
+CSS is a duplicated `<style>{`…`}</style>` block guarded by `commentsContext`.
+
+**Proposed solution**: Extract a shared `useCommentGutter(editor, monacoNs, openBox)`
+hook (parameterized by the monaco namespace and editor, since the diff viewer
+uses `monacoEditor`/`modifiedEditor` and the plain viewer uses
+`monacoInstance`/`editor`) and a shared `commentGutterStyles` constant or a
+`<CommentGutterStyle/>` component. Introduced by the v1 inline-comments feature
+(see `docs/superpowers/specs/2026-07-23-diff-comments-design.md`).
+
+**Expected benefit**: Single source of truth for the comment gutter UX; changes
+(e.g. affordance styling, target types) no longer need to be mirrored.

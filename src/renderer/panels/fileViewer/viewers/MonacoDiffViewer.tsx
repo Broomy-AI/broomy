@@ -7,9 +7,15 @@
  * at the requested line on mount and when the scrollToLine prop changes.
  */
 import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { DiffEditor, loader } from '@monaco-editor/react'
 import * as monacoEditor from 'monaco-editor'
 import { useMonacoComments } from '../hooks/useMonacoComments'
+import { useCommentBox } from '../hooks/useCommentBox'
+import { useCommentPlus } from '../hooks/useCommentPlus'
+import InlineCommentBox from '../components/InlineCommentBox'
+import CommentPlusButton from '../components/CommentPlusButton'
+import CommentMarkerButton from '../components/CommentMarkerButton'
 import { useSettingsStore } from '../../../store/settings'
 import { MONACO_THEMES } from '../../../shared/theme/monacoTheme'
 
@@ -23,7 +29,7 @@ interface MonacoDiffViewerProps {
   language?: string
   sideBySide?: boolean
   scrollToLine?: number
-  reviewContext?: { sessionDirectory: string; commentsFilePath: string }
+  commentsContext?: { sessionDirectory: string; commentsFilePath: string }
   onEditorReady?: (actions: import('./types').EditorActions | null) => void
 }
 
@@ -88,7 +94,7 @@ export default function MonacoDiffViewer({
   language,
   sideBySide = true,
   scrollToLine,
-  reviewContext,
+  commentsContext,
   onEditorReady,
 }: MonacoDiffViewerProps) {
   const resolvedTheme = useSettingsStore((s) => s.resolvedTheme)
@@ -97,32 +103,27 @@ export default function MonacoDiffViewer({
   const diffEditorRef = useRef<monacoEditor.editor.IStandaloneDiffEditor | null>(null)
   const modifiedEditorRef = useRef<monacoEditor.editor.IStandaloneCodeEditor | null>(null)
 
-  const {
-    commentLine,
-    setCommentLine,
-    commentText,
-    setCommentText,
-    handleAddComment,
-  } = useMonacoComments({
-    filePath,
-    reviewContext,
-    editorRef: modifiedEditorRef,
-  })
+  const { existingComments, addCommentAt, updateCommentBody } = useMonacoComments({ filePath, commentsContext, editorRef: modifiedEditorRef })
+  const { boxLine, boxNode, editingComment, openBox, openEditBox, closeBox } = useCommentBox(modifiedEditorRef)
+  // useCommentPlus bumps internal scroll state on scroll/layout, re-rendering
+  // this component so the persistent markers reposition via positionFor.
+  const { plus, hostNode: plusHost, positionFor, attach: attachCommentPlus, hide: hideCommentPlus } = useCommentPlus()
+  const commentByLine = new Map(existingComments.map((c) => [c.line, c]))
 
   const handleDiffEditorMount = (editor: monacoEditor.editor.IStandaloneDiffEditor) => {
     diffEditorRef.current = editor
     const modifiedEditor = editor.getModifiedEditor()
     modifiedEditorRef.current = modifiedEditor
-    // Enable glyph margin for comment clicks when review context is present
-    if (reviewContext) {
-      modifiedEditor.updateOptions({ glyphMargin: true })
-      modifiedEditor.onMouseDown((e) => {
-        if (e.target.type === monacoEditor.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) {
-          const lineNumber = e.target.position.lineNumber
-          if (lineNumber) {
-            setCommentLine(lineNumber)
-          }
-        }
+    // Comment affordance: a "+" appears over the hovered line's number (no glyph
+    // margin, so the gutter keeps its width). Clicking it opens the comment box.
+    if (commentsContext) {
+      attachCommentPlus(modifiedEditor, monacoEditor)
+      modifiedEditor.addAction({
+        id: 'broomy.addComment',
+        label: 'Comment',
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 1.5,
+        run: (ed) => { const pos = ed.getPosition(); if (pos) openBox(pos.lineNumber) },
       })
     }
 
@@ -165,44 +166,23 @@ export default function MonacoDiffViewer({
 
   return (
     <div className="h-full flex flex-col">
-      {/* Inline comment input */}
-      {reviewContext && commentLine !== null && (
-        <div className="flex-shrink-0 px-3 py-2 bg-bg-secondary border-b border-border">
-          <div className="text-xs text-text-secondary mb-1">Comment on line {commentLine}:</div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && commentText.trim()) {
-                  void handleAddComment()
-                } else if (e.key === 'Escape') {
-                  setCommentLine(null)
-                }
-              }}
-              placeholder="Type your comment..."
-              className="flex-1 px-2 py-1 text-xs rounded border border-border bg-bg-primary text-text-primary focus:outline-none focus:border-accent"
-              autoFocus
-            />
-            <button
-              onClick={handleAddComment}
-              disabled={!commentText.trim()}
-              className="px-2 py-1 text-xs rounded bg-review-solid text-on-solid hover:bg-review-base disabled:opacity-50 transition-colors"
-            >
-              Add
-            </button>
-            <button
-              onClick={() => setCommentLine(null)}
-              className="px-2 py-1 text-xs rounded text-text-secondary hover:text-text-primary transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
+      {boxNode && boxLine !== null && createPortal(
+        <InlineCommentBox
+          line={boxLine}
+          quotedText={editingComment ? editingComment.quotedText : (modifiedEditorRef.current?.getModel()?.getLineContent(boxLine) ?? '')}
+          initialBody={editingComment?.body ?? ''}
+          submitLabel={editingComment ? 'Save' : 'Add'}
+          onAdd={(body) => {
+            if (editingComment) updateCommentBody(editingComment.id, body)
+            else addCommentAt(boxLine, body)
+            closeBox()
+          }}
+          onCancel={closeBox}
+        />,
+        boxNode,
       )}
       {/* Diff Editor */}
-      <div className="flex-1 min-h-0">
+      <div className="relative flex-1 min-h-0">
         <DiffEditor
           key={`${filePath}:${sideBySide ? 'sbs' : 'inline'}`}
           height="100%"
@@ -234,7 +214,6 @@ export default function MonacoDiffViewer({
             scrollBeyondLastLine: false,
             automaticLayout: true,
             padding: { top: 8, bottom: 8 },
-            glyphMargin: !!reviewContext,
             // Show unchanged regions collapsed by default with expand option
             hideUnchangedRegions: {
               enabled: true,
@@ -249,7 +228,26 @@ export default function MonacoDiffViewer({
             ignoreTrimWhitespace: false,
           }}
         />
+        {/* Persistent markers on lines that already have a comment. */}
+        {commentsContext && plusHost && [...commentByLine.values()].map((c) => {
+          const pos = positionFor(c.line)
+          return pos ? createPortal(<CommentMarkerButton key={c.id} pos={pos} onClick={() => openEditBox(c)} />, plusHost) : null
+        })}
+        {/* Hover "add" affordance — suppressed on lines that already have a comment. */}
+        {commentsContext && plus && plusHost && !commentByLine.has(plus.line) && createPortal(
+          <CommentPlusButton plus={plus} onClick={() => { openBox(plus.line); hideCommentPlus() }} />,
+          plusHost,
+        )}
       </div>
+      {/* Whole-line tint marking lines that already have a comment. */}
+      {commentsContext && (
+        <style>{`
+          .review-comment-line {
+            /* 0.05 is invisible on a light ground; the token carries the theme. */
+            background-color: rgb(var(--color-warning-base) / 0.12);
+          }
+        `}</style>
+      )}
     </div>
   )
 }
