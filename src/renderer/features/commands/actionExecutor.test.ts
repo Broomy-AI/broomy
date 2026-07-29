@@ -159,6 +159,18 @@ describe('executeAction', () => {
     expect(result.error).toBe('network error')
   })
 
+  it('fails with a clear message when the session has no agent terminal', async () => {
+    const { executeAction } = await import('./actionExecutor')
+    const result = await executeAction(
+      { id: 'a', label: 'Plan', template: '/plan' },
+      { directory: '/r', agentPtyId: undefined, templateVars: { main: 'main', branch: 'b', directory: '/r', issueNumber: '' }, argValues: {} },
+    )
+    expect(result).toEqual({
+      success: false,
+      error: 'Session is paused — resume it to run this command.',
+    })
+  })
+
   it('agent path: no agentPtyId and not in API mode returns error', async () => {
     const { executeAction } = await import('./actionExecutor')
     const result = await executeAction(
@@ -166,7 +178,7 @@ describe('executeAction', () => {
       { directory: '/r', templateVars: { main: 'main', branch: 'b', directory: '/r', issueNumber: '' }, argValues: {} },
     )
     expect(result.success).toBe(false)
-    expect(result.error).toBe('No agent terminal available')
+    expect(result.error).toBe('Session is paused — resume it to run this command.')
   })
 
   it('agent path: fs.mkdir throwing returns failure', async () => {

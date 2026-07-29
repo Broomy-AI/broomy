@@ -75,7 +75,7 @@ function getApiModeSessionId(agentId?: string | null): string | null {
 async function executeAgent(resolved: string, ctx: ActionExecutionContext): Promise<ActionResult> {
   const apiSessionId = getApiModeSessionId(ctx.agentId)
   if (!apiSessionId && !ctx.agentPtyId) {
-    return { success: false, error: 'No agent terminal available' }
+    return { success: false, error: 'Session is paused — resume it to run this command.' }
   }
   try {
     const outputDir = `${ctx.directory}/.broomy/output`
@@ -106,6 +106,10 @@ async function executeAgent(resolved: string, ctx: ActionExecutionContext): Prom
       })
     } else if (ctx.agentPtyId) {
       await sendAgentPrompt(ctx.agentPtyId, resolved)
+    } else {
+      // No agent PTY means the session is paused (or its terminal hasn't
+      // spawned yet). Reporting success here would silently drop the command.
+      return { success: false, error: 'Session is paused — resume it to run this command.' }
     }
     return { success: true }
   } catch (err) {
