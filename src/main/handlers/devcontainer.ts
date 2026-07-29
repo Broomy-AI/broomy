@@ -3,7 +3,7 @@
  */
 import { IpcMain } from 'electron'
 import { HandlerContext } from './types'
-import { isDevcontainerCliAvailable, hasDevcontainerConfig, writeDefaultDevcontainerConfig, getContainerInfo, resetContainer } from '../devcontainer'
+import { isDevcontainerCliAvailable, hasDevcontainerConfig, writeDefaultDevcontainerConfig, getContainerInfo, resetContainer, stopContainer } from '../devcontainer'
 
 export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
   ipcMain.handle('devcontainer:status', async () => {
@@ -39,5 +39,12 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
       return
     }
     await resetContainer(ctx, repoDir)
+  })
+
+  ipcMain.handle('devcontainer:stopContainer', async (_event, repoDir: string) => {
+    if (ctx.isE2ETest) {
+      return
+    }
+    await stopContainer(ctx, repoDir)
   })
 }

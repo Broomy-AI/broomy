@@ -158,10 +158,25 @@ export function createBranchActions(get: StoreGet, set: StoreSet) {
 
     pauseSession: (sessionId: string) => {
       const { sessions } = get()
+      const paused = sessions.find((s) => s.id === sessionId)
       // Unlike archiving, pausing keeps the session selected: you stay where
       // you are and see the paused panel. No debouncedSave() — isPaused is
       // runtime-only.
       set({ sessions: sessions.map((s) => (s.id === sessionId ? { ...s, isPaused: true } : s)) })
+
+      // Killing the PTY only kills the local `docker exec` client, so an
+      // isolated session's container would keep running with everything in
+      // it. Stop it too — unless another still-running session shares the
+      // directory. No-ops for non-isolated sessions, which have no tracked
+      // container. Fire-and-forget: the paused UI must not wait on docker.
+      if (!paused) return
+      const stillInUse = sessions.some(
+        (s) => s.id !== sessionId && !s.isPaused && !s.isArchived && s.directory === paused.directory,
+      )
+      if (stillInUse) return
+      void window.devcontainer.stopContainer(paused.directory).catch(() => {
+        // Best-effort teardown; a failure here must not break pausing.
+      })
     },
 
     resumeSession: (sessionId: string) => {

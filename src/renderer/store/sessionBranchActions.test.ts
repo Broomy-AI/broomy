@@ -326,6 +326,40 @@ describe('sessionBranchActions', () => {
     })
   })
 
+  describe('pauseSession container teardown', () => {
+    beforeEach(() => {
+      vi.mocked(window.devcontainer.stopContainer).mockResolvedValue(undefined)
+    })
+
+    it('stops the container for the paused session directory', () => {
+      addTestSession('a', { directory: '/work/a' })
+
+      useSessionStore.getState().pauseSession('a')
+
+      expect(window.devcontainer.stopContainer).toHaveBeenCalledWith('/work/a')
+    })
+
+    it('leaves a container alone while another running session shares the directory', () => {
+      addTestSession('a', { directory: '/work/shared' })
+      const b = { ...useSessionStore.getState().sessions[0], id: 'b', isPaused: false }
+      useSessionStore.setState({
+        sessions: [...useSessionStore.getState().sessions, b],
+      })
+
+      useSessionStore.getState().pauseSession('a')
+
+      expect(window.devcontainer.stopContainer).not.toHaveBeenCalled()
+    })
+
+    it('does not reject when stopping fails', () => {
+      vi.mocked(window.devcontainer.stopContainer).mockRejectedValue(new Error('docker down'))
+      addTestSession('a', { directory: '/work/a' })
+
+      expect(() => useSessionStore.getState().pauseSession('a')).not.toThrow()
+      expect(useSessionStore.getState().sessions[0].isPaused).toBe(true)
+    })
+  })
+
   describe('updateChecksStatus', () => {
     it('sets statusChip to failed when open PR checks fail', () => {
       addTestSession('test-session', { branchStatus: 'open', hasFeedback: false, checksStatus: 'none' })
