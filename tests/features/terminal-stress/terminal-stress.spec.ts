@@ -13,6 +13,7 @@ import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { screenshotElement } from '../_shared/screenshot-helpers'
 import { generateFeaturePage, generateIndex, FeatureStep } from '../_shared/template'
+import { resumeActiveSession } from '../_shared/resume-helpers'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -33,10 +34,19 @@ async function waitForTerminalReady(p: Page) {
   return terminal
 }
 
-/** Click a session in the sidebar and wait for terminal to be ready. */
+/**
+ * Click a session in the sidebar, resume it if needed (sessions restore
+ * paused — resumeActiveSession no-ops if it's already running, so this is
+ * safe to call every time this suite switches to a session, including
+ * switching back to one resumed earlier), and wait for its terminal.
+ *
+ * docs-site has no configured agent, so its PTY is a bare shell and prints
+ * the E2E mock shell's ready marker instead of the fake agent's.
+ */
 async function switchToSession(p: Page, name: string) {
   const session = p.locator(`.cursor-pointer:has-text("${name}")`)
   await session.click()
+  await resumeActiveSession(p, { readyMarker: name === 'docs-site' ? 'E2E_TEST_SHELL_READY' : undefined })
   await waitForTerminalReady(p)
 }
 
@@ -62,6 +72,9 @@ test.afterAll(async () => {
 
 test.describe.serial('Feature: Terminal Stress', () => {
   test('Step 1: Basic rendering — terminal shows content', async () => {
+    // Sessions restore paused — resume the initially active one before
+    // stress-testing its terminal.
+    await resumeActiveSession(page)
     const terminalArea = await waitForTerminalReady(page)
 
     await screenshotElement(page, terminalArea, path.join(SCREENSHOTS, '01-basic-rendering.png'))
@@ -69,21 +82,28 @@ test.describe.serial('Feature: Terminal Stress', () => {
       screenshotPath: 'screenshots/01-basic-rendering.png',
       caption: 'Terminal renders content after startup',
       description:
-        'The xterm.js 6.0 terminal is visible and rendering output from the agent process. ' +
-        'The canvas renderer handles terminal output.',
+        'The session has been resumed (sessions restore paused). The xterm.js 6.0 terminal is ' +
+        'visible and rendering output from the agent process. The canvas renderer handles ' +
+        'terminal output.',
     })
   })
 
   test('Step 2: Session switching — switch away and back', async () => {
-    await switchToSession(page, 'backend-api')
+    // docs-site, not backend-api: backend-api's mock agentId ('aider') isn't
+    // a configured default agent, so its terminal can never start (see
+    // task-8 report — pre-existing, unrelated to session-pause). docs-site
+    // has no agent at all, which is still a real second terminal to
+    // switch to and stress.
+    await switchToSession(page, 'docs-site')
 
     const terminalArea = await waitForTerminalReady(page)
     await screenshotElement(page, terminalArea, path.join(SCREENSHOTS, '02-switched-session.png'))
     steps.push({
       screenshotPath: 'screenshots/02-switched-session.png',
-      caption: 'Terminal content after switching to backend-api session',
+      caption: 'Terminal content after switching to and resuming docs-site',
       description:
-        'After clicking backend-api in the sidebar, its terminal is visible with content intact.',
+        'After clicking docs-site in the sidebar and resuming it (it also restores paused), its ' +
+        'terminal is visible with content intact.',
     })
 
     await switchToSession(page, 'broomy')
@@ -93,19 +113,24 @@ test.describe.serial('Feature: Terminal Stress', () => {
       screenshotPath: 'screenshots/03-switched-back.png',
       caption: 'Terminal content preserved after switching back',
       description:
-        'Switching back to the original session shows the terminal content is preserved. ' +
-        'Using visibility:hidden instead of display:none ensures fitAddon measurements stay valid.',
+        'Switching back to the original (already-resumed, still-running) session shows the ' +
+        'terminal content is preserved. Using visibility:hidden instead of display:none ensures ' +
+        'fitAddon measurements stay valid.',
     })
   })
 
   test('Step 3: Rapid session switching — multiple times quickly', async () => {
-    const sessionNames = ['backend-api', 'broomy', 'backend-api', 'broomy']
+    const sessionNames = ['docs-site', 'broomy', 'docs-site', 'broomy']
 
     for (const name of sessionNames) {
       const session = page.locator(`.cursor-pointer:has-text("${name}")`)
       await session.click()
       // Minimal wait — just ensure click registered
       await expect(page.locator(`.cursor-pointer:has-text("${name}")`)).toHaveClass(/bg-accent/)
+      // Both sessions were already resumed in step 2 — resumeActiveSession
+      // no-ops here, so this doesn't add the readiness wait back into what
+      // is meant to be a rapid, minimal-wait switch.
+      await resumeActiveSession(page, { readyMarker: name === 'docs-site' ? 'E2E_TEST_SHELL_READY' : undefined })
     }
 
     const terminalArea = await waitForTerminalReady(page)
@@ -115,8 +140,8 @@ test.describe.serial('Feature: Terminal Stress', () => {
       screenshotPath: 'screenshots/04-rapid-switching.png',
       caption: 'Terminal stable after rapid session switching',
       description:
-        'After rapidly switching between sessions 4 times in quick succession, ' +
-        'the terminal renders correctly without scroll desync or visual glitches.',
+        'After rapidly switching between two already-running sessions 4 times in quick ' +
+        'succession, the terminal renders correctly without scroll desync or visual glitches.',
     })
   })
 
@@ -266,12 +291,13 @@ test.describe.serial('Feature: Terminal Stress', () => {
   })
 
   test('Step 8: Multiple sessions remain stable', async () => {
-    const sessionNames = ['broomy', 'backend-api']
+    const sessionNames = ['broomy', 'docs-site']
     for (const name of sessionNames) {
       const session = page.locator(`.cursor-pointer:has-text("${name}")`)
       if (await session.isVisible()) {
         await session.click()
         await expect(session).toHaveClass(/bg-accent/)
+        await resumeActiveSession(page, { readyMarker: name === 'docs-site' ? 'E2E_TEST_SHELL_READY' : undefined })
       }
     }
 
