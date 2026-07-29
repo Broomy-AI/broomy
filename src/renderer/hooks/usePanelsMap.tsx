@@ -294,6 +294,23 @@ export function usePanelsMap(config: PanelsMapConfig) {
   const terminalPanel = useMemo(() => (
     <div className="h-full w-full relative">
       {sessions.filter(s => !s.isArchived).map((session) => {
+        // Ordering matters here: a durable failure (initError) must not be
+        // hidden behind isPaused, a state the user chose — so initError is
+        // checked first and wins even for a paused session. isPaused in turn
+        // is checked before the "initializing" spinner: a spinner for work
+        // that isn't happening (because the session is paused) is also
+        // wrong. So the precedence is initError > isPaused > initializing.
+        if (session.initError) {
+          const isVisible = session.id === config.activeSessionId
+          return (
+            <div key={session.id} className={`absolute inset-0 flex items-center justify-center ${isVisible ? '' : 'invisible pointer-events-none'}`}>
+              <div className="text-center text-text-secondary max-w-md">
+                <div className="text-sm text-status-error mb-2">Setup failed</div>
+                <div className="text-xs text-text-secondary/80 mb-3">{session.initError}</div>
+              </div>
+            </div>
+          )
+        }
         if (session.isPaused) {
           const isVisible = session.id === config.activeSessionId
           return (
@@ -313,17 +330,6 @@ export function usePanelsMap(config: PanelsMapConfig) {
                 </svg>
                 <div className="text-sm">Setting up session...</div>
                 <div className="text-xs mt-1 text-text-secondary/60">Creating worktree and pushing branch</div>
-              </div>
-            </div>
-          )
-        }
-        if (session.initError) {
-          const isVisible = session.id === config.activeSessionId
-          return (
-            <div key={session.id} className={`absolute inset-0 flex items-center justify-center ${isVisible ? '' : 'invisible pointer-events-none'}`}>
-              <div className="text-center text-text-secondary max-w-md">
-                <div className="text-sm text-status-error mb-2">Setup failed</div>
-                <div className="text-xs text-text-secondary/80 mb-3">{session.initError}</div>
               </div>
             </div>
           )

@@ -472,6 +472,27 @@ describe('usePanelsMap', () => {
       expect(screen.getByTestId('session-terminal')).toBeInTheDocument()
     })
 
+    it('shows initError instead of the paused placeholder when both are set', () => {
+      renderAgentPanel(
+        [makeSession({ id: 'a', isPaused: true, initError: 'worktree creation failed' })],
+        { activeSessionId: 'a' },
+      )
+
+      expect(screen.getByText('Setup failed')).toBeInTheDocument()
+      expect(screen.getByText('worktree creation failed')).toBeInTheDocument()
+      expect(screen.queryByText('Session paused')).not.toBeInTheDocument()
+    })
+
+    it('shows the paused placeholder instead of the initializing spinner when both are set', () => {
+      renderAgentPanel(
+        [makeSession({ id: 'a', isPaused: true, status: 'initializing' as never })],
+        { activeSessionId: 'a' },
+      )
+
+      expect(screen.getByText('Session paused')).toBeInTheDocument()
+      expect(screen.queryByText('Setting up session...')).not.toBeInTheDocument()
+    })
+
     it('passes an onPauseSession handler to SessionList that pauses a running session', () => {
       const session = makeSession({ id: 'a', isPaused: false })
       useSessionStore.setState({ sessions: [session] })
