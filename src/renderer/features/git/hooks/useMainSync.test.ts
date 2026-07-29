@@ -159,6 +159,26 @@ describe('useMainSync', () => {
     expect(result.current.mainBehindByRepoId.has('r1')).toBe(false)
   })
 
+  it('re-runs the refresh for a repo dropped and re-added before its in-flight check settled', async () => {
+    const deferreds: ((v: { success: true; behind: number; defaultBranch: string }) => void)[] = []
+    vi.mocked(window.git.isBehindMain).mockImplementation(() => new Promise((r) => { deferreds.push(r) }))
+    const { result, rerender } = renderHook(
+      ({ r, s }: { r: ManagedRepo[]; s: Session[] }) => useMainSync(r, s),
+      { initialProps: { r: [repo('r1')], s: [sess('s1', 'r1')] } },
+    )
+    expect(window.git.isBehindMain).toHaveBeenCalledTimes(1) // mount refresh A, still pending
+
+    rerender({ r: [repo('r1')], s: [] })                   // r1 leaves — A's result gets invalidated
+    rerender({ r: [repo('r1')], s: [sess('s1', 'r1')] })   // r1 re-added while A is still in flight → queued
+
+    // A resolves (stale): its finally must fire the queued refresh B.
+    await act(async () => { deferreds[0]({ success: true, behind: 3, defaultBranch: 'main' }); await Promise.resolve(); await Promise.resolve() })
+    expect(window.git.isBehindMain).toHaveBeenCalledTimes(2) // B ran rather than leaving the repo blank
+
+    await act(async () => { deferreds[1]({ success: true, behind: 3, defaultBranch: 'main' }); await Promise.resolve() })
+    expect(result.current.mainBehindByRepoId.get('r1')).toEqual({ status: 'available', behind: 3 })
+  })
+
   describe('window focus (TTL-gated, poll-free)', () => {
     beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(1000) })
     afterEach(() => { vi.useRealTimers() })

@@ -84,6 +84,7 @@ export function useMainSync(repos: ManagedRepo[], sessions: Session[]): MainSync
   reposRef.current = repos
   const inFlightSync = useRef(new Map<string, Promise<{ success: boolean; error?: string }>>())
   const inFlightRefresh = useRef(new Set<string>())
+  const pendingRefresh = useRef(new Set<string>()) // a refresh requested while one was in flight — re-run after
   const refreshToken = useRef(new Map<string, number>()) // latest-wins; bumped by a completed sync too
   const lastFetchedAt = useRef(new Map<string, number>())
   // The current eligible set, synchronously readable. Publication consults it so an op that settles
@@ -109,11 +110,16 @@ export function useMainSync(repos: ManagedRepo[], sessions: Session[]): MainSync
   }, [])
 
   const refresh = useCallback(async (repoId: string): Promise<void> => {
-    // Skip while that repo is syncing (avoids a fetch/fetch race with the pull) or already refreshing.
-    if (inFlightSync.current.has(repoId) || inFlightRefresh.current.has(repoId)) return
+    // A sync owns the count while it runs — don't queue a refresh behind it.
+    if (inFlightSync.current.has(repoId)) return
+    // Already refreshing: coalesce this request and re-run once after it settles. This covers a
+    // drop→re-add where the in-flight result is stale (token-invalidated) — without the re-run the
+    // re-added repo would show no count until the next focus.
+    if (inFlightRefresh.current.has(repoId)) { pendingRefresh.current.add(repoId); return }
     const dir = mainDirFor(repoId)
     if (!dir) return
     inFlightRefresh.current.add(repoId)
+    pendingRefresh.current.delete(repoId) // this call services any queued request
     const token = (refreshToken.current.get(repoId) ?? 0) + 1
     refreshToken.current.set(repoId, token)
     lastFetchedAt.current.set(repoId, Date.now())
@@ -128,6 +134,8 @@ export function useMainSync(repos: ManagedRepo[], sessions: Session[]): MainSync
       publish(repoId, (prev) => toUnavailable(prev, String(err)))
     } finally {
       inFlightRefresh.current.delete(repoId)
+      // Service a request that arrived mid-flight (e.g. drop→re-add) if the repo is still eligible.
+      if (pendingRefresh.current.delete(repoId) && eligibleRef.current.has(repoId)) void refresh(repoId)
     }
   }, [mainDirFor, publish])
 
