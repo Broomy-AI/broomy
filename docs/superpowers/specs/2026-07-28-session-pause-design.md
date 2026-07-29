@@ -1,10 +1,10 @@
 # Session Pause — Design
 
 A paused session is one that stays in the main session list but has no agent
-process and no terminals running. It exists so you can keep a session around
-while waiting for a review, without it holding a PTY. Every session is paused
-when Broomy starts, so launching the app costs no processes until you pick a
-session to work in.
+process, no terminals, and nothing those started still running. It exists so
+you can keep a session around while waiting for a review, without it holding a
+PTY. Every session is paused when Broomy starts, so launching the app costs no
+processes until you pick a session to work in.
 
 Pause is distinct from archive: archived sessions leave the main list and are
 tucked into a collapsible section; paused sessions stay exactly where they
@@ -63,6 +63,42 @@ Consequences, all of them intended:
 This deliberately avoids introducing a second way to kill a terminal. The
 existing critical invariant — terminal trees are never unmounted on *session
 switch* — is untouched; pause is an explicit user action, not a switch.
+
+## No orphan processes
+
+Pausing must leave nothing running: not the agent, not the shells, and not
+what they started — dev servers, watchers, emulators, background jobs.
+
+Most of this already works and only needs asserting. `pty:kill` calls
+`treeKill` (`src/main/treeKill.ts`), which collects every descendant of the
+shell by walking parent-pid chains **and** unions in every process sharing the
+shell's process group, sends SIGTERM, then SIGKILLs survivors after a grace
+period. The process-group union is what catches daemons that detach from the
+controlling terminal and would otherwise be reparented to init — the usual
+source of orphans. Anything the agent spawned, including background jobs, is
+a descendant or a group member, so it dies with the shell. The on-disk markers
+in `~/.broomy/pids/` remain the backstop for main-process crashes.
+
+The gap is **isolated (devcontainer) sessions**. Their PTY is a local
+`docker exec` client, so tree-killing it kills the client while the processes
+inside the container — and the container itself — keep running. Pause must
+therefore also stop the session's dev container:
+
+- Use `docker stop`, not `docker rm -f`. Stopping ends every process in the
+  container while preserving it and its installed dependencies, so resume
+  restarts a warm container instead of paying a full devcontainer rebuild.
+  `resetContainer` in `src/main/devcontainer.ts` is the nearest existing code
+  but force-removes; this needs a stop variant beside it.
+- Containers are tracked in `ctx.dockerContainers`, keyed by workspace folder.
+  Only stop a container when no other running session is using that same
+  workspace folder, so a shared container is never pulled out from under an
+  active session.
+- Teardown is best-effort and must never throw or block the UI: the paused
+  placeholder appears immediately while the kills proceed in the main process,
+  matching how the existing cleanup fires `pty.kill` without awaiting it.
+
+A resume that lands during the SIGTERM grace period is safe — the new shell
+gets a fresh PID and the dying tree is tracked separately.
 
 ## Paused placeholder
 
@@ -129,6 +165,10 @@ silently doing nothing.
 - Persistence test: `isPaused` never reaches the saved config.
 - `usePanelsMap` test: a paused session renders `PausedSession` and mounts no
   `TabbedTerminal`; resuming mounts one.
+- Orphan teardown: pausing kills every PTY belonging to the session, agent tab
+  and user tabs alike, via the existing `treeKill` path; and pausing an
+  isolated session stops its dev container, but leaves a container still in
+  use by another running session alone.
 - `SessionCard` test: the pause/resume toggle button and the dimmed styling.
 - Storybook stories for `PausedSession`, plus a paused variant of
   `SessionCard`.
