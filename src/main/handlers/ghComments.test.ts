@@ -424,17 +424,19 @@ describe('ghComments handlers', () => {
       login?: string
       reviews?: unknown[]
       requestedReviewers?: string[]
+      requestedTeams?: string[]
       lastPushTime?: string
       prComments?: string[]
       issueComments?: string[]
     }) {
       const slug = opts.slug ?? 'user/repo'
       const login = opts.login ?? 'octocat'
+      const requested = { users: opts.requestedReviewers ?? [], teams: opts.requestedTeams ?? [] }
       vi.mocked(execFile)
         .mockReturnValueOnce({ stdout: `${slug}\n`, stderr: '' } as never)
         .mockReturnValueOnce({ stdout: `${login}\n`, stderr: '' } as never)
         .mockReturnValueOnce({ stdout: JSON.stringify(opts.reviews ?? []), stderr: '' } as never)
-        .mockReturnValueOnce({ stdout: JSON.stringify(opts.requestedReviewers ?? []), stderr: '' } as never)
+        .mockReturnValueOnce({ stdout: JSON.stringify(requested), stderr: '' } as never)
         .mockReturnValueOnce({ stdout: `${opts.lastPushTime ?? '2024-01-01T00:00:00Z'}\n`, stderr: '' } as never)
         .mockReturnValueOnce({ stdout: JSON.stringify(opts.prComments ?? []), stderr: '' } as never)
         .mockReturnValueOnce({ stdout: JSON.stringify(opts.issueComments ?? []), stderr: '' } as never)
@@ -461,6 +463,47 @@ describe('ghComments handlers', () => {
       })
       const handlers = setupHandlers()
       expect(await handlers['gh:prFeedbackStatus'](null, '/repo', 42)).toBe(false)
+    })
+
+    it('returns true when a reviewer only commented and has not been re-requested', async () => {
+      mockFeedbackCalls({
+        reviews: [{ author: 'reviewer1', state: 'COMMENTED' }],
+        requestedReviewers: [],
+        // Comments predate the push, so the only signal is the unresolved review.
+        lastPushTime: '2024-02-01T00:00:00Z',
+      })
+      const handlers = setupHandlers()
+      expect(await handlers['gh:prFeedbackStatus'](null, '/repo', 42)).toBe(true)
+    })
+
+    it('returns false when the commenting reviewer has been re-requested', async () => {
+      mockFeedbackCalls({
+        reviews: [{ author: 'reviewer1', state: 'COMMENTED' }],
+        requestedReviewers: ['reviewer1'],
+        lastPushTime: '2024-02-01T00:00:00Z',
+      })
+      const handlers = setupHandlers()
+      expect(await handlers['gh:prFeedbackStatus'](null, '/repo', 42)).toBe(false)
+    })
+
+    it('returns false when the only submitted review is an approval', async () => {
+      mockFeedbackCalls({
+        reviews: [{ author: 'reviewer1', state: 'APPROVED' }],
+        requestedReviewers: [],
+        lastPushTime: '2024-02-01T00:00:00Z',
+      })
+      const handlers = setupHandlers()
+      expect(await handlers['gh:prFeedbackStatus'](null, '/repo', 42)).toBe(false)
+    })
+
+    it('ignores a pending team request when deciding whether a review is unresolved', async () => {
+      mockFeedbackCalls({
+        reviews: [{ author: 'reviewer1', state: 'COMMENTED' }],
+        requestedTeams: ['reviewer1'],
+        lastPushTime: '2024-02-01T00:00:00Z',
+      })
+      const handlers = setupHandlers()
+      expect(await handlers['gh:prFeedbackStatus'](null, '/repo', 42)).toBe(true)
     })
 
     it('returns true when a human comment was posted after the last push', async () => {
@@ -491,8 +534,10 @@ describe('ghComments handlers', () => {
       const jqArgs = calls.flatMap(call => (call[1] as string[]) ?? [])
       const jqFilters = jqArgs.filter(arg => arg.includes('.user'))
 
-      // Reviews query excludes bots
-      expect(jqFilters.some(f => f.includes('.user.type != "Bot"') && f.includes('.state'))).toBe(true)
+      // Reviews query excludes bots and the PR author
+      const reviewsFilter = jqFilters.find(f => f.includes('.state'))
+      expect(reviewsFilter).toContain('.user.type != "Bot"')
+      expect(reviewsFilter).toContain('.user.login != "octocat"')
       // Both comment queries (review + issue) include the bot exclusion
       const commentFilters = jqFilters.filter(f => f.includes('.created_at'))
       expect(commentFilters).toHaveLength(2)
@@ -518,6 +563,7 @@ describe('ghComments handlers', () => {
     it('counts approvals, pending re-requests, and other reviews', async () => {
       vi.mocked(execFile)
         .mockReturnValueOnce({ stdout: 'user/repo\n', stderr: '' } as never)
+        .mockReturnValueOnce({ stdout: 'octocat\n', stderr: '' } as never)
         .mockReturnValueOnce({
           stdout: JSON.stringify([
             { author: 'a', state: 'APPROVED' },
@@ -525,31 +571,80 @@ describe('ghComments handlers', () => {
           ]),
           stderr: '',
         } as never)
-        .mockReturnValueOnce({ stdout: JSON.stringify(['c']), stderr: '' } as never)
+        .mockReturnValueOnce({ stdout: JSON.stringify({ users: ['c'], teams: [] }), stderr: '' } as never)
 
       const handlers = setupHandlers()
       const result = await handlers['gh:prApprovalStatus'](null, '/repo', 1)
       expect(result).toEqual({ approved: 1, pending: 1, otherReviews: 1 })
     })
 
-    it('counts a re-requested reviewer as pending, ignoring their stale review state', async () => {
+    it('counts a requested team as pending when no individual reviewer is requested', async () => {
       vi.mocked(execFile)
         .mockReturnValueOnce({ stdout: 'user/repo\n', stderr: '' } as never)
-        // 'a' has a stale CHANGES_REQUESTED review but has been re-requested...
+        .mockReturnValueOnce({ stdout: 'octocat\n', stderr: '' } as never)
+        .mockReturnValueOnce({ stdout: JSON.stringify([]), stderr: '' } as never)
         .mockReturnValueOnce({
-          stdout: JSON.stringify([{ author: 'a', state: 'CHANGES_REQUESTED' }]),
+          stdout: JSON.stringify({ users: [], teams: ['orpc-experts'] }),
           stderr: '',
         } as never)
-        // ...so 'a' appears in requested_reviewers and must be counted as pending only.
-        .mockReturnValueOnce({ stdout: JSON.stringify(['a']), stderr: '' } as never)
 
       const handlers = setupHandlers()
       const result = await handlers['gh:prApprovalStatus'](null, '/repo', 1)
       expect(result).toEqual({ approved: 0, pending: 1, otherReviews: 0 })
     })
 
+    it('counts requested users and teams together', async () => {
+      vi.mocked(execFile)
+        .mockReturnValueOnce({ stdout: 'user/repo\n', stderr: '' } as never)
+        .mockReturnValueOnce({ stdout: 'octocat\n', stderr: '' } as never)
+        .mockReturnValueOnce({ stdout: JSON.stringify([]), stderr: '' } as never)
+        .mockReturnValueOnce({
+          stdout: JSON.stringify({ users: ['a'], teams: ['t1', 't2'] }),
+          stderr: '',
+        } as never)
+
+      const handlers = setupHandlers()
+      const result = await handlers['gh:prApprovalStatus'](null, '/repo', 1)
+      expect(result).toEqual({ approved: 0, pending: 3, otherReviews: 0 })
+    })
+
+    it('counts a re-requested reviewer as pending, ignoring their stale review state', async () => {
+      vi.mocked(execFile)
+        .mockReturnValueOnce({ stdout: 'user/repo\n', stderr: '' } as never)
+        .mockReturnValueOnce({ stdout: 'octocat\n', stderr: '' } as never)
+        // 'a' has a stale CHANGES_REQUESTED review but has been re-requested...
+        .mockReturnValueOnce({
+          stdout: JSON.stringify([{ author: 'a', state: 'CHANGES_REQUESTED' }]),
+          stderr: '',
+        } as never)
+        // ...so 'a' appears in requested_reviewers and must be counted as pending only.
+        .mockReturnValueOnce({ stdout: JSON.stringify({ users: ['a'], teams: [] }), stderr: '' } as never)
+
+      const handlers = setupHandlers()
+      const result = await handlers['gh:prApprovalStatus'](null, '/repo', 1)
+      expect(result).toEqual({ approved: 0, pending: 1, otherReviews: 0 })
+    })
+
+    it('excludes the PR author from the reviews query', async () => {
+      vi.mocked(execFile)
+        .mockReturnValueOnce({ stdout: 'user/repo\n', stderr: '' } as never)
+        .mockReturnValueOnce({ stdout: 'octocat\n', stderr: '' } as never)
+        .mockReturnValueOnce({ stdout: JSON.stringify([]), stderr: '' } as never)
+        .mockReturnValueOnce({ stdout: JSON.stringify({ users: [], teams: [] }), stderr: '' } as never)
+
+      const handlers = setupHandlers()
+      await handlers['gh:prApprovalStatus'](null, '/repo', 1)
+
+      const jqArgs = vi.mocked(execFile).mock.calls.flatMap(call => (call[1] as string[]) ?? [])
+      const reviewsFilter = jqArgs.find(arg => arg.includes('.state'))
+      expect(reviewsFilter).toContain('.user.login != "octocat"')
+      expect(reviewsFilter).toContain('.user.type != "Bot"')
+    })
+
     it('returns neutral counts when the repo slug cannot be resolved', async () => {
-      vi.mocked(execFile).mockReturnValueOnce({ stdout: '\n', stderr: '' } as never)
+      vi.mocked(execFile)
+        .mockReturnValueOnce({ stdout: '\n', stderr: '' } as never)
+        .mockReturnValueOnce({ stdout: 'octocat\n', stderr: '' } as never)
 
       const handlers = setupHandlers()
       const result = await handlers['gh:prApprovalStatus'](null, '/repo', 1)

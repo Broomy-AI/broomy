@@ -30,18 +30,93 @@ function parseJsonLines(stdout: string): unknown[] {
 }
 
 /**
- * Checks whether a PR has actionable feedback: either someone requested changes
- * (and hasn't been re-requested for review), or there are comments since the last push.
+ * The reviewers GitHub still has an open review request for. Teams matter as much
+ * as individuals: a PR whose only outstanding request is on a team is still waiting
+ * on a review, and `.users` is empty in that case.
+ */
+interface RequestedReviewers {
+  /** Logins of individually requested users. */
+  users: string[]
+  /** Slugs of requested teams. GitHub drops the request once any member reviews. */
+  teams: string[]
+}
+
+/** The `--jq` filter that shapes /requested_reviewers into {@link RequestedReviewers}. */
+const REQUESTED_REVIEWERS_JQ = '{users: [.users[].login], teams: [.teams[].slug]}'
+
+function parseRequestedReviewers(stdout: string): RequestedReviewers {
+  const parsed = JSON.parse(stdout.trim() || '{}') as Partial<RequestedReviewers>
+  return { users: parsed.users ?? [], teams: parsed.teams ?? [] }
+}
+
+/** Total outstanding review requests, counting each requested team as one. */
+function pendingReviewerCount(requested: RequestedReviewers): number {
+  return requested.users.length + requested.teams.length
+}
+
+/** The review state of a PR at a point in time, as both chip computations need it. */
+interface ReviewSnapshot {
+  /**
+   * Latest submitted review state per reviewer, excluding the PR author and bots.
+   * Draft (PENDING) reviews are not visible to anyone else, so they are dropped.
+   */
+  latestByAuthor: Map<string, string>
+  requested: RequestedReviewers
+}
+
+/**
+ * Fetches the submitted reviews and open review requests for a PR.
+ *
+ * The PR author is excluded along with bots: GitHub lets you leave COMMENTED
+ * reviews on your own PR, and those are not reviewer feedback.
+ */
+async function fetchReviewSnapshot(
+  dir: string, slug: string, login: string, prNumber: number,
+): Promise<ReviewSnapshot> {
+  const [reviewsResult, requestedResult] = await Promise.all([
+    execFileAsync('gh', [
+      'api', `repos/${slug}/pulls/${prNumber}/reviews`, '--jq',
+      `[.[] | select(.user.login != "${login}" and .user.type != "Bot") | {author: .user.login, state: .state}]`,
+    ], { cwd: dir, encoding: 'utf-8', timeout: 15000 }),
+    execFileAsync('gh', [
+      'api', `repos/${slug}/pulls/${prNumber}/requested_reviewers`, '--jq',
+      REQUESTED_REVIEWERS_JQ,
+    ], { cwd: dir, encoding: 'utf-8', timeout: 10000 }),
+  ])
+
+  const reviews: { author: string; state: string }[] = JSON.parse(reviewsResult.stdout.trim() || '[]')
+  const latestByAuthor = new Map<string, string>()
+  for (const review of reviews) {
+    if (review.state === 'PENDING') continue
+    latestByAuthor.set(review.author, review.state)
+  }
+
+  return { latestByAuthor, requested: parseRequestedReviewers(requestedResult.stdout) }
+}
+
+/** Resolves the repo's owner/name slug and the authenticated user's login. */
+async function fetchSlugAndLogin(dir: string): Promise<{ slug: string; login: string }> {
+  const [slugResult, userResult] = await Promise.all([
+    execFileAsync('gh', ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'], { cwd: dir, encoding: 'utf-8', timeout: 10000 }),
+    execFileAsync('gh', ['api', 'user', '--jq', '.login'], { encoding: 'utf-8', timeout: 10000 }),
+  ])
+  return { slug: slugResult.stdout.trim(), login: userResult.stdout.trim() }
+}
+
+/**
+ * Checks whether a PR has actionable feedback: either someone left a review that
+ * did not approve (and hasn't been re-requested for review), or there are comments
+ * since the last push.
+ *
+ * The non-approving-review rule mirrors GitHub's own UI: GitHub shows the
+ * re-request icon next to any reviewer with a submitted review and no open
+ * request, so a plain COMMENTED review is feedback to act on just like
+ * CHANGES_REQUESTED is.
  */
 async function fetchPrFeedbackStatus(repoDir: string, prNumber: number): Promise<boolean> {
   try {
     const dir = expandHomePath(repoDir)
-    const [slugResult, userResult] = await Promise.all([
-      execFileAsync('gh', ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'], { cwd: dir, encoding: 'utf-8', timeout: 10000 }),
-      execFileAsync('gh', ['api', 'user', '--jq', '.login'], { encoding: 'utf-8', timeout: 10000 }),
-    ])
-    const slug = slugResult.stdout.trim()
-    const login = userResult.stdout.trim()
+    const { slug, login } = await fetchSlugAndLogin(dir)
     if (!slug || !login) return false
 
     // Exclude the PR author and bot accounts. Bots (GitHub Apps like
@@ -50,18 +125,9 @@ async function fetchPrFeedbackStatus(repoDir: string, prNumber: number): Promise
     // feedback.
     const humanReviewerFilter = `select(.user.login != "${login}" and .user.type != "Bot")`
 
-    // Fetch in parallel: reviews, requested reviewers, last push time, comments
-    const [reviewsResult, requestedResult, lastPushResult, prCommentsResult, issueCommentsResult] = await Promise.all([
-      // All reviews on this PR (exclude bot reviews)
-      execFileAsync('gh', [
-        'api', `repos/${slug}/pulls/${prNumber}/reviews`, '--jq',
-        '[.[] | select(.user.type != "Bot") | {author: .user.login, state: .state}]',
-      ], { cwd: dir, encoding: 'utf-8', timeout: 15000 }),
-      // Currently requested reviewers
-      execFileAsync('gh', [
-        'api', `repos/${slug}/pulls/${prNumber}/requested_reviewers`, '--jq',
-        '[.users[].login]',
-      ], { cwd: dir, encoding: 'utf-8', timeout: 10000 }),
+    // Fetch in parallel: reviews + requested reviewers, last push time, comments
+    const [snapshot, lastPushResult, prCommentsResult, issueCommentsResult] = await Promise.all([
+      fetchReviewSnapshot(dir, slug, login, prNumber),
       // Timestamp of the latest event on the head branch (last push)
       execFileAsync('gh', [
         'api', `repos/${slug}/pulls/${prNumber}`, '--jq',
@@ -79,23 +145,12 @@ async function fetchPrFeedbackStatus(repoDir: string, prNumber: number): Promise
       ], { cwd: dir, encoding: 'utf-8', timeout: 15000 }),
     ])
 
-    // 1. Check for unresolved "changes requested" reviews
-    // A reviewer's changes_requested is unresolved if they are NOT in the requested_reviewers
-    // list (re-requesting review clears the old review state on GitHub's side, but the reviewer
+    // 1. Check for unresolved non-approving reviews
+    // A review is unresolved if its author is NOT in the requested_reviewers list
+    // (re-requesting review clears the old review state on GitHub's side, but the reviewer
     // appears in requested_reviewers until they submit a new review).
-    const reviews: { author: string; state: string }[] = JSON.parse(reviewsResult.stdout.trim() || '[]')
-    const requestedReviewers: string[] = JSON.parse(requestedResult.stdout.trim() || '[]')
-
-    // Group reviews by author, keeping only the latest state per author
-    const latestReviewByAuthor = new Map<string, string>()
-    for (const review of reviews) {
-      if (review.state === 'PENDING') continue
-      latestReviewByAuthor.set(review.author, review.state)
-    }
-
-    // Check if any reviewer's latest review is CHANGES_REQUESTED and they haven't been re-requested
-    for (const [author, state] of latestReviewByAuthor) {
-      if (state === 'CHANGES_REQUESTED' && !requestedReviewers.includes(author)) {
+    for (const [author, state] of snapshot.latestByAuthor) {
+      if (state !== 'APPROVED' && !snapshot.requested.users.includes(author)) {
         return true
       }
     }
@@ -132,46 +187,27 @@ export interface PrApprovalCounts {
  * Counts PR reviews for the waiting/approved chip. Mirrors fetchPrFeedbackStatus's
  * re-request handling: a reviewer who was re-requested (appears in
  * requested_reviewers) is counted as pending, not by their stale review state.
+ * A requested team counts as one pending reviewer — a PR can be waiting on a team
+ * with no individually requested user at all.
  */
 async function fetchPrApprovalStatus(repoDir: string, prNumber: number): Promise<PrApprovalCounts> {
   const empty: PrApprovalCounts = { approved: 0, pending: 0, otherReviews: 0 }
   try {
     const dir = expandHomePath(repoDir)
-    const slugResult = await execFileAsync('gh', [
-      'repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner',
-    ], { cwd: dir, encoding: 'utf-8', timeout: 10000 })
-    const slug = slugResult.stdout.trim()
-    if (!slug) return empty
+    const { slug, login } = await fetchSlugAndLogin(dir)
+    if (!slug || !login) return empty
 
-    const [reviewsResult, requestedResult] = await Promise.all([
-      execFileAsync('gh', [
-        'api', `repos/${slug}/pulls/${prNumber}/reviews`, '--jq',
-        '[.[] | select(.user.type != "Bot") | {author: .user.login, state: .state}]',
-      ], { cwd: dir, encoding: 'utf-8', timeout: 15000 }),
-      execFileAsync('gh', [
-        'api', `repos/${slug}/pulls/${prNumber}/requested_reviewers`, '--jq',
-        '[.users[].login]',
-      ], { cwd: dir, encoding: 'utf-8', timeout: 10000 }),
-    ])
-
-    const reviews: { author: string; state: string }[] = JSON.parse(reviewsResult.stdout.trim() || '[]')
-    const requestedReviewers: string[] = JSON.parse(requestedResult.stdout.trim() || '[]')
-
-    const latestByAuthor = new Map<string, string>()
-    for (const review of reviews) {
-      if (review.state === 'PENDING') continue
-      latestByAuthor.set(review.author, review.state)
-    }
+    const { latestByAuthor, requested } = await fetchReviewSnapshot(dir, slug, login, prNumber)
 
     let approved = 0
     let otherReviews = 0
     for (const [author, state] of latestByAuthor) {
-      if (requestedReviewers.includes(author)) continue // re-requested -> counted as pending
+      if (requested.users.includes(author)) continue // re-requested -> counted as pending
       if (state === 'APPROVED') approved++
       else otherReviews++
     }
 
-    return { approved, pending: requestedReviewers.length, otherReviews }
+    return { approved, pending: pendingReviewerCount(requested), otherReviews }
   } catch {
     return empty
   }
