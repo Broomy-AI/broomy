@@ -283,4 +283,33 @@ describe('executeAction (API mode)', () => {
       expect.objectContaining({ cwd: '/r' }),
     )
   })
+
+  it('fails instead of dispatching when the active API-mode session is paused', async () => {
+    vi.doMock('../../store/sessions', () => ({
+      useSessionStore: {
+        getState: () => ({
+          activeSessionId: 'sess-api',
+          setSessionStage: vi.fn(),
+          sessions: [{ id: 'sess-api', repoId: 'repo-1', sdkSessionId: undefined, isPaused: true }],
+          updateAgentMonitor: vi.fn(),
+        }),
+      },
+    }))
+
+    const { executeAction } = await import('./actionExecutor')
+    const result = await executeAction(
+      { id: 'a', label: 'Plan', template: '/plan' },
+      {
+        directory: '/r',
+        agentId: 'agent-api',
+        templateVars: { main: 'main', branch: 'b', directory: '/r', issueNumber: '' },
+        argValues: {},
+      },
+    )
+    expect(result).toEqual({
+      success: false,
+      error: 'No agent terminal available — resume the session if it is paused.',
+    })
+    expect(window.agentSdk.send).not.toHaveBeenCalled()
+  })
 })

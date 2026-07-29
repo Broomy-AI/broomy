@@ -69,7 +69,14 @@ function getApiModeSessionId(agentId?: string | null): string | null {
   if (!ENABLE_AGENT_SDK || !agentId) return null
   const agent = useAgentStore.getState().agents.find((a: AgentConfig) => a.id === agentId)
   if (agent?.connectionMode !== 'api') return null
-  return useSessionStore.getState().activeSessionId
+  const { activeSessionId, sessions } = useSessionStore.getState()
+  if (!activeSessionId) return null
+  const session = sessions.find((s) => s.id === activeSessionId)
+  // A paused session runs no agent — API mode included — even though the
+  // main-process query that would need tearing down isn't stopped yet (see
+  // useAgentSdk.ts cleanup comment). Don't let a command reach it.
+  if (session?.isPaused) return null
+  return activeSessionId
 }
 
 async function executeAgent(resolved: string, ctx: ActionExecutionContext): Promise<ActionResult> {
