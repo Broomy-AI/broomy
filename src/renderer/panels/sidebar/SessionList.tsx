@@ -18,6 +18,7 @@ import UpdateBanner from './UpdateBanner'
 import { RepoGroupSection } from './RepoGroupSection'
 import { ArchivedSection } from './ArchivedSection'
 import { useSessionGrouping } from './useSessionGrouping'
+import { useSessionListActions } from './useSessionListActions'
 
 interface SessionListProps {
   repos: ManagedRepo[]
@@ -87,21 +88,9 @@ export default function SessionList({
     setPendingDeleteId(sessionId)
   }, [])
 
-  const handleArchive = useCallback((e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation(); onArchiveSession(sessionId)
-  }, [onArchiveSession])
-
-  const handleUnarchive = useCallback((e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation(); onUnarchiveSession(sessionId)
-  }, [onUnarchiveSession])
-
-  const handlePause = useCallback((e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation(); onPauseSession?.(sessionId)
-  }, [onPauseSession])
-
-  const handleSelectArchived = useCallback((sessionId: string) => {
-    onUnarchiveSession(sessionId); onSelectSession(sessionId)
-  }, [onUnarchiveSession, onSelectSession])
+  const { handleArchive, handleUnarchive, handlePause, handleSelectArchived } = useSessionListActions({
+    onArchiveSession, onUnarchiveSession, onPauseSession, onSelectSession,
+  })
 
   // Repo grouping + alphabetical sort + the visible-order view-model.
   const searching = searchQuery.trim().length > 0

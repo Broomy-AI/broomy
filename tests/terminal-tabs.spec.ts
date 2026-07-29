@@ -24,6 +24,21 @@ test.beforeAll(async () => {
   await page.waitForSelector('#root > div', { timeout: 10000 })
   // Wait for sessions to load
   await page.waitForSelector('.cursor-pointer', { timeout: 10000 })
+  // The active session starts paused (no agent, no terminal). Resume it so
+  // these tests have something running to interact with.
+  let resumed = true
+  try {
+    await page.locator('button:has-text("Resume Session"):visible').click({ timeout: 3000 })
+  } catch {
+    resumed = false // Already running -- no paused placeholder to click through.
+  }
+  if (resumed) {
+    // The initial agent command is written into the freshly spawned PTY
+    // after a short delay (see src/main/handlers/pty.ts). Wait for it to
+    // land before later tests interact with the terminal.
+    await expect.poll(() => getTerminalContent(page, 'agent'), { timeout: 10000 })
+      .toContain('FAKE_CLAUDE_READY')
+  }
 })
 
 test.afterAll(async () => {

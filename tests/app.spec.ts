@@ -63,6 +63,26 @@ async function getTerminalContent(p: Page, type: 'agent' | 'user' | 'any' = 'age
   }, type)
 }
 
+/**
+ * Restored sessions start paused (no agent, no terminal). Click through the
+ * "Resume Session" placeholder when present so terminal-dependent tests have
+ * something to assert against.
+ */
+async function resumeIfPaused(p: Page) {
+  try {
+    await p.locator('button:has-text("Resume Session"):visible').click({ timeout: 3000 })
+  } catch {
+    // Already running -- no paused placeholder to click through.
+    return
+  }
+  // The initial agent command is written into the freshly spawned PTY after
+  // a short delay (see src/main/handlers/pty.ts). Wait for it to actually
+  // land so later tests that type into the terminal don't race the write
+  // and corrupt it.
+  await expect.poll(() => getTerminalContent(p, 'agent'), { timeout: 10000 })
+    .toContain('FAKE_CLAUDE_READY')
+}
+
 test.describe('Broomy App', () => {
   test('should display the app title', async () => {
     const title = page.locator('text=Broomy').first()
@@ -133,6 +153,12 @@ test.describe('Broomy App', () => {
 })
 
 test.describe('Terminal Integration', () => {
+  test.beforeAll(async () => {
+    // The broomy session (active after the previous describe block) starts
+    // paused on load; resume it so these tests have a running terminal.
+    await resumeIfPaused(page)
+  })
+
   test('should have a terminal container', async () => {
     // Use first() since there are multiple terminals (main + user)
     const terminal = page.locator('.xterm').first()

@@ -167,7 +167,7 @@ describe('executeAction', () => {
     )
     expect(result).toEqual({
       success: false,
-      error: 'Session is paused — resume it to run this command.',
+      error: 'No agent terminal available — resume the session if it is paused.',
     })
   })
 
@@ -178,7 +178,7 @@ describe('executeAction', () => {
       { directory: '/r', templateVars: { main: 'main', branch: 'b', directory: '/r', issueNumber: '' }, argValues: {} },
     )
     expect(result.success).toBe(false)
-    expect(result.error).toBe('Session is paused — resume it to run this command.')
+    expect(result.error).toBe('No agent terminal available — resume the session if it is paused.')
   })
 
   it('agent path: fs.mkdir throwing returns failure', async () => {

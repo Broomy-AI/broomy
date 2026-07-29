@@ -300,6 +300,23 @@ test.describe('Session Creation', () => {
     const broomySession = page.locator('.cursor-pointer:has-text("broomy")')
     await broomySession.click()
     await expect(broomySession).toHaveClass(/bg-accent\/15/)
+
+    // The session starts paused (no agent, no terminal). Resume it so the
+    // Terminal Tab Switching and Agent Terminal describes below have a
+    // running fake-claude process to assert against.
+    let resumed = true
+    try {
+      await page.locator('button:has-text("Resume Session"):visible').click({ timeout: 3000 })
+    } catch {
+      resumed = false // Already running -- no paused placeholder to click through.
+    }
+    if (resumed) {
+      // The initial agent command is written into the freshly spawned PTY
+      // after a short delay (see src/main/handlers/pty.ts). Wait for it to
+      // land before later tests interact with the terminal.
+      await expect.poll(() => getTerminalContent(page, 'agent'), { timeout: 10000 })
+        .toContain('FAKE_CLAUDE_READY')
+    }
   })
 })
 

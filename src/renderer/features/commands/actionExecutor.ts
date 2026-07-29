@@ -75,7 +75,10 @@ function getApiModeSessionId(agentId?: string | null): string | null {
 async function executeAgent(resolved: string, ctx: ActionExecutionContext): Promise<ActionResult> {
   const apiSessionId = getApiModeSessionId(ctx.agentId)
   if (!apiSessionId && !ctx.agentPtyId) {
-    return { success: false, error: 'Session is paused — resume it to run this command.' }
+    // Most commonly the session is paused, but agentPtyId can also be unset
+    // before the agent terminal has finished starting up — don't assert a
+    // specific cause we can't confirm here.
+    return { success: false, error: 'No agent terminal available — resume the session if it is paused.' }
   }
   try {
     const outputDir = `${ctx.directory}/.broomy/output`

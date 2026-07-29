@@ -45,6 +45,14 @@ test.describe('Comments Dock', () => {
     await expect(broomySession).toBeVisible()
     await broomySession.click()
 
+    // The session starts paused (no agent, no terminal). Resume it so the
+    // later "submit comment to agent" assertion has an agent to submit to.
+    try {
+      await page.locator('button:has-text("Resume Session"):visible').click({ timeout: 3000 })
+    } catch {
+      // Already running -- no paused placeholder to click through.
+    }
+
     // Open the Explorer panel.
     const explorerBtn = page.locator('button[title*="Explorer"]')
     const explorerPanel = page.locator('[data-panel-id="explorer"]')

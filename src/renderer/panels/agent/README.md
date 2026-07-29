@@ -12,6 +12,12 @@ Each session gets a `TabbedTerminal` with an agent tab and optional user shell t
 
 **Terminal React trees are NEVER unmounted on session switch.** Visibility is toggled via CSS (`invisible pointer-events-none`). Unmounting would kill the PTY process and lose terminal history.
 
+The one deliberate exception is **pause**. A paused session renders
+`PausedSession` instead of its terminal, and the resulting unmount is exactly
+how its PTYs get killed — the agent terminal, user shell tabs, services, and
+docker. This is a user action, never a session switch: switching sessions
+still only toggles CSS visibility.
+
 ## Components
 
 - `TabbedTerminal.tsx` -- Tab bar + terminal switching for agent/user tabs
