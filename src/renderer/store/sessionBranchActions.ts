@@ -162,13 +162,25 @@ export function createBranchActions(get: StoreGet, set: StoreSet) {
       // Unlike archiving, pausing keeps the session selected: you stay where
       // you are and see the paused panel. No debouncedSave() — isPaused is
       // runtime-only.
-      set({ sessions: sessions.map((s) => (s.id === sessionId ? { ...s, isPaused: true } : s)) })
+      //
+      // Also clear agentPtyId here: the React unmount that follows kills the
+      // PTY process, but only clears useTerminalSetup's local ref, not this
+      // store field. PTY ids are `${sessionId}-${Date.now()}` so a retained
+      // id is dead forever — leaving it set would make command/comment
+      // buttons think an agent terminal still exists and silently swallow
+      // input instead of reporting failure.
+      set({
+        sessions: sessions.map((s) =>
+          s.id === sessionId ? { ...s, isPaused: true, agentPtyId: undefined } : s
+        ),
+      })
 
-      // Killing the PTY only kills the local `docker exec` client, so an
-      // isolated session's container would keep running with everything in
-      // it. Stop it too — unless another still-running session shares the
-      // directory. No-ops for non-isolated sessions, which have no tracked
-      // container. Fire-and-forget: the paused UI must not wait on docker.
+      // pauseSession fires this before React unmounts the terminal (which is
+      // what actually kills the `docker exec` client via window.pty.kill).
+      // Stop the container proactively too — unless another still-running
+      // session shares the directory. No-ops for non-isolated sessions,
+      // which have no tracked container. Fire-and-forget: the paused UI
+      // must not wait on docker.
       if (!paused) return
       const stillInUse = sessions.some(
         (s) => s.id !== sessionId && !s.isPaused && !s.isArchived && s.directory === paused.directory,

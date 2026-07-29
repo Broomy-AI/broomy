@@ -324,6 +324,26 @@ describe('sessionBranchActions', () => {
 
       expect(useSessionStore.getState().sessions.find(s => s.id === 'b')!.isPaused).toBe(false)
     })
+
+    it('clears agentPtyId so command/comment buttons cannot target a dead terminal', () => {
+      addTestSession('a', { agentPtyId: 'a-1234567890' })
+
+      useSessionStore.getState().pauseSession('a')
+
+      expect(useSessionStore.getState().sessions.find(s => s.id === 'a')!.agentPtyId).toBeUndefined()
+    })
+
+    it('leaves other sessions agentPtyId untouched', () => {
+      addTestSession('a')
+      const b = { ...useSessionStore.getState().sessions[0], id: 'b', isPaused: false, agentPtyId: 'b-1234567890' }
+      useSessionStore.setState({
+        sessions: [...useSessionStore.getState().sessions, b],
+      })
+
+      useSessionStore.getState().pauseSession('a')
+
+      expect(useSessionStore.getState().sessions.find(s => s.id === 'b')!.agentPtyId).toBe('b-1234567890')
+    })
   })
 
   describe('pauseSession container teardown', () => {
