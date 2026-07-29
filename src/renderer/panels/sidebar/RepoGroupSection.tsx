@@ -16,6 +16,7 @@ export function RepoGroupSection({
   onSelect,
   onDelete,
   onArchive,
+  onPause,
 }: {
   group: RepoGroup
   collapsed: boolean
@@ -24,6 +25,7 @@ export function RepoGroupSection({
   onSelect: (id: string) => void
   onDelete: (e: MouseEvent | KeyboardEvent, id: string) => void
   onArchive: (e: MouseEvent, id: string) => void
+  onPause?: (e: MouseEvent, id: string) => void
 }) {
   return (
     <div className="mb-1">
@@ -32,7 +34,7 @@ export function RepoGroupSection({
         <div className="ml-3 pl-2" style={rail ? { borderLeft: `2px solid ${rail}` } : undefined}>
           {group.sessions.map((session) => (
             <PanelErrorBoundary key={session.id} name={`Session ${session.branch}`}>
-              <SessionCard sessionId={session.id} onSelect={onSelect} onDelete={onDelete} onArchive={onArchive} />
+              <SessionCard sessionId={session.id} onSelect={onSelect} onDelete={onDelete} onArchive={onArchive} onPause={onPause} />
             </PanelErrorBoundary>
           ))}
         </div>

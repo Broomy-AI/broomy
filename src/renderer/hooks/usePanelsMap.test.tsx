@@ -5,12 +5,13 @@ import { renderHook, cleanup, screen, waitFor } from '@testing-library/react'
 import { render } from '@testing-library/react'
 import { usePanelsMap, type PanelsMapConfig } from './usePanelsMap'
 import { PANEL_IDS } from '../panels'
-import { type Session, type StatusChip } from '../store/sessions'
+import { useSessionStore, type Session, type StatusChip } from '../store/sessions'
 
 // Mock all component imports — capture props for callback testing
 let lastExplorerProps: Record<string, unknown> = {}
 let lastFileViewerProps: Record<string, unknown> = {}
 let lastAgentSettingsProps: Record<string, unknown> = {}
+let lastSessionListProps: Record<string, unknown> = {}
 
 // Toggled by the teardown test (step 6) so it can exercise the real
 // TabbedTerminal/Terminal stack — the actual PTY-killing code lives in
@@ -40,7 +41,7 @@ vi.mock('../panels/agent/TabbedTerminal', async (importOriginal) => {
 vi.mock('../panels/explorer/ExplorerPanel', () => ({ default: (props: Record<string, unknown>) => { lastExplorerProps = props; return null } }))
 vi.mock('../panels/fileViewer/FileViewer', () => ({ default: (props: Record<string, unknown>) => { lastFileViewerProps = props; return null } }))
 vi.mock('../panels/settings/AgentSettings', () => ({ default: (props: Record<string, unknown>) => { lastAgentSettingsProps = props; return null } }))
-vi.mock('../panels/sidebar/SessionList', () => ({ default: () => null }))
+vi.mock('../panels/sidebar/SessionList', () => ({ default: (props: Record<string, unknown>) => { lastSessionListProps = props; return null } }))
 vi.mock('../panels/agent/WelcomeScreen', () => ({ default: () => null }))
 vi.mock('../panels/tutorial/TutorialPanel', () => ({ default: () => null }))
 
@@ -469,6 +470,34 @@ describe('usePanelsMap', () => {
 
       expect(screen.queryByText('Session paused')).not.toBeInTheDocument()
       expect(screen.getByTestId('session-terminal')).toBeInTheDocument()
+    })
+
+    it('passes an onPauseSession handler to SessionList that pauses a running session', () => {
+      const session = makeSession({ id: 'a', isPaused: false })
+      useSessionStore.setState({ sessions: [session] })
+      const config = makeConfig({ sessions: [session], activeSession: session, activeSessionId: 'a' })
+      const { result } = renderHook(() => usePanelsMap(config))
+      render(result.current[PANEL_IDS.SIDEBAR] as React.ReactElement)
+
+      const onPauseSession = lastSessionListProps.onPauseSession as (id: string) => void
+      onPauseSession('a')
+
+      expect(useSessionStore.getState().sessions.find(s => s.id === 'a')?.isPaused).toBe(true)
+      useSessionStore.setState({ sessions: [] })
+    })
+
+    it('passes an onPauseSession handler to SessionList that resumes a paused session', () => {
+      const session = makeSession({ id: 'a', isPaused: true })
+      useSessionStore.setState({ sessions: [session] })
+      const config = makeConfig({ sessions: [session], activeSession: session, activeSessionId: 'a' })
+      const { result } = renderHook(() => usePanelsMap(config))
+      render(result.current[PANEL_IDS.SIDEBAR] as React.ReactElement)
+
+      const onPauseSession = lastSessionListProps.onPauseSession as (id: string) => void
+      onPauseSession('a')
+
+      expect(useSessionStore.getState().sessions.find(s => s.id === 'a')?.isPaused).toBe(false)
+      useSessionStore.setState({ sessions: [] })
     })
 
     // Uses the real TabbedTerminal/Terminal stack (not the stub) — the PTY-killing

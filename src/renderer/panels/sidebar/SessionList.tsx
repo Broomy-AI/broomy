@@ -27,6 +27,7 @@ interface SessionListProps {
   onRefreshPrStatus?: () => Promise<void>
   onArchiveSession: (id: string) => void
   onUnarchiveSession: (id: string) => void
+  onPauseSession?: (id: string) => void
 }
 
 export default function SessionList({
@@ -37,6 +38,7 @@ export default function SessionList({
   onRefreshPrStatus,
   onArchiveSession,
   onUnarchiveSession,
+  onPauseSession,
 }: SessionListProps) {
   const sessions = useSessionStore((s) => s.sessions)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -86,18 +88,19 @@ export default function SessionList({
   }, [])
 
   const handleArchive = useCallback((e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation()
-    onArchiveSession(sessionId)
+    e.stopPropagation(); onArchiveSession(sessionId)
   }, [onArchiveSession])
 
   const handleUnarchive = useCallback((e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation()
-    onUnarchiveSession(sessionId)
+    e.stopPropagation(); onUnarchiveSession(sessionId)
   }, [onUnarchiveSession])
 
+  const handlePause = useCallback((e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation(); onPauseSession?.(sessionId)
+  }, [onPauseSession])
+
   const handleSelectArchived = useCallback((sessionId: string) => {
-    onUnarchiveSession(sessionId)
-    onSelectSession(sessionId)
+    onUnarchiveSession(sessionId); onSelectSession(sessionId)
   }, [onUnarchiveSession, onSelectSession])
 
   // Repo grouping + alphabetical sort + the visible-order view-model.
@@ -180,6 +183,7 @@ export default function SessionList({
               onSelect={onSelectSession}
               onDelete={handleDelete}
               onArchive={handleArchive}
+              onPause={onPauseSession ? handlePause : undefined}
               repoLabel={repoLabelFor(session)}
             />
           </PanelErrorBoundary>
@@ -198,6 +202,7 @@ export default function SessionList({
               onSelect={onSelectSession}
               onDelete={handleDelete}
               onArchive={handleArchive}
+              onPause={onPauseSession ? handlePause : undefined}
             />
           )
         })}

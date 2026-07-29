@@ -375,6 +375,15 @@ export function usePanelsMap(config: PanelsMapConfig) {
   const explorerPanel = useExplorerPanel(config)
   const fileViewerPanel = useFileViewerPanel(config)
 
+  // Pause/resume is a single toggle button on the card, so resolve which action to take
+  // here (rather than threading two separate handlers the way archive/unarchive do).
+  const handlePauseSession = useCallback((sessionId: string) => {
+    const { sessions: currentSessions, pauseSession, resumeSession } = useSessionStore.getState()
+    const session = currentSessions.find(s => s.id === sessionId)
+    if (session?.isPaused) resumeSession(sessionId)
+    else pauseSession(sessionId)
+  }, [])
+
   const sidebarPanel = useMemo(() => (
     <SessionList
       repos={repos}
@@ -384,8 +393,9 @@ export function usePanelsMap(config: PanelsMapConfig) {
       onRefreshPrStatus={refreshPrStatus}
       onArchiveSession={archiveSession}
       onUnarchiveSession={unarchiveSession}
+      onPauseSession={handlePauseSession}
     />
-  ), [repos, handleSelectSession, handleNewSession, removeSession, refreshPrStatus, archiveSession, unarchiveSession])
+  ), [repos, handleSelectSession, handleNewSession, removeSession, refreshPrStatus, archiveSession, unarchiveSession, handlePauseSession])
 
   const panelsMap = useMemo(() => ({
     [PANEL_IDS.SIDEBAR]: sidebarPanel,
