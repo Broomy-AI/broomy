@@ -112,7 +112,7 @@ describe('NewBranchView', () => {
 
   it('creates branch and calls onComplete on success', async () => {
     vi.mocked(window.git.pull).mockResolvedValue({ success: true })
-    vi.mocked(window.git.worktreeAdd).mockResolvedValue({ success: true })
+    vi.mocked(window.git.worktreeAddNewBranch).mockResolvedValue({ success: true })
     vi.mocked(window.git.pushNewBranch).mockResolvedValue({ success: true })
     vi.mocked(window.repos.getInitScript).mockResolvedValue('')
 
@@ -126,7 +126,7 @@ describe('NewBranchView', () => {
     fireEvent.click(screen.getByText('Create Branch'))
 
     await waitFor(() => {
-      expect(window.git.worktreeAdd).toHaveBeenCalledWith(
+      expect(window.git.worktreeAddNewBranch).toHaveBeenCalledWith(
         '/repos/my-project/main',
         '/repos/my-project/feature/auth',
         'feature/auth',
@@ -142,7 +142,7 @@ describe('NewBranchView', () => {
 
   it('shows error when worktree creation fails', async () => {
     vi.mocked(window.git.pull).mockResolvedValue({ success: true })
-    vi.mocked(window.git.worktreeAdd).mockResolvedValue({ success: false, error: 'fatal: invalid reference: main' })
+    vi.mocked(window.git.worktreeAddNewBranch).mockResolvedValue({ success: false, error: 'fatal: invalid reference: main' })
 
     render(
       <NewBranchView repo={mockRepo} onBack={vi.fn()} onComplete={vi.fn()} />
@@ -159,7 +159,7 @@ describe('NewBranchView', () => {
 
   it('shows error when pushNewBranch fails', async () => {
     vi.mocked(window.git.pull).mockResolvedValue({ success: true })
-    vi.mocked(window.git.worktreeAdd).mockResolvedValue({ success: true })
+    vi.mocked(window.git.worktreeAddNewBranch).mockResolvedValue({ success: true })
     vi.mocked(window.git.pushNewBranch).mockResolvedValue({ success: false, error: 'Permission denied' })
 
     render(
@@ -177,7 +177,7 @@ describe('NewBranchView', () => {
 
   it('executes init script when non-empty', async () => {
     vi.mocked(window.git.pull).mockResolvedValue({ success: true })
-    vi.mocked(window.git.worktreeAdd).mockResolvedValue({ success: true })
+    vi.mocked(window.git.worktreeAddNewBranch).mockResolvedValue({ success: true })
     vi.mocked(window.git.pushNewBranch).mockResolvedValue({ success: true })
     vi.mocked(window.repos.getInitScript).mockResolvedValue('npm install')
 
@@ -222,7 +222,7 @@ describe('NewBranchView', () => {
       })
       // Should NOT call git operations
       expect(window.git.pull).not.toHaveBeenCalled()
-      expect(window.git.worktreeAdd).not.toHaveBeenCalled()
+      expect(window.git.worktreeAddNewBranch).not.toHaveBeenCalled()
     })
 
     it('passes issue info to onStartBranch when issue is provided', () => {
@@ -245,7 +245,7 @@ describe('NewBranchView', () => {
   describe('branch already exists on remote', () => {
     beforeEach(() => {
       vi.mocked(window.git.pull).mockResolvedValue({ success: true })
-      vi.mocked(window.git.worktreeAdd).mockResolvedValue({ success: true })
+      vi.mocked(window.git.worktreeAddNewBranch).mockResolvedValue({ success: true })
       vi.mocked(window.git.worktreeRemove).mockResolvedValue({ success: true })
       vi.mocked(window.git.deleteBranch).mockResolvedValue({ success: true })
     })
@@ -373,7 +373,7 @@ describe('NewBranchView', () => {
 
   it('shows NO_WRITE_ACCESS error and cleans up worktree', async () => {
     vi.mocked(window.git.pull).mockResolvedValue({ success: true })
-    vi.mocked(window.git.worktreeAdd).mockResolvedValue({ success: true })
+    vi.mocked(window.git.worktreeAddNewBranch).mockResolvedValue({ success: true })
     vi.mocked(window.git.pushNewBranch).mockResolvedValue({
       success: false,
       error: 'NO_WRITE_ACCESS:You do not have write access to this repo',
@@ -398,7 +398,7 @@ describe('NewBranchView', () => {
 
   it('dismisses error banner when onDismiss is called', async () => {
     vi.mocked(window.git.pull).mockResolvedValue({ success: true })
-    vi.mocked(window.git.worktreeAdd).mockResolvedValue({ success: false, error: 'some failure' })
+    vi.mocked(window.git.worktreeAddNewBranch).mockResolvedValue({ success: false, error: 'some failure' })
 
     render(
       <NewBranchView repo={mockRepo} onBack={vi.fn()} onComplete={vi.fn()} />
@@ -423,7 +423,7 @@ describe('NewBranchView', () => {
 
   it('switches to existing session when "Open existing session" is clicked', async () => {
     vi.mocked(window.git.pull).mockResolvedValue({ success: true })
-    vi.mocked(window.git.worktreeAdd).mockResolvedValue({ success: true })
+    vi.mocked(window.git.worktreeAddNewBranch).mockResolvedValue({ success: true })
     vi.mocked(window.git.pushNewBranch).mockResolvedValue({
       success: false,
       error: 'BRANCH_EXISTS:The remote branch "fix/lint" has diverged.',
@@ -491,7 +491,7 @@ describe('NewBranchView', () => {
   describe('auth error flow', () => {
     it('shows "Set up Git Authentication" button on push auth error', async () => {
       vi.mocked(window.git.pull).mockResolvedValue({ success: true })
-      vi.mocked(window.git.worktreeAdd).mockResolvedValue({ success: true })
+      vi.mocked(window.git.worktreeAddNewBranch).mockResolvedValue({ success: true })
       vi.mocked(window.git.pushNewBranch).mockResolvedValue({
         success: false,
         error: 'fatal: could not read Username for \'https://github.com\': terminal prompts disabled',
@@ -513,7 +513,7 @@ describe('NewBranchView', () => {
 
     it('shows "Install GitHub CLI" button on auth error when gh not available', async () => {
       vi.mocked(window.git.pull).mockResolvedValue({ success: true })
-      vi.mocked(window.git.worktreeAdd).mockResolvedValue({ success: true })
+      vi.mocked(window.git.worktreeAddNewBranch).mockResolvedValue({ success: true })
       vi.mocked(window.git.pushNewBranch).mockResolvedValue({
         success: false,
         error: 'Authentication failed for \'https://github.com/user/repo\'',
@@ -533,10 +533,12 @@ describe('NewBranchView', () => {
       })
     })
 
-    it('tolerates "already exists" worktree error on retry', async () => {
+    it('surfaces a WORKTREE_PATH_EXISTS collision from the new-branch op without completing', async () => {
       vi.mocked(window.git.pull).mockResolvedValue({ success: true })
-      vi.mocked(window.git.worktreeAdd).mockResolvedValue({ success: false, error: "'feature/auth' already exists" })
-      vi.mocked(window.git.pushNewBranch).mockResolvedValue({ success: true })
+      vi.mocked(window.git.worktreeAddNewBranch).mockResolvedValue({
+        success: false,
+        error: 'WORKTREE_PATH_EXISTS:A folder already exists at "/repos/my-project/feature/auth". Remove or rename it, then try again.',
+      })
       vi.mocked(window.repos.getInitScript).mockResolvedValue('')
 
       const onComplete = vi.fn()
@@ -549,8 +551,14 @@ describe('NewBranchView', () => {
       fireEvent.click(screen.getByText('Create Branch'))
 
       await waitFor(() => {
-        expect(onComplete).toHaveBeenCalled()
+        // DialogErrorBanner humanizes any "already exists" message; the production instant path
+        // surfaces the full "A folder already exists at …" text on the session card instead.
+        expect(screen.getByText(/Worktree or branch already exists/)).toBeTruthy()
       })
+      // A creation collision is terminal: don't complete, push, or clean up anything.
+      expect(onComplete).not.toHaveBeenCalled()
+      expect(window.git.pushNewBranch).not.toHaveBeenCalled()
+      expect(window.git.worktreeRemove).not.toHaveBeenCalled()
     })
   })
 })

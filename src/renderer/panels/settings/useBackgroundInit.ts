@@ -17,6 +17,15 @@ function isAborted(signal: AbortSignal): boolean {
   return signal.aborted
 }
 
+/** Strip the machine-readable status prefix a git handler may return, leaving a user-facing message. */
+function friendlyGitError(error: string | undefined): string {
+  const raw = error || 'Failed to create the branch'
+  for (const prefix of ['BRANCH_EXISTS:', 'WORKTREE_PATH_EXISTS:', 'NO_WRITE_ACCESS:']) {
+    if (raw.startsWith(prefix)) return raw.slice(prefix.length)
+  }
+  return raw
+}
+
 export function useBackgroundInit({
   addInitializingSession,
   finalizeSession,
@@ -64,21 +73,26 @@ export function useBackgroundInit({
         await window.git.pull(mainDir)
         if (isAborted(controller.signal)) return
 
-        const result = await window.git.worktreeAdd(mainDir, worktreePath, branchName, baseRef)
-        if (!result.success && !result.error?.includes('already exists')) {
-          throw new Error(result.error || 'Failed to create worktree')
+        const result = await window.git.worktreeAddNewBranch(mainDir, worktreePath, branchName, baseRef)
+        if (!result.success) {
+          // A creation collision is terminal: never push or clean up a pre-existing branch/worktree.
+          throw new Error(friendlyGitError(result.error))
         }
+        // Abort just stops init here; the caller's session-delete performs worktree/branch removal
+        // per the user's "Delete worktree and folder" choice, so this must NOT force-remove them
+        // (doing so would override an explicit "keep worktree" selection).
         if (isAborted(controller.signal)) return
 
         const pushResult = await window.git.pushNewBranch(worktreePath, branchName)
         if (!pushResult.success) {
+          // This attempt created the worktree + branch, so removing them on a push failure is safe.
           try {
             await window.git.worktreeRemove(mainDir, worktreePath)
             await window.git.deleteBranch(mainDir, branchName)
           } catch {
             // Best-effort cleanup
           }
-          throw new Error(pushResult.error || 'Failed to push branch to remote')
+          throw new Error(friendlyGitError(pushResult.error))
         }
         if (isAborted(controller.signal)) return
 

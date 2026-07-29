@@ -1,13 +1,15 @@
 /**
- * Pure grouping + alphabetical sorting for the session sidebar.
+ * Pure grouping + ordering for the session sidebar.
  *
- * Sessions cluster by repo; groups sort A→Z by repo name (named repos first, then
- * "Unknown repository", then "No repo"); sessions sort A→Z by branch within a group.
- * Everything is computed — there is no manual order and nothing here is persisted.
+ * Sessions cluster by repo. Order is the user's: sessions appear in the order of the
+ * persisted `sessions` array (dragged in the sidebar, appended on creation), and groups
+ * appear in `repoGroupOrder`. Groups absent from that list fall back to a computed order
+ * — named repos first, then "Unknown repository", then "No repo" — so a newly added repo
+ * lands somewhere predictable until the user drags it.
  *
- * All string ordering goes through ONE shared `Intl.Collator('en-US', …)` so the
- * result is identical across dev machines and CI (bare `localeCompare` is host-locale
- * dependent). Ties fall back to the stable id, never to insertion order.
+ * That fallback ordering goes through ONE shared `Intl.Collator('en-US', …)` so it is
+ * identical across dev machines and CI (bare `localeCompare` is host-locale dependent).
+ * Ties fall back to the stable id, never to insertion order.
  */
 import type { Session } from '../../store/sessions'
 import type { ManagedRepo } from '../../../preload/index'
@@ -92,10 +94,14 @@ function rankForKind(kind: RepoGroupKind): number {
 }
 
 /**
- * Group active (non-archived) sessions by repo and sort everything alphabetically.
- * Pure and non-mutating: the input arrays and session objects are never touched.
+ * Group active (non-archived) sessions by repo. Pure and non-mutating: the input arrays
+ * and session objects are never touched.
  */
-export function groupSessionsByRepo(sessions: Session[], repos: ManagedRepo[]): RepoGroup[] {
+export function groupSessionsByRepo(
+  sessions: Session[],
+  repos: ManagedRepo[],
+  repoGroupOrder: string[] = [],
+): RepoGroup[] {
   const repoById = new Map(repos.map((r) => [r.id, r]))
   const groups = new Map<string, RepoGroup>()
 
@@ -128,16 +134,15 @@ export function groupSessionsByRepo(sessions: Session[], repos: ManagedRepo[]): 
 
   const result = [...groups.values()]
 
-  // Sort sessions within each group: branch A→Z, then id. (New arrays — input untouched.)
-  for (const group of result) {
-    group.sessions.sort(
-      (a, b) => collator.compare(a.branch, b.branch) || byId(a.id, b.id),
-    )
+  // Groups the user has dragged come first, in that order; the rest fall back to the
+  // computed order. `indexOf` is fine here — the list is one entry per visible repo.
+  const rank = (g: RepoGroup) => {
+    const i = repoGroupOrder.indexOf(g.key)
+    return i === -1 ? repoGroupOrder.length : i
   }
-
-  // Sort the groups: kind rank → label A→Z → repoId (total order, deterministic).
   result.sort(
     (a, b) =>
+      rank(a) - rank(b) ||
       rankForKind(a.kind) - rankForKind(b.kind) ||
       collator.compare(a.label, b.label) ||
       byId(a.repoId ?? '', b.repoId ?? ''),
@@ -170,7 +175,7 @@ export function rollUpStatus(sessions: Session[]): Rollup {
   return { status: 'idle', count: 0, total }
 }
 
-/** The flat, alphabetically-sorted list of visible session ids across all groups. */
+/** The flat list of visible session ids across all groups, in group order then array order. */
 export function flattenGroupOrder(groups: RepoGroup[]): string[] {
   return groups.flatMap((g) => g.sessions.map((s) => s.id))
 }

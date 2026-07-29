@@ -139,6 +139,7 @@ export default function Explorer({
               gitStatus={gitStatus}
               syncStatus={syncStatus}
               onFileSelect={onFileSelect}
+              selectedFilePath={selectedFilePath}
               onGitStatusRefresh={onGitStatusRefresh}
               branchStatus={branchStatus}
               statusChip={statusChip}

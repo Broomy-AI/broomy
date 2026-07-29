@@ -177,6 +177,44 @@ describe('ghComments handlers', () => {
       const result = await handlers['gh:prsToReview'](null, '/repo')
       expect(result).toEqual([])
     })
+
+    describe('filter modes', () => {
+      const searchArgsFor = async (mode?: string) => {
+        vi.mocked(execFile).mockResolvedValue({ stdout: '[]', stderr: '' } as never)
+        const handlers = setupHandlers()
+        await handlers['gh:prsToReview'](null, '/repo', mode)
+        return vi.mocked(execFile).mock.calls[0][1] as string[]
+      }
+
+      it('searches team and direct review requests by default', async () => {
+        expect(await searchArgsFor()).toEqual(
+          expect.arrayContaining(['--search', 'review-requested:@me'])
+        )
+      })
+
+      it('searches team and direct review requests in team mode', async () => {
+        expect(await searchArgsFor('team')).toEqual(
+          expect.arrayContaining(['--search', 'review-requested:@me'])
+        )
+      })
+
+      it('searches only direct review requests in mine mode', async () => {
+        expect(await searchArgsFor('mine')).toEqual(
+          expect.arrayContaining(['--search', 'user-review-requested:@me'])
+        )
+      })
+
+      it('passes no search argument in all mode', async () => {
+        expect(await searchArgsFor('all')).not.toContain('--search')
+      })
+
+      it('returns extra open PRs for all mode in E2E mode', async () => {
+        const handlers = setupHandlers(createMockCtx({ isE2ETest: true }))
+        const team = await handlers['gh:prsToReview'](null, '/repo', 'team')
+        const all = await handlers['gh:prsToReview'](null, '/repo', 'all')
+        expect(all.length).toBeGreaterThan(team.length)
+      })
+    })
   })
 
   describe('gh:prDescription', () => {

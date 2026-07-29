@@ -42,7 +42,7 @@ function headerButtons() {
 }
 
 describe('SessionList — repo grouping', () => {
-  it('renders group headers A→Z with sessions sorted by branch', () => {
+  it('renders group headers A→Z with sessions kept in array order', () => {
     useSessionStore.setState({ sessions: [
       makeSession({ id: '1', repoId: 'r-b', branch: 'spike/z' }),
       makeSession({ id: '2', repoId: 'r-a', branch: 'feature/x' }),
@@ -52,10 +52,10 @@ describe('SessionList — repo grouping', () => {
     const labels = headerButtons().map((h) => h.getAttribute('aria-label') ?? '')
     expect(labels[0]).toContain('acme-web')
     expect(labels[1]).toContain('broomy')
-    // within broomy: feat/a before spike/z
+    // within broomy: array order (id '1' then id '3'), not alphabetical by branch
     const cards = Array.from(document.querySelectorAll('[data-session-card]'))
     const order = cards.map((c) => c.getAttribute('data-session-id'))
-    expect(order).toEqual(['2', '3', '1'])
+    expect(order).toEqual(['2', '1', '3'])
   })
 
   it('collapses a group on header click — persists the key and hides its cards', () => {

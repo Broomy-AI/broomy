@@ -25,6 +25,7 @@ interface SourceControlProps {
   gitStatus: GitFileStatus[]
   syncStatus?: GitStatusResult | null
   onFileSelect?: (target: NavigationTarget) => void
+  selectedFilePath?: string | null
   onGitStatusRefresh?: () => void
   branchStatus?: BranchStatus
   statusChip?: StatusChip
@@ -50,6 +51,7 @@ export function SourceControl({
   gitStatus,
   syncStatus,
   onFileSelect,
+  selectedFilePath,
   onGitStatusRefresh,
   branchStatus,
   statusChip,
@@ -210,6 +212,7 @@ export function SourceControl({
           loadingCommitFiles={data.loadingCommitFiles}
           onToggleCommit={actions.handleToggleCommit}
           onFileSelect={onFileSelect}
+          selectedFilePath={selectedFilePath}
         />
       </div>
     )
@@ -228,6 +231,7 @@ export function SourceControl({
           branchBaseName={data.branchBaseName}
           branchMergeBase={data.branchMergeBase}
           onFileSelect={onFileSelect}
+          selectedFilePath={selectedFilePath}
         />
       </div>
     )
@@ -254,6 +258,7 @@ export function SourceControl({
         onStageAll={actions.handleStageAll}
         onUnstage={actions.handleUnstage}
         onFileSelect={onFileSelect}
+        selectedFilePath={selectedFilePath}
         onSwitchTab={onSwitchTab}
         onGitStatusRefresh={onGitStatusRefresh}
         actions={commandsConfig?.actions ?? null}

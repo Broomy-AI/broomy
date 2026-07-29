@@ -55,3 +55,10 @@ export const ManyChanges: Story = {
     ],
   },
 }
+
+export const WithSelectedFile: Story = {
+  args: {
+    branchChanges: WithChanges.args!.branchChanges,
+    selectedFilePath: '/Users/test/projects/my-app/src/components/Dashboard.tsx',
+  },
+}

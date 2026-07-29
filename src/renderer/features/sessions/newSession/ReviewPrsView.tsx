@@ -4,7 +4,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useAgentStore } from '../../../store/agents'
 import { useSessionStore } from '../../../store/sessions'
-import type { ManagedRepo, GitHubPrForReview, AgentData } from '../../../../preload/index'
+import { useRepoStore } from '../../../store/repos'
+import type { ManagedRepo, GitHubPrForReview, AgentData, PrReviewFilterMode } from '../../../../preload/index'
 import { DialogErrorBanner } from '../../../shared/components/ErrorBanner'
 import { useListKeyboardNav } from './useListKeyboardNav'
 import { runRepoInitScript } from '../runRepoInitScript'
@@ -55,6 +56,34 @@ async function createReviewWorktree(repo: ManagedRepo, pr: GitHubPrForReview): P
   await runRepoInitScript(repo, worktreePath)
 
   return { worktreePath }
+}
+
+const FILTER_MODES: { mode: PrReviewFilterMode; label: string; subtitle: string; emptyText: string }[] = [
+  { mode: 'team', label: 'Team', subtitle: 'Requested for review', emptyText: 'No PRs pending your review.' },
+  { mode: 'mine', label: 'Mine', subtitle: 'Requested from you directly', emptyText: 'No PRs personally assigned to you.' },
+  { mode: 'all', label: 'All', subtitle: 'All open PRs', emptyText: 'No open PRs.' },
+]
+
+function FilterModeTabs({ mode, onChange }: { mode: PrReviewFilterMode; onChange: (mode: PrReviewFilterMode) => void }) {
+  return (
+    <div className="flex gap-1 mt-2" role="tablist" aria-label="PR filter">
+      {FILTER_MODES.map((m) => (
+        <button
+          key={m.mode}
+          role="tab"
+          aria-selected={m.mode === mode}
+          onClick={() => onChange(m.mode)}
+          className={`px-2.5 py-0.5 text-xs rounded-full border transition-colors ${
+            m.mode === mode
+              ? 'bg-review-base/20 border-review-base/50 text-review-fg'
+              : 'border-border text-text-secondary hover:text-text-primary hover:border-review-base/50'
+          }`}
+        >
+          {m.label}
+        </button>
+      ))}
+    </div>
+  )
 }
 
 function PrRow({ pr, hasSession, isFocused, onSelect, onMouseEnter }: { key?: string | number | bigint | null; pr: GitHubPrForReview; hasSession: boolean; isFocused: boolean; onSelect: () => void; onMouseEnter: () => void }) {
@@ -178,6 +207,7 @@ export function ReviewPrsView({
 }) {
   const { agents } = useAgentStore()
   const sessions = useSessionStore((s) => s.sessions)
+  const updateRepo = useRepoStore((s) => s.updateRepo)
 
   // PR numbers that already have an active (non-archived) review session for this repo
   const reviewedPrNumbers = useMemo(() => {
@@ -196,21 +226,27 @@ export function ReviewPrsView({
   const [error, setError] = useState<string | null>(null)
   const [selectedPr, setSelectedPr] = useState<GitHubPrForReview | null>(null)
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(repo.defaultAgentId || agents[0]?.id || null)
+  const [mode, setMode] = useState<PrReviewFilterMode>(repo.prReviewFilter || 'team')
+  const activeMode = FILTER_MODES.find((m) => m.mode === mode) || FILTER_MODES[0]
 
   useEffect(() => {
+    let cancelled = false
     const fetchPrs = async () => {
+      setLoading(true)
+      setError(null)
       try {
         const mainDir = `${repo.rootDir}/main`
-        const result = await window.gh.prsToReview(mainDir)
-        setPrs(result)
+        const result = await window.gh.prsToReview(mainDir, mode)
+        if (!cancelled) setPrs(result)
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err))
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
     void fetchPrs()
-  }, [repo])
+    return () => { cancelled = true }
+  }, [repo, mode])
 
   const handleSelectPr = useCallback((pr: GitHubPrForReview) => {
     setSelectedPr(pr)
@@ -250,6 +286,12 @@ export function ReviewPrsView({
     dataAttribute: 'data-pr-row',
   })
 
+  const handleModeChange = useCallback((next: PrReviewFilterMode) => {
+    setMode(next)
+    setFocusedIndex(0)
+    updateRepo(repo.id, { prReviewFilter: next })
+  }, [repo.id, setFocusedIndex, updateRepo])
+
   // PR selected - show confirmation with agent picker
   if (selectedPr) {
     return (
@@ -265,15 +307,16 @@ export function ReviewPrsView({
 
   return (
     <>
-      <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-        <button onClick={onBack} className="text-text-secondary hover:text-text-primary transition-colors">
+      <div className="px-4 py-3 border-b border-border flex items-start gap-2">
+        <button onClick={onBack} className="text-text-secondary hover:text-text-primary transition-colors mt-1">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
         <div>
           <h2 className="text-lg font-medium text-text-primary">PRs to Review</h2>
-          <p className="text-xs text-text-secondary">{repo.name} &middot; Requested for review</p>
+          <p className="text-xs text-text-secondary">{repo.name} &middot; {activeMode.subtitle}</p>
+          <FilterModeTabs mode={mode} onChange={handleModeChange} />
         </div>
       </div>
 
@@ -294,7 +337,7 @@ export function ReviewPrsView({
 
         {!loading && !error && prs.length === 0 && (
           <div className="text-center text-text-secondary text-sm py-8">
-            No PRs pending your review.
+            {activeMode.emptyText}
           </div>
         )}
 

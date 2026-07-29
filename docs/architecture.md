@@ -371,7 +371,7 @@ Terminal output data arrives
          │
          ▼
 ┌─────────────────┐
-│  Start idle     │  After 1 second of no output, set status
+│  Start idle     │  After 3 seconds of no output, set status
 │  timeout        │  to 'idle' (300ms debounce for store update)
 └─────────────────┘
 ```
@@ -379,7 +379,7 @@ Terminal output data arrives
 ### Status States
 
 - **working** -- Terminal output is actively being received (set immediately)
-- **idle** -- No terminal output for 1 second (debounced 300ms before store update)
+- **idle** -- No terminal output for 3 seconds, or 10 seconds of output that never changes the rendered screen (debounced 300ms before store update)
 - **error** -- Set externally when the PTY process exits with a non-zero code
 
 ### Unread Notifications

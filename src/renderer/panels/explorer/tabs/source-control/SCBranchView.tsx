@@ -12,6 +12,7 @@ interface SCBranchViewProps {
   branchBaseName: string
   branchMergeBase: string
   onFileSelect?: (target: NavigationTarget) => void
+  selectedFilePath?: string | null
 }
 
 export function SCBranchView({
@@ -21,6 +22,7 @@ export function SCBranchView({
   branchBaseName,
   branchMergeBase,
   onFileSelect,
+  selectedFilePath,
 }: SCBranchViewProps) {
   if (isBranchLoading) {
     return (
@@ -41,23 +43,26 @@ export function SCBranchView({
       <div className="px-3 py-1.5 text-xs font-medium text-text-secondary uppercase tracking-wide bg-bg-secondary">
         Changes vs {branchBaseName} ({branchChanges.length})
       </div>
-      {branchChanges.map((file) => (
-        <div
-          key={`branch-${file.path}`}
-          className="flex items-center gap-2 px-3 py-1 hover:bg-bg-tertiary cursor-pointer"
-          title={`${file.path} — ${statusLabel(file.status)}`}
-          onClick={() => {
-            if (onFileSelect) {
-              onFileSelect({ filePath: `${directory}/${file.path}`, openInDiffMode: true, diffBaseRef: branchMergeBase || `origin/${branchBaseName}`, diffLabel: `Branch vs ${branchBaseName}` })
-            }
-          }}
-        >
-          <span className={`truncate flex-1 text-xs ${getStatusColor(file.status)}`}>
-            {file.path}
-          </span>
-          <StatusBadge status={file.status} />
-        </div>
-      ))}
+      {branchChanges.map((file) => {
+        const isSelected = !!selectedFilePath && `${directory}/${file.path}` === selectedFilePath
+        return (
+          <div
+            key={`branch-${file.path}`}
+            className={`flex items-center gap-2 px-3 py-1 cursor-pointer ${isSelected ? 'bg-accent/20 ring-1 ring-accent/50' : 'hover:bg-bg-tertiary'}`}
+            title={`${file.path} — ${statusLabel(file.status)}`}
+            onClick={() => {
+              if (onFileSelect) {
+                onFileSelect({ filePath: `${directory}/${file.path}`, openInDiffMode: true, diffBaseRef: branchMergeBase || `origin/${branchBaseName}`, diffLabel: `Branch vs ${branchBaseName}` })
+              }
+            }}
+          >
+            <span className={`truncate flex-1 text-xs ${getStatusColor(file.status)}`}>
+              {file.path}
+            </span>
+            <StatusBadge status={file.status} />
+          </div>
+        )
+      })}
     </div>
   )
 }
