@@ -116,6 +116,9 @@ function makeConfig(overrides: Partial<PanelsMapConfig> = {}): PanelsMapConfig {
     setToolbarPanels: vi.fn(),
     closeCommandsEditor: vi.fn(),
     repos: [],
+    mainBehindByRepoId: new Map(),
+    syncingRepoIds: new Set(),
+    syncMain: vi.fn().mockResolvedValue({ success: true }),
     ...overrides,
   }
 }

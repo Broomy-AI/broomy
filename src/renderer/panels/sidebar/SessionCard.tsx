@@ -17,6 +17,9 @@ import { StatusIndicator } from './StatusIndicator'
 import { dropEdgeClasses } from './useSidebarDrag'
 import { fileManagerName } from '../../shared/utils/platform'
 import { useErrorStore } from '../../store/errors'
+import type { MainSyncProps, MainBehind } from '../../features/git/hooks/useMainSync'
+import type { MenuItemDef } from '../../../preload/apis/types'
+import { reportMainSyncFailure } from '../../features/git/mainSyncError'
 
 /**
  * Surface a failed "Open in <file manager>". The user asked for something visible to happen, so a
@@ -33,6 +36,50 @@ function reportOpenFailure(directory: string, error?: string): void {
     dismissed: false,
     timestamp: Date.now(),
   })
+}
+
+/**
+ * Build + run the card's right-click menu: always "Open in <file manager>", plus (for a managed repo
+ * with a tracked `main/` behind-count, #170) a separator and a "Sync main" item enabled only when
+ * there's something to fast-forward and no sync is already running. Extracted from the component so
+ * its branching doesn't inflate the render function's length/complexity budget.
+ */
+async function runSessionContextMenu(params: {
+  directory: string
+  repoId: string | undefined
+  mainBehindByRepoId: ReadonlyMap<string, MainBehind>
+  syncingRepoIds: ReadonlySet<string>
+  onSyncMain: (repoId: string) => Promise<{ success: boolean; error?: string }>
+}): Promise<void> {
+  const { directory, repoId, mainBehindByRepoId, syncingRepoIds, onSyncMain } = params
+  // Only managed repos with a tracked behind-count appear in the map (#170).
+  const mainBehind = repoId ? mainBehindByRepoId.get(repoId) : undefined
+  const behind = mainBehind?.status === 'available' ? mainBehind.behind : 0
+  const isSyncing = repoId ? syncingRepoIds.has(repoId) : false
+  const items: MenuItemDef[] = [{ id: 'open-in-file-manager', label: `Open in ${fileManagerName}` }]
+  if (repoId && mainBehind) {
+    items.push({ id: 'sep-sync', label: '', type: 'separator' })
+    items.push({
+      id: 'sync-main',
+      label: behind > 0 ? `Sync main (${behind} behind)` : 'Sync main',
+      enabled: mainBehind.status === 'available' && behind > 0 && !isSyncing,
+    })
+  }
+  const choice = await window.menu.popup(items)
+  if (choice === 'sync-main') {
+    if (!repoId) return
+    const result = await onSyncMain(repoId)
+    if (!result.success) reportMainSyncFailure(result.error)
+    return
+  }
+  if (choice !== 'open-in-file-manager') return
+  const result = await window.shell.openInFileManager(directory)
+  // 'opened'/'revealed' are both successes. Report the rest: 'failed' is an OS error, and 'none'
+  // means the folder is gone (common on an archived session whose worktree was deleted). Staying
+  // silent would make the menu item look dead.
+  if (result.action !== 'opened' && result.action !== 'revealed') {
+    reportOpenFailure(directory, result.error)
+  }
 }
 
 const statusLabels: Record<SessionStatus, string> = {
@@ -65,6 +112,9 @@ export default memo(function SessionCard({
   onDrop,
   onDragEnd,
   dropEdge,
+  mainBehindByRepoId,
+  syncingRepoIds,
+  onSyncMain,
 }: {
   sessionId: string
   onSelect: (sessionId: string) => void
@@ -81,7 +131,7 @@ export default memo(function SessionCard({
   onDragEnd?: (e: React.DragEvent) => void
   /** 'before' | 'after' draws the drop indicator on that edge; null draws none. */
   dropEdge?: 'before' | 'after' | null
-}) {
+} & MainSyncProps) {
   // Subscribe to only the fields this card renders, with shallow equality.
   // This prevents re-renders when unrelated session fields (or other sessions) change.
   const session = useSessionStore(
@@ -102,6 +152,7 @@ export default memo(function SessionCard({
         reviewStatus: sess.reviewStatus,
         initError: sess.initError,
         directory: sess.directory,
+        repoId: sess.repoId,
       }
     }),
   )
@@ -129,24 +180,14 @@ export default memo(function SessionCard({
     : showWorking ? 'working' : (session.status === 'error' ? 'error' : 'idle')
   const isUnread = session.isUnread
 
-  // Right-click → native context menu → open the session's worktree folder in the OS file manager.
+  // Right-click → native context menu: open the worktree folder, and (for managed repos) sync main/.
   const directory = session.directory
+  const repoId = session.repoId
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    void (async () => {
-      const choice = await window.menu.popup([
-        { id: 'open-in-file-manager', label: `Open in ${fileManagerName}` },
-      ])
-      if (choice !== 'open-in-file-manager') return
-      const result = await window.shell.openInFileManager(directory)
-      // 'opened'/'revealed' are both successes. Report the rest: 'failed' is an OS error, and
-      // 'none' means the folder is gone (common on an archived session whose worktree was
-      // deleted). Staying silent would make the menu item look dead.
-      if (result.action !== 'opened' && result.action !== 'revealed') {
-        reportOpenFailure(directory, result.error)
-      }
-    })().catch((err: unknown) => reportOpenFailure(directory, String(err)))
+    void runSessionContextMenu({ directory, repoId, mainBehindByRepoId, syncingRepoIds, onSyncMain })
+      .catch((err: unknown) => reportOpenFailure(directory, String(err)))
   }
 
   return (

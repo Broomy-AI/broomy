@@ -22,8 +22,9 @@ import { useSessionGrouping } from './useSessionGrouping'
 import { sortArchived } from './archivedOrder'
 import { useSidebarDrag } from './useSidebarDrag'
 import { groupKeyForSession } from './repoGroups'
+import type { MainSyncProps } from '../../features/git/hooks/useMainSync'
 
-interface SessionListProps {
+interface SessionListProps extends MainSyncProps {
   repos: ManagedRepo[]
   onSelectSession: (id: string) => void
   onNewSession: () => void
@@ -41,6 +42,9 @@ export default function SessionList({
   onRefreshPrStatus,
   onArchiveSession,
   onUnarchiveSession,
+  mainBehindByRepoId,
+  syncingRepoIds,
+  onSyncMain,
 }: SessionListProps) {
   const sessions = useSessionStore((s) => s.sessions)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -183,6 +187,9 @@ export default function SessionList({
               onDelete={handleDelete}
               onArchive={handleArchive}
               repoLabel={repoLabelFor(session)}
+              mainBehindByRepoId={mainBehindByRepoId}
+              syncingRepoIds={syncingRepoIds}
+              onSyncMain={onSyncMain}
             />
           </PanelErrorBoundary>
         ))}
@@ -203,6 +210,9 @@ export default function SessionList({
               sessionDrag={sessionDrag}
               groupDrag={groupDrag}
               dropTarget={dropTarget}
+              mainBehindByRepoId={mainBehindByRepoId}
+              syncingRepoIds={syncingRepoIds}
+              onSyncMain={onSyncMain}
             />
           )
         })}
@@ -231,6 +241,9 @@ export default function SessionList({
           onSelect={handleSelectArchived}
           onDelete={handleDelete}
           onArchive={handleUnarchive}
+          mainBehindByRepoId={mainBehindByRepoId}
+          syncingRepoIds={syncingRepoIds}
+          onSyncMain={onSyncMain}
         />
       </div>
 

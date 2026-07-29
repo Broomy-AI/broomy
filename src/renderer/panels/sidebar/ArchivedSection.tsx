@@ -9,6 +9,7 @@ import { StatusIndicator } from './StatusIndicator'
 import { rollupToIndicator } from './RepoGroupHeader'
 import type { Session } from '../../store/sessions'
 import type { Rollup } from './repoGroups'
+import type { MainSyncProps } from '../../features/git/hooks/useMainSync'
 
 export function ArchivedSection({
   sessions,
@@ -20,6 +21,9 @@ export function ArchivedSection({
   onSelect,
   onDelete,
   onArchive,
+  mainBehindByRepoId,
+  syncingRepoIds,
+  onSyncMain,
 }: {
   sessions: Session[]
   rollup: Rollup
@@ -31,7 +35,7 @@ export function ArchivedSection({
   onSelect: (id: string) => void
   onDelete: (e: MouseEvent | KeyboardEvent, id: string) => void
   onArchive: (e: MouseEvent, id: string) => void
-}) {
+} & MainSyncProps) {
   if (sessions.length === 0) return null
   const open = show || searching
   const ind = !open ? rollupToIndicator(rollup.status) : null
@@ -72,6 +76,9 @@ export function ArchivedSection({
                 onDelete={onDelete}
                 onArchive={onArchive}
                 repoLabel={searching && repoLabel ? repoLabel(session) : undefined}
+                mainBehindByRepoId={mainBehindByRepoId}
+                syncingRepoIds={syncingRepoIds}
+                onSyncMain={onSyncMain}
               />
             </PanelErrorBoundary>
           ))}

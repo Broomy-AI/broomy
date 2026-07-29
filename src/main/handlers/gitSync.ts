@@ -72,7 +72,9 @@ async function handlePullOriginMain(ctx: HandlerContext, repoPath: string) {
  */
 async function handleIsBehindMain(ctx: HandlerContext, repoPath: string) {
   if (ctx.isE2ETest && !ctx.e2eRealRepos) {
-    return { success: true as const, behind: 0, defaultBranch: 'main' }
+    // Deterministic mock; `E2E_MOCK_BEHIND_MAIN` lets a test/feature-doc surface the sync chip.
+    const behind = parseInt(process.env.E2E_MOCK_BEHIND_MAIN ?? '', 10) || 0
+    return { success: true as const, behind, defaultBranch: 'main' }
   }
 
   try {

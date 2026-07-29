@@ -13,6 +13,7 @@ import SessionCard from './SessionCard'
 import { RepoGroupHeader } from './RepoGroupHeader'
 import type { RepoGroup } from './repoGroups'
 import type { DragHandlers, DropKind, DropTarget } from './useSidebarDrag'
+import type { MainSyncProps } from '../../features/git/hooks/useMainSync'
 
 export function RepoGroupSection({
   group,
@@ -25,6 +26,9 @@ export function RepoGroupSection({
   sessionDrag,
   groupDrag,
   dropTarget,
+  mainBehindByRepoId,
+  syncingRepoIds,
+  onSyncMain,
 }: {
   group: RepoGroup
   collapsed: boolean
@@ -36,7 +40,7 @@ export function RepoGroupSection({
   sessionDrag: DragHandlers
   groupDrag: DragHandlers
   dropTarget: DropTarget | null
-}) {
+} & MainSyncProps) {
   const edgeFor = (kind: DropKind, id: string): 'before' | 'after' | null =>
     dropTarget?.kind === kind && dropTarget.id === id
       ? (dropTarget.before ? 'before' : 'after')
@@ -55,6 +59,9 @@ export function RepoGroupSection({
         onDrop={groupDrag.onDrop}
         onDragEnd={groupDrag.onDragEnd}
         dropEdge={edgeFor('group', group.key)}
+        mainBehind={group.repoId ? mainBehindByRepoId.get(group.repoId) : undefined}
+        isSyncing={group.repoId ? syncingRepoIds.has(group.repoId) : false}
+        onSyncMain={onSyncMain}
       />
       {!collapsed && (
         <div className="ml-3 pl-2" style={rail ? { borderLeft: `2px solid ${rail}` } : undefined}>
@@ -72,6 +79,9 @@ export function RepoGroupSection({
                 onDrop={sessionDrag.onDrop}
                 onDragEnd={sessionDrag.onDragEnd}
                 dropEdge={edgeFor('session', session.id)}
+                mainBehindByRepoId={mainBehindByRepoId}
+                syncingRepoIds={syncingRepoIds}
+                onSyncMain={onSyncMain}
               />
             </PanelErrorBoundary>
           ))}

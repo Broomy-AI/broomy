@@ -189,6 +189,16 @@ describe('gitSync handlers', () => {
       expect(await handlers['git:isBehindMain'](null, '/repo')).toEqual({ success: true, behind: 0, defaultBranch: 'main' })
     })
 
+    it('honors E2E_MOCK_BEHIND_MAIN so a test/feature-doc can surface the sync chip', async () => {
+      const handlers = setupHandlers(createMockCtx({ isE2ETest: true }))
+      process.env.E2E_MOCK_BEHIND_MAIN = '5'
+      try {
+        expect(await handlers['git:isBehindMain'](null, '/repo')).toEqual({ success: true, behind: 5, defaultBranch: 'main' })
+      } finally {
+        delete process.env.E2E_MOCK_BEHIND_MAIN
+      }
+    })
+
     it('returns the behind count on success', async () => {
       rawRouter({ behind: '5' })
       mockGitInstance.fetch.mockResolvedValue(undefined)

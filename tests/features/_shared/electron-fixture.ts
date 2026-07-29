@@ -87,6 +87,8 @@ interface ResetOptions {
   mockGitAhead?: number
   /** Override git status tracking branch */
   mockGitTracking?: string
+  /** Override git:isBehindMain behind-count (#170) so the sidebar sync chip appears */
+  mockBehindMain?: number
   /**
    * Canned agent responses for E2E tests. Each entry maps a prompt substring
    * to a reply string. The first matching entry is used; when nothing matches
@@ -125,6 +127,7 @@ function buildEnvOverrides(opts?: ResetOptions) {
     gitClean: opts?.mockGitClean ? 'true' : '',
     gitAhead: optNum(opts?.mockGitAhead),
     gitTracking: opts?.mockGitTracking ?? '',
+    behindMain: optNum(opts?.mockBehindMain),
     agentResponses: opts?.agentResponses ? JSON.stringify(opts.agentResponses) : '',
     agentResponseDelayMs: optNum(opts?.agentResponseDelayMs),
     fakeSdk: opts?.fakeSdk ? 'true' : '',
@@ -143,6 +146,7 @@ async function applyEnvOverrides(electronApp: ElectronApplication, envOverrides:
     setOrDelete('E2E_MOCK_GIT_CLEAN', env.gitClean)
     setOrDelete('E2E_MOCK_GIT_AHEAD', env.gitAhead)
     setOrDelete('E2E_MOCK_GIT_TRACKING', env.gitTracking)
+    setOrDelete('E2E_MOCK_BEHIND_MAIN', env.behindMain)
     setOrDelete('E2E_AGENT_RESPONSES', env.agentResponses)
     setOrDelete('E2E_AGENT_RESPONSE_DELAY_MS', env.agentResponseDelayMs)
     setOrDelete('E2E_FAKE_SDK', env.fakeSdk)
@@ -164,7 +168,7 @@ export async function resetApp(opts?: ResetOptions): Promise<{ electronApp: Elec
   if (isFirstCall) {
     // First call — app is already fresh from launch
     isFirstCall = false
-    if (opts?.scenario || opts?.mockMerge) {
+    if (opts?.scenario || opts?.mockMerge || opts?.mockBehindMain !== undefined) {
       // Env vars changed after launch — need a reload to pick them up
       await page.reload()
       await page.waitForLoadState('domcontentloaded')

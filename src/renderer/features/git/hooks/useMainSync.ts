@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ManagedRepo } from '../../../../preload/apis/types'
 import type { Session } from '../../../store/sessions'
+import { resolveRepoId } from '../../../panels/sidebar/repoGroups'
 
 /** A repo's `main/` behind-count, or `unavailable` when it couldn't be checked / a sync failed. */
 export type MainBehind =
@@ -23,6 +24,13 @@ export interface MainSyncView {
   syncingRepoIds: ReadonlySet<string>
   /** Fast-forward `main/`. Returns the result; the caller surfaces any error (manual → modal, auto → silent). */
   syncMain: (repoId: string) => Promise<{ success: boolean; error?: string }>
+}
+
+/** The view-model as it's threaded down to the sidebar components (stable `onSyncMain(repoId)`). */
+export interface MainSyncProps {
+  mainBehindByRepoId: ReadonlyMap<string, MainBehind>
+  syncingRepoIds: ReadonlySet<string>
+  onSyncMain: (repoId: string) => Promise<{ success: boolean; error?: string }>
 }
 
 /** Don't re-fetch a repo's count on focus if it was checked within this window. */
@@ -122,13 +130,18 @@ export function useMainSync(repos: ManagedRepo[], sessions: Session[]): MainSync
     return run
   }, [mainDirFor, publish])
 
-  // Repos with sessions in the sidebar — the only ones worth a network check.
+  // Repos with sessions in the sidebar — the only ones worth a network check. Resolve the repo the
+  // same way sidebar grouping does (explicit `repoId`, else by worktree path) so legacy sessions
+  // without a stored `repoId` still light up their group's chip.
   const repoById = useMemo(() => new Map(repos.map((r) => [r.id, r])), [repos])
   const eligibleRepoIds = useMemo(() => {
     const ids = new Set<string>()
-    for (const s of sessions) if (s.repoId && repoById.has(s.repoId)) ids.add(s.repoId)
+    for (const s of sessions) {
+      const repoId = resolveRepoId(s, repos)
+      if (repoId && repoById.has(repoId)) ids.add(repoId)
+    }
     return ids
-  }, [sessions, repoById])
+  }, [sessions, repos, repoById])
 
   // Newly-eligible repos get one refresh; drop state for repos that leave the sidebar.
   const prevEligible = useRef(new Set<string>())

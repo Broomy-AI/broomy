@@ -7,6 +7,7 @@ import SessionList from './SessionList'
 import { useSessionStore } from '../../store/sessions'
 import { useErrorStore } from '../../store/errors'
 import type { Session, StatusChip } from '../../store/sessions'
+import type { MainBehind } from '../../features/git/hooks/useMainSync'
 
 function makeSession(overrides: Partial<Session> = {}): Session {
   return {
@@ -59,6 +60,9 @@ function makeProps(overrides: Record<string, unknown> = {}) {
     onRefreshPrStatus: vi.fn().mockResolvedValue(undefined),
     onArchiveSession: vi.fn(),
     onUnarchiveSession: vi.fn(),
+    mainBehindByRepoId: new Map<string, MainBehind>(),
+    syncingRepoIds: new Set<string>(),
+    onSyncMain: vi.fn().mockResolvedValue({ success: true }),
     ...overrides,
   }
 }
@@ -515,6 +519,63 @@ describe('SessionList', () => {
 
       fireEvent.contextMenu(container.querySelector('[data-session-card]')!)
       expect(props.onSelectSession).not.toHaveBeenCalled()
+    })
+
+    it('offers "Sync main" for a managed repo that is behind, and syncs on selection', async () => {
+      const onSyncMain = vi.fn().mockResolvedValue({ success: true })
+      vi.mocked(window.menu.popup).mockResolvedValueOnce('sync-main')
+      setSessions([makeSession({ id: 's1', branch: 'b1', repoId: 'r1' })])
+      const behind = new Map<string, MainBehind>([['r1', { status: 'available', behind: 3 }]])
+      const { container } = render(<SessionList {...makeProps({ mainBehindByRepoId: behind, onSyncMain })} />)
+
+      fireEvent.contextMenu(container.querySelector('[data-session-card]')!)
+
+      expect(window.menu.popup).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'open-in-file-manager' }),
+        expect.objectContaining({ id: 'sep-sync', type: 'separator' }),
+        expect.objectContaining({ id: 'sync-main', label: 'Sync main (3 behind)', enabled: true }),
+      ])
+      await waitFor(() => expect(onSyncMain).toHaveBeenCalledWith('r1'))
+    })
+
+    it('disables "Sync main" while a sync for that repo is in flight', () => {
+      vi.mocked(window.menu.popup).mockResolvedValueOnce(null)
+      setSessions([makeSession({ id: 's1', branch: 'b1', repoId: 'r1' })])
+      const behind = new Map<string, MainBehind>([['r1', { status: 'available', behind: 3 }]])
+      const { container } = render(
+        <SessionList {...makeProps({ mainBehindByRepoId: behind, syncingRepoIds: new Set(['r1']) })} />,
+      )
+
+      fireEvent.contextMenu(container.querySelector('[data-session-card]')!)
+
+      expect(window.menu.popup).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ id: 'sync-main', enabled: false })]),
+      )
+    })
+
+    it('surfaces a failed "Sync main" instead of doing nothing visible', async () => {
+      const onSyncMain = vi.fn().mockResolvedValue({ success: false, error: 'main/ has diverged from origin' })
+      vi.mocked(window.menu.popup).mockResolvedValueOnce('sync-main')
+      setSessions([makeSession({ id: 's1', branch: 'b1', repoId: 'r1' })])
+      const behind = new Map<string, MainBehind>([['r1', { status: 'available', behind: 2 }]])
+      const { container } = render(<SessionList {...makeProps({ mainBehindByRepoId: behind, onSyncMain })} />)
+
+      fireEvent.contextMenu(container.querySelector('[data-session-card]')!)
+
+      await waitFor(() => expect(useErrorStore.getState().detailError?.detail).toContain('diverged'))
+    })
+
+    it('omits the sync section for a session whose repo is not tracked', () => {
+      vi.mocked(window.menu.popup).mockResolvedValueOnce(null)
+      // repoId is set but absent from the behind-map (e.g. not yet refreshed / not managed).
+      setSessions([makeSession({ id: 's1', branch: 'b1', repoId: 'r1' })])
+      const { container } = render(<SessionList {...makeProps()} />)
+
+      fireEvent.contextMenu(container.querySelector('[data-session-card]')!)
+
+      expect(window.menu.popup).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'open-in-file-manager' }),
+      ])
     })
   })
 
