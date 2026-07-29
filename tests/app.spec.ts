@@ -72,7 +72,10 @@ async function resumeIfPaused(p: Page) {
   try {
     await p.locator('button:has-text("Resume Session"):visible').click({ timeout: 3000 })
   } catch {
-    // Already running -- no paused placeholder to click through.
+    // Assumes the click failed because the session was already running (no
+    // placeholder to click through) -- if resume genuinely broke instead,
+    // this silently no-ops and the failure surfaces later as a confusing
+    // "no terminal" error in whichever test runs next. Check here first.
     return
   }
   // The initial agent command is written into the freshly spawned PTY after

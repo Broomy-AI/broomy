@@ -30,7 +30,11 @@ test.beforeAll(async () => {
   try {
     await page.locator('button:has-text("Resume Session"):visible').click({ timeout: 3000 })
   } catch {
-    resumed = false // Already running -- no paused placeholder to click through.
+    // Assumes the click failed because the session was already running (no
+    // placeholder to click through) -- if resume genuinely broke instead,
+    // this silently no-ops and the failure surfaces later as a confusing
+    // "no terminal" error in whichever test runs next. Check here first.
+    resumed = false
   }
   if (resumed) {
     // The initial agent command is written into the freshly spawned PTY
