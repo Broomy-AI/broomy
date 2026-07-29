@@ -37,12 +37,14 @@ const mockHasDevcontainerConfig = vi.fn()
 const mockIsDevcontainerCliAvailable = vi.fn()
 const mockDevcontainerUp = vi.fn()
 const mockBuildDevcontainerExecArgs = vi.fn()
+const mockStopContainer = vi.fn().mockResolvedValue(undefined)
 vi.mock('../devcontainer', () => ({
   hasDevcontainerConfig: (...args: unknown[]) => mockHasDevcontainerConfig(...args),
   isDevcontainerCliAvailable: (...args: unknown[]) => mockIsDevcontainerCliAvailable(...args),
   devcontainerUp: (...args: unknown[]) => mockDevcontainerUp(...args),
   buildDevcontainerExecArgs: (...args: unknown[]) => mockBuildDevcontainerExecArgs(...args),
   devcontainerSetupMessage: () => 'Devcontainer CLI not available',
+  stopContainer: (...args: unknown[]) => mockStopContainer(...args),
 }))
 
 // Mock platform
@@ -799,6 +801,46 @@ describe('pty handlers', () => {
           }),
         )
       })
+    })
+    it('stops the container if the session is killed (paused) while devcontainer up is still in flight', async () => {
+      const { register } = await import('./pty')
+      const ctx = createCtx()
+      register(mockIpcMain as never, ctx)
+
+      mockBrowserWindowFromWebContents.mockReturnValue(mockSenderWindow)
+      mockHasDevcontainerConfig.mockReturnValue(true)
+      mockIsDevcontainerCliAvailable.mockResolvedValue({ available: true })
+      mockIsDockerAvailable.mockResolvedValue({ available: true })
+      mockEnsureAgentInstalled.mockResolvedValue({ success: true })
+
+      // Keep devcontainer up pending until the test releases it, simulating
+      // a slow first launch that pause interrupts mid-bringup.
+      let resolveUp: (v: unknown) => void
+      mockDevcontainerUp.mockReturnValue(
+        new Promise((resolve) => { resolveUp = resolve })
+      )
+
+      await handlers['pty:create'](mockEvent, {
+        id: 'dc-midbringup',
+        cwd: '/repo-midbringup',
+        isolated: true,
+        sessionId: 'sess-midbringup',
+      })
+
+      // Pause fires pty:kill before devcontainer up has resolved.
+      await handlers['pty:kill'](mockEvent, 'dc-midbringup')
+
+      // Now devcontainer up finally resolves — the container exists.
+      resolveUp!({
+        success: true,
+        result: { containerId: 'dc-mid-123', remoteUser: 'node', remoteWorkspaceFolder: '/workspaces/repo' },
+      })
+
+      await vi.waitFor(() => {
+        expect(mockStopContainer).toHaveBeenCalledWith(ctx, '/repo-midbringup')
+      })
+      // Cancelled setup must not go on to spawn the docker exec PTY.
+      expect(mockPtySpawn).not.toHaveBeenCalled()
     })
   })
 
