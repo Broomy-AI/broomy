@@ -24,6 +24,7 @@ import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { screenshotElement } from '../_shared/screenshot-helpers'
 import { generateFeaturePage, generateIndex, FeatureStep } from '../_shared/template'
+import { resumeActiveSession, getActiveSessionTerminalBuffer } from '../_shared/resume-helpers'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -34,22 +35,6 @@ const FEATURES_ROOT = path.join(__dirname, '..')
 
 /** The URL the fake agent prints (scripts/fake-claude.sh). */
 const AGENT_URL = 'https://github.com/Broomy-AI/broomy/pull/149'
-
-/** Read serialized terminal buffer content from the in-app registry. */
-async function getTerminalContent(p: Page): Promise<string> {
-  return p.evaluate(() => {
-    const registry = (window as unknown as {
-      __terminalBufferRegistry?: { getSessionIds: () => string[]; getBuffer: (id: string) => string | null }
-    }).__terminalBufferRegistry
-    if (!registry) return ''
-    for (const id of registry.getSessionIds()) {
-      if (id.endsWith('-user')) continue
-      const buf = registry.getBuffer(id)
-      if (buf && buf.length > 0) return buf
-    }
-    return ''
-  })
-}
 
 let page: Page
 const steps: FeatureStep[] = []
@@ -75,8 +60,10 @@ test.afterAll(async () => {
 
 test.describe.serial('Feature: Click a URL in the Terminal', () => {
   test('A URL printed in the terminal is a ⌘/⌃-clickable link', async () => {
-    // Wait for the fake agent to finish so its URL line is in the terminal buffer.
-    await expect.poll(() => getTerminalContent(page), { timeout: 15000 }).toContain(AGENT_URL)
+    // Sessions restore paused — resume it, then wait for the fake agent to
+    // finish so its URL line is in the terminal buffer.
+    await resumeActiveSession(page)
+    await expect.poll(() => getActiveSessionTerminalBuffer(page), { timeout: 15000 }).toContain(AGENT_URL)
 
     const agentPanel = page.locator('[data-panel-id="agent"]')
     await expect(agentPanel).toBeVisible()
@@ -88,7 +75,7 @@ test.describe.serial('Feature: Click a URL in the Terminal', () => {
       screenshotPath: 'screenshots/01-url-in-terminal.png',
       caption: 'A URL printed in the terminal is clickable',
       description:
-        'Agents constantly print URLs — PR links from `gh pr create`, docs, localhost dev ' +
+        'After resuming the session, agents constantly print URLs — PR links from `gh pr create`, docs, localhost dev ' +
         'servers. The web-links addon detects the URL (and xterm handles OSC 8 hyperlinks) and ' +
         'underlines it on hover, alongside a "⌘click to open" hint — xterm underlines a link ' +
         'whether or not the modifier is held, so without the hint a plain click would be a dead ' +

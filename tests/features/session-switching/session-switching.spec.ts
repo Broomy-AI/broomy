@@ -13,6 +13,7 @@ import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { screenshotElement } from '../_shared/screenshot-helpers'
 import { generateFeaturePage, generateIndex, FeatureStep } from '../_shared/template'
+import { resumeActiveSession } from '../_shared/resume-helpers'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -23,24 +24,6 @@ const FEATURES_ROOT = path.join(__dirname, '..')
 
 let page: Page
 const steps: FeatureStep[] = []
-
-/**
- * Get terminal buffer content from the buffer registry.
- * xterm 6.0 renders via canvas, so DOM queries can't read terminal text.
- */
-async function getAgentTerminalContent(p: Page): Promise<string> {
-  return p.evaluate(() => {
-    const registry = (window as unknown as { __terminalBufferRegistry?: { getSessionIds: () => string[]; getBuffer: (id: string) => string | null } }).__terminalBufferRegistry
-    if (!registry) return ''
-    for (const id of registry.getSessionIds()) {
-      if (id.endsWith('-user')) continue
-      const buf = registry.getBuffer(id)
-      if (buf) return buf
-    }
-    return ''
-  })
-}
-
 
 test.beforeAll(async () => {
   await fs.promises.mkdir(SCREENSHOTS, { recursive: true })
@@ -95,15 +78,8 @@ test.describe.serial('Feature: Session Switching', () => {
     await expect(broomySession).toHaveClass(/bg-accent\/15/)
 
     // Sessions restore paused, so the active session's panel starts as a
-    // "Resume Session" placeholder rather than a terminal. Resume it and
-    // wait for the mock agent's ready banner (not a sleep) before asserting
-    // the terminal is up — the initial agent command is written into the
-    // freshly spawned PTY a moment after creation (see
-    // src/main/handlers/pty.ts), so a screenshot taken immediately after
-    // clicking Resume can catch the bare shell prompt instead.
-    await page.locator('button:has-text("Resume Session"):visible').click()
-    await expect.poll(() => getAgentTerminalContent(page), { timeout: 10000 })
-      .toContain('FAKE_CLAUDE_READY')
+    // "Resume Session" placeholder rather than a terminal.
+    await resumeActiveSession(page)
 
     const terminalArea = page.locator('.xterm').first()
     await expect(terminalArea).toBeVisible()
