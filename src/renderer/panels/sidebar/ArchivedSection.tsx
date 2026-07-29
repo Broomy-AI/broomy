@@ -8,8 +8,9 @@ import SessionCard from './SessionCard'
 import { StatusIndicator } from './StatusIndicator'
 import { rollupToIndicator } from './RepoGroupHeader'
 import type { Session } from '../../store/sessions'
-import type { Rollup } from './repoGroups'
-import type { MainSyncProps } from '../../features/git/hooks/useMainSync'
+import type { ManagedRepo } from '../../../preload/index'
+import { resolveRepoId, type Rollup } from './repoGroups'
+import { resolveCardMainSync, type MainSyncProps } from '../../features/git/hooks/useMainSync'
 
 export function ArchivedSection({
   sessions,
@@ -17,6 +18,7 @@ export function ArchivedSection({
   show,
   searching = false,
   repoLabel,
+  repos,
   onToggle,
   onSelect,
   onDelete,
@@ -31,6 +33,8 @@ export function ArchivedSection({
   /** While searching, the section is forced open and its cards carry a repo tag. */
   searching?: boolean
   repoLabel?: (s: Session) => string
+  /** Needed to resolve each archived session's repo (an archived list spans repos). */
+  repos: ManagedRepo[]
   onToggle: () => void
   onSelect: (id: string) => void
   onDelete: (e: MouseEvent | KeyboardEvent, id: string) => void
@@ -76,8 +80,7 @@ export function ArchivedSection({
                 onDelete={onDelete}
                 onArchive={onArchive}
                 repoLabel={searching && repoLabel ? repoLabel(session) : undefined}
-                mainBehindByRepoId={mainBehindByRepoId}
-                syncingRepoIds={syncingRepoIds}
+                {...resolveCardMainSync(resolveRepoId(session, repos), mainBehindByRepoId, syncingRepoIds)}
                 onSyncMain={onSyncMain}
               />
             </PanelErrorBoundary>

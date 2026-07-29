@@ -140,6 +140,25 @@ describe('useMainSync', () => {
     await waitFor(() => expect(result.current.mainBehindByRepoId.has('r1')).toBe(false))
   })
 
+  it('does not republish a repo that left the sidebar while its refresh was in flight', async () => {
+    let resolveBehind!: (v: { success: true; behind: number; defaultBranch: string }) => void
+    vi.mocked(window.git.isBehindMain).mockReturnValueOnce(new Promise((r) => { resolveBehind = r }))
+    const { result, rerender } = renderHook(
+      ({ r, s }: { r: ManagedRepo[]; s: Session[] }) => useMainSync(r, s),
+      { initialProps: { r: [repo('r1')], s: [sess('s1', 'r1')] } },
+    )
+
+    // r1 leaves the sidebar before its initial behind-check resolves.
+    rerender({ r: [repo('r1')], s: [] })
+    await act(async () => {
+      resolveBehind({ success: true, behind: 9, defaultBranch: 'main' })
+      await Promise.resolve()
+    })
+
+    // The late result must not resurrect the dropped repo's state.
+    expect(result.current.mainBehindByRepoId.has('r1')).toBe(false)
+  })
+
   describe('window focus (TTL-gated, poll-free)', () => {
     beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(1000) })
     afterEach(() => { vi.useRealTimers() })

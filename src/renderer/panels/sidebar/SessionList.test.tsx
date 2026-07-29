@@ -565,6 +565,23 @@ describe('SessionList', () => {
       await waitFor(() => expect(useErrorStore.getState().detailError?.detail).toContain('diverged'))
     })
 
+    it('offers "Sync main" for a legacy session resolved to its repo by worktree path', async () => {
+      const onSyncMain = vi.fn().mockResolvedValue({ success: true })
+      vi.mocked(window.menu.popup).mockResolvedValueOnce('sync-main')
+      // No repoId — the session is resolved to r1 purely by its directory under the repo rootDir.
+      setSessions([makeSession({ id: 's1', branch: 'b1', repoId: undefined, directory: '/repos/demo/b1' })])
+      const repos = [{ id: 'r1', name: 'demo', remoteUrl: '', rootDir: '/repos/demo', defaultBranch: 'main' }]
+      const behind = new Map<string, MainBehind>([['r1', { status: 'available', behind: 4 }]])
+      const { container } = render(<SessionList {...makeProps({ repos, mainBehindByRepoId: behind, onSyncMain })} />)
+
+      fireEvent.contextMenu(container.querySelector('[data-session-card]')!)
+
+      expect(window.menu.popup).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({ id: 'sync-main', label: 'Sync main (4 behind)', enabled: true })]),
+      )
+      await waitFor(() => expect(onSyncMain).toHaveBeenCalledWith('r1'))
+    })
+
     it('omits the sync section for a session whose repo is not tracked', () => {
       vi.mocked(window.menu.popup).mockResolvedValueOnce(null)
       // repoId is set but absent from the behind-map (e.g. not yet refreshed / not managed).

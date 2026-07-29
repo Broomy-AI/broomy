@@ -21,8 +21,8 @@ import { SessionListHeader } from './SessionListHeader'
 import { useSessionGrouping } from './useSessionGrouping'
 import { sortArchived } from './archivedOrder'
 import { useSidebarDrag } from './useSidebarDrag'
-import { groupKeyForSession } from './repoGroups'
-import type { MainSyncProps } from '../../features/git/hooks/useMainSync'
+import { groupKeyForSession, resolveRepoId } from './repoGroups'
+import { resolveCardMainSync, type MainSyncProps } from '../../features/git/hooks/useMainSync'
 
 interface SessionListProps extends MainSyncProps {
   repos: ManagedRepo[]
@@ -187,8 +187,7 @@ export default function SessionList({
               onDelete={handleDelete}
               onArchive={handleArchive}
               repoLabel={repoLabelFor(session)}
-              mainBehindByRepoId={mainBehindByRepoId}
-              syncingRepoIds={syncingRepoIds}
+              {...resolveCardMainSync(resolveRepoId(session, repos), mainBehindByRepoId, syncingRepoIds)}
               onSyncMain={onSyncMain}
             />
           </PanelErrorBoundary>
@@ -237,6 +236,7 @@ export default function SessionList({
           show={showArchived}
           searching={searching}
           repoLabel={repoLabelFor}
+          repos={repos}
           onToggle={() => setShowArchived(!showArchived)}
           onSelect={handleSelectArchived}
           onDelete={handleDelete}

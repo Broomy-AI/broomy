@@ -17,7 +17,7 @@ import { StatusIndicator } from './StatusIndicator'
 import { dropEdgeClasses } from './useSidebarDrag'
 import { fileManagerName } from '../../shared/utils/platform'
 import { useErrorStore } from '../../store/errors'
-import type { MainSyncProps, MainBehind } from '../../features/git/hooks/useMainSync'
+import type { CardMainSync, MainBehind } from '../../features/git/hooks/useMainSync'
 import type { MenuItemDef } from '../../../preload/apis/types'
 import { reportMainSyncFailure } from '../../features/git/mainSyncError'
 
@@ -47,15 +47,12 @@ function reportOpenFailure(directory: string, error?: string): void {
 async function runSessionContextMenu(params: {
   directory: string
   repoId: string | undefined
-  mainBehindByRepoId: ReadonlyMap<string, MainBehind>
-  syncingRepoIds: ReadonlySet<string>
+  mainBehind: MainBehind | undefined
+  isSyncing: boolean
   onSyncMain: (repoId: string) => Promise<{ success: boolean; error?: string }>
 }): Promise<void> {
-  const { directory, repoId, mainBehindByRepoId, syncingRepoIds, onSyncMain } = params
-  // Only managed repos with a tracked behind-count appear in the map (#170).
-  const mainBehind = repoId ? mainBehindByRepoId.get(repoId) : undefined
+  const { directory, repoId, mainBehind, isSyncing, onSyncMain } = params
   const behind = mainBehind?.status === 'available' ? mainBehind.behind : 0
-  const isSyncing = repoId ? syncingRepoIds.has(repoId) : false
   const items: MenuItemDef[] = [{ id: 'open-in-file-manager', label: `Open in ${fileManagerName}` }]
   if (repoId && mainBehind) {
     items.push({ id: 'sep-sync', label: '', type: 'separator' })
@@ -112,8 +109,9 @@ export default memo(function SessionCard({
   onDrop,
   onDragEnd,
   dropEdge,
-  mainBehindByRepoId,
-  syncingRepoIds,
+  syncRepoId,
+  mainBehind,
+  isSyncing,
   onSyncMain,
 }: {
   sessionId: string
@@ -131,7 +129,7 @@ export default memo(function SessionCard({
   onDragEnd?: (e: React.DragEvent) => void
   /** 'before' | 'after' draws the drop indicator on that edge; null draws none. */
   dropEdge?: 'before' | 'after' | null
-} & MainSyncProps) {
+} & CardMainSync) {
   // Subscribe to only the fields this card renders, with shallow equality.
   // This prevents re-renders when unrelated session fields (or other sessions) change.
   const session = useSessionStore(
@@ -152,7 +150,6 @@ export default memo(function SessionCard({
         reviewStatus: sess.reviewStatus,
         initError: sess.initError,
         directory: sess.directory,
-        repoId: sess.repoId,
       }
     }),
   )
@@ -181,12 +178,12 @@ export default memo(function SessionCard({
   const isUnread = session.isUnread
 
   // Right-click → native context menu: open the worktree folder, and (for managed repos) sync main/.
+  // The repo is resolved by the parent (so legacy path-only sessions still get the item).
   const directory = session.directory
-  const repoId = session.repoId
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    void runSessionContextMenu({ directory, repoId, mainBehindByRepoId, syncingRepoIds, onSyncMain })
+    void runSessionContextMenu({ directory, repoId: syncRepoId, mainBehind, isSyncing: !!isSyncing, onSyncMain })
       .catch((err: unknown) => reportOpenFailure(directory, String(err)))
   }
 

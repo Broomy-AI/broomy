@@ -46,6 +46,11 @@ export function RepoGroupSection({
       ? (dropTarget.before ? 'before' : 'after')
       : null
 
+  // Every card in a group shares the group's (already-resolved) repo, so resolve the sync inputs once.
+  const repoId = group.repoId
+  const mainBehind = repoId ? mainBehindByRepoId.get(repoId) : undefined
+  const isSyncing = repoId ? syncingRepoIds.has(repoId) : false
+
   return (
     <div className="mb-1">
       <RepoGroupHeader
@@ -59,8 +64,8 @@ export function RepoGroupSection({
         onDrop={groupDrag.onDrop}
         onDragEnd={groupDrag.onDragEnd}
         dropEdge={edgeFor('group', group.key)}
-        mainBehind={group.repoId ? mainBehindByRepoId.get(group.repoId) : undefined}
-        isSyncing={group.repoId ? syncingRepoIds.has(group.repoId) : false}
+        mainBehind={mainBehind}
+        isSyncing={isSyncing}
         onSyncMain={onSyncMain}
       />
       {!collapsed && (
@@ -79,8 +84,9 @@ export function RepoGroupSection({
                 onDrop={sessionDrag.onDrop}
                 onDragEnd={sessionDrag.onDragEnd}
                 dropEdge={edgeFor('session', session.id)}
-                mainBehindByRepoId={mainBehindByRepoId}
-                syncingRepoIds={syncingRepoIds}
+                syncRepoId={repoId}
+                mainBehind={mainBehind}
+                isSyncing={isSyncing}
                 onSyncMain={onSyncMain}
               />
             </PanelErrorBoundary>

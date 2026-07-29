@@ -26,11 +26,41 @@ export interface MainSyncView {
   syncMain: (repoId: string) => Promise<{ success: boolean; error?: string }>
 }
 
-/** The view-model as it's threaded down to the sidebar components (stable `onSyncMain(repoId)`). */
+/** The view-model as it's threaded down to the section components (stable `onSyncMain(repoId)`). */
 export interface MainSyncProps {
   mainBehindByRepoId: ReadonlyMap<string, MainBehind>
   syncingRepoIds: ReadonlySet<string>
   onSyncMain: (repoId: string) => Promise<{ success: boolean; error?: string }>
+}
+
+/**
+ * A single card's resolved sync inputs. Parents resolve the repo (so legacy path-only sessions still
+ * get the affordance) and pass just these — identity-stable when unchanged, so `SessionCard`'s
+ * `React.memo` isn't defeated by a whole-map/set prop that changes on any repo's update.
+ */
+export interface CardMainSync {
+  /** Resolved managed-repo id for the card's session; undefined = unmanaged / unresolved (no chip/menu). */
+  syncRepoId?: string
+  mainBehind?: MainBehind
+  isSyncing?: boolean
+  onSyncMain: (repoId: string) => Promise<{ success: boolean; error?: string }>
+}
+
+/**
+ * Resolve a card's sync inputs from an already-resolved repo id. Shared by every card render path
+ * (grouped, search, archived) so the "look up behind + syncing" logic lives in one place; returns
+ * identity-stable values (the `MainBehind` object is unchanged when that repo didn't change).
+ */
+export function resolveCardMainSync(
+  repoId: string | undefined,
+  mainBehindByRepoId: ReadonlyMap<string, MainBehind>,
+  syncingRepoIds: ReadonlySet<string>,
+): { syncRepoId?: string; mainBehind?: MainBehind; isSyncing: boolean } {
+  return {
+    syncRepoId: repoId,
+    mainBehind: repoId ? mainBehindByRepoId.get(repoId) : undefined,
+    isSyncing: repoId ? syncingRepoIds.has(repoId) : false,
+  }
 }
 
 /** Don't re-fetch a repo's count on focus if it was checked within this window. */
@@ -56,17 +86,24 @@ export function useMainSync(repos: ManagedRepo[], sessions: Session[]): MainSync
   const inFlightRefresh = useRef(new Set<string>())
   const refreshToken = useRef(new Map<string, number>()) // latest-wins; bumped by a completed sync too
   const lastFetchedAt = useRef(new Map<string, number>())
+  // The current eligible set, synchronously readable. Publication consults it so an op that settles
+  // after its repo left the sidebar can't republish (and resurrect) that repo's dropped state.
+  const eligibleRef = useRef<ReadonlySet<string>>(new Set())
 
   const mainDirFor = useCallback((repoId: string): string | null => {
     const repo = reposRef.current.find((r) => r.id === repoId)
     return repo ? `${repo.rootDir}/main` : null
   }, [])
 
-  const publish = useCallback((repoId: string, value: MainBehind) => {
-    if (!mountedRef.current) return
+  // The single publication path for BOTH success and failure. Gates on mounted + still-eligible so a
+  // late result never writes after unmount nor re-adds a repo that has left the sidebar. `compute` may
+  // read the prior value (a failure keeps the last known behind-count as `lastKnownBehind`).
+  const publish = useCallback((repoId: string, compute: MainBehind | ((prev: MainBehind | undefined) => MainBehind)) => {
+    if (!mountedRef.current || !eligibleRef.current.has(repoId)) return
     setBehindByRepoId((prev) => {
+      if (!eligibleRef.current.has(repoId)) return prev
       const next = new Map(prev)
-      next.set(repoId, value)
+      next.set(repoId, typeof compute === 'function' ? compute(prev.get(repoId)) : compute)
       return next
     })
   }, [])
@@ -82,13 +119,13 @@ export function useMainSync(repos: ManagedRepo[], sessions: Session[]): MainSync
     lastFetchedAt.current.set(repoId, Date.now())
     try {
       const result = await window.git.isBehindMain(dir)
-      // Latest-wins: a newer refresh, or a sync that finished meanwhile, owns the state now.
+      // Latest-wins: a newer refresh, a completed sync, or a drop (token bumped) owns the state now.
       if (refreshToken.current.get(repoId) !== token || inFlightSync.current.has(repoId)) return
       if (result.success) publish(repoId, { status: 'available', behind: result.behind })
-      else setBehindByRepoId((prev) => new Map(prev).set(repoId, toUnavailable(prev.get(repoId), result.error)))
+      else publish(repoId, (prev) => toUnavailable(prev, result.error))
     } catch (err) {
       if (refreshToken.current.get(repoId) !== token) return
-      setBehindByRepoId((prev) => new Map(prev).set(repoId, toUnavailable(prev.get(repoId), String(err))))
+      publish(repoId, (prev) => toUnavailable(prev, String(err)))
     } finally {
       inFlightRefresh.current.delete(repoId)
     }
@@ -106,12 +143,12 @@ export function useMainSync(repos: ManagedRepo[], sessions: Session[]): MainSync
         // A completed sync owns the count: bump the token so an in-flight refresh can't overwrite it.
         refreshToken.current.set(repoId, (refreshToken.current.get(repoId) ?? 0) + 1)
         if (result.success) publish(repoId, { status: 'available', behind: 0 })
-        else setBehindByRepoId((prev) => new Map(prev).set(repoId, toUnavailable(prev.get(repoId), result.error)))
+        else publish(repoId, (prev) => toUnavailable(prev, result.error))
         return result
       } catch (err) {
         const error = String(err)
         refreshToken.current.set(repoId, (refreshToken.current.get(repoId) ?? 0) + 1)
-        setBehindByRepoId((prev) => new Map(prev).set(repoId, toUnavailable(prev.get(repoId), error)))
+        publish(repoId, (prev) => toUnavailable(prev, error))
         return { success: false, error }
       } finally {
         inFlightSync.current.delete(repoId)
@@ -142,6 +179,8 @@ export function useMainSync(repos: ManagedRepo[], sessions: Session[]): MainSync
     }
     return ids
   }, [sessions, repos, repoById])
+  // Keep the synchronous eligibility view (read by `publish`) current with each render.
+  eligibleRef.current = eligibleRepoIds
 
   // Newly-eligible repos get one refresh; drop state for repos that leave the sidebar.
   const prevEligible = useRef(new Set<string>())
@@ -153,6 +192,11 @@ export function useMainSync(repos: ManagedRepo[], sessions: Session[]): MainSync
       for (const id of prev.keys()) if (!eligibleRepoIds.has(id)) { next.delete(id); changed = true }
       return changed ? next : prev
     })
+    // Invalidate any in-flight refresh for a now-ineligible repo so a late result can't republish it
+    // (the mounted+eligible guard in `publish` is the real backstop; this also avoids stale re-adds).
+    for (const id of prevEligible.current) {
+      if (!eligibleRepoIds.has(id)) refreshToken.current.set(id, (refreshToken.current.get(id) ?? 0) + 1)
+    }
     prevEligible.current = new Set(eligibleRepoIds)
   }, [eligibleRepoIds, refresh])
 

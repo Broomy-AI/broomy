@@ -2,6 +2,8 @@
  * IPC handlers for git sync operations: pull, push, fetch, and stash.
  */
 import { IpcMain } from 'electron'
+import { realpathSync } from 'fs'
+import { resolve } from 'path'
 import simpleGit from 'simple-git'
 import { HandlerContext, expandHomePath } from './types'
 import { getScenarioData } from './scenarios'
@@ -21,6 +23,18 @@ function withNonInteractive(git: ReturnType<typeof simpleGit>) {
  * so a settling caller can't clear a still-queued successor's slot (a 2-caller test wouldn't catch that).
  */
 const mainSyncLocks = new Map<string, Promise<unknown>>()
+
+/**
+ * Canonicalize the clone path so equivalent spellings — a symlink, a trailing separator, `..`
+ * segments, or a case-variant on a case-insensitive filesystem — resolve to ONE lock key. Otherwise
+ * two windows (same main process) referencing the same clone by different spellings would take
+ * different locks and pull concurrently, defeating the per-clone serialization. `realpath` needs the
+ * path to exist; if it doesn't yet, fall back to `resolve` (still normalizes `..`/trailing sep).
+ */
+function cloneLockKey(expandedPath: string): string {
+  try { return realpathSync.native(expandedPath) } catch { return resolve(expandedPath) }
+}
+
 function withMainSyncLock<T>(key: string, op: () => Promise<T>): Promise<T> {
   const prev = mainSyncLocks.get(key) ?? Promise.resolve()
   const run = prev.then(op, op) // run after the predecessor settles (success or failure)
@@ -41,7 +55,7 @@ async function handlePullOriginMain(ctx: HandlerContext, repoPath: string) {
   }
 
   const expanded = expandHomePath(repoPath)
-  return withMainSyncLock(expanded, async () => {
+  return withMainSyncLock(cloneLockKey(expanded), async () => {
     try {
       const git = withNonInteractive(simpleGit(expanded))
       const defaultBranch = await getDefaultBranch(git, true)
