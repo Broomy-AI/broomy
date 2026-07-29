@@ -168,12 +168,13 @@ test.describe.serial('Feature: Appearance', () => {
       screenshotPath: 'screenshots/06-back-to-dark.png',
       caption: 'Back to dark — the accent and text size survive the theme change',
       description:
-        'Appearance is stored globally in ~/.broomy/settings.json rather than per-profile: ' +
-        'nativeTheme.themeSource is process-global, so two profile windows disagreeing would leave ' +
-        'the native chrome able to satisfy only one of them — and how readable a UI is, is a ' +
-        'property of a person\'s eyes, not of which project they happen to have open. The main ' +
-        'process reads it synchronously before the first window exists, so a light-mode user never ' +
-        'sees a dark frame flash on launch.',
+        'Appearance is stored globally in ~/.broomy/settings.json rather than per-profile: how ' +
+        'readable a UI is, is a property of a person\'s eyes, not of which project they happen to ' +
+        'have open. The main process reads it synchronously before the first window exists, so a ' +
+        'light-mode user never sees a dark frame flash on launch. Note what the theme does NOT ' +
+        'touch: web pages in the file viewer. Broomy leaves nativeTheme.themeSource alone, so a ' +
+        'site renders exactly as it would in any other browser on your machine — picking a dark ' +
+        'Broomy no longer forces every website dark along with it.',
     })
   })
 })
