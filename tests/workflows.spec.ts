@@ -18,6 +18,7 @@ import { execSync } from 'child_process'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { dockerArgs, isDocker } from './electron-launch-args'
+import { resumeActiveSession } from './features/_shared/resume-helpers'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
@@ -304,23 +305,7 @@ test.describe('Session Creation', () => {
     // The session starts paused (no agent, no terminal). Resume it so the
     // Terminal Tab Switching and Agent Terminal describes below have a
     // running fake-claude process to assert against.
-    let resumed = true
-    try {
-      await page.locator('button:has-text("Resume Session"):visible').click({ timeout: 3000 })
-    } catch {
-      // Assumes the click failed because the session was already running (no
-      // placeholder to click through) -- if resume genuinely broke instead,
-      // this silently no-ops and the failure surfaces later as a confusing
-      // "no terminal" error in whichever test runs next. Check here first.
-      resumed = false
-    }
-    if (resumed) {
-      // The initial agent command is written into the freshly spawned PTY
-      // after a short delay (see src/main/handlers/pty.ts). Wait for it to
-      // land before later tests interact with the terminal.
-      await expect.poll(() => getTerminalContent(page, 'agent'), { timeout: 10000 })
-        .toContain('FAKE_CLAUDE_READY')
-    }
+    await resumeActiveSession(page)
   })
 })
 

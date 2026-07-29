@@ -10,6 +10,7 @@ import { test, expect, _electron as electron, ElectronApplication, Page } from '
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { dockerArgs } from './electron-launch-args'
+import { resumeActiveSession } from './features/_shared/resume-helpers'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -47,15 +48,7 @@ test.describe('Comments Dock', () => {
 
     // The session starts paused (no agent, no terminal). Resume it so the
     // later "submit comment to agent" assertion has an agent to submit to.
-    try {
-      await page.locator('button:has-text("Resume Session"):visible').click({ timeout: 3000 })
-    } catch {
-      // Assumes the click failed because the session was already running (no
-      // placeholder to click through) -- if resume genuinely broke instead,
-      // this silently no-ops and the failure surfaces later as a confusing
-      // "no terminal"/"no agent to submit to" error further down this test.
-      // Check here first.
-    }
+    await resumeActiveSession(page)
 
     // Open the Explorer panel.
     const explorerBtn = page.locator('button[title*="Explorer"]')

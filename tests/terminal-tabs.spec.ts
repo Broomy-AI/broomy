@@ -2,6 +2,7 @@ import { test, expect, _electron as electron, ElectronApplication, Page } from '
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { dockerArgs } from './electron-launch-args'
+import { resumeActiveSession } from './features/_shared/resume-helpers'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -26,23 +27,7 @@ test.beforeAll(async () => {
   await page.waitForSelector('.cursor-pointer', { timeout: 10000 })
   // The active session starts paused (no agent, no terminal). Resume it so
   // these tests have something running to interact with.
-  let resumed = true
-  try {
-    await page.locator('button:has-text("Resume Session"):visible').click({ timeout: 3000 })
-  } catch {
-    // Assumes the click failed because the session was already running (no
-    // placeholder to click through) -- if resume genuinely broke instead,
-    // this silently no-ops and the failure surfaces later as a confusing
-    // "no terminal" error in whichever test runs next. Check here first.
-    resumed = false
-  }
-  if (resumed) {
-    // The initial agent command is written into the freshly spawned PTY
-    // after a short delay (see src/main/handlers/pty.ts). Wait for it to
-    // land before later tests interact with the terminal.
-    await expect.poll(() => getTerminalContent(page, 'agent'), { timeout: 10000 })
-      .toContain('FAKE_CLAUDE_READY')
-  }
+  await resumeActiveSession(page)
 })
 
 test.afterAll(async () => {

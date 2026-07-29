@@ -2,6 +2,7 @@ import { test, expect, _electron as electron, ElectronApplication, Page } from '
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { dockerArgs } from './electron-launch-args'
+import { resumeActiveSession } from './features/_shared/resume-helpers'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -61,29 +62,6 @@ async function getTerminalContent(p: Page, type: 'agent' | 'user' | 'any' = 'age
     }
     return ''
   }, type)
-}
-
-/**
- * Restored sessions start paused (no agent, no terminal). Click through the
- * "Resume Session" placeholder when present so terminal-dependent tests have
- * something to assert against.
- */
-async function resumeIfPaused(p: Page) {
-  try {
-    await p.locator('button:has-text("Resume Session"):visible').click({ timeout: 3000 })
-  } catch {
-    // Assumes the click failed because the session was already running (no
-    // placeholder to click through) -- if resume genuinely broke instead,
-    // this silently no-ops and the failure surfaces later as a confusing
-    // "no terminal" error in whichever test runs next. Check here first.
-    return
-  }
-  // The initial agent command is written into the freshly spawned PTY after
-  // a short delay (see src/main/handlers/pty.ts). Wait for it to actually
-  // land so later tests that type into the terminal don't race the write
-  // and corrupt it.
-  await expect.poll(() => getTerminalContent(p, 'agent'), { timeout: 10000 })
-    .toContain('FAKE_CLAUDE_READY')
 }
 
 test.describe('Broomy App', () => {
@@ -159,7 +137,7 @@ test.describe('Terminal Integration', () => {
   test.beforeAll(async () => {
     // The broomy session (active after the previous describe block) starts
     // paused on load; resume it so these tests have a running terminal.
-    await resumeIfPaused(page)
+    await resumeActiveSession(page)
   })
 
   test('should have a terminal container', async () => {
