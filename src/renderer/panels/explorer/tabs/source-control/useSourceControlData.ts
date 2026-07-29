@@ -226,9 +226,9 @@ export function useSourceControlData({
     let cancelled = false
     setIsFetchingBehindMain(true)
 
-    window.git.isBehindMain(directory).then((result: { behind: number; defaultBranch: string }) => {
+    window.git.isBehindMain(directory).then((result) => {
       if (cancelled) return
-      setBehindMainCount(result.behind)
+      setBehindMainCount(result.success ? result.behind : 0) // couldn't check → treat as 0 here (existing behaviour)
       setIsFetchingBehindMain(false)
       setHasBehindMainLoadedOnce(true)
     }).catch(() => {

@@ -84,8 +84,8 @@ ipcMain.handle('git:status', async (_event, repoPath: string) => {
 | `git:fetchPrHead` | Fetch PR head ref |
 | `git:isMergedInto` | Check if current branch is merged into a ref |
 | `git:hasBranchCommits` | Check if branch has commits ahead of a ref |
-| `git:pullOriginMain` | Pull and merge default branch |
-| `git:isBehindMain` | Check how many commits behind default branch |
+| `git:pullOriginMain` | **Fast-forward-only** (`merge --ff-only`) update of the `main/` clone to `origin/<default>`; verifies the clone is on the default branch first and serializes per clone. Returns `{ success, error? }` (a diverged/detached/wrong-branch clone fails with a clear `error`, never a merge commit). |
+| `git:isBehindMain` | Commits behind `origin/<default>`. Discriminated: `{ success: true, behind, defaultBranch }` or `{ success: false, error }` — so "0 behind" is distinguishable from "couldn't check". |
 | `git:branchChanges` | Files changed on branch vs base |
 | `git:branchCommits` | Commits on branch since diverging from base |
 | `git:commitFiles` | Files changed in a specific commit |

@@ -14,49 +14,76 @@ function withNonInteractive(git: ReturnType<typeof simpleGit>) {
   return git.env({ ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' })
 }
 
+/**
+ * Serialize fetch/merge on one `main/` clone (#170): the auto-sync-on-merge and the manual "Sync main"
+ * paths must never run two fast-forwards on the same clone at once. Keyed by the expanded repo path; a
+ * chained promise so callers queue. Tail-safe: the map entry is removed only if it's still THIS op's tail,
+ * so a settling caller can't clear a still-queued successor's slot (a 2-caller test wouldn't catch that).
+ */
+const mainSyncLocks = new Map<string, Promise<unknown>>()
+function withMainSyncLock<T>(key: string, op: () => Promise<T>): Promise<T> {
+  const prev = mainSyncLocks.get(key) ?? Promise.resolve()
+  const run = prev.then(op, op) // run after the predecessor settles (success or failure)
+  mainSyncLocks.set(key, run)
+  const cleanup = () => { if (mainSyncLocks.get(key) === run) mainSyncLocks.delete(key) }
+  run.then(cleanup, cleanup)
+  return run
+}
+
+/**
+ * Fast-forward the primary `main/` clone to `origin/<default>` (#170). `--ff-only` so it can never
+ * create a merge commit or leave conflicts — a diverged clone fails loudly. Guarded so it never
+ * advances the WRONG branch: the clone must be checked out on the default branch. Serialized per clone.
+ */
 async function handlePullOriginMain(ctx: HandlerContext, repoPath: string) {
   if (ctx.isE2ETest && !ctx.e2eRealRepos) {
     return { success: true }
   }
 
-  try {
-    const git = withNonInteractive(simpleGit(expandHomePath(repoPath)))
-
-    const defaultBranch = await getDefaultBranch(git)
-
-    await git.fetch('origin', defaultBranch)
-
+  const expanded = expandHomePath(repoPath)
+  return withMainSyncLock(expanded, async () => {
     try {
-      await git.merge([`origin/${defaultBranch}`])
-      return { success: true }
-    } catch (mergeError) {
-      const errorStr = String(mergeError)
-      const hasConflicts = errorStr.includes('CONFLICTS') || errorStr.includes('Merge conflict') || errorStr.includes('fix conflicts')
-      return { success: false, hasConflicts, error: errorStr }
+      const git = withNonInteractive(simpleGit(expanded))
+      const defaultBranch = await getDefaultBranch(git, true)
+
+      // Never fast-forward a non-default branch: the primary clone must be ON the default branch.
+      const head = (await git.raw(['symbolic-ref', '--short', 'HEAD']).catch(() => '')).trim()
+      if (head !== defaultBranch) {
+        return { success: false, error: `The main clone is on "${head || 'a detached HEAD'}", not "${defaultBranch}", so it can't be fast-forwarded automatically.` }
+      }
+
+      await git.fetch('origin', defaultBranch)
+      try {
+        await git.merge(['--ff-only', `origin/${defaultBranch}`])
+        return { success: true }
+      } catch (mergeError) {
+        return { success: false, error: String(mergeError) }
+      }
+    } catch (error) {
+      return { success: false, error: String(error) }
     }
-  } catch (error) {
-    return { success: false, hasConflicts: false, error: String(error) }
-  }
+  })
 }
 
+/**
+ * How many commits `repoPath`'s HEAD is behind `origin/<default>` (#170). Discriminated result so a
+ * caller can tell "0 behind" from "couldn't check" (missing clone, no network) — the latter must not
+ * read as "up to date".
+ */
 async function handleIsBehindMain(ctx: HandlerContext, repoPath: string) {
   if (ctx.isE2ETest && !ctx.e2eRealRepos) {
-    return { behind: 0, defaultBranch: 'main' }
+    return { success: true as const, behind: 0, defaultBranch: 'main' }
   }
 
   try {
     const git = withNonInteractive(simpleGit(expandHomePath(repoPath)))
-
-    const defaultBranch = await getDefaultBranch(git)
-
+    const defaultBranch = await getDefaultBranch(git, true)
     await git.fetch('origin', defaultBranch)
-
     const output = await git.raw(['rev-list', '--count', `HEAD..origin/${defaultBranch}`])
     const behind = parseInt(output.trim(), 10) || 0
-
-    return { behind, defaultBranch }
-  } catch {
-    return { behind: 0, defaultBranch: 'main' }
+    return { success: true as const, behind, defaultBranch }
+  } catch (error) {
+    return { success: false as const, error: String(error) }
   }
 }
 

@@ -334,7 +334,7 @@ describe('useSourceControlData', () => {
   })
 
   it('fetches behind-main count when pushed with no changes', async () => {
-    vi.mocked(window.git.isBehindMain).mockResolvedValue({ behind: 5, defaultBranch: 'main' })
+    vi.mocked(window.git.isBehindMain).mockResolvedValue({ success: true, behind: 5, defaultBranch: 'main' })
 
     const { result } = renderHook(() =>
       useSourceControlData({ ...defaultProps, branchStatus: 'pushed', gitStatus: [] })
@@ -348,7 +348,7 @@ describe('useSourceControlData', () => {
   })
 
   it('fetches behind-main count when open with no changes', async () => {
-    vi.mocked(window.git.isBehindMain).mockResolvedValue({ behind: 3, defaultBranch: 'main' })
+    vi.mocked(window.git.isBehindMain).mockResolvedValue({ success: true, behind: 3, defaultBranch: 'main' })
 
     const { result } = renderHook(() =>
       useSourceControlData({ ...defaultProps, branchStatus: 'open', gitStatus: [] })
@@ -362,7 +362,7 @@ describe('useSourceControlData', () => {
   })
 
   it('fetches behind-main even when branch is in-progress', async () => {
-    vi.mocked(window.git.isBehindMain).mockResolvedValue({ behind: 7, defaultBranch: 'main' })
+    vi.mocked(window.git.isBehindMain).mockResolvedValue({ success: true, behind: 7, defaultBranch: 'main' })
     const { result } = renderHook(() =>
       useSourceControlData({ ...defaultProps, branchStatus: 'in-progress', gitStatus: [] })
     )
@@ -376,7 +376,7 @@ describe('useSourceControlData', () => {
   })
 
   it('fetches behind-main even when there are uncommitted changes', async () => {
-    vi.mocked(window.git.isBehindMain).mockResolvedValue({ behind: 4, defaultBranch: 'main' })
+    vi.mocked(window.git.isBehindMain).mockResolvedValue({ success: true, behind: 4, defaultBranch: 'main' })
     const gitStatus = [{ path: 'file.ts', status: 'modified' as const, staged: false, indexStatus: ' ', workingDirStatus: 'M' }]
     const { result } = renderHook(() =>
       useSourceControlData({ ...defaultProps, branchStatus: 'pushed', gitStatus })

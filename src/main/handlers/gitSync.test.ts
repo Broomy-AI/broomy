@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const mockGitInstance: Record<string, ReturnType<typeof vi.fn>> = {
-  raw: vi.fn(),
-  fetch: vi.fn(),
-  merge: vi.fn(),
-  env: vi.fn().mockImplementation(() => mockGitInstance),
+const mockGitInstance = {
+  raw: vi.fn<(args: string[]) => Promise<string>>(),
+  fetch: vi.fn<(remote: string, branch: string) => Promise<void>>(),
+  merge: vi.fn<(args: string[]) => Promise<void>>(),
+  env: vi.fn(),
 }
+mockGitInstance.env.mockImplementation(() => mockGitInstance)
 
 vi.mock('simple-git', () => ({
   default: vi.fn(() => mockGitInstance),
@@ -72,93 +73,137 @@ describe('gitSync handlers', () => {
     })
   })
 
-  describe('git:pullOriginMain', () => {
+  // raw() serves getDefaultBranch (symbolic-ref refs/remotes/origin/HEAD) AND the on-default guard
+  // (symbolic-ref --short HEAD) AND rev-list; route by argument so call ordering isn't brittle.
+  const flush = () => new Promise((r) => setTimeout(r, 0))
+  function rawRouter(opts: { defaultBranch?: string; headBranch?: string; behind?: string } = {}) {
+    const def = opts.defaultBranch ?? 'main'
+    mockGitInstance.raw.mockImplementation((args: string[]) => {
+      if (args[0] === 'symbolic-ref' && args[1] === 'refs/remotes/origin/HEAD') return Promise.resolve(`refs/remotes/origin/${def}\n`)
+      if (args[0] === 'symbolic-ref' && args[1] === '--short') {
+        return opts.headBranch === 'detached' ? Promise.reject(new Error('not a symbolic ref')) : Promise.resolve(`${opts.headBranch ?? def}\n`)
+      }
+      if (args[0] === 'rev-list') return Promise.resolve(`${opts.behind ?? '0'}\n`)
+      return Promise.resolve('')
+    })
+  }
+
+  describe('git:pullOriginMain (#170)', () => {
     it('returns success in E2E mode', async () => {
       const handlers = setupHandlers(createMockCtx({ isE2ETest: true }))
       expect(await handlers['git:pullOriginMain'](null, '/repo')).toEqual({ success: true })
     })
 
-    it('fetches and merges default branch', async () => {
-      mockGitInstance.raw.mockResolvedValue('refs/remotes/origin/main\n')
+    it('fast-forwards the default branch (--ff-only)', async () => {
+      rawRouter()
       mockGitInstance.fetch.mockResolvedValue(undefined)
       mockGitInstance.merge.mockResolvedValue(undefined)
-
       const handlers = setupHandlers()
       const result = await handlers['git:pullOriginMain'](null, '/repo')
       expect(result).toEqual({ success: true })
       expect(mockGitInstance.fetch).toHaveBeenCalledWith('origin', 'main')
-      expect(mockGitInstance.merge).toHaveBeenCalledWith(['origin/main'])
+      expect(mockGitInstance.merge).toHaveBeenCalledWith(['--ff-only', 'origin/main'])
     })
 
-    it('reports merge conflicts', async () => {
-      mockGitInstance.raw.mockResolvedValue('refs/remotes/origin/main\n')
+    it('fails clearly when a diverged clone cannot fast-forward (no hasConflicts field)', async () => {
+      rawRouter()
       mockGitInstance.fetch.mockResolvedValue(undefined)
-      mockGitInstance.merge.mockRejectedValue(new Error('CONFLICTS detected'))
-
+      mockGitInstance.merge.mockRejectedValue(new Error('Not possible to fast-forward, aborting.'))
       const handlers = setupHandlers()
       const result = await handlers['git:pullOriginMain'](null, '/repo')
       expect(result.success).toBe(false)
-      expect(result.hasConflicts).toBe(true)
+      expect(result.error).toContain('fast-forward')
+      expect(result).not.toHaveProperty('hasConflicts')
     })
 
-    it('reports non-conflict merge errors', async () => {
-      mockGitInstance.raw.mockResolvedValue('refs/remotes/origin/main\n')
-      mockGitInstance.fetch.mockResolvedValue(undefined)
-      mockGitInstance.merge.mockRejectedValue(new Error('generic merge error'))
-
+    it('refuses to fast-forward when the clone is on a non-default branch', async () => {
+      rawRouter({ headBranch: 'some-feature' })
       const handlers = setupHandlers()
       const result = await handlers['git:pullOriginMain'](null, '/repo')
       expect(result.success).toBe(false)
-      expect(result.hasConflicts).toBe(false)
+      expect(result.error).toContain('not "main"')
+      expect(mockGitInstance.merge).not.toHaveBeenCalled()
     })
 
-    it('falls back to master when main does not exist', async () => {
-      mockGitInstance.raw
-        .mockRejectedValueOnce(new Error('no symbolic ref'))
-        .mockRejectedValueOnce(new Error('no main'))
+    it('refuses on a detached HEAD', async () => {
+      rawRouter({ headBranch: 'detached' })
+      const handlers = setupHandlers()
+      const result = await handlers['git:pullOriginMain'](null, '/repo')
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('detached HEAD')
+      expect(mockGitInstance.merge).not.toHaveBeenCalled()
+    })
+
+    it('resolves a non-main default branch via the remote (allowRemote)', async () => {
+      // origin/HEAD absent → ls-remote --symref → develop; clone is on develop.
+      mockGitInstance.raw.mockImplementation((args: string[]) => {
+        if (args[0] === 'symbolic-ref' && args[1] === 'refs/remotes/origin/HEAD') return Promise.reject(new Error('no origin/HEAD'))
+        if (args[0] === 'ls-remote') return Promise.resolve('ref: refs/heads/develop\tHEAD\n0000\tHEAD\n')
+        if (args[0] === 'symbolic-ref' && args[1] === '--short') return Promise.resolve('develop\n')
+        return Promise.resolve('')
+      })
       mockGitInstance.fetch.mockResolvedValue(undefined)
       mockGitInstance.merge.mockResolvedValue(undefined)
-
       const handlers = setupHandlers()
       const result = await handlers['git:pullOriginMain'](null, '/repo')
       expect(result).toEqual({ success: true })
-      expect(mockGitInstance.fetch).toHaveBeenCalledWith('origin', 'master')
+      expect(mockGitInstance.merge).toHaveBeenCalledWith(['--ff-only', 'origin/develop'])
     })
 
-    it('returns error when fetch fails', async () => {
-      mockGitInstance.raw.mockResolvedValue('refs/remotes/origin/main\n')
+    it('returns the error when fetch fails', async () => {
+      rawRouter()
       mockGitInstance.fetch.mockRejectedValue(new Error('network error'))
-
       const handlers = setupHandlers()
       const result = await handlers['git:pullOriginMain'](null, '/repo')
-      expect(result).toEqual({ success: false, hasConflicts: false, error: expect.stringContaining('network error') })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('network error')
+    })
+
+    it('serializes syncs on one clone tail-safely — a later caller cannot overtake a queued one', async () => {
+      rawRouter()
+      mockGitInstance.fetch.mockResolvedValue(undefined)
+      const releases: (() => void)[] = []
+      mockGitInstance.merge.mockImplementation(() => new Promise<void>((resolve) => releases.push(resolve)))
+      const handlers = setupHandlers()
+      const A = handlers['git:pullOriginMain'](null, '/repo')
+      const B = handlers['git:pullOriginMain'](null, '/repo') // queued behind A
+      await flush()
+      expect(releases).toHaveLength(1) // only A is running
+      releases[0]() // A completes
+      await A
+      const C = handlers['git:pullOriginMain'](null, '/repo') // arrives AFTER A settled — must NOT overtake B
+      await flush()
+      expect(releases).toHaveLength(2) // only B is running (C queued behind it — tail-safe cleanup held B's slot)
+      releases[1]() // B completes
+      await B
+      await flush()
+      expect(releases).toHaveLength(3) // C runs only now
+      releases[2]()
+      expect(await C).toEqual({ success: true })
     })
   })
 
-  describe('git:isBehindMain', () => {
-    it('returns zero behind in E2E mode', async () => {
+  describe('git:isBehindMain (#170)', () => {
+    it('returns a success result with 0 behind in E2E mode', async () => {
       const handlers = setupHandlers(createMockCtx({ isE2ETest: true }))
-      const result = await handlers['git:isBehindMain'](null, '/repo')
-      expect(result).toEqual({ behind: 0, defaultBranch: 'main' })
+      expect(await handlers['git:isBehindMain'](null, '/repo')).toEqual({ success: true, behind: 0, defaultBranch: 'main' })
     })
 
-    it('returns behind count', async () => {
-      mockGitInstance.raw.mockResolvedValueOnce('refs/remotes/origin/main\n')
+    it('returns the behind count on success', async () => {
+      rawRouter({ behind: '5' })
       mockGitInstance.fetch.mockResolvedValue(undefined)
-      mockGitInstance.raw.mockResolvedValueOnce('5\n')
-
       const handlers = setupHandlers()
-      const result = await handlers['git:isBehindMain'](null, '/repo')
-      expect(result.behind).toBe(5)
-      expect(result.defaultBranch).toBe('main')
+      expect(await handlers['git:isBehindMain'](null, '/repo')).toEqual({ success: true, behind: 5, defaultBranch: 'main' })
     })
 
-    it('returns zero on error', async () => {
-      mockGitInstance.raw.mockRejectedValue(new Error('fail'))
-
+    it('returns a discriminated failure (not 0) when it cannot check', async () => {
+      mockGitInstance.raw.mockResolvedValue('refs/remotes/origin/main\n')
+      mockGitInstance.fetch.mockRejectedValue(new Error('network down'))
       const handlers = setupHandlers()
       const result = await handlers['git:isBehindMain'](null, '/repo')
-      expect(result).toEqual({ behind: 0, defaultBranch: 'main' })
+      expect(result.success).toBe(false)
+      expect(result).not.toHaveProperty('behind')
+      expect((result as { error: string }).error).toContain('network down')
     })
   })
 
