@@ -175,6 +175,33 @@ describe('configPersistence', () => {
     })
   })
 
+  describe('isPaused persistence', () => {
+    it('never persists isPaused', async () => {
+      useAgentStore.setState({ agents: [{ id: 'a1', name: 'Claude', command: 'claude' }] })
+      useSessionStore.setState({
+        sessions: [
+          {
+            id: 's1', name: 'Ready', directory: '/d1', branch: 'main', status: 'idle',
+            agentId: null, panelVisibility: {}, showExplorer: false, showFileViewer: false,
+            showDiff: false, selectedFilePath: null, planFilePath: null,
+            fileViewerPosition: 'top', layoutSizes: { explorerWidth: 256, fileViewerSize: 300, userTerminalHeight: 192, diffPanelWidth: 320, tutorialPanelWidth: 320 },
+            explorerFilter: 'files', lastMessage: null, lastMessageTime: null,
+            isUnread: false, workingStartTime: null, recentFiles: [], searchHistory: [],
+            terminalTabs: { tabs: [], activeTabId: null }, branchStatus: 'in-progress',
+            isArchived: false, isPaused: true, isRestored: false,
+          },
+        ] as never,
+      })
+
+      scheduleSave()
+      await vi.advanceTimersByTimeAsync(600)
+
+      expect(window.config.save).toHaveBeenCalledTimes(1)
+      const savedConfig = vi.mocked(window.config.save).mock.calls[0][0] as { sessions: Record<string, unknown>[] }
+      expect(savedConfig.sessions[0]).not.toHaveProperty('isPaused')
+    })
+  })
+
   describe('save guards', () => {
     beforeEach(() => { allowConsoleWarn() })
 

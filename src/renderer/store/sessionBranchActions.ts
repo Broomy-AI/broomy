@@ -155,5 +155,18 @@ export function createBranchActions(get: StoreGet, set: StoreSet) {
       set({ sessions: updatedSessions })
       debouncedSave()
     },
+
+    pauseSession: (sessionId: string) => {
+      const { sessions } = get()
+      // Unlike archiving, pausing keeps the session selected: you stay where
+      // you are and see the paused panel. No debouncedSave() — isPaused is
+      // runtime-only.
+      set({ sessions: sessions.map((s) => (s.id === sessionId ? { ...s, isPaused: true } : s)) })
+    },
+
+    resumeSession: (sessionId: string) => {
+      const { sessions } = get()
+      set({ sessions: sessions.map((s) => (s.id === sessionId ? { ...s, isPaused: false } : s)) })
+    },
   }
 }

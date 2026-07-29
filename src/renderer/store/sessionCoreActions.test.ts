@@ -97,6 +97,14 @@ describe('sessionCoreActions', () => {
       expect(session.explorerFilter).toBe('review')
     })
 
+    it('creates new sessions unpaused', async () => {
+      vi.mocked(window.git.isGitRepo).mockResolvedValue(true)
+
+      await useSessionStore.getState().addSession('/test/repo', null)
+
+      expect(useSessionStore.getState().sessions[0].isPaused).toBe(false)
+    })
+
     it('returns existing session info for active duplicate by directory', async () => {
       vi.mocked(window.git.isGitRepo).mockResolvedValue(true)
       vi.mocked(window.git.getBranch).mockResolvedValue('feature/test')
@@ -169,6 +177,18 @@ describe('sessionCoreActions', () => {
 
   })
 
+  describe('loadSessions', () => {
+    it('marks every restored session paused', async () => {
+      vi.mocked(window.config.load).mockResolvedValue({
+        sessions: [{ id: 'a', name: 'A', directory: '/tmp/a', branch: 'a' }],
+      } as never)
+
+      await useSessionStore.getState().loadSessions()
+
+      expect(useSessionStore.getState().sessions[0].isPaused).toBe(true)
+    })
+  })
+
   describe('addInitializingSession', () => {
     it('creates a session with initializing status', () => {
       const id = useSessionStore.getState().addInitializingSession({
@@ -187,6 +207,7 @@ describe('sessionCoreActions', () => {
       expect(state.sessions[0].agentId).toBe('claude')
       expect(state.sessions[0].name).toBe('my-project')
       expect(state.activeSessionId).toBe(id)
+      expect(state.sessions[0].isPaused).toBe(false)
     })
 
     it('does not trigger a save', () => {

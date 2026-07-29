@@ -65,6 +65,7 @@ describe('sessionBranchActions', () => {
       isArchived: false,
       stage: 'planning',
       isRestored: false,
+      isPaused: false,
     }
   }
 
@@ -286,6 +287,42 @@ describe('sessionBranchActions', () => {
       addTestSession('test-session', { branchStatus: 'open', hasFeedback: false })
       useSessionStore.getState().updateFeedbackStatus('missing', true)
       expect(useSessionStore.getState().sessions[0].hasFeedback).toBe(false)
+    })
+  })
+
+  describe('pauseSession / resumeSession', () => {
+    it('pauses a session without changing the active session', () => {
+      addTestSession('a')
+      const b = { ...useSessionStore.getState().sessions[0], id: 'b' }
+      useSessionStore.setState({
+        sessions: [...useSessionStore.getState().sessions, b],
+        activeSessionId: 'a',
+      })
+
+      useSessionStore.getState().pauseSession('a')
+
+      expect(useSessionStore.getState().sessions.find(s => s.id === 'a')!.isPaused).toBe(true)
+      expect(useSessionStore.getState().activeSessionId).toBe('a')
+    })
+
+    it('resumes a paused session', () => {
+      addTestSession('a', { isPaused: true })
+
+      useSessionStore.getState().resumeSession('a')
+
+      expect(useSessionStore.getState().sessions.find(s => s.id === 'a')!.isPaused).toBe(false)
+    })
+
+    it('leaves other sessions untouched', () => {
+      addTestSession('a')
+      const b = { ...useSessionStore.getState().sessions[0], id: 'b', isPaused: false }
+      useSessionStore.setState({
+        sessions: [...useSessionStore.getState().sessions, b],
+      })
+
+      useSessionStore.getState().pauseSession('a')
+
+      expect(useSessionStore.getState().sessions.find(s => s.id === 'b')!.isPaused).toBe(false)
     })
   })
 
