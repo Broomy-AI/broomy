@@ -8,6 +8,7 @@ import { useRepoStore } from '../../../store/repos'
 import type { ManagedRepo, GitHubPrForReview, AgentData, PrReviewFilterMode } from '../../../../preload/index'
 import { DialogErrorBanner } from '../../../shared/components/ErrorBanner'
 import { useListKeyboardNav } from './useListKeyboardNav'
+import { runRepoInitScript } from '../runRepoInitScript'
 
 async function createReviewWorktree(repo: ManagedRepo, pr: GitHubPrForReview): Promise<{ worktreePath: string; error?: string }> {
   const mainDir = `${repo.rootDir}/main`
@@ -52,15 +53,7 @@ async function createReviewWorktree(repo: ManagedRepo, pr: GitHubPrForReview): P
     await window.git.setConfig(worktreePath, `branch.${branchName}.merge`, `refs/pull/${pr.number}/head`)
   }
 
-  // Run init script if exists (non-fatal)
-  try {
-    const initScript = await window.repos.getInitScript(repo.id)
-    if (initScript) {
-      await window.shell.exec(initScript, worktreePath)
-    }
-  } catch {
-    // Non-fatal
-  }
+  await runRepoInitScript(repo, worktreePath)
 
   return { worktreePath }
 }

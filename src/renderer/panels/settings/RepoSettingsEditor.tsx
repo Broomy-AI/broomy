@@ -5,6 +5,8 @@ import { useState, useEffect } from 'react'
 import type { AgentConfig } from '../../store/agents'
 import type { ManagedRepo, DevcontainerStatus } from '../../../preload/index'
 import { IsolationSettings } from '../../shared/components/IsolationSettings'
+import { TemplateVarsModal, TemplateVarsButton } from '../../shared/components/TemplateVarsModal'
+import { useInsertAtCursor } from '../../shared/hooks/useInsertAtCursor'
 
 export function RepoSettingsEditor({
   repo,
@@ -25,6 +27,8 @@ export function RepoSettingsEditor({
   const [devcontainerStatus, setDevcontainerStatus] = useState<DevcontainerStatus | null>(null)
   const [hasDevcontainerConfigState, setHasDevcontainerConfig] = useState<boolean | null>(null)
   const [initScript, setInitScript] = useState('')
+  const [showVars, setShowVars] = useState(false)
+  const { ref: scriptRef, insert } = useInsertAtCursor<HTMLTextAreaElement>()
   const [loadingScript, setLoadingScript] = useState(true)
   const [saving, setSaving] = useState(false)
   const [writeAccessError, setWriteAccessError] = useState<string | null>(null)
@@ -157,11 +161,18 @@ export function RepoSettingsEditor({
       />
 
       <div className="space-y-2">
-        <label className="text-xs text-text-secondary">Init Script (runs when session starts)</label>
+        <div className="flex items-center justify-between">
+          <label className="text-xs text-text-secondary">Init Script (runs when session starts)</label>
+          <TemplateVarsButton
+            onClick={() => setShowVars(true)}
+            testId="open-template-vars-init-script"
+          />
+        </div>
         {loadingScript ? (
           <div className="text-xs text-text-secondary">Loading...</div>
         ) : (
           <textarea
+            ref={scriptRef}
             value={initScript}
             onChange={(e) => setInitScript(e.target.value)}
             placeholder="# Commands to run when starting a session in this repo&#10;# e.g., source .venv/bin/activate"
@@ -169,7 +180,19 @@ export function RepoSettingsEditor({
             rows={4}
           />
         )}
+        <p className="text-2xs text-text-tertiary">
+          Session details are available as environment variables, e.g. $BROOMY_BRANCH.
+        </p>
       </div>
+
+      {showVars && (
+        <TemplateVarsModal
+          surface="init"
+          varInput={{ directory: '', repo }}
+          onInsert={(t) => insert(t, initScript, setInitScript)}
+          onClose={() => setShowVars(false)}
+        />
+      )}
 
       <div className="flex gap-2">
         <button

@@ -6,6 +6,7 @@ import { useAgentStore } from '../../../store/agents'
 import type { ManagedRepo } from '../../../../preload/index'
 import type { BranchInfo } from './types'
 import { DialogErrorBanner } from '../../../shared/components/ErrorBanner'
+import { runRepoInitScript } from '../runRepoInitScript'
 
 async function fetchBranchList(repo: ManagedRepo): Promise<{ branches: BranchInfo[]; error?: string }> {
   try {
@@ -81,15 +82,7 @@ async function createWorktreeForBranch(repo: ManagedRepo, branchName: string): P
     return { worktreePath: '', error: result.error || 'Failed to create worktree' }
   }
 
-  // Run init script if exists (non-fatal)
-  try {
-    const initScript = await window.repos.getInitScript(repo.id)
-    if (initScript) {
-      await window.shell.exec(initScript, worktreePath)
-    }
-  } catch {
-    // Non-fatal
-  }
+  await runRepoInitScript(repo, worktreePath)
 
   return { worktreePath }
 }

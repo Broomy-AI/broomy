@@ -1,7 +1,9 @@
 /**
  * Editor for managing environment variable key-value pairs with command-aware suggestions.
  */
-import { useState, useImperativeHandle, forwardRef } from 'react'
+import { useState, useRef, useImperativeHandle, forwardRef } from 'react'
+import { TemplateVarsModal, TemplateVarsButton } from '../../shared/components/TemplateVarsModal'
+import { useInsertAtCursor } from '../../shared/hooks/useInsertAtCursor'
 
 // Suggested env vars for different commands
 const ENV_SUGGESTIONS: Partial<Record<string, { key: string; description: string }[]>> = {
@@ -24,6 +26,9 @@ export const EnvVarEditor = forwardRef<
 >(function EnvVarEditor({ env, onChange, command }: { env: Record<string, string>; onChange: (env: Record<string, string>) => void; command: string }, ref) {
   const [newKey, setNewKey] = useState('')
   const [newValue, setNewValue] = useState('')
+  const [showVars, setShowVars] = useState(false)
+  const { ref: valueRef, insert } = useInsertAtCursor<HTMLInputElement>()
+  const focusedKey = useRef<string | null>(null)
 
   useImperativeHandle(ref, () => ({
     getPendingEnv: () => {
@@ -58,9 +63,39 @@ export const EnvVarEditor = forwardRef<
     setNewKey(key)
   }
 
+  // One picker serves every value input: it inserts into whichever was focused
+  // last, falling back to the new-value row.
+  const insertVar = (text: string) => {
+    const key = focusedKey.current
+    // null covers both "nothing focused yet" and the add-new row.
+    if (key === null) {
+      insert(text, newValue, setNewValue)
+      return
+    }
+    insert(text, env[key] ?? '', (v) => handleChange(key, v))
+  }
+
+  const focusValue = (key: string | null) => (e: React.FocusEvent<HTMLInputElement>) => {
+    valueRef.current = e.currentTarget
+    focusedKey.current = key
+  }
+
   return (
     <div className="space-y-2">
-      <div className="text-xs text-text-secondary">Environment Variables</div>
+      <div className="flex items-center justify-between">
+        <div className="text-xs text-text-secondary">Environment Variables</div>
+        <TemplateVarsButton onClick={() => setShowVars(true)} testId="open-template-vars-env" />
+      </div>
+
+      {showVars && (
+        <TemplateVarsModal
+          surface="envValue"
+          varInput={{ directory: '' }}
+          footerNote="Inserted into the value you last edited. Values are passed to the agent as-is, never through a shell."
+          onInsert={insertVar}
+          onClose={() => setShowVars(false)}
+        />
+      )}
 
       {/* Existing env vars */}
       {entries.map(([key, value]) => (
@@ -75,6 +110,7 @@ export const EnvVarEditor = forwardRef<
             type="text"
             value={value}
             onChange={(e) => handleChange(key, e.target.value)}
+            onFocus={focusValue(key)}
             className="flex-1 px-2 py-1.5 bg-bg-secondary border border-border rounded text-xs text-text-primary font-mono focus:outline-none focus:border-accent"
             placeholder="Value"
           />
@@ -104,6 +140,7 @@ export const EnvVarEditor = forwardRef<
           type="text"
           value={newValue}
           onChange={(e) => setNewValue(e.target.value)}
+          onFocus={focusValue(null)}
           className="flex-1 px-2 py-1.5 bg-bg-secondary border border-border rounded text-xs text-text-primary font-mono focus:outline-none focus:border-accent"
           placeholder="value"
         />

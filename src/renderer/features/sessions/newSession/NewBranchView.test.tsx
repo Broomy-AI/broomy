@@ -191,7 +191,7 @@ describe('NewBranchView', () => {
     fireEvent.click(screen.getByText('Create Branch'))
 
     await waitFor(() => {
-      expect(window.shell.exec).toHaveBeenCalledWith('npm install', '/repos/my-project/feature/auth')
+      expect(window.shell.exec).toHaveBeenCalledWith('npm install', '/repos/my-project/feature/auth', expect.objectContaining({ BROOMY_BRANCH: expect.any(String) }))
       expect(onComplete).toHaveBeenCalled()
     })
   })

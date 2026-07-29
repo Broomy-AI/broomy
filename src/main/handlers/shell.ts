@@ -215,13 +215,18 @@ async function openInFileManagerHandler(ctx: HandlerContext, rawPath: unknown): 
 }
 
 export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
-  ipcMain.handle('shell:exec', async (_event, command: string, cwd: string) => {
+  ipcMain.handle('shell:exec', async (_event, command: string, cwd: string, env?: Record<string, string>) => {
     if (ctx.isE2ETest && !ctx.e2eRealRepos) {
       return { success: true, stdout: '', stderr: '', exitCode: 0 }
     }
 
     return new Promise<{ success: boolean; stdout: string; stderr: string; exitCode: number }>((resolve) => {
-      exec(command, { cwd: expandHomePath(cwd), shell: getExecShell(), timeout: 300000 }, (error, stdout, stderr) => {
+      exec(command, {
+        cwd: expandHomePath(cwd),
+        shell: getExecShell(),
+        timeout: 300000,
+        env: env ? { ...process.env, ...env } : process.env,
+      }, (error, stdout, stderr) => {
         const exitCode = error ? error.code ?? 1 : 0
         resolve({
           success: !error,

@@ -1,11 +1,7 @@
 import { parseTemplate } from './templateParser'
 
-export interface SubContext {
-  main: string
-  branch: string
-  directory: string
-  issueNumber: string
-}
+/** Context variable values, keyed by registry name. See templateVars.ts. */
+export type SubContext = Record<string, string>
 
 export interface ArgValue {
   value: string
@@ -35,12 +31,14 @@ export function substituteTemplate(template: string, input: SubInput): string {
     }
   }
 
-  // Substitute reserved context vars.
-  s = s
-    .replace(/\{main\}/g, input.context.main)
-    .replace(/\{branch\}/g, input.context.branch)
-    .replace(/\{directory\}/g, input.context.directory)
-    .replace(/\{issueNumber\}/g, input.context.issueNumber)
+  // Substitute reserved context vars. Runs before user args so a context
+  // variable always wins a name collision (parseTemplate already excludes
+  // reserved names from args, so this is belt and braces).
+  const contextMap = input.context as Record<string, string | undefined>
+  s = s.replace(/\{([A-Za-z_][\w]*)\}/g, (full, name: string) => {
+    const v = contextMap[name]
+    return v !== undefined ? v : full
+  })
 
   // Substitute user args (cast to allow lookup to be undefined at runtime).
   const argsMap = input.args as Record<string, ArgValue | undefined>

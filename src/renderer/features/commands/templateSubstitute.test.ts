@@ -45,3 +45,31 @@ describe('substituteTemplate', () => {
       .toBe('/x A')
   })
 })
+
+describe('registry-wide context substitution', () => {
+  it('substitutes the new context variables', () => {
+    const result = substituteTemplate('/review {prTitle} on {branch} in {repoName}', {
+      context: { prTitle: 'Fix login', branch: 'fix/login', repoName: 'broomy' },
+      args: {},
+    })
+    expect(result).toBe('/review Fix login on fix/login in broomy')
+  })
+
+  it('substitutes an empty string for a context variable with no value', () => {
+    const result = substituteTemplate('/pr {prNumber}', { context: { prNumber: '' }, args: {} })
+    expect(result).toBe('/pr ')
+  })
+
+  it('leaves unknown placeholders untouched', () => {
+    const result = substituteTemplate('/x {notAVar}', { context: { branch: 'b' }, args: {} })
+    expect(result).toBe('/x {notAVar}')
+  })
+
+  it('prefers a context variable over an arg of the same name', () => {
+    const result = substituteTemplate('/x {branch}', {
+      context: { branch: 'from-context' },
+      args: { branch: { value: 'from-arg' } },
+    })
+    expect(result).toBe('/x from-context')
+  })
+})

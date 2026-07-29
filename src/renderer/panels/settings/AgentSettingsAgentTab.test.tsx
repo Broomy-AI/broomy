@@ -270,3 +270,21 @@ describe('AgentSettingsAgentTab', () => {
     expect(defaultProps.onCancel).toHaveBeenCalledOnce()
   })
 })
+
+describe('AgentSettingsAgentTab template variables', () => {
+  it('inserts the $BROOMY_ form into the command field', async () => {
+    const onCommandChange = vi.fn()
+    render(
+      <AgentSettingsAgentTab
+        {...defaultProps}
+        agents={[]}
+        showAddForm={true}
+        command="claude"
+        onCommandChange={onCommandChange}
+      />
+    )
+    fireEvent.click(screen.getByTestId('open-template-vars-agent-command'))
+    fireEvent.click(await screen.findByText('$BROOMY_BRANCH'))
+    expect(onCommandChange).toHaveBeenCalledWith('claude$BROOMY_BRANCH')
+  })
+})

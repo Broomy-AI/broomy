@@ -19,6 +19,7 @@ import { useCommandsConfig } from '../../../../features/commands/hooks/useComman
 import { computeConditionState } from '../../../../features/commands/conditionState'
 import { DEFAULT_STAGE } from '../../../../features/commands/commandsConfig'
 import type { SubContext } from '../../../../features/commands/templateSubstitute'
+import { buildTemplateVars } from '../../../../features/commands/templateVars'
 import { ActionButtons } from '../../../../shared/components/ActionButtons'
 import { useSessionStore } from '../../../../store/sessions'
 
@@ -383,12 +384,13 @@ export default function ReviewPanel({ session, repo, onSelectFile, gitStatus, sy
     [gitStatus, syncStatus, branchStatus, session.prNumber, session.issueNumber]
   )
 
-  const templateVars: SubContext = useMemo(() => ({
-    main: session.prBaseBranch || 'main',
-    branch: syncStatus?.current ?? '',
+  const templateVars: SubContext = useMemo(() => buildTemplateVars({
+    session,
+    repo,
+    syncStatus,
     directory: session.directory,
-    issueNumber: session.issueNumber ? String(session.issueNumber) : '',
-  }), [session.prBaseBranch, syncStatus?.current, session.directory, session.issueNumber])
+    branchBaseName: session.prBaseBranch,
+  }), [session, repo, syncStatus])
 
   const showEmptyState = !reviewMarkdown && (fetching || waitingForAgent)
 

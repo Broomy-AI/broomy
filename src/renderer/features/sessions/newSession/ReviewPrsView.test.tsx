@@ -317,7 +317,7 @@ describe('ReviewPrsView', () => {
       await waitFor(() => {
         expect(onComplete).toHaveBeenCalled()
       })
-      expect(window.shell.exec).toHaveBeenCalledWith('pnpm install', '/repos/my-project/add-tests')
+      expect(window.shell.exec).toHaveBeenCalledWith('pnpm install', '/repos/my-project/add-tests', expect.objectContaining({ BROOMY_BRANCH: expect.any(String) }))
     })
 
     it('handles worktree creation failure', async () => {

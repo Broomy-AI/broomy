@@ -4,6 +4,7 @@
  */
 import { useCallback, useRef } from 'react'
 import { resolveBaseRef } from '../../features/git/baseRef'
+import { runRepoInitScript } from '../../features/sessions/runRepoInitScript'
 
 interface BackgroundInitDeps {
   addInitializingSession: (params: { directory: string; branch: string; agentId: string | null; extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; issueUrl?: string; name?: string } }) => string
@@ -95,14 +96,7 @@ export function useBackgroundInit({
         }
         if (isAborted(controller.signal)) return
 
-        try {
-          const initScript = await window.repos.getInitScript(repo.id)
-          if (initScript) {
-            await window.shell.exec(initScript, worktreePath)
-          }
-        } catch {
-          // Non-fatal
-        }
+        await runRepoInitScript(repo, worktreePath, { issue })
         if (isAborted(controller.signal)) return
 
         finalizeSession(sessionId)
@@ -145,14 +139,7 @@ export function useBackgroundInit({
         }
         if (isAborted(controller.signal)) return
 
-        try {
-          const initScript = await window.repos.getInitScript(repo.id)
-          if (initScript) {
-            await window.shell.exec(initScript, worktreePath)
-          }
-        } catch {
-          // Non-fatal
-        }
+        await runRepoInitScript(repo, worktreePath)
         if (isAborted(controller.signal)) return
 
         finalizeSession(sessionId)
