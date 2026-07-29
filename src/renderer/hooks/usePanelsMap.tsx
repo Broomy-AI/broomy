@@ -10,6 +10,7 @@ import { CommandsEditor } from '../panels/fileViewer/CommandsEditor'
 import AgentSettings from '../panels/settings/AgentSettings'
 import SessionList from '../panels/sidebar/SessionList'
 import WelcomeScreen from '../panels/agent/WelcomeScreen'
+import PausedSession from '../panels/agent/PausedSession'
 import TutorialPanel from '../panels/tutorial/TutorialPanel'
 import { useSessionStore, type Session } from '../store/sessions'
 import { PANEL_IDS } from '../panels'
@@ -285,7 +286,7 @@ export function usePanelsMap(config: PanelsMapConfig) {
   // instead of SessionTerminal).
   const terminalSessionKey = useMemo(() =>
     sessions.filter(s => !s.isArchived)
-      .map(s => `${s.id}|${s.directory}|${s.isRestored}|${s.agentId}|${s.repoId}|${s.status === 'initializing'}|${s.initError ?? ''}`)
+      .map(s => `${s.id}|${s.directory}|${s.isRestored}|${s.agentId}|${s.repoId}|${s.status === 'initializing'}|${s.initError ?? ''}|${s.isPaused}`)
       .join(','),
     [sessions]
   )
@@ -293,6 +294,14 @@ export function usePanelsMap(config: PanelsMapConfig) {
   const terminalPanel = useMemo(() => (
     <div className="h-full w-full relative">
       {sessions.filter(s => !s.isArchived).map((session) => {
+        if (session.isPaused) {
+          const isVisible = session.id === config.activeSessionId
+          return (
+            <div key={session.id} className={`absolute inset-0 ${isVisible ? '' : 'invisible pointer-events-none'}`}>
+              <PausedSession onResume={() => useSessionStore.getState().resumeSession(session.id)} />
+            </div>
+          )
+        }
         if (session.status === 'initializing') {
           const isVisible = session.id === config.activeSessionId
           return (

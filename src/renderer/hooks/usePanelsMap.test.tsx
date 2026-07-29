@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook } from '@testing-library/react'
+import { createElement } from 'react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { renderHook, cleanup, screen, waitFor } from '@testing-library/react'
 import { render } from '@testing-library/react'
 import { usePanelsMap, type PanelsMapConfig } from './usePanelsMap'
 import { PANEL_IDS } from '../panels'
@@ -11,14 +12,45 @@ let lastExplorerProps: Record<string, unknown> = {}
 let lastFileViewerProps: Record<string, unknown> = {}
 let lastAgentSettingsProps: Record<string, unknown> = {}
 
-vi.mock('../panels/agent/Terminal', () => ({ default: () => null }))
-vi.mock('../panels/agent/TabbedTerminal', () => ({ default: () => null }))
+// Toggled by the teardown test (step 6) so it can exercise the real
+// TabbedTerminal/Terminal stack — the actual PTY-killing code lives in
+// useTerminalSetup's cleanup, so a fully mocked terminal can never prove
+// the teardown happens. Every other test in this file leaves this false
+// and gets the lightweight stub so it never touches xterm or window.pty.
+const terminalMockState = vi.hoisted(() => ({ useReal: false }))
+
+vi.mock('../panels/agent/Terminal', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../panels/agent/Terminal')>()
+  const ActualTerminal = actual.default
+  return {
+    default: (props: Record<string, unknown>) =>
+      terminalMockState.useReal ? createElement(ActualTerminal, props as never) : null,
+  }
+})
+vi.mock('../panels/agent/TabbedTerminal', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../panels/agent/TabbedTerminal')>()
+  const ActualTabbedTerminal = actual.default
+  return {
+    default: (props: Record<string, unknown>) =>
+      terminalMockState.useReal
+        ? createElement(ActualTabbedTerminal, props as never)
+        : <div data-testid="session-terminal" />,
+  }
+})
 vi.mock('../panels/explorer/ExplorerPanel', () => ({ default: (props: Record<string, unknown>) => { lastExplorerProps = props; return null } }))
 vi.mock('../panels/fileViewer/FileViewer', () => ({ default: (props: Record<string, unknown>) => { lastFileViewerProps = props; return null } }))
 vi.mock('../panels/settings/AgentSettings', () => ({ default: (props: Record<string, unknown>) => { lastAgentSettingsProps = props; return null } }))
 vi.mock('../panels/sidebar/SessionList', () => ({ default: () => null }))
 vi.mock('../panels/agent/WelcomeScreen', () => ({ default: () => null }))
 vi.mock('../panels/tutorial/TutorialPanel', () => ({ default: () => null }))
+
+// jsdom doesn't implement these browser APIs; xterm.js needs them to mount
+// for real, which only the teardown test (step 6) does.
+class StubResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
 
 function makeSession(overrides: Partial<Session> = {}): Session {
   return {
@@ -121,10 +153,45 @@ function makeConfig(overrides: Partial<PanelsMapConfig> = {}): PanelsMapConfig {
   }
 }
 
+/**
+ * Renders the AGENT panel element the hook returns, for the pause/resume tests below.
+ *
+ * Reuses the same base config (and its vi.fn() callback references) across
+ * `rerender` calls rather than building a fresh one each time. Callback props
+ * being unstable would force the terminal panel's memo to recompute on every
+ * rerender regardless of `terminalSessionKey`, masking whether `isPaused`
+ * being in that key is actually what triggers the re-render.
+ */
+function renderAgentPanel(sessions: Session[], configOverrides: Partial<PanelsMapConfig> = {}) {
+  const baseConfig = makeConfig({ sessions, activeSession: sessions[0], ...configOverrides })
+  const { result, rerender: rerenderHook } = renderHook(
+    (cfg: PanelsMapConfig) => usePanelsMap(cfg),
+    { initialProps: baseConfig }
+  )
+  const view = render(result.current[PANEL_IDS.AGENT] as React.ReactElement)
+
+  function rerender(newSessions: Session[], newOverrides: Partial<PanelsMapConfig> = {}) {
+    const nextConfig: PanelsMapConfig = {
+      ...baseConfig,
+      sessions: newSessions,
+      activeSession: newSessions[0],
+      ...newOverrides,
+    }
+    rerenderHook(nextConfig)
+    view.rerender(result.current[PANEL_IDS.AGENT] as React.ReactElement)
+  }
+
+  return { rerender }
+}
+
 describe('usePanelsMap', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(window.app.tmpdir).mockResolvedValue('/tmp')
+  })
+
+  afterEach(() => {
+    cleanup()
   })
 
   it('returns a map with all expected panel IDs', () => {
@@ -386,6 +453,59 @@ describe('usePanelsMap', () => {
       const onClose = lastAgentSettingsProps.onClose as () => void
       onClose()
       expect(toggleGlobalPanel).toHaveBeenCalledWith(PANEL_IDS.SETTINGS)
+    })
+  })
+
+  describe('paused sessions', () => {
+    it('renders the paused placeholder and no terminal for a paused session', () => {
+      renderAgentPanel([makeSession({ id: 'a', isPaused: true })], { activeSessionId: 'a' })
+
+      expect(screen.getByText('Session paused')).toBeInTheDocument()
+      expect(screen.queryByTestId('session-terminal')).not.toBeInTheDocument()
+    })
+
+    it('renders the terminal for a running session', () => {
+      renderAgentPanel([makeSession({ id: 'a', isPaused: false })], { activeSessionId: 'a' })
+
+      expect(screen.queryByText('Session paused')).not.toBeInTheDocument()
+      expect(screen.getByTestId('session-terminal')).toBeInTheDocument()
+    })
+
+    // Uses the real TabbedTerminal/Terminal stack (not the stub) — the PTY-killing
+    // code lives in useTerminalSetup's cleanup effect, so only mounting the real
+    // component and unmounting it proves pausing tears down the PTY. window.pty is
+    // stubbed globally (src/test/setup.ts); xterm.js additionally needs matchMedia
+    // and ResizeObserver, which jsdom doesn't implement.
+    describe('with the real terminal', () => {
+      let originalMatchMedia: typeof window.matchMedia | undefined
+      let originalResizeObserver: unknown
+
+      beforeEach(() => {
+        terminalMockState.useReal = true
+        originalMatchMedia = window.matchMedia
+        window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+          matches: false, media: query, onchange: null,
+          addListener: vi.fn(), removeListener: vi.fn(),
+          addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
+        })) as unknown as typeof window.matchMedia
+        originalResizeObserver = (window as unknown as { ResizeObserver: unknown }).ResizeObserver
+        ;(window as unknown as { ResizeObserver: unknown }).ResizeObserver = StubResizeObserver
+      })
+
+      afterEach(() => {
+        terminalMockState.useReal = false
+        window.matchMedia = originalMatchMedia!
+        ;(window as unknown as { ResizeObserver: unknown }).ResizeObserver = originalResizeObserver
+      })
+
+      it('kills the session PTYs when it becomes paused', async () => {
+        const { rerender } = renderAgentPanel([makeSession({ id: 'a', isPaused: false })], { activeSessionId: 'a' })
+        await waitFor(() => expect(window.pty.create).toHaveBeenCalled())
+
+        rerender([makeSession({ id: 'a', isPaused: true })], { activeSessionId: 'a' })
+
+        await waitFor(() => expect(window.pty.kill).toHaveBeenCalled())
+      })
     })
   })
 })
