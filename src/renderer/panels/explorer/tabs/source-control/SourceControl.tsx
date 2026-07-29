@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import type { GitFileStatus, GitStatusResult } from '../../../../../preload/index'
-import type { BranchStatus, PrState, StatusChip } from '../../../../store/sessions'
+import type { BranchStatus, PrState, StatusChip, Session } from '../../../../store/sessions'
 import type { NavigationTarget } from '../../../../shared/utils/fileNavigation'
 import { useSourceControlData } from './useSourceControlData'
 import { useSourceControlActions } from './useSourceControlActions'
@@ -16,7 +16,7 @@ import { SCWorkingView } from './SCWorkingView'
 import { CommandsSetupDialog } from './CommandsSetupDialog'
 import { useCommandsConfig } from '../../../../features/commands/hooks/useCommandsConfig'
 import { computeConditionState } from '../../../../features/commands/conditionState'
-import { buildTemplateVars } from '../../../../features/commands/templateVars'
+import { buildTemplateVars, type TemplateVarRepo } from '../../../../features/commands/templateVars'
 import { DEFAULT_STAGE } from '../../../../features/commands/commandsConfig'
 import { useSessionStore } from '../../../../store/sessions'
 
@@ -44,6 +44,29 @@ interface SourceControlProps {
   isReview?: boolean
   reviewStatus?: 'pending' | 'reviewed'
   onRefreshReviewStatus?: () => void
+}
+
+/** Resolves the template variables that action labels and prompts substitute. */
+function useTemplateVars({
+  session, repo, syncStatus, directory, branchBaseName, issueNumber, issueTitle, issueUrl,
+}: {
+  session?: Session
+  repo?: TemplateVarRepo
+  syncStatus?: GitStatusResult | null
+  directory?: string
+  branchBaseName?: string
+  issueNumber?: number
+  issueTitle?: string
+  issueUrl?: string
+}) {
+  return useMemo(() => buildTemplateVars({
+    session,
+    repo,
+    syncStatus,
+    directory: directory ?? '',
+    branchBaseName,
+    issue: { number: issueNumber, title: issueTitle, url: issueUrl },
+  }), [session, repo, syncStatus, directory, branchBaseName, issueNumber, issueTitle, issueUrl])
 }
 
 export function SourceControl({
@@ -149,14 +172,10 @@ export function SourceControl({
   const conditionState = settledConditionState.current
 
   // Template variables for action labels and prompts
-  const templateVars = useMemo(() => buildTemplateVars({
-    session: activeSession,
-    repo: data.currentRepo,
-    syncStatus,
-    directory: directory ?? '',
-    branchBaseName: data.branchBaseName,
-    issue: { number: issueNumber, title: issueTitle, url: issueUrl },
-  }), [activeSession, data.currentRepo, syncStatus, directory, data.branchBaseName, issueNumber, issueTitle, issueUrl])
+  const templateVars = useTemplateVars({
+    session: activeSession, repo: data.currentRepo, syncStatus, directory,
+    branchBaseName: data.branchBaseName, issueNumber, issueTitle, issueUrl,
+  })
 
   if (!directory) return null
 
