@@ -381,10 +381,19 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     // its synchronized full-screen redraws are written to the main buffer.
     // See xtermjs/xterm.js#5784 and #5801. Per-session env (agentEnv) is
     // merged after this, so users can override with CLAUDE_CODE_NO_FLICKER=0.
+    //
+    // FORCE_HYPERLINK=1 makes Claude Code emit its `[file]`/`[image]` chips (and
+    // other file/URL references) as OSC 8 hyperlinks even though xterm's PTY name
+    // isn't a terminal `supports-hyperlinks` recognizes on its own (#164). Without
+    // it Claude falls back to plain text and a hard-wrapped chip can't be linked;
+    // with it the link rides on the cells and survives the wrap. The renderer honors
+    // the resulting `file://` OSC 8 links (terminalLinkHandler.ts). Override with
+    // FORCE_HYPERLINK=0 per session via agentEnv (merged after).
     const baseEnv = {
       ...process.env,
       PATH: enhancedPath(process.env.PATH),
       CLAUDE_CODE_NO_FLICKER: '1',
+      FORCE_HYPERLINK: '1',
     } as Record<string, string>
     delete baseEnv.CLAUDE_CONFIG_DIR
 

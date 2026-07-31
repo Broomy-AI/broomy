@@ -21,7 +21,8 @@ const HINT_CLASSES =
   'bg-bg-tertiary text-text-secondary text-2xs whitespace-nowrap shadow-lg'
 
 export interface TerminalLinkHintElement {
-  show(event: MouseEvent, uri: string): void
+  /** `detail` (a file link's decoded path) is appended so a deceptive label can't hide the target. */
+  show(event: MouseEvent, detail?: string): void
   hide(): void
   dispose(): void
 }
@@ -35,12 +36,13 @@ export interface TerminalLinkHintElement {
 export function createTerminalLinkHint(container: HTMLElement): TerminalLinkHintElement {
   const el = document.createElement('div')
   el.className = HINT_CLASSES
-  el.textContent = `${modifierSymbol}click to open`
   el.style.display = 'none'
   container.appendChild(el)
 
   return {
-    show(event: MouseEvent): void {
+    show(event: MouseEvent, detail?: string): void {
+      // `textContent` (never innerHTML) — the decoded path is untrusted agent output.
+      el.textContent = detail ? `${modifierSymbol}click to open ${detail}` : `${modifierSymbol}click to open`
       el.style.display = ''
       // Anchored above-right of the pointer. `fixed` means viewport coordinates, which is
       // exactly what clientX/clientY are, so no ancestor needs to be positioned.

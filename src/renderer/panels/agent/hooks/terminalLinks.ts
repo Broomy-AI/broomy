@@ -37,20 +37,31 @@ export interface TerminalLinkWiring {
 /**
  * Build the link wiring for a terminal mounted on `container`.
  *
- * The gate wants the platform modifier plus the primary button, and re-checks the scheme —
- * the main process restricts `shell.openExternal` to http(s) as well, since terminal output
- * is untrusted. Open failures are logged rather than left as an unhandled rejection: a plain
- * click still positions the cursor, so a failed open must not break the terminal.
+ * The gate wants the platform modifier plus the primary button, and re-checks the scheme. `http(s)`
+ * URLs open via `shell.openExternal` (which the main process also restricts to http(s)); `file://`
+ * OSC 8 links (Claude Code's chips, #164) open via `shell.openPath` — the same gated opener the
+ * bare-path provider uses (existence-checked, native-open allowlist, reveal-in-Finder), which resolves
+ * `{ action, error }` rather than rejecting, so a failed open is read off `r.error`. `allowFileUris` is
+ * false for isolated sessions, where a container path must not resolve to a host file. Open failures
+ * are logged rather than left as an unhandled rejection: a plain click still positions the cursor, so a
+ * failed open must not break the terminal.
  */
-export function createLinkWiring(container: HTMLElement): TerminalLinkWiring {
+export function createLinkWiring(container: HTMLElement, cwd: string, allowFileUris: boolean): TerminalLinkWiring {
   const hint = createTerminalLinkHint(container)
   const handlers = createTerminalLinkHandlers({
     isMac,
     hint,
+    allowFileUris,
     openExternal: (uri) => {
       window.shell.openExternal(uri).catch((err: unknown) => {
         console.error('[terminal] failed to open link', err)
       })
+    },
+    openPath: (path) => {
+      window.shell
+        .openPath(path, cwd)
+        .then((r) => { if (r.error) console.error('[terminal] failed to open path', r.error) })
+        .catch((err: unknown) => console.error('[terminal] failed to open path', err))
     },
   })
 

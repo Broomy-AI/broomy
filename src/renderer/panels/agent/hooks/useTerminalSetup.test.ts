@@ -269,11 +269,12 @@ describe('useTerminalSetup', () => {
     expect(window.shell.openExternal).toHaveBeenCalledExactlyOnceWith('https://text.example')
 
     // 2) OSC 8 hyperlinks (xterm linkHandler): the same gate must reach the Terminal constructor,
-    //    or OSC 8 links fall back to xterm's plain-click confirm()+window.open.
+    //    or OSC 8 links fall back to xterm's plain-click confirm()+window.open. On a host (non-isolated)
+    //    terminal `allowNonHttpProtocols` is true so Claude's file:// chip links reach the handler (#164).
     const ctorOptions = mockTerminalConstructor.mock.calls.at(-1)?.[0] as
       | { linkHandler?: { activate?: (e: MouseEvent, uri: string) => void; allowNonHttpProtocols?: boolean } }
       | undefined
-    expect(ctorOptions?.linkHandler?.allowNonHttpProtocols).toBe(false)
+    expect(ctorOptions?.linkHandler?.allowNonHttpProtocols).toBe(true)
     vi.mocked(window.shell.openExternal).mockClear()
     ctorOptions!.linkHandler!.activate!({ button: 0, metaKey: true, ctrlKey: true } as MouseEvent, 'https://osc8.example')
     ctorOptions!.linkHandler!.activate!({ button: 0, metaKey: false, ctrlKey: false } as MouseEvent, 'https://osc8.example')
