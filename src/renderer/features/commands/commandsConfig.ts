@@ -333,6 +333,19 @@ export async function loadConfigFromPath(path: string): Promise<LoadResult | nul
 
 // --- Merge ---
 
+/** Warns about ids repeated inside one file — always a mistake, unlike a project override. */
+function warnRepeatedIds(actions: ActionDefinition[], source: 'user' | 'project'): void {
+  const seen = new Set<string>()
+  const repeated = new Set<string>()
+  for (const a of actions) {
+    if (seen.has(a.id)) repeated.add(a.id)
+    seen.add(a.id)
+  }
+  if (repeated.size > 0) {
+    console.warn(`[commands] ${source} commands.json repeats action id(s): ${[...repeated].join(', ')} — showing the first of each`)
+  }
+}
+
 /**
  * Actions are keyed by id: a project action replaces the user action with the
  * same id (in the user list's position) rather than adding a second button.
@@ -340,6 +353,9 @@ export async function loadConfigFromPath(path: string): Promise<LoadResult | nul
  */
 export function mergeConfigs(user: CommandsConfig | null, project: CommandsConfig | null): CommandsConfig | null {
   if (!user && !project) return null
+
+  if (user) warnRepeatedIds(user.actions, 'user')
+  if (project) warnRepeatedIds(project.actions, 'project')
 
   const projectActions = project?.actions ?? []
   const overrides = new Map<string, ActionDefinition>()

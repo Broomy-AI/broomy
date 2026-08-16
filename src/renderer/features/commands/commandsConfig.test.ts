@@ -401,11 +401,30 @@ describe('mergeConfigs', () => {
   })
 
   it('drops duplicate ids within a single config, keeping the first', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const merged = mergeConfigs(
       { version: 2, actions: [{ id: 'a', label: 'First', template: 't' }, { id: 'a', label: 'Second', template: 't' }] },
       null,
     )
     expect(merged?.actions.map(a => a.label)).toEqual(['First'])
+  })
+
+  it('warns which file repeats an id, but not for a project override', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    mergeConfigs(
+      { version: 2, actions: [{ id: 'a', label: 'A', template: 't' }] },
+      { version: 2, actions: [{ id: 'a', label: 'A', template: 't' }] },
+    )
+    expect(warn).not.toHaveBeenCalled()
+
+    mergeConfigs(
+      null,
+      { version: 2, actions: [{ id: 'a', label: 'A', template: 't' }, { id: 'a', label: 'A', template: 't' }] },
+    )
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('project commands.json repeats action id(s): a'))
+
+    warn.mockRestore()
   })
 })
 

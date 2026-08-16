@@ -3,7 +3,7 @@
  * Watches both files for external edits.
  * Returns each side plus the merged concatenation.
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import type { CommandsConfig } from '../commandsConfig'
 import { loadConfigFromPath, mergeConfigs, projectCommandsConfigPath } from '../commandsConfig'
 import { getUserCommandsConfigPath } from '../userConfigPath'
@@ -83,7 +83,7 @@ export function useCommandsConfig(directory: string | undefined): UseCommandsCon
     }
   }, [directory, reloadKey])
 
-  const merged = mergeConfigs(user, project)
+  const merged = useMemo(() => mergeConfigs(user, project), [user, project])
   const reload = () => setReloadKey(k => k + 1)
 
   return { user, userError, userExists, project, projectError, projectExists, merged, loading, reload }
