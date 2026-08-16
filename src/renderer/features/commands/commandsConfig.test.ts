@@ -392,12 +392,20 @@ describe('mergeConfigs', () => {
     )?.actions.map(a => a.id)).toEqual(['b'])
   })
 
-  it('concatenates user then project, keeping duplicate ids', () => {
+  it('lets a project action replace the user action with the same id, in place', () => {
     const merged = mergeConfigs(
-      { version: 2, actions: [{ id: 'a', label: 'User A', template: 't' }] },
+      { version: 2, actions: [{ id: 'a', label: 'User A', template: 't' }, { id: 'c', label: 'C', template: 't' }] },
       { version: 2, actions: [{ id: 'a', label: 'Project A', template: 't' }, { id: 'b', label: 'B', template: 't' }] },
     )
-    expect(merged?.actions.map(a => a.label)).toEqual(['User A', 'Project A', 'B'])
+    expect(merged?.actions.map(a => a.label)).toEqual(['Project A', 'C', 'B'])
+  })
+
+  it('drops duplicate ids within a single config, keeping the first', () => {
+    const merged = mergeConfigs(
+      { version: 2, actions: [{ id: 'a', label: 'First', template: 't' }, { id: 'a', label: 'Second', template: 't' }] },
+      null,
+    )
+    expect(merged?.actions.map(a => a.label)).toEqual(['First'])
   })
 })
 

@@ -333,12 +333,27 @@ export async function loadConfigFromPath(path: string): Promise<LoadResult | nul
 
 // --- Merge ---
 
+/**
+ * Actions are keyed by id: a project action replaces the user action with the
+ * same id (in the user list's position) rather than adding a second button.
+ * Project-only actions are appended in project order.
+ */
 export function mergeConfigs(user: CommandsConfig | null, project: CommandsConfig | null): CommandsConfig | null {
   if (!user && !project) return null
-  return {
-    version: CURRENT_CONFIG_VERSION,
-    actions: [...(user?.actions ?? []), ...(project?.actions ?? [])],
+
+  const projectActions = project?.actions ?? []
+  const overrides = new Map<string, ActionDefinition>()
+  for (const a of projectActions) if (!overrides.has(a.id)) overrides.set(a.id, a)
+
+  const seen = new Set<string>()
+  const actions: ActionDefinition[] = []
+  for (const a of [...(user?.actions ?? []), ...projectActions]) {
+    if (seen.has(a.id)) continue
+    seen.add(a.id)
+    actions.push(overrides.get(a.id) ?? a)
   }
+
+  return { version: CURRENT_CONFIG_VERSION, actions }
 }
 
 // --- Visibility ---
