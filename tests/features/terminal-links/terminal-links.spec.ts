@@ -7,7 +7,9 @@
  * positions the cursor, and only http(s) URLs are opened.
  *
  * Hovering shows a "⌘click to open" hint, because xterm underlines a link whether or not
- * the modifier is held.
+ * the modifier is held. A `file://` OSC 8 hyperlink opens too — that is how Claude Code's file
+ * chips work (#164, see the terminal-chip-links walkthrough) — but through `shell:openPath`,
+ * never the browser. Every other scheme is ignored.
  *
  * The browser-open itself is not observable in E2E (`shell:openExternal` no-ops under
  * E2E_TEST), so the interaction logic — modifier gating, primary-button-only, http(s)
@@ -94,8 +96,9 @@ test.describe.serial('Feature: Click a URL in the Terminal', () => {
         'whether or not the modifier is held, so without the hint a plain click would be a dead ' +
         'end with no explanation. ⌘-click (⌃-click on Windows/Linux) opens it via ' +
         'window.shell.openExternal — the same external-browser path the rest of the app uses, so ' +
-        'the Electron window never navigates away. A plain click still positions the cursor, and ' +
-        'only http(s) URLs open (file:, javascript:, mailto: and scheme-less text are ignored). ' +
+        'the Electron window never navigates away. A plain click still positions the cursor. Only ' +
+        'http(s) opens externally; a `file://` OSC 8 link opens through the gated file opener ' +
+        'instead (#164), and javascript:, mailto: and scheme-less text are ignored. ' +
         'The open itself is not observable in E2E, so the modifier/button/scheme gating is ' +
         'proven in terminalLinkHandler.test.ts.',
     })
