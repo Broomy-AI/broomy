@@ -2,11 +2,20 @@
  * IPC for the global appearance settings, and the owner of everything native that
  * has to follow the theme.
  *
- * The renderer can restyle itself from a CSS variable. The window frame, the
- * Windows caption buttons, the macOS traffic lights, the native file dialogs and
- * the context menus cannot — they live outside the DOM. `nativeTheme.themeSource`
- * is what makes those follow, and it is process-global, which is the main reason
- * appearance is a global setting rather than a per-profile one.
+ * The renderer restyles itself from a CSS variable. The window frame and the Windows
+ * caption buttons cannot — they live outside the DOM, so `applyChromeToAllWindows`
+ * pushes their colours from the palette explicitly.
+ *
+ * `nativeTheme.themeSource` is deliberately NEVER assigned, here or anywhere else in
+ * main. It looks like the obvious way to make the remaining native surfaces (macOS
+ * traffic lights, the menu bar, file dialogs, the webview context menu) follow the
+ * app theme, and it was used for exactly that until this was removed. But it is
+ * process-global AND it drives `prefers-color-scheme` for every web content in the
+ * process — so forcing it dark turned every website in the file viewer dark too,
+ * with nothing the user could do about it. Our own UI never reads
+ * `prefers-color-scheme` (see the guard in renderer/theme.css.test.ts), so leaving
+ * themeSource at 'system' costs the app's appearance nothing: those few native
+ * surfaces follow the OS, and web pages render as they would in any other browser.
  */
 import { BrowserWindow, IpcMain, nativeTheme, type MenuItemConstructorOptions } from 'electron'
 import { HandlerContext } from './types'
@@ -83,7 +92,6 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     const result = saveAppearance(appearance)
     // Apply even if the disk write failed: the user asked for this, and refusing to
     // show it because a file is unwritable would be worse than showing it.
-    nativeTheme.themeSource = getAppearance().theme === 'system' ? 'system' : (getResolvedTheme() === 'light' || getResolvedTheme() === 'hc-light' ? 'light' : 'dark')
     applyChromeToAllWindows(ctx)
     broadcast()
     return result

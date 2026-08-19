@@ -13,7 +13,6 @@
 import { app, BrowserWindow, ipcMain, Menu, shell, dialog, nativeTheme } from 'electron'
 import { chromeFor, getAppearance, getResolvedTheme, initSettings } from './settings'
 import { zoomMenuItems } from './handlers/settings'
-import { themeIsLight } from '../shared/appearance'
 import pkg from 'electron-updater'
 const { autoUpdater } = pkg
 import { join, dirname } from 'path'
@@ -480,12 +479,10 @@ function buildAppMenu() {
     // and the zoom factor — all constructor options. Load it late and a light-mode
     // user gets a dark frame flashed at them on every single launch.
     //
-    // themeSource is what makes the NATIVE surfaces follow: traffic lights, context
-    // menus, and the file dialogs. A renderer-side media query can never reach them.
+    // Deliberately does NOT set nativeTheme.themeSource — see the note in
+    // handlers/settings.ts. Our theme is CSS; forcing themeSource would drag every
+    // website in the file viewer dark along with it.
     initSettings(isDev, isE2ETest, nativeTheme.shouldUseDarkColors)
-    const pref = getAppearance().theme
-    nativeTheme.themeSource =
-      pref === 'system' ? 'system' : themeIsLight(getResolvedTheme()) ? 'light' : 'dark'
 
     // Reap PTY trees left behind by previous Broomy main-process crashes
     // before any new PTYs are spawned. Best-effort — never blocks startup.
