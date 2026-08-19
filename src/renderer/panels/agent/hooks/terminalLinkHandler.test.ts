@@ -3,6 +3,7 @@ import {
   shouldOpenTerminalLink,
   isOpenableTerminalUri,
   fileUriToPath,
+  linkHintDetail,
   createTerminalLinkHandlers,
   type TerminalLinkClick,
 } from './terminalLinkHandler'
@@ -84,8 +85,14 @@ describe('shouldOpenTerminalLink', () => {
     expect(shouldOpenTerminalLink(click({ ctrlKey: true }), HTTPS, true, true)).toBe(false)
   })
 
+  it('does NOT open with the wrong-platform modifier', () => {
+    expect(shouldOpenTerminalLink(click({ metaKey: true }), HTTPS, false, true)).toBe(false)
+    expect(shouldOpenTerminalLink(click({ ctrlKey: true }), HTTPS, true, true)).toBe(false)
+  })
+
   it('does NOT open on a plain click (leaves selection/cursor to xterm)', () => {
     expect(shouldOpenTerminalLink(click(), HTTPS, true, true)).toBe(false)
+    expect(shouldOpenTerminalLink(click(), HTTPS, false, true)).toBe(false)
   })
 
   it('does NOT open on middle- or right-click even with the modifier', () => {
@@ -104,6 +111,40 @@ describe('shouldOpenTerminalLink', () => {
 
   it('is case-insensitive on the scheme', () => {
     expect(shouldOpenTerminalLink(click({ metaKey: true }), 'HTTPS://Example.com', true, true)).toBe(true)
+  })
+})
+
+describe('linkHintDetail', () => {
+  const CHIP = '[image]/Users/x/quiz.png (495.3KB)'
+
+  it('stays quiet when the hovered row already shows the target', () => {
+    expect(linkHintDetail('file:///Users/x/quiz.png', CHIP, true)).toBeUndefined()
+    expect(linkHintDetail('https://example.com/a', 'see https://example.com/a', true)).toBeUndefined()
+  })
+
+  it('spells out a target the row does not show — the spoofed label', () => {
+    // A chip whose label says one file and whose URI points at another.
+    expect(linkHintDetail('file:///Users/x/other.html', CHIP, true)).toBe('/Users/x/other.html')
+    // The same trick over http: an honest-looking label, a different host.
+    expect(linkHintDetail('https://evil.example', 'docs.example.com', true)).toBe('https://evil.example')
+  })
+
+  it('spells out the target when only PART of a hard-wrapped path is on the hovered row', () => {
+    // The anchor row of a wrapped chip holds `…/qu`; the rest is on the continuation row.
+    expect(linkHintDetail('file:///Users/x/quiz.png', '[image]/Users/x/qu', true)).toBe('/Users/x/quiz.png')
+  })
+
+  it('ignores the wrap indent when matching, so an unwrapped continuation row stays quiet', () => {
+    expect(linkHintDetail('file:///Users/x/quiz.png', '  /Users/x/quiz.png  ', true)).toBeUndefined()
+  })
+
+  it('fails toward showing when the row is unreadable', () => {
+    expect(linkHintDetail('file:///Users/x/quiz.png', undefined, true)).toBe('/Users/x/quiz.png')
+  })
+
+  it('has nothing to say about a link that will not open', () => {
+    expect(linkHintDetail('file:///Users/x/quiz.png', undefined, false)).toBeUndefined() // isolated
+    expect(linkHintDetail('javascript:alert(1)', undefined, true)).toBeUndefined()
   })
 })
 
@@ -165,18 +206,37 @@ describe('createTerminalLinkHandlers', () => {
     expect(openPath).not.toHaveBeenCalled()
   })
 
-  it('hover shows the decoded path for a file link, the plain hint for a URL, nothing otherwise', () => {
+  it('hover spells out an OSC 8 target the row hides, stays quiet for detected URL text', () => {
     const { hint, handlers } = makeDeps(true)
     const event = { clientX: 10, clientY: 20 } as MouseEvent
 
+    // No range (and so no row to read) → the target is shown.
     handlers.linkHandler.hover(event, 'file:///Users/a%20b.png')
     expect(hint.show).toHaveBeenCalledExactlyOnceWith(event, '/Users/a b.png')
 
+    // Detected URL text: the label IS the URI, so nothing to add.
     handlers.linkProviderOptions.hover(event, 'https://example.com')
-    expect(hint.show).toHaveBeenLastCalledWith(event, undefined) // URL → static "⌘click to open"
+    expect(hint.show).toHaveBeenLastCalledWith(event)
 
     handlers.linkHandler.hover(event, 'javascript:alert(1)')
     expect(hint.show).toHaveBeenCalledTimes(2) // unsupported scheme → no hint
+  })
+
+  it('reads the hovered row via the range, and stays quiet when that row shows the target', () => {
+    const readRow = vi.fn((row: number) => (row === 7 ? '[image]/Users/a b.png (2KB)' : '[image]/Users/a'))
+    const hint = { show: vi.fn(), hide: vi.fn() }
+    const handlers = createTerminalLinkHandlers({
+      isMac: true, openExternal: vi.fn(), openPath: vi.fn(), allowFileUris: true, hint, readRow,
+    })
+    const event = { clientX: 1, clientY: 2 } as MouseEvent
+    const range = (y: number) => ({ start: { x: 1, y }, end: { x: 20, y } })
+
+    handlers.linkHandler.hover(event, 'file:///Users/a%20b.png', range(7))
+    expect(readRow).toHaveBeenCalledWith(7) // 1-based absolute buffer row, as xterm reports it
+    expect(hint.show).toHaveBeenLastCalledWith(event, undefined) // whole path visible → no repeat
+
+    handlers.linkHandler.hover(event, 'file:///Users/a%20b.png', range(3)) // wrapped: half the path
+    expect(hint.show).toHaveBeenLastCalledWith(event, '/Users/a b.png')
   })
 
   it('does not show a file hint in an isolated session', () => {

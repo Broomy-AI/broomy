@@ -217,7 +217,9 @@ describe('FilePathLinkProvider — plain lines', () => {
 
     const ev = { clientX: 5, clientY: 6 } as MouseEvent
     link.hover!(ev, link.text)
-    expect(hint.show).toHaveBeenCalledWith(ev, '/tmp/a.html')
+    // No target spelled out: the link's text IS the path, right under the pointer (#164 keeps that
+    // detail for OSC 8 links, whose label can disagree with their URI).
+    expect(hint.show).toHaveBeenCalledWith(ev)
     link.leave!(ev, link.text)
     expect(hint.hide).toHaveBeenCalledTimes(1)
 

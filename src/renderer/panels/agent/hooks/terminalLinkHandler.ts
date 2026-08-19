@@ -10,8 +10,9 @@
  *    honoring them makes even a hard-wrapped chip clickable — the link rides on the cells (#164).
  * Every other scheme reaches `activate` but opens nothing.
  *
- * The hover hint (`terminalLinkHint.ts`) is the one DOM-touching piece; for a `file://` link it
- * shows the DECODED path so a deceptive label can't hide the real target.
+ * The hover hint (`terminalLinkHint.ts`) is the one DOM-touching piece; for an OSC 8 link whose
+ * label doesn't already show its target it spells the target out, so a deceptive label can't hide
+ * where the click goes (`linkHintDetail`).
  */
 
 /** The parts of a `MouseEvent` the open-decision depends on. */
@@ -21,11 +22,21 @@ export interface TerminalLinkClick {
   ctrlKey: boolean
 }
 
-/** The hover affordance, injected so this module stays DOM-free. `detail` (a `file://` link's
- *  decoded path) is appended to the "⌘click to open" hint; omit it for URLs. */
+/** The hover affordance, injected so this module stays DOM-free. `detail` (the link's real target)
+ *  is appended to the "⌘click to open" hint, and is passed ONLY when the link's own visible text
+ *  doesn't already show it — see `linkHintDetail`. */
 export interface TerminalLinkHint {
   show(event: MouseEvent, detail?: string): void
   hide(): void
+}
+
+/**
+ * Structural stand-in for xterm's `IBufferRange`, so this module stays xterm-free. `y` is the
+ * 1-based ABSOLUTE buffer row xterm reports for an OSC 8 link (`buffer.active.getLine(y - 1)`).
+ */
+export interface TerminalLinkRange {
+  start: { x: number; y: number }
+  end: { x: number; y: number }
 }
 
 /**
@@ -81,6 +92,31 @@ export function isOpenableTerminalUri(uri: string, allowFileUris: boolean): bool
   return allowFileUris && fileUriToPath(uri) !== null
 }
 
+/** Whitespace-insensitive, because a hard-wrapped chip splits its path across rows with an indent. */
+const squash = (text: string): string => text.replace(/\s+/g, '')
+
+/**
+ * The link's real target, to append to the hover hint — or `undefined` when the link's own visible
+ * text already shows it and the hint would just repeat the terminal.
+ *
+ * This is the anti-spoofing check (#164). An OSC 8 hyperlink's LABEL is arbitrary agent output and
+ * need not match its URI: a chip reading `[image]/safe.png` can point at `file:///…/other.html`,
+ * and an `https` link reading `docs.example.com` can point anywhere. `rowText` is the terminal row
+ * the pointer is on; when the target isn't visible in it, the hint spells the target out before the
+ * user ⌘-clicks. Fails toward SHOWING: an unreadable row, or a hard-wrapped chip whose path is only
+ * half on this row, shows the full target rather than trusting the label.
+ */
+export function linkHintDetail(
+  uri: string,
+  rowText: string | undefined,
+  allowFileUris: boolean,
+): string | undefined {
+  const target = /^https?:\/\//i.test(uri) ? uri : allowFileUris ? fileUriToPath(uri) : null
+  if (target === null) return undefined
+  if (rowText !== undefined && squash(rowText).includes(squash(target))) return undefined
+  return target
+}
+
 /**
  * Whether a click carries the "open" intent: the PRIMARY button plus the platform modifier —
  * ⌘ on macOS, Ctrl elsewhere. (Ctrl-click on macOS is the context-menu gesture, so it must not
@@ -117,6 +153,12 @@ export interface TerminalLinkDeps {
   openPath: (path: string) => void
   /** Whether `file://` OSC 8 links may open (host terminals only; false for isolated sessions). */
   allowFileUris: boolean
+  /**
+   * Read terminal row `row` (1-based, as xterm reports it in an OSC 8 link's range) as plain text,
+   * so the hint can tell whether the link's target is already visible. Optional: without it every
+   * OSC 8 link's target is spelled out.
+   */
+  readRow?: (row: number) => string | undefined
   /** Optional so callers without a container (and most tests) can skip the affordance. */
   hint?: TerminalLinkHint
 }
@@ -151,8 +193,9 @@ function createWebLinkHandler(deps: TerminalLinkDeps): (event: MouseEvent, uri: 
  * outright — container paths must not resolve to host paths).
  *
  * The hover hooks exist because xterm underlines a link and shows a pointer cursor whether or not the
- * modifier is held: without a hint, a plain click is a dead end with no feedback. A `file://` link's
- * hint shows the decoded path so a deceptive label can't hide the real target.
+ * modifier is held: without a hint, a plain click is a dead end with no feedback. The two paths hint
+ * differently only where they must: the addon's label is the URI itself, while an OSC 8 label is
+ * arbitrary agent output, so the latter spells out a target the row doesn't already show.
  */
 export function createTerminalLinkHandlers(deps: TerminalLinkDeps): {
   onClick: (event: MouseEvent, uri: string) => void
@@ -162,23 +205,32 @@ export function createTerminalLinkHandlers(deps: TerminalLinkDeps): {
   }
   linkHandler: {
     activate: (event: MouseEvent, uri: string) => void
-    hover: (event: MouseEvent, uri: string) => void
+    hover: (event: MouseEvent, uri: string, range?: TerminalLinkRange) => void
     leave: () => void
     allowNonHttpProtocols: boolean
   }
 } {
   const onClick = createWebLinkHandler(deps)
-  const hover = (event: MouseEvent, uri: string): void => {
-    if (isOpenableTerminalUri(uri, deps.allowFileUris)) {
-      // Show the decoded path for a file link; URLs keep the plain "⌘click to open" hint.
-      deps.hint?.show(event, fileUriToPath(uri) ?? undefined)
-    }
+
+  // Detected URL TEXT: the link's label IS the URI (that is what the addon matched), so the target
+  // is already on screen and spelling it out would only repeat the terminal.
+  const textHover = (event: MouseEvent, uri: string): void => {
+    if (isOpenableTerminalUri(uri, deps.allowFileUris)) deps.hint?.show(event)
   }
+
+  // OSC 8: the label is arbitrary and may not match the URI, so show the target unless the hovered
+  // row already contains it.
+  const oscHover = (event: MouseEvent, uri: string, range?: TerminalLinkRange): void => {
+    if (!isOpenableTerminalUri(uri, deps.allowFileUris)) return
+    const rowText = range ? deps.readRow?.(range.start.y) : undefined
+    deps.hint?.show(event, linkHintDetail(uri, rowText, deps.allowFileUris))
+  }
+
   const leave = (): void => deps.hint?.hide()
 
   return {
     onClick,
-    linkProviderOptions: { hover, leave },
-    linkHandler: { activate: onClick, hover, leave, allowNonHttpProtocols: deps.allowFileUris },
+    linkProviderOptions: { hover: textHover, leave },
+    linkHandler: { activate: onClick, hover: oscHover, leave, allowNonHttpProtocols: deps.allowFileUris },
   }
 }

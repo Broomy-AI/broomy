@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest'
-import { createTerminalLinkHint } from './terminalLinkHint'
+import { createTerminalLinkHint, middleEllipsis } from './terminalLinkHint'
 import { modifierSymbol } from '../../../shared/utils/platform'
 
 describe('createTerminalLinkHint', () => {
@@ -46,6 +46,36 @@ describe('createTerminalLinkHint', () => {
     hint.show(at(), '/tmp/<img src=x onerror=alert(1)>.png')
     expect(hintEl()!.querySelector('img')).toBeNull()
     expect(hintEl()!.textContent).toContain('<img src=x onerror=alert(1)>')
+  })
+
+  it('shortens a long target from the MIDDLE, keeping the tree and the filename', () => {
+    const long = `/Users/rob/repos/broomy/${'nested/'.repeat(20)}quiz-layout.png`
+    const hint = createTerminalLinkHint(container)
+    hint.show(at(), long)
+
+    const text = hintEl()!.textContent
+    expect(text).toContain('/Users/rob/repos') // the head survives
+    expect(text).toContain('quiz-layout.png') // and so does the filename
+    expect(text).toContain('…')
+    expect(text.length).toBeLessThan(long.length)
+  })
+
+  it('middleEllipsis leaves a short target alone and never exceeds the budget', () => {
+    expect(middleEllipsis('/tmp/a.png')).toBe('/tmp/a.png')
+    expect(middleEllipsis('/a/'.repeat(80)).length).toBe(72)
+    expect(middleEllipsis('abcdefghij', 5)).toBe('a…hij') // the budget favours the filename end
+  })
+
+  it('clamps back inside the window instead of running off the right edge', () => {
+    const hint = createTerminalLinkHint(container)
+    // jsdom reports 0 for offsetWidth/Height, so stub the measured size the clamp reads.
+    const el = hintEl()!
+    Object.defineProperty(el, 'offsetWidth', { value: 300, configurable: true })
+    Object.defineProperty(el, 'offsetHeight', { value: 20, configurable: true })
+
+    hint.show({ clientX: window.innerWidth - 10, clientY: window.innerHeight - 5 } as MouseEvent, '/tmp/a.png')
+    expect(parseInt(el.style.left, 10)).toBe(window.innerWidth - 300 - 4)
+    expect(parseInt(el.style.top, 10)).toBe(window.innerHeight - 20 - 4)
   })
 
   it('carries xterm-hover so it does not swallow events into the terminal beneath', () => {

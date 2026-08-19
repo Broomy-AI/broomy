@@ -50,6 +50,21 @@ describe('createLinkWiring', () => {
     expect(window.shell.openPath).not.toHaveBeenCalled()
   })
 
+  it('reads the hovered row from the attached terminal, so a truthful label needs no hint detail', () => {
+    const links = createLinkWiring(container, CWD, true)
+    const hintShow = vi.spyOn(links.hint, 'show')
+    const line = { translateToString: vi.fn(() => '[image]/Users/x.png (2KB)') }
+    links.attachTerminal({ buffer: { active: { getLine: vi.fn(() => line) } } } as never)
+
+    const event = { clientX: 1, clientY: 2 } as MouseEvent
+    links.linkHandler.hover!(event, 'file:///Users/x.png', { start: { x: 1, y: 5 }, end: { x: 20, y: 5 } })
+    expect(hintShow).toHaveBeenLastCalledWith(event, undefined) // row shows it → no repeat
+
+    line.translateToString.mockReturnValue('[image]/safe.png') // label lies about the target
+    links.linkHandler.hover!(event, 'file:///Users/x.png', { start: { x: 1, y: 5 }, end: { x: 20, y: 5 } })
+    expect(hintShow).toHaveBeenLastCalledWith(event, '/Users/x.png')
+  })
+
   it('mounts a hint the addon can drive, and removes it on dispose', () => {
     const links = createLinkWiring(container, CWD, true)
     const addon = links.addon as unknown as {

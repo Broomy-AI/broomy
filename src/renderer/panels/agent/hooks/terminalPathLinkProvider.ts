@@ -439,7 +439,9 @@ export class FilePathLinkProvider implements ILinkProvider {
       },
       // Same affordance as URL links: xterm underlines and shows a pointer cursor whether or not
       // the modifier is held, so without the hint a plain click is a dead end with no feedback.
-      hover: (event: MouseEvent) => this._deps.hint?.show(event, c.text),
+      // No target in the hint: a bare path link's text IS the path, right under the pointer, so
+      // spelling it out again would only repeat the terminal (an OSC 8 label can lie; this can't).
+      hover: (event: MouseEvent) => this._deps.hint?.show(event),
       leave: () => this._deps.hint?.hide(),
     }
   }
