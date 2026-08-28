@@ -8,7 +8,7 @@ import type { OpenPathResult } from '../../shared/openPath'
 export type { OpenPathResult }
 
 export type ShellApi = {
-  exec: (command: string, cwd: string) => Promise<{ success: boolean; stdout: string; stderr: string; exitCode: number }>
+  exec: (command: string, cwd: string, env?: Record<string, string>) => Promise<{ success: boolean; stdout: string; stderr: string; exitCode: number }>
   openExternal: (url: string) => Promise<void>
   /**
    * Batch existence check for the terminal file-path link provider — one entry per input, in
@@ -68,7 +68,7 @@ export const windowControlsApi: WindowControlsApi = {
 }
 
 export const shellApi: ShellApi = {
-  exec: (command, cwd) => ipcRenderer.invoke('shell:exec', command, cwd),
+  exec: (command, cwd, env) => ipcRenderer.invoke('shell:exec', command, cwd, env),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   // Clamp the batch here too (main is authoritative): only forward string paths, capped.
   pathExists: (paths, baseCwd) =>

@@ -14,6 +14,7 @@ import { useElapsedSeconds } from '../../shared/hooks/useElapsedSeconds'
 import { deriveDisplayedChip } from '../../features/git/displayedChip'
 import { ReviewStatusChip } from '../../shared/components/ReviewStatusChip'
 import { StatusIndicator } from './StatusIndicator'
+import { dropEdgeClasses } from './useSidebarDrag'
 import { fileManagerName } from '../../shared/utils/platform'
 import { useErrorStore } from '../../store/errors'
 
@@ -32,6 +33,28 @@ function reportOpenFailure(directory: string, error?: string): void {
     dismissed: false,
     timestamp: Date.now(),
   })
+}
+
+/**
+ * Right-click → native context menu → open the session's worktree folder in
+ * the OS file manager. Module-level so the card component stays readable.
+ */
+async function openWorktreeInFileManager(directory: string): Promise<void> {
+  try {
+    const choice = await window.menu.popup([
+      { id: 'open-in-file-manager', label: `Open in ${fileManagerName}` },
+    ])
+    if (choice !== 'open-in-file-manager') return
+    const result = await window.shell.openInFileManager(directory)
+    // 'opened'/'revealed' are both successes. Report the rest: 'failed' is an OS error, and
+    // 'none' means the folder is gone (common on an archived session whose worktree was
+    // deleted). Staying silent would make the menu item look dead.
+    if (result.action !== 'opened' && result.action !== 'revealed') {
+      reportOpenFailure(directory, result.error)
+    }
+  } catch (err: unknown) {
+    reportOpenFailure(directory, String(err))
+  }
 }
 
 const statusLabels: Record<SessionStatus, string> = {
@@ -87,6 +110,13 @@ export default memo(function SessionCard({
   onArchive,
   onPause,
   repoLabel,
+  draggable,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onDragEnd,
+  dropEdge,
 }: {
   sessionId: string
   onSelect: (sessionId: string) => void
@@ -95,6 +125,15 @@ export default memo(function SessionCard({
   onPause?: (e: React.MouseEvent, sessionId: string) => void
   /** Search mode only: a neutral repo tag (grouped mode shows the repo on the header). */
   repoLabel?: string
+  /** Drag-to-reorder. Omitted (or false) for archived cards and while searching. */
+  draggable?: boolean
+  onDragStart?: (e: React.DragEvent, sessionId: string) => void
+  onDragOver?: (e: React.DragEvent, sessionId: string) => void
+  onDragLeave?: () => void
+  onDrop?: (e: React.DragEvent, sessionId: string) => void
+  onDragEnd?: (e: React.DragEvent) => void
+  /** 'before' | 'after' draws the drop indicator on that edge; null draws none. */
+  dropEdge?: 'before' | 'after' | null
 }) {
   // Subscribe to only the fields this card renders, with shallow equality.
   // This prevents re-renders when unrelated session fields (or other sessions) change.
@@ -144,24 +183,11 @@ export default memo(function SessionCard({
     : showWorking ? 'working' : (session.status === 'error' ? 'error' : 'idle')
   const isUnread = session.isUnread
 
-  // Right-click → native context menu → open the session's worktree folder in the OS file manager.
   const directory = session.directory
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    void (async () => {
-      const choice = await window.menu.popup([
-        { id: 'open-in-file-manager', label: `Open in ${fileManagerName}` },
-      ])
-      if (choice !== 'open-in-file-manager') return
-      const result = await window.shell.openInFileManager(directory)
-      // 'opened'/'revealed' are both successes. Report the rest: 'failed' is an OS error, and
-      // 'none' means the folder is gone (common on an archived session whose worktree was
-      // deleted). Staying silent would make the menu item look dead.
-      if (result.action !== 'opened' && result.action !== 'revealed') {
-        reportOpenFailure(directory, result.error)
-      }
-    })().catch((err: unknown) => reportOpenFailure(directory, String(err)))
+    void openWorktreeInFileManager(directory)
   }
 
   return (
@@ -169,6 +195,12 @@ export default memo(function SessionCard({
       data-session-card
       data-session-id={sessionId}
       tabIndex={0}
+      draggable={!!draggable}
+      onDragStart={(e) => onDragStart?.(e, sessionId)}
+      onDragOver={(e) => onDragOver?.(e, sessionId)}
+      onDragLeave={onDragLeave}
+      onDrop={(e) => onDrop?.(e, sessionId)}
+      onDragEnd={onDragEnd}
       onClick={() => onSelect(sessionId)}
       onContextMenu={handleContextMenu}
       onKeyDown={(e) => {
@@ -186,7 +218,7 @@ export default memo(function SessionCard({
       }}
       className={`group relative w-full text-left p-3 rounded mb-1 transition-all cursor-pointer outline-none focus:ring-1 focus:ring-accent/50 ${
         isActive ? 'bg-accent/15' : 'hover:bg-bg-tertiary/50'
-      } ${session.isPaused ? 'opacity-60' : ''}`}
+      } ${session.isPaused ? 'opacity-60' : ''} ${dropEdgeClasses(dropEdge)}`}
     >
       <div className="flex items-center gap-2 mb-1">
         <StatusIndicator status={displayStatus} isUnread={isUnread} />

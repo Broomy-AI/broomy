@@ -118,6 +118,35 @@ describe('shell handlers', () => {
       )
     })
 
+    it('merges a passed env over process.env', async () => {
+      const { register } = await import('./shell')
+      const ctx = createCtx()
+      register(mockIpcMain as never, ctx)
+
+      mockExec.mockImplementation((_cmd: string, _opts: unknown, cb: Function) => {
+        cb(null, '', '')
+      })
+
+      await handlers['shell:exec'](mockEvent, 'env', '/tmp', { BROOMY_BRANCH: 'fix/login' })
+      const opts = mockExec.mock.calls[0][1] as { env: Record<string, string> }
+      expect(opts.env.BROOMY_BRANCH).toBe('fix/login')
+      expect(opts.env.PATH).toBe(process.env.PATH)
+    })
+
+    it('uses process.env unchanged when no env is passed', async () => {
+      const { register } = await import('./shell')
+      const ctx = createCtx()
+      register(mockIpcMain as never, ctx)
+
+      mockExec.mockImplementation((_cmd: string, _opts: unknown, cb: Function) => {
+        cb(null, '', '')
+      })
+
+      await handlers['shell:exec'](mockEvent, 'env', '/tmp')
+      const opts = mockExec.mock.calls[0][1] as { env: NodeJS.ProcessEnv }
+      expect(opts.env).toBe(process.env)
+    })
+
     it('resolves with error info when command fails', async () => {
       const { register } = await import('./shell')
       const ctx = createCtx()

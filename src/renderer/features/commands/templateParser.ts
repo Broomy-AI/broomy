@@ -1,4 +1,6 @@
-export const RESERVED_CONTEXT_VARS = new Set(['main', 'branch', 'directory', 'issueNumber'])
+import { RESERVED_CONTEXT_VARS } from './templateVars'
+
+export { RESERVED_CONTEXT_VARS }
 
 export interface TemplateArg {
   name: string

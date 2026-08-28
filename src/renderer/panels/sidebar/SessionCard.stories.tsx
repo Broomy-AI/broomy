@@ -183,3 +183,7 @@ export const ApprovedChip: Story = {
 export const Paused: Story = {
   args: { sessionId: 'session-12' },
 }
+
+export const DropTargetBefore: Story = {
+  args: { sessionId: 'session-1', draggable: true, dropEdge: 'before' },
+}

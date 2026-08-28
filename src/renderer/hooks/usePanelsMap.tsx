@@ -87,7 +87,7 @@ export interface PanelsMapConfig {
   handleFileViewerPositionChange: (position: 'top' | 'left') => void
   fetchGitStatus: () => void | Promise<void>
   getAgentCommand: (session: Session) => string | undefined
-  getAgentEnv: (session: Session) => Record<string, string> | undefined
+  getAgentEnv: (session: Session) => Record<string, string>
   getRepoIsolation: (session: Session) => { isolated: boolean; repoRootDir?: string } | undefined
   getAgentConnectionMode: (session: Session) => 'terminal' | 'api' | undefined
   getAgentModel: (session: Session) => string | undefined

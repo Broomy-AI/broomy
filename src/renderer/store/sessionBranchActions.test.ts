@@ -400,4 +400,24 @@ describe('sessionBranchActions', () => {
       expect(useSessionStore.getState().sessions[0].checksStatus).toBe('none')
     })
   })
+
+  describe('archivedAt', () => {
+    it('stamps archivedAt on archive and clears it on unarchive', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-07-27T12:00:00Z'))
+      useSessionStore.setState({
+        sessions: [{ id: 's1', isArchived: false } as unknown as Session],
+        activeSessionId: null,
+      })
+
+      useSessionStore.getState().archiveSession('s1')
+      expect(useSessionStore.getState().sessions[0].archivedAt).toBe(
+        new Date('2026-07-27T12:00:00Z').getTime(),
+      )
+
+      useSessionStore.getState().unarchiveSession('s1')
+      expect(useSessionStore.getState().sessions[0].archivedAt).toBeUndefined()
+      vi.useRealTimers()
+    })
+  })
 })

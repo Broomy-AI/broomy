@@ -17,6 +17,11 @@ import {
 import { getUserCommandsConfigPath, userCommandsDir } from '../../features/commands/userConfigPath'
 import { parseTemplate } from '../../features/commands/templateParser'
 import { ShowWhenPicker } from '../../shared/components/ShowWhenPicker'
+import { TemplateVarsModal, TemplateVarsButton } from '../../shared/components/TemplateVarsModal'
+import type { TemplateVarInput } from '../../features/commands/templateVars'
+import { useInsertAtCursor } from '../../shared/hooks/useInsertAtCursor'
+import { useSessionStore } from '../../store/sessions'
+import { useRepoStore } from '../../store/repos'
 import { DialogErrorBanner } from '../../shared/components/ErrorBanner'
 import { Field, StageChips, EmptyPane, DeleteButton, UnsavedChangesModal, CommandExpandedEditor, ArgsTable, NewStageModal } from './CommandsEditorParts'
 
@@ -299,6 +304,20 @@ function EditorHeader({
 }
 
 
+/**
+ * Live variable values for the picker, taken from the active session, so it
+ * shows what a command would actually resolve to right now.
+ */
+function useActiveSessionVarInput(): TemplateVarInput {
+  const activeSession = useSessionStore(s => s.sessions.find(x => x.id === s.activeSessionId))
+  const repos = useRepoStore(s => s.repos)
+  return useMemo(() => ({
+    session: activeSession,
+    repo: repos.find(r => r.id === activeSession?.repoId),
+    directory: activeSession?.directory ?? '',
+  }), [activeSession, repos])
+}
+
 function Detail({
   selected, onUpdate, onDelete, stageOptions,
 }: {
@@ -312,6 +331,12 @@ function Detail({
   const mode: 'one-line' | 'block' = selected.template.includes('\n') ? 'block' : 'one-line'
   const [commandExpanded, setCommandExpanded] = useState(false)
   const [addingSetStage, setAddingSetStage] = useState(false)
+  const [showVars, setShowVars] = useState(false)
+  const { ref: commandRef, insert } = useInsertAtCursor<HTMLInputElement & HTMLTextAreaElement>()
+
+  const varInput = useActiveSessionVarInput()
+
+  const insertVar = (text: string) => insert(text, selected.template, v => onUpdate({ template: v }))
 
   function updateArgMeta(name: string, patch: Partial<{ description: string; multiline: boolean }>) {
     const existing = argsMeta.find(a => a.name === name)
@@ -349,26 +374,36 @@ function Detail({
             : 'Text-block mode.'
         }
         action={
-          <button
-            type="button"
-            onClick={() => setCommandExpanded(true)}
-            className="text-2xs text-text-tertiary hover:text-text-primary transition-colors"
-            title="Edit in a larger pane"
-            data-testid="expand-command"
-          >
-            ⤢ Expand
-          </button>
+          <div className="flex items-center gap-2">
+            <TemplateVarsButton
+              onClick={() => setShowVars(true)}
+              testId="open-template-vars"
+            />
+            <button
+              type="button"
+              onClick={() => setCommandExpanded(true)}
+              className="text-2xs text-text-tertiary hover:text-text-primary transition-colors"
+              title="Edit in a larger pane"
+              data-testid="expand-command"
+            >
+              ⤢ Expand
+            </button>
+          </div>
         }
       >
         {mode === 'one-line' ? (
           <input
+            ref={commandRef}
             type="text"
+            data-testid="command-template-field"
             value={selected.template}
             onChange={e => onUpdate({ template: e.target.value })}
             className="w-full px-2 py-1.5 text-sm font-mono rounded border border-border bg-bg-secondary text-text-primary focus:outline-none focus:border-accent"
           />
         ) : (
           <textarea
+            ref={commandRef}
+            data-testid="command-template-field"
             value={selected.template}
             onChange={e => onUpdate({ template: e.target.value })}
             rows={6}
@@ -377,9 +412,19 @@ function Detail({
         )}
       </Field>
 
+      {showVars && (
+        <TemplateVarsModal
+          surface="command"
+          varInput={varInput}
+          onInsert={insertVar}
+          onClose={() => setShowVars(false)}
+        />
+      )}
+
       {commandExpanded && (
         <CommandExpandedEditor
           value={selected.template}
+          varInput={varInput}
           onChange={(v) => onUpdate({ template: v })}
           onClose={() => setCommandExpanded(false)}
         />

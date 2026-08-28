@@ -7,6 +7,7 @@ import type { SdkModelInfo } from '../../../preload/apis/types'
 import { EnvVarEditor, type EnvVarEditorRef } from './EnvVarEditor'
 import { useSdkModels, DEFAULT_MODEL } from '../../shared/hooks/useSdkModels'
 import { ENABLE_AGENT_SDK } from '../../../shared/featureFlags'
+import { AgentCommandField } from './AgentCommandField'
 
 interface AgentSettingsAgentTabProps {
   agents: AgentConfig[]
@@ -133,13 +134,7 @@ export function AgentSettingsAgentTab({
             className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent"
             autoFocus
           />
-          <input
-            type="text"
-            value={command}
-            onChange={(e) => onCommandChange(e.target.value)}
-            placeholder="Command (e.g., claude)"
-            className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent"
-          />
+          <AgentCommandField command={command} onCommandChange={onCommandChange} />
           <input
             type="text"
             value={color}
@@ -276,13 +271,7 @@ function AgentEditForm({
         placeholder="Agent name"
         className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent"
       />
-      <input
-        type="text"
-        value={command}
-        onChange={(e) => onCommandChange(e.target.value)}
-        placeholder="Command (e.g., claude)"
-        className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-sm text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent"
-      />
+      <AgentCommandField command={command} onCommandChange={onCommandChange} />
       <input
         type="text"
         value={color}

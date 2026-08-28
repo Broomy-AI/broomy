@@ -135,8 +135,9 @@ export function createBranchActions(get: StoreGet, set: StoreSet) {
 
     archiveSession: (sessionId: string) => {
       const { sessions, activeSessionId } = get()
+      const now = Date.now()
       const updatedSessions = sessions.map((s) =>
-        s.id === sessionId ? { ...s, isArchived: true } : s
+        s.id === sessionId ? { ...s, isArchived: true, archivedAt: now } : s
       )
       let newActiveId = activeSessionId
       if (activeSessionId === sessionId) {
@@ -150,7 +151,7 @@ export function createBranchActions(get: StoreGet, set: StoreSet) {
     unarchiveSession: (sessionId: string) => {
       const { sessions } = get()
       const updatedSessions = sessions.map((s) =>
-        s.id === sessionId ? { ...s, isArchived: false } : s
+        s.id === sessionId ? { ...s, isArchived: false, archivedAt: undefined } : s
       )
       set({ sessions: updatedSessions })
       debouncedSave()

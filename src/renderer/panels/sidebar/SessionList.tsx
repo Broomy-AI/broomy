@@ -17,8 +17,12 @@ import DeleteSessionDialog from './DeleteSessionDialog'
 import UpdateBanner from './UpdateBanner'
 import { RepoGroupSection } from './RepoGroupSection'
 import { ArchivedSection } from './ArchivedSection'
+import { SessionListHeader } from './SessionListHeader'
 import { useSessionGrouping } from './useSessionGrouping'
 import { useSessionListActions } from './useSessionListActions'
+import { sortArchived } from './archivedOrder'
+import { useSidebarDrag } from './useSidebarDrag'
+import { groupKeyForSession } from './repoGroups'
 
 interface SessionListProps {
   repos: ManagedRepo[]
@@ -65,7 +69,10 @@ export default function SessionList({
 
   const allActive = useMemo(() => sessions.filter((s) => !s.isArchived), [sessions])
   const activeSessions = useMemo(() => allActive.filter(matchesSearch), [allActive, matchesSearch])
-  const archivedSessions = useMemo(() => sessions.filter((s) => s.isArchived && matchesSearch(s)), [sessions, matchesSearch])
+  const archivedSessions = useMemo(
+    () => sortArchived(sessions.filter((s) => s.isArchived && matchesSearch(s))),
+    [sessions, matchesSearch],
+  )
 
   const handleRefresh = async () => {
     if (!onRefreshPrStatus || isRefreshing) return
@@ -92,45 +99,40 @@ export default function SessionList({
     onArchiveSession, onUnarchiveSession, onPauseSession, onSelectSession,
   })
 
-  // Repo grouping + alphabetical sort + the visible-order view-model.
+  // Repo grouping + manual drag order + the visible-order view-model.
   const searching = searchQuery.trim().length > 0
   const { railColorByKey, collapsedSet, setRepoGroupCollapsed, repoLabelFor, groups, orderedSessions, archivedRollup } =
     useSessionGrouping(allActive, activeSessions, archivedSessions, repos, searching)
 
+  // Dragging is off while searching: the search view is a filtered projection, so a drop
+  // between two visible cards has no unambiguous position in the underlying array.
+  const renderedGroupKeys = useMemo(() => groups.map((g) => g.key), [groups])
+
+  // A session may only be dropped onto a card in its own repo group — cross-group drags
+  // are rejected by the store, but the drop indicator must not promise a drop that won't
+  // happen. Memoized on `allActive`/`repos` so the predicate (and therefore every drag
+  // handler built from it) stays referentially stable across unrelated re-renders —
+  // SessionCard is React.memo-wrapped and depends on that stability.
+  const groupKeyById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const session of allActive) map.set(session.id, groupKeyForSession(session, repos))
+    return map
+  }, [allActive, repos])
+  const canDropSession = useCallback(
+    (draggedId: string, targetId: string) => groupKeyById.get(draggedId) === groupKeyById.get(targetId),
+    [groupKeyById],
+  )
+
+  const { dropTarget, sessionDrag, groupDrag } = useSidebarDrag(!searching, renderedGroupKeys, canDropSession)
+
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="p-3 border-b border-border flex items-center gap-2">
-        <button
-          onClick={onNewSession}
-          className="flex-1 py-2 px-3 bg-accent hover:bg-accent/80 text-on-accent text-sm font-medium rounded transition-colors"
-        >
-          + New Session
-        </button>
-        {onRefreshPrStatus && (
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="p-2 rounded text-text-secondary hover:text-text-primary hover:bg-bg-tertiary transition-colors disabled:opacity-50"
-            title="Refresh PR status for all sessions"
-          >
-            <svg
-              className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M21 2v6h-6" />
-              <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-              <path d="M3 22v-6h6" />
-              <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-            </svg>
-          </button>
-        )}
-      </div>
+      <SessionListHeader
+        onNewSession={onNewSession}
+        onRefreshPrStatus={onRefreshPrStatus}
+        isRefreshing={isRefreshing}
+        onRefresh={handleRefresh}
+      />
 
       {/* Search */}
       <div className="px-2 pt-2 relative">
@@ -192,6 +194,9 @@ export default function SessionList({
               onDelete={handleDelete}
               onArchive={handleArchive}
               onPause={onPauseSession ? handlePause : undefined}
+              sessionDrag={sessionDrag}
+              groupDrag={groupDrag}
+              dropTarget={dropTarget}
             />
           )
         })}

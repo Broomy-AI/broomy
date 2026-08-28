@@ -45,8 +45,15 @@ describe('parseTemplate', () => {
     expect(r.args).toEqual([{ name: 'topic', optional: false, flag: null }])
   })
 
-  it('reserved set includes the canonical four', () => {
-    expect(RESERVED_CONTEXT_VARS).toEqual(new Set(['main', 'branch', 'directory', 'issueNumber']))
+  it('reserves every name in the template variable registry', () => {
+    for (const name of ['main', 'branch', 'directory', 'issueNumber', 'prTitle', 'repoName', 'stage']) {
+      expect(RESERVED_CONTEXT_VARS.has(name)).toBe(true)
+    }
+  })
+
+  it('excludes new reserved context vars from parsed args', () => {
+    const r = parseTemplate('/summarize {prTitle} {myArg}')
+    expect(r.args.map(a => a.name)).toEqual(['myArg'])
   })
 
   it('flag-group beats bare when same name appears twice', () => {

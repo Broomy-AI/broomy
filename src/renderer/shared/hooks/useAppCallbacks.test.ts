@@ -209,13 +209,32 @@ describe('useAppCallbacks', () => {
     const agents = [{ id: 'a1', name: 'Agent', command: 'claude', env }] as Parameters<typeof useAppCallbacks>[0]['agents']
     const deps = makeDeps({ agents })
     const { result } = renderHook(() => useAppCallbacks(deps))
-    expect(result.current.getAgentEnv({ agentId: 'a1' } as never)).toEqual(env)
+    expect(result.current.getAgentEnv({ agentId: 'a1' } as never)).toMatchObject(env)
   })
 
-  it('getAgentEnv returns undefined when session has no agentId', () => {
+  it('getAgentEnv exports BROOMY_ variables for the session', () => {
     const deps = makeDeps()
     const { result } = renderHook(() => useAppCallbacks(deps))
-    expect(result.current.getAgentEnv({ agentId: null } as never)).toBeUndefined()
+    const env = result.current.getAgentEnv({ agentId: 'a1', branch: 'fix/login', directory: '/repo/wt' } as never)
+    expect(env.BROOMY_BRANCH).toBe('fix/login')
+    expect(env.BROOMY_DIRECTORY).toBe('/repo/wt')
+  })
+
+  it('getAgentEnv resolves {vars} inside configured env values', () => {
+    const agents = [
+      { id: 'a1', name: 'Agent', command: 'claude', env: { MY_BRANCH: '{branch}' } },
+    ] as Parameters<typeof useAppCallbacks>[0]['agents']
+    const deps = makeDeps({ agents })
+    const { result } = renderHook(() => useAppCallbacks(deps))
+    const env = result.current.getAgentEnv({ agentId: 'a1', branch: 'fix/login', directory: '/repo/wt' } as never)
+    expect(env.MY_BRANCH).toBe('fix/login')
+  })
+
+  it('getAgentEnv still returns BROOMY_ variables when the session has no agent', () => {
+    const deps = makeDeps()
+    const { result } = renderHook(() => useAppCallbacks(deps))
+    const env = result.current.getAgentEnv({ agentId: null, branch: 'b', directory: '/d' } as never)
+    expect(env.BROOMY_BRANCH).toBe('b')
   })
 
   // --- getAgentConnectionMode / getAgentModel / getAgentEffort / getAgentSkipApproval ---

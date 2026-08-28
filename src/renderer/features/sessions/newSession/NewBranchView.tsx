@@ -10,6 +10,7 @@ import { issueToBranchName } from '../../../shared/utils/slugify'
 import { DialogErrorBanner } from '../../../shared/components/ErrorBanner'
 import { AuthSetupSection } from '../../../shared/components/AuthSetupSection'
 import { resolveBaseRef } from '../../git/baseRef'
+import { runRepoInitScript } from '../runRepoInitScript'
 
 export function NewBranchView({
   repo,
@@ -123,15 +124,9 @@ export function NewBranchView({
         throw new Error(pushResult.error || 'Failed to push branch to remote')
       }
 
-      // Run init script if exists (non-fatal)
-      try {
-        const initScript = await window.repos.getInitScript(repo.id)
-        if (initScript) {
-          await window.shell.exec(initScript, worktreePath)
-        }
-      } catch {
-        // Non-fatal
-      }
+      await runRepoInitScript(repo, worktreePath, {
+        issue: issue ? { number: issue.number, title: issue.title, url: issue.url } : undefined,
+      })
 
       onComplete(worktreePath, selectedAgentId, {
         repoId: repo.id,

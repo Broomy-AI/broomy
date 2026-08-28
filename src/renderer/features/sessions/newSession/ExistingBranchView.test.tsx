@@ -320,7 +320,7 @@ describe('ExistingBranchView', () => {
     fireEvent.click(screen.getByRole('button', { name: /Create Worktree/ }))
 
     await waitFor(() => {
-      expect(window.shell.exec).toHaveBeenCalledWith('pnpm install', '/repos/my-project/fix-init')
+      expect(window.shell.exec).toHaveBeenCalledWith('pnpm install', '/repos/my-project/fix-init', expect.objectContaining({ BROOMY_BRANCH: expect.any(String) }))
       expect(onComplete).toHaveBeenCalled()
     })
   })

@@ -4,14 +4,9 @@
  * the renderer.
  *
  * These live in a GLOBAL ~/.broomy/settings.json rather than the per-profile
- * config.json, for two reasons:
- *
- *   - `nativeTheme.themeSource` is process-global. If two profile windows disagreed
- *     about the theme, the native chrome (traffic lights, context menus, file
- *     dialogs) could only satisfy one of them.
- *   - How readable a UI is, is a property of the person's eyes — not of which
- *     project they happen to have open. Opening a new profile must not reset a
- *     low-vision user to 13px dark.
+ * config.json: how readable a UI is, is a property of the person's eyes — not of
+ * which project they happen to have open. Opening a new profile must not reset a
+ * low-vision user to 13px dark.
  */
 import { bestLabelOn, contrast, fitContrast, hexToRgb, parseTriplet, rgbToTriplet, type Rgb } from './color'
 import { IS_LIGHT, PALETTE, type ThemeName } from './theme'

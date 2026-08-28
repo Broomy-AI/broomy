@@ -262,3 +262,40 @@ describe('CommandsEditor', () => {
     expect(written.actions[0].switchTab).toBe('review')
   })
 })
+
+describe('CommandsEditor template variable picker', () => {
+  async function renderWithCommand(template: string) {
+    vi.mocked(window.fs.exists).mockImplementation(async (p: string) => p === '/Users/test/.broomy/commands.json')
+    vi.mocked(window.fs.readFile).mockResolvedValue(JSON.stringify({
+      version: 2, actions: [{ id: 'u', label: 'My Cmd', template }],
+    }))
+    render(<CommandsEditor directory="/repo" onClose={vi.fn()} />)
+    fireEvent.click(await screen.findByText('My Cmd'))
+  }
+
+  it('opens the picker from the command field', async () => {
+    await renderWithCommand('/fix now')
+    fireEvent.click(screen.getByTestId('open-template-vars'))
+    expect(await screen.findByRole('dialog', { name: 'Template variables' })).toBeInTheDocument()
+    expect(screen.getByText('{branch}')).toBeInTheDocument()
+  })
+
+  it('inserts a variable at the caret in the command field', async () => {
+    await renderWithCommand('/fix now')
+    const field = screen.getByDisplayValue<HTMLInputElement>('/fix now')
+    field.setSelectionRange(5, 5)
+    fireEvent.click(screen.getByTestId('open-template-vars'))
+    fireEvent.click(await screen.findByText('{branch}'))
+    expect(await screen.findByDisplayValue('/fix {branch}now')).toBeInTheDocument()
+  })
+
+  it('inserts a variable from the expanded editor', async () => {
+    await renderWithCommand('/fix now')
+    fireEvent.click(screen.getByTestId('expand-command'))
+    const textarea = await screen.findByTestId<HTMLTextAreaElement>('expanded-command-textarea')
+    textarea.setSelectionRange(5, 5)
+    fireEvent.click(await screen.findByTestId('open-template-vars-expanded'))
+    fireEvent.click(await screen.findByText('{repoName}'))
+    expect(await screen.findByTestId('expanded-command-textarea')).toHaveValue('/fix {repoName}now')
+  })
+})

@@ -1,0 +1,143 @@
+/**
+ * Drag-and-drop state for the sidebar: session cards within their repo group, and repo
+ * group headers among themselves.
+ *
+ * Sessions and groups are two separate drags that must never cross — the hook tracks
+ * which kind is in flight and ignores drop targets of the other kind, so dragging a
+ * card over a header (or vice versa) shows nothing and drops nowhere.
+ *
+ * A session dragged over a card in a different repo group must show no drop indicator,
+ * since the drop is rejected. The store action is the source of truth for that
+ * rejection — it owns the session data needed to judge it — but the store can't tell
+ * the *visual* affordance not to lie mid-drag, before any drop has happened. So the
+ * caller (which does have session/repo data) injects an optional `canDropSession`
+ * predicate that this hook consults purely to gate `setDropTarget`; it never
+ * duplicates the store's own rejection logic.
+ *
+ * Drop position is "before or after this item", decided by which vertical half of the
+ * target the cursor is in — in a vertical list the meaningful position is the gap
+ * between two items, not the item itself.
+ */
+import { useState, useCallback } from 'react'
+import { useSessionStore } from '../../store/sessions'
+
+export type DropKind = 'session' | 'group'
+
+export interface DropTarget {
+  id: string
+  kind: DropKind
+  before: boolean
+}
+
+export interface DragHandlers {
+  onDragStart: (e: React.DragEvent, id: string) => void
+  onDragOver: (e: React.DragEvent, id: string) => void
+  onDragLeave: () => void
+  onDrop: (e: React.DragEvent, id: string) => void
+  onDragEnd: (e: React.DragEvent) => void
+}
+
+/**
+ * Tailwind classes for the 2px accent drop-indicator line, shared by SessionCard and
+ * RepoGroupHeader so the "before"/"after" edge styling can't drift between the two.
+ */
+export function dropEdgeClasses(dropEdge: 'before' | 'after' | null | undefined): string {
+  if (dropEdge === 'before') return 'border-t-2 border-t-accent'
+  if (dropEdge === 'after') return 'border-b-2 border-b-accent'
+  return ''
+}
+
+/** True when the cursor sits in the top half of the event's target element. */
+function isBefore(e: React.DragEvent): boolean {
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  return e.clientY < rect.top + rect.height / 2
+}
+
+/**
+ * Not curried by kind: a curried factory (`useCallback((kind) => (e, id) => {...})`)
+ * only memoizes the outer function — calling it per-render to build `sessionDrag` /
+ * `groupDrag` still returns a fresh inner closure every time, which defeats
+ * `React.memo` on consumers like `SessionCard`. Defining each handler directly with
+ * its own `useCallback` (mirroring the `TabbedTerminal.tsx` precedent) keeps them
+ * genuinely stable across renders where their dependencies haven't changed.
+ */
+/**
+ * @param canDropSession Optional predicate deciding whether a session dragged with id
+ *   `draggedId` may be dropped on the card for `targetId`. Omit it (or return true) to
+ *   allow every session-over-session dragover, which is what plain array reordering
+ *   within a single flat list needs. The caller MUST memoize this so its identity is
+ *   stable across renders where the underlying data hasn't changed — an unstable
+ *   predicate makes `dragOver`, and therefore every drag handler built from it, unstable
+ *   too, defeating `React.memo` on `SessionCard`.
+ */
+export function useSidebarDrag(
+  enabled: boolean,
+  renderedGroupKeys: string[],
+  canDropSession?: (draggedId: string, targetId: string) => boolean,
+) {
+  const reorderSession = useSessionStore((s) => s.reorderSession)
+  const reorderRepoGroup = useSessionStore((s) => s.reorderRepoGroup)
+  const [dragging, setDragging] = useState<{ id: string; kind: DropKind } | null>(null)
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
+
+  const startDrag = useCallback((kind: DropKind, e: React.DragEvent, id: string) => {
+    if (!enabled) { e.preventDefault(); return }
+    setDragging({ id, kind })
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', id)
+  }, [enabled])
+
+  const dragOver = useCallback((kind: DropKind, e: React.DragEvent, id: string) => {
+    if (!enabled || dragging?.kind !== kind) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (dragging.id === id) { setDropTarget(null); return }
+    if (kind === 'session' && canDropSession && !canDropSession(dragging.id, id)) { setDropTarget(null); return }
+    setDropTarget({ id, kind, before: isBefore(e) })
+  }, [enabled, dragging, canDropSession])
+
+  const leave = useCallback(() => setDropTarget(null), [])
+
+  const performDrop = useCallback((kind: DropKind, e: React.DragEvent, id: string) => {
+    if (!enabled || dragging?.kind !== kind) return
+    e.preventDefault()
+    e.stopPropagation()
+    const before = isBefore(e)
+    setDropTarget(null)
+    setDragging(null)
+    if (dragging.id === id) return
+    if (kind === 'session') reorderSession(dragging.id, id, before)
+    else reorderRepoGroup(dragging.id, id, renderedGroupKeys, before)
+  }, [enabled, dragging, reorderSession, reorderRepoGroup, renderedGroupKeys])
+
+  const end = useCallback(() => {
+    setDragging(null)
+    setDropTarget(null)
+  }, [])
+
+  const handleSessionDragStart = useCallback((e: React.DragEvent, id: string) => startDrag('session', e, id), [startDrag])
+  const handleSessionDragOver = useCallback((e: React.DragEvent, id: string) => dragOver('session', e, id), [dragOver])
+  const handleSessionDrop = useCallback((e: React.DragEvent, id: string) => performDrop('session', e, id), [performDrop])
+
+  const handleGroupDragStart = useCallback((e: React.DragEvent, id: string) => startDrag('group', e, id), [startDrag])
+  const handleGroupDragOver = useCallback((e: React.DragEvent, id: string) => dragOver('group', e, id), [dragOver])
+  const handleGroupDrop = useCallback((e: React.DragEvent, id: string) => performDrop('group', e, id), [performDrop])
+
+  const sessionDrag: DragHandlers = {
+    onDragStart: handleSessionDragStart,
+    onDragOver: handleSessionDragOver,
+    onDragLeave: leave,
+    onDrop: handleSessionDrop,
+    onDragEnd: end,
+  }
+
+  const groupDrag: DragHandlers = {
+    onDragStart: handleGroupDragStart,
+    onDragOver: handleGroupDragOver,
+    onDragLeave: leave,
+    onDrop: handleGroupDrop,
+    onDragEnd: end,
+  }
+
+  return { dropTarget, sessionDrag, groupDrag }
+}

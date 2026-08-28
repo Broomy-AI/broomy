@@ -12,7 +12,10 @@ export type ReviewState = 'none' | 'waiting' | 'approved'
 export interface PrApprovalStatus {
   /** Reviewers whose latest submitted review is APPROVED (and not re-requested). */
   approved: number
-  /** Requested reviewers who have not yet submitted a review. */
+  /**
+   * Outstanding review requests that have not been answered. Counts requested
+   * teams as well as individuals — a PR can be waiting on a team alone.
+   */
   pending: number
   /** Reviewers whose latest submitted review is not APPROVED (changes/comments). */
   otherReviews: number

@@ -107,6 +107,7 @@ describe('configPersistence', () => {
         sidebarWidth: 300,
         toolbarPanels: ['sidebar', 'explorer'],
         globalPanelVisibility: { [PANEL_IDS.SIDEBAR]: false, [PANEL_IDS.SETTINGS]: false },
+        repoGroupOrder: ['repo:r2', 'repo:r1'],
       })
 
       scheduleSave()
@@ -120,6 +121,7 @@ describe('configPersistence', () => {
           sidebarWidth: 300,
           toolbarPanels: ['sidebar', 'explorer'],
           showSidebar: false,
+          repoGroupOrder: ['repo:r2', 'repo:r1'],
         })
       )
     })
