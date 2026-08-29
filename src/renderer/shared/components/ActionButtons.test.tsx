@@ -8,6 +8,7 @@ vi.mock('../../features/commands/actionExecutor', () => ({
 }))
 
 import { ActionButtons } from './ActionButtons'
+import { mergeConfigs, type ActionDefinition } from '../../features/commands/commandsConfig'
 
 const condState = {
   'has-changes': true, 'clean': false, 'merging': false, 'conflicts': false,
@@ -173,5 +174,40 @@ describe('ActionButtons', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     fireEvent.click(screen.getByText('A…', { selector: 'span' }))
     expect(screen.getByLabelText(/topic/i)).toHaveValue('auth')
+  })
+  // Regression: two configs defining the same action id produced duplicate React
+  // keys, and React left the extra nodes in the DOM — they survived into later
+  // renders, so ghost buttons showed up in sessions whose own config was clean.
+  it('leaves no ghost buttons behind when a session with a project override is switched away from', () => {
+    const userConfig = { version: 2, actions: [
+      { id: 'brainstorm', label: 'Brainstorm', template: '!echo hi' },
+      { id: 'review', label: 'Review', template: '!echo hi' },
+    ] }
+    const projectConfig = { version: 2, actions: [
+      { id: 'review', label: 'Review', template: '!echo hi' },
+    ] }
+
+    const view = (actions: ActionDefinition[]) => (
+      <ActionButtons
+        actions={actions}
+        conditionState={condState}
+        templateVars={ctx}
+        currentStage="new"
+        directory="/r"
+        agentPtyId="pty-1"
+        onSetup={vi.fn()}
+        onSetSessionStage={vi.fn()}
+      />
+    )
+
+    // Session A: user config plus a project config that overrides `review`.
+    const withProject = mergeConfigs(userConfig, projectConfig)!
+    const { rerender } = render(view(withProject.actions))
+    expect(screen.getAllByText('Review')).toHaveLength(1)
+
+    // Session B: a repo with no project config of its own.
+    const userOnly = mergeConfigs(userConfig, null)!
+    rerender(view(userOnly.actions))
+    expect(screen.getAllByText('Review')).toHaveLength(1)
   })
 })
