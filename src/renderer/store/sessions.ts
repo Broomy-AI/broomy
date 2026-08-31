@@ -114,6 +114,13 @@ export interface Session {
   lastKnownPrUrl?: string
   // Archive state (persisted)
   isArchived: boolean
+  /**
+   * Runtime-only. A paused session stays in the main list but runs no agent,
+   * no terminals, and nothing they started. Never persisted — hydration marks
+   * every restored session paused, which is what makes all sessions paused
+   * after a restart.
+   */
+  isPaused: boolean
   // When the session was archived, epoch ms (persisted). Absent on sessions archived
   // before this field existed — those sort last in the Archived section.
   archivedAt?: number
@@ -216,6 +223,9 @@ interface SessionStore {
   // Archive actions
   archiveSession: (sessionId: string) => void
   unarchiveSession: (sessionId: string) => void
+  // Pause actions
+  pauseSession: (sessionId: string) => void
+  resumeSession: (sessionId: string) => void
   // Instant setup actions
   addInitializingSession: (params: { directory: string; branch: string; agentId: string | null; extra?: { repoId?: string; issueNumber?: number; issueTitle?: string; issueUrl?: string; name?: string } }) => string
   finalizeSession: (id: string) => void

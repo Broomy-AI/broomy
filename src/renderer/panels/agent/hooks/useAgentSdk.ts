@@ -231,6 +231,14 @@ export function useAgentSdk(options: UseAgentSdkOptions): UseAgentSdkReturn {
       setHistoryMeta(meta)
     }))
 
+    // NOTE(session-pause): this only tears down IPC listeners in the
+    // renderer. It does NOT stop the main-process agent SDK query, so
+    // pausing an API-mode session (ENABLE_AGENT_SDK, currently false in
+    // src/shared/featureFlags.ts) does not actually stop the agent — only
+    // the renderer-side dispatch is guarded (see getApiModeSessionId in
+    // actionExecutor.ts). If ENABLE_AGENT_SDK ever flips on, this cleanup
+    // needs to also cancel/kill the main-process query for `sessionId` so
+    // "pause runs no agent" holds for API-mode sessions too.
     return () => { cleanups.forEach((fn) => fn()) }
   }, [sessionId])
 

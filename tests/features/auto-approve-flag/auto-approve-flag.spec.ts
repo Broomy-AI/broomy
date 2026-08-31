@@ -9,6 +9,7 @@
  */
 import { test, expect, resetApp } from '../_shared/electron-fixture'
 import type { Page } from '@playwright/test'
+import { resumeActiveSession, getActiveSessionTerminalBuffer } from '../_shared/resume-helpers'
 
 let page: Page
 
@@ -16,43 +17,23 @@ test.beforeAll(async () => {
   ;({ page } = await resetApp())
 })
 
-/**
- * Get terminal buffer content from the buffer registry.
- */
-async function getTerminalContent(p: Page, type: 'agent' | 'user' | 'any' = 'agent'): Promise<string> {
-  return p.evaluate((searchType) => {
-    const registry = (window as unknown as { __terminalBufferRegistry?: { getSessionIds: () => string[]; getBuffer: (id: string) => string | null } }).__terminalBufferRegistry
-    if (!registry) return ''
-    const ids = registry.getSessionIds()
-    for (const id of ids) {
-      const isUser = id.endsWith('-user')
-      if (searchType === 'agent' && isUser) continue
-      if (searchType === 'user' && !isUser) continue
-      const buf = registry.getBuffer(id)
-      if (buf && buf.length > 0) return buf
-    }
-    return ''
-  }, type)
-}
-
 test.describe.serial('Feature: Auto-approve flag passed to agent', () => {
-  test('session 1 (linked to repo with skipApproval) launches with --dangerously-skip-permissions', async () => {
-    // Session 1 is "broomy" with agentId: 'claude' and repoId: 'repo-1'
-    // repo-1 has skipApproval: true
-    // Claude agent has skipApprovalFlag: '--dangerously-skip-permissions'
+  test('session 1 (linked to repo with skipApproval) launches with --approval-mode full-auto', async () => {
+    // Session 1 is "broomy" with agentId: 'codex' and repoId: 'repo-1'
+    // (see DEFAULT scenario in src/main/handlers/scenarios.ts)
+    // repo-1 has skipApproval: true (src/main/handlers/types.ts)
+    // Codex agent has skipApprovalFlag: '--approval-mode full-auto' (src/main/handlers/types.ts)
 
     // First ensure session 1 is active (it should be by default)
     const broomySession = page.locator('.cursor-pointer:has-text("broomy")')
     await broomySession.click()
 
-    // Wait for terminal to have content (fake-claude outputs BROOMY_COMMAND=...)
-    await expect.poll(
-      () => getTerminalContent(page, 'agent'),
-      { timeout: 15000, message: 'terminal should have content from fake-claude' },
-    ).toBeTruthy()
+    // Sessions restore paused — resume it so fake-claude actually runs and
+    // prints BROOMY_COMMAND=...
+    await resumeActiveSession(page, { timeout: 15000 })
 
     // Get terminal content and verify the original command includes the flag
-    const content = await getTerminalContent(page, 'agent')
-    expect(content).toContain('BROOMY_COMMAND=claude --dangerously-skip-permissions')
+    const content = await getActiveSessionTerminalBuffer(page)
+    expect(content).toContain('BROOMY_COMMAND=codex --approval-mode full-auto')
   })
 })

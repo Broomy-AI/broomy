@@ -106,6 +106,14 @@ const allSessions = [
     statusChip: 'approved',
     lastMessage: 'PR approved and ready to merge',
   }),
+  makeSession({
+    id: 'session-12',
+    status: 'idle',
+    branch: 'feature/paused-work',
+    name: 'my-app',
+    isPaused: true,
+    lastMessage: 'Waiting to resume...',
+  }),
 ]
 
 const meta: Meta<typeof SessionCard> = {
@@ -118,6 +126,7 @@ const meta: Meta<typeof SessionCard> = {
     onSelect: () => {},
     onDelete: () => {},
     onArchive: () => {},
+    onPause: () => {},
   },
 }
 export default meta
@@ -169,6 +178,10 @@ export const WaitingChip: Story = {
 
 export const ApprovedChip: Story = {
   args: { sessionId: 'session-11' },
+}
+
+export const Paused: Story = {
+  args: { sessionId: 'session-12' },
 }
 
 export const DropTargetBefore: Story = {

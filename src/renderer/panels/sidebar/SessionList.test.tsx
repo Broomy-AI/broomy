@@ -44,6 +44,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     reviewState: 'none' as const,
     statusChip: 'in-progress' as StatusChip,
     isArchived: false,
+    isPaused: false,
     stage: 'planning',
     isRestored: false,
     ...overrides,
@@ -59,6 +60,7 @@ function makeProps(overrides: Record<string, unknown> = {}) {
     onRefreshPrStatus: vi.fn().mockResolvedValue(undefined),
     onArchiveSession: vi.fn(),
     onUnarchiveSession: vi.fn(),
+    onPauseSession: vi.fn() as ((id: string) => void) | undefined,
     ...overrides,
   }
 }
@@ -369,6 +371,41 @@ describe('SessionList', () => {
       fireEvent.click(screen.getByText('archived-b'))
       expect(props.onUnarchiveSession).toHaveBeenCalledWith('s1')
       expect(props.onSelectSession).toHaveBeenCalledWith('s1')
+    })
+  })
+
+  describe('pause actions', () => {
+    it('calls onPauseSession when the pause button is clicked', () => {
+      setSessions([makeSession({ id: 's1', branch: 'b1', isPaused: false })])
+      const props = makeProps({ onPauseSession: vi.fn() })
+      const { container } = render(<SessionList {...props} />)
+      const pauseBtn = container.querySelector('[title="Pause session"]')!
+      fireEvent.click(pauseBtn)
+      expect(props.onPauseSession).toHaveBeenCalledWith('s1')
+    })
+
+    it('calls onPauseSession when the resume button is clicked on a paused session', () => {
+      setSessions([makeSession({ id: 's1', branch: 'b1', isPaused: true })])
+      const props = makeProps({ onPauseSession: vi.fn() })
+      const { container } = render(<SessionList {...props} />)
+      const resumeBtn = container.querySelector('[title="Resume session"]')!
+      fireEvent.click(resumeBtn)
+      expect(props.onPauseSession).toHaveBeenCalledWith('s1')
+    })
+
+    it('does not show a pause button when onPauseSession is not provided', () => {
+      setSessions([makeSession({ id: 's1', branch: 'b1' })])
+      const { container } = render(<SessionList {...makeProps({ onPauseSession: undefined })} />)
+      expect(container.querySelector('[title="Pause session"]')).toBeNull()
+    })
+
+    it('does not resume a paused session just by selecting it', () => {
+      setSessions([makeSession({ id: 's1', branch: 'paused-b', isPaused: true })])
+      const props = makeProps({ onPauseSession: vi.fn() })
+      render(<SessionList {...props} />)
+      fireEvent.click(screen.getByText('paused-b'))
+      expect(props.onSelectSession).toHaveBeenCalledWith('s1')
+      expect(props.onPauseSession).not.toHaveBeenCalled()
     })
   })
 

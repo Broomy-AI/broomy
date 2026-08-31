@@ -18,6 +18,7 @@ import { execSync } from 'child_process'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { dockerArgs, isDocker } from './electron-launch-args'
+import { resumeActiveSession } from './features/_shared/resume-helpers'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
@@ -300,6 +301,11 @@ test.describe('Session Creation', () => {
     const broomySession = page.locator('.cursor-pointer:has-text("broomy")')
     await broomySession.click()
     await expect(broomySession).toHaveClass(/bg-accent\/15/)
+
+    // The session starts paused (no agent, no terminal). Resume it so the
+    // Terminal Tab Switching and Agent Terminal describes below have a
+    // running fake-claude process to assert against.
+    await resumeActiveSession(page)
   })
 })
 

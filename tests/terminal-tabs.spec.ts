@@ -2,6 +2,7 @@ import { test, expect, _electron as electron, ElectronApplication, Page } from '
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { dockerArgs } from './electron-launch-args'
+import { resumeActiveSession } from './features/_shared/resume-helpers'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -24,6 +25,9 @@ test.beforeAll(async () => {
   await page.waitForSelector('#root > div', { timeout: 10000 })
   // Wait for sessions to load
   await page.waitForSelector('.cursor-pointer', { timeout: 10000 })
+  // The active session starts paused (no agent, no terminal). Resume it so
+  // these tests have something running to interact with.
+  await resumeActiveSession(page)
 })
 
 test.afterAll(async () => {

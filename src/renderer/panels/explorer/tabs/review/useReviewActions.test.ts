@@ -44,6 +44,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     reviewState: 'none' as const,
     statusChip: 'in-progress' as StatusChip,
     isArchived: false,
+    isPaused: false,
     isRestored: false,
     stage: 'planning',
     prNumber: 42,

@@ -49,6 +49,7 @@ export function makeSession(overrides: Partial<Session> = {}): Session {
     reviewState: 'none' as const,
     statusChip: 'in-progress' as StatusChip,
     isArchived: false,
+    isPaused: false,
     stage: 'planning',
     isRestored: false,
     ...overrides,

@@ -35,6 +35,28 @@ function reportOpenFailure(directory: string, error?: string): void {
   })
 }
 
+/**
+ * Right-click → native context menu → open the session's worktree folder in
+ * the OS file manager. Module-level so the card component stays readable.
+ */
+async function openWorktreeInFileManager(directory: string): Promise<void> {
+  try {
+    const choice = await window.menu.popup([
+      { id: 'open-in-file-manager', label: `Open in ${fileManagerName}` },
+    ])
+    if (choice !== 'open-in-file-manager') return
+    const result = await window.shell.openInFileManager(directory)
+    // 'opened'/'revealed' are both successes. Report the rest: 'failed' is an OS error, and
+    // 'none' means the folder is gone (common on an archived session whose worktree was
+    // deleted). Staying silent would make the menu item look dead.
+    if (result.action !== 'opened' && result.action !== 'revealed') {
+      reportOpenFailure(directory, result.error)
+    }
+  } catch (err: unknown) {
+    reportOpenFailure(directory, String(err))
+  }
+}
+
 const statusLabels: Record<SessionStatus, string> = {
   working: 'Working',
   idle: 'Idle',
@@ -52,11 +74,41 @@ function StatusChipBadge({ status }: { status: StatusChip }) {
   )
 }
 
+function PauseButton({ isPaused, onPause, sessionId }: {
+  isPaused: boolean
+  onPause: (e: React.MouseEvent, sessionId: string) => void
+  sessionId: string
+}) {
+  return (
+    <button
+      onClick={(e) => onPause(e, sessionId)}
+      className="text-text-secondary hover:text-text-primary p-1"
+      title={isPaused ? 'Resume session' : 'Pause session'}
+    >
+      {isPaused ? (
+        /* Play triangle */
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M6 4l14 8-14 8V4z" />
+        </svg>
+      ) : (
+        /* Pause bars */
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 4v16" />
+          <path d="M15 4v16" />
+        </svg>
+      )}
+    </button>
+  )
+}
+
 export default memo(function SessionCard({
   sessionId,
   onSelect,
   onDelete,
   onArchive,
+  onPause,
   repoLabel,
   draggable,
   onDragStart,
@@ -70,6 +122,7 @@ export default memo(function SessionCard({
   onSelect: (sessionId: string) => void
   onDelete: (e: React.MouseEvent | React.KeyboardEvent, sessionId: string) => void
   onArchive?: (e: React.MouseEvent, sessionId: string) => void
+  onPause?: (e: React.MouseEvent, sessionId: string) => void
   /** Search mode only: a neutral repo tag (grouped mode shows the repo on the header). */
   repoLabel?: string
   /** Drag-to-reorder. Omitted (or false) for archived cards and while searching. */
@@ -98,6 +151,7 @@ export default memo(function SessionCard({
         prNumber: sess.prNumber,
         lastKnownPrNumber: sess.lastKnownPrNumber,
         isArchived: sess.isArchived,
+        isPaused: sess.isPaused,
         sessionType: sess.sessionType,
         reviewStatus: sess.reviewStatus,
         initError: sess.initError,
@@ -129,24 +183,11 @@ export default memo(function SessionCard({
     : showWorking ? 'working' : (session.status === 'error' ? 'error' : 'idle')
   const isUnread = session.isUnread
 
-  // Right-click → native context menu → open the session's worktree folder in the OS file manager.
   const directory = session.directory
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    void (async () => {
-      const choice = await window.menu.popup([
-        { id: 'open-in-file-manager', label: `Open in ${fileManagerName}` },
-      ])
-      if (choice !== 'open-in-file-manager') return
-      const result = await window.shell.openInFileManager(directory)
-      // 'opened'/'revealed' are both successes. Report the rest: 'failed' is an OS error, and
-      // 'none' means the folder is gone (common on an archived session whose worktree was
-      // deleted). Staying silent would make the menu item look dead.
-      if (result.action !== 'opened' && result.action !== 'revealed') {
-        reportOpenFailure(directory, result.error)
-      }
-    })().catch((err: unknown) => reportOpenFailure(directory, String(err)))
+    void openWorktreeInFileManager(directory)
   }
 
   return (
@@ -177,7 +218,7 @@ export default memo(function SessionCard({
       }}
       className={`group relative w-full text-left p-3 rounded mb-1 transition-all cursor-pointer outline-none focus:ring-1 focus:ring-accent/50 ${
         isActive ? 'bg-accent/15' : 'hover:bg-bg-tertiary/50'
-      } ${dropEdgeClasses(dropEdge)}`}
+      } ${session.isPaused ? 'opacity-60' : ''} ${dropEdgeClasses(dropEdge)}`}
     >
       <div className="flex items-center gap-2 mb-1">
         <StatusIndicator status={displayStatus} isUnread={isUnread} />
@@ -187,6 +228,9 @@ export default memo(function SessionCard({
           {session.branch}
         </span>
         <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity">
+          {onPause && (
+            <PauseButton isPaused={session.isPaused} onPause={onPause} sessionId={sessionId} />
+          )}
           {onArchive && (
             <button
               onClick={(e) => onArchive(e, sessionId)}

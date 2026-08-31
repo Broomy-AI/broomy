@@ -2,6 +2,7 @@ import { test, expect, _electron as electron, ElectronApplication, Page } from '
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { dockerArgs } from './electron-launch-args'
+import { resumeActiveSession } from './features/_shared/resume-helpers'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -133,6 +134,12 @@ test.describe('Broomy App', () => {
 })
 
 test.describe('Terminal Integration', () => {
+  test.beforeAll(async () => {
+    // The broomy session (active after the previous describe block) starts
+    // paused on load; resume it so these tests have a running terminal.
+    await resumeActiveSession(page)
+  })
+
   test('should have a terminal container', async () => {
     // Use first() since there are multiple terminals (main + user)
     const terminal = page.locator('.xterm').first()

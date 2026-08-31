@@ -13,6 +13,7 @@ import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { screenshotElement } from '../_shared/screenshot-helpers'
 import { generateFeaturePage, generateIndex, FeatureStep } from '../_shared/template'
+import { resumeActiveSession } from '../_shared/resume-helpers'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -23,7 +24,6 @@ const FEATURES_ROOT = path.join(__dirname, '..')
 
 let page: Page
 const steps: FeatureStep[] = []
-
 
 test.beforeAll(async () => {
   await fs.promises.mkdir(SCREENSHOTS, { recursive: true })
@@ -63,28 +63,35 @@ test.describe.serial('Feature: Session Switching', () => {
     })
     steps.push({
       screenshotPath: 'screenshots/01-initial-sidebar.png',
-      caption: 'Initial sidebar with multiple sessions',
+      caption: 'Initial sidebar with multiple sessions, all paused',
       description:
         'The sidebar shows all active sessions. Each card displays the repo name, branch, ' +
-        'agent status (Idle/Working), and a status indicator dot.',
+        'agent status (Idle/Working), and a status indicator dot. Sessions always restore ' +
+        'paused, which is why every card renders dimmed here — no agent or terminal is ' +
+        'running yet for any of them.',
     })
   })
 
-  test('Step 2: First session is selected — terminal visible', async () => {
+  test('Step 2: Resume the selected session to bring up its terminal', async () => {
     // The first session (broomy) should be selected by default
     const broomySession = page.locator('.cursor-pointer:has-text("broomy")')
     await expect(broomySession).toHaveClass(/bg-accent\/15/)
 
-    // Terminal pane should be visible for the active session
+    // Sessions restore paused, so the active session's panel starts as a
+    // "Resume Session" placeholder rather than a terminal.
+    await resumeActiveSession(page)
+
     const terminalArea = page.locator('.xterm').first()
     await expect(terminalArea).toBeVisible()
 
     await screenshotElement(page, terminalArea, path.join(SCREENSHOTS, '02-first-session-terminal.png'))
     steps.push({
       screenshotPath: 'screenshots/02-first-session-terminal.png',
-      caption: 'Terminal pane for the initially selected session',
+      caption: 'Resuming starts a fresh agent terminal',
       description:
-        'The main area shows the agent terminal for the active session.',
+        'Clicking "Resume Session" on the active session\'s placeholder spins up a fresh agent ' +
+        'terminal in the main area. From here on this session stays running — switching away ' +
+        'from it and back does not pause it again.',
     })
   })
 
@@ -108,8 +115,9 @@ test.describe.serial('Feature: Session Switching', () => {
       screenshotPath: 'screenshots/03-switched-session.png',
       caption: 'After clicking backend-api, it becomes the active session',
       description:
-        'The highlight has moved from "broomy" to "backend-api". ' +
-        'The terminal area now shows the backend-api agent terminal.',
+        'The highlight has moved from "broomy" to "backend-api". Selecting a session never ' +
+        'resumes it on its own — backend-api hasn\'t been resumed yet, so its main panel shows ' +
+        'the paused placeholder rather than a terminal, exactly like broomy did in step 1.',
     })
   })
 
