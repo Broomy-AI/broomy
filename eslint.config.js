@@ -1,6 +1,7 @@
 import js from '@eslint/js'
 import tseslint from 'typescript-eslint'
 import reactHooks from 'eslint-plugin-react-hooks'
+import react from 'eslint-plugin-react'
 
 export default tseslint.config(
   // Ignore build outputs
@@ -19,6 +20,18 @@ export default tseslint.config(
     rules: {
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'off',
+    },
+  },
+
+  // React child-key hygiene. These catch missing and unstable keys; duplicate
+  // keys from runtime data (e.g. two commands.json files defining the same
+  // action id) can only be caught in the data layer -- see mergeConfigs.
+  {
+    files: ['**/*.tsx'],
+    plugins: { react },
+    rules: {
+      'react/jsx-key': ['error', { checkFragmentShorthand: true, checkKeyMustBeforeSpread: true, warnOnDuplicates: true }],
+      'react/no-array-index-key': 'error',
     },
   },
 
