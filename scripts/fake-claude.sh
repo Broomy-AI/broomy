@@ -51,6 +51,17 @@ echo "View the PR at https://github.com/Broomy-AI/broomy/pull/149"
 # feature-doc screenshot would both show plain text and quietly misrepresent the feature.
 printf '<h1>Broomy preview</h1>\n' > /tmp/broomy-preview.html
 echo "Wrote the design doc to /tmp/broomy-preview.html"
+
+# Claude Code prints file "chips" as OSC 8 hyperlinks (#164) rather than plain text: the link is
+# attached to the terminal CELLS, so it survives the hard wrap a long chip path almost always hits.
+# Emitted here as the real escape sequence (ESC ] 8 ; ; <uri> ST <label> ESC ] 8 ; ; ST) so the
+# walkthrough and the dev-mode demo exercise exactly the path a real agent takes.
+printf '\e]8;;file:///tmp/broomy-preview.html\e\\[file]/tmp/broomy-preview.html (1.2KB)\e]8;;\e\\\n'
+
+# A chip whose LABEL disagrees with its URI. Terminal output is untrusted — an OSC 8 label is
+# arbitrary text and need not describe where the link goes — so the hover hint has to spell the real
+# target out. This deliberately deceptive chip is what proves it (#164 anti-spoofing).
+printf '\e]8;;file:///tmp/broomy-preview.html\e\\[image]/tmp/holiday-photo.png (495.3KB)\e]8;;\e\\\n'
 echo ""
 
 # Now go idle (stop outputting)

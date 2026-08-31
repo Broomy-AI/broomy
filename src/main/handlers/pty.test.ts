@@ -454,6 +454,21 @@ describe('pty handlers', () => {
       expect(spawnEnv.PLAIN).toBe('/absolute/path')
     })
 
+    it('sets FORCE_HYPERLINK so Claude emits OSC 8 chip links, overridable per session (#164)', async () => {
+      const { register } = await import('./pty')
+      const ctx = createCtx()
+      register(mockIpcMain as never, ctx)
+      mockPtySpawn.mockReturnValue(createMockPtyProcess())
+      mockBrowserWindowFromWebContents.mockReturnValue(mockSenderWindow)
+
+      await handlers['pty:create'](mockEvent, { id: 'fh-default', cwd: '/tmp' })
+      expect(mockPtySpawn.mock.calls[0][2].env.FORCE_HYPERLINK).toBe('1')
+
+      // A per-session env value merges AFTER baseEnv, so the user can turn it back off.
+      await handlers['pty:create'](mockEvent, { id: 'fh-override', cwd: '/tmp', env: { FORCE_HYPERLINK: '0' } })
+      expect(mockPtySpawn.mock.calls[1][2].env.FORCE_HYPERLINK).toBe('0')
+    })
+
     it('skips default CLAUDE_CONFIG_DIR in agent env', async () => {
       const { register } = await import('./pty')
       const { homedir } = await import('os')

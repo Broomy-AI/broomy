@@ -288,10 +288,28 @@ button. A plain click still positions the cursor. `terminalLinkHandler.ts` owns 
 |---|---|---|---|
 | URLs (#149) | `@xterm/addon-web-links` + xterm's OSC 8 `linkHandler` | `shell:openExternal` | `terminalLinks.ts` |
 | File paths (#153) | `FilePathLinkProvider` (hand-written `ILinkProvider`) | `shell:openPath` | `terminalPathLinkProvider.ts` |
+| Claude's `[file]`/`[image]` chips (#164) | xterm's OSC 8 `linkHandler` — Claude emits them as `file://` hyperlinks | `shell:openPath` | `terminalLinkHandler.ts` |
 
-Both share the hover hint from `terminalLinkHint.ts` ("⌘click to open"), because xterm underlines
-a link and shows a pointer cursor whether or not the modifier is held — without the hint, a plain
-click is a dead end with no feedback.
+All three share the hover hint from `terminalLinkHint.ts` ("⌘click to open"), because xterm
+underlines a link and shows a pointer cursor whether or not the modifier is held — without the hint,
+a plain click is a dead end with no feedback.
+
+Notes specific to the OSC 8 chips:
+
+- **Broomy asks for them**: `FORCE_HYPERLINK=1` on the host PTY, since xterm's terminal name isn't
+  one `supports-hyperlinks` recognises. Per-session `agentEnv` merges after, so `FORCE_HYPERLINK=0`
+  turns it back off. It is deliberately absent from the isolated `dockerEnv`.
+- **`file://` never reaches `openExternal`** — it goes through the same gated `shell:openPath` as a
+  bare path. `fileUriToPath` accepts only a canonical `file:///…`, decoded exactly once, and fails
+  closed on an encoded slash, query/fragment, remote host, control characters, or over-length input.
+- **`allowNonHttpProtocols` is per terminal**: true on a host terminal so `file://` is delivered,
+  false for an isolated session, where a container path must not resolve against the host. A scheme
+  we don't open reaches `activate` and does nothing.
+- **The hint names the target when the label hides it.** An OSC 8 label is arbitrary agent output and
+  need not match its URI, so `linkHintDetail` compares the target with the row under the pointer and
+  spells it out only when that row doesn't already show it — quiet for a truthful chip, explicit for
+  a deceptive one. It fails toward showing, so a chip whose path is half off-row still gets the full
+  target, shortened from the middle to keep the filename.
 
 Notes specific to file-path links:
 
