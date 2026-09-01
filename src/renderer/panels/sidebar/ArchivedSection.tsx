@@ -10,7 +10,7 @@ import { rollupToIndicator } from './RepoGroupHeader'
 import type { Session } from '../../store/sessions'
 import type { ManagedRepo } from '../../../preload/index'
 import { resolveRepoId, type Rollup } from './repoGroups'
-import { resolveCardMainSync, type MainSyncProps } from '../../features/git/hooks/useMainSync'
+import type { MainSyncProps } from '../../features/git/hooks/useMainSync'
 
 export function ArchivedSection({
   sessions,
@@ -23,8 +23,6 @@ export function ArchivedSection({
   onSelect,
   onDelete,
   onArchive,
-  mainBehindByRepoId,
-  syncingRepoIds,
   onSyncMain,
 }: {
   sessions: Session[]
@@ -72,19 +70,24 @@ export function ArchivedSection({
       </button>
       {open && (
         <div className="mt-1">
-          {sessions.map((session) => (
-            <PanelErrorBoundary key={session.id} name={`Session ${session.branch}`}>
-              <SessionCard
-                sessionId={session.id}
-                onSelect={onSelect}
-                onDelete={onDelete}
-                onArchive={onArchive}
-                repoLabel={searching && repoLabel ? repoLabel(session) : undefined}
-                {...resolveCardMainSync(resolveRepoId(session, repos), mainBehindByRepoId, syncingRepoIds)}
-                onSyncMain={onSyncMain}
-              />
-            </PanelErrorBoundary>
-          ))}
+          {sessions.map((session) => {
+            // A deleted repo keeps its id on the session, so only offer "Sync main" for a live repo.
+            const rid = resolveRepoId(session, repos)
+            const syncRepoId = rid && repos.some((r) => r.id === rid) ? rid : undefined
+            return (
+              <PanelErrorBoundary key={session.id} name={`Session ${session.branch}`}>
+                <SessionCard
+                  sessionId={session.id}
+                  onSelect={onSelect}
+                  onDelete={onDelete}
+                  onArchive={onArchive}
+                  repoLabel={searching && repoLabel ? repoLabel(session) : undefined}
+                  syncRepoId={syncRepoId}
+                  onSyncMain={onSyncMain}
+                />
+              </PanelErrorBoundary>
+            )
+          })}
         </div>
       )}
     </div>

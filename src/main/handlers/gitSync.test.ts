@@ -203,37 +203,25 @@ describe('gitSync handlers', () => {
     })
   })
 
-  describe('git:isBehindMain (#170)', () => {
-    it('returns a success result with 0 behind in E2E mode', async () => {
+  describe('git:isBehindMain', () => {
+    it('returns zero behind in E2E mode', async () => {
       const handlers = setupHandlers(createMockCtx({ isE2ETest: true }))
-      expect(await handlers['git:isBehindMain'](null, '/repo')).toEqual({ success: true, behind: 0, defaultBranch: 'main' })
+      expect(await handlers['git:isBehindMain'](null, '/repo')).toEqual({ behind: 0, defaultBranch: 'main' })
     })
 
-    it('honors E2E_MOCK_BEHIND_MAIN so a test/feature-doc can surface the sync chip', async () => {
-      const handlers = setupHandlers(createMockCtx({ isE2ETest: true }))
-      process.env.E2E_MOCK_BEHIND_MAIN = '5'
-      try {
-        expect(await handlers['git:isBehindMain'](null, '/repo')).toEqual({ success: true, behind: 5, defaultBranch: 'main' })
-      } finally {
-        delete process.env.E2E_MOCK_BEHIND_MAIN
-      }
-    })
-
-    it('returns the behind count on success', async () => {
+    it('returns the behind count', async () => {
       rawRouter({ behind: '5' })
       mockGitInstance.fetch.mockResolvedValue(undefined)
       const handlers = setupHandlers()
-      expect(await handlers['git:isBehindMain'](null, '/repo')).toEqual({ success: true, behind: 5, defaultBranch: 'main' })
+      const result = await handlers['git:isBehindMain'](null, '/repo')
+      expect(result.behind).toBe(5)
+      expect(result.defaultBranch).toBe('main')
     })
 
-    it('returns a discriminated failure (not 0) when it cannot check', async () => {
-      mockGitInstance.raw.mockResolvedValue('refs/remotes/origin/main\n')
-      mockGitInstance.fetch.mockRejectedValue(new Error('network down'))
+    it('returns zero on error', async () => {
+      mockGitInstance.raw.mockRejectedValue(new Error('fail'))
       const handlers = setupHandlers()
-      const result = await handlers['git:isBehindMain'](null, '/repo')
-      expect(result.success).toBe(false)
-      expect(result).not.toHaveProperty('behind')
-      expect((result as { error: string }).error).toContain('network down')
+      expect(await handlers['git:isBehindMain'](null, '/repo')).toEqual({ behind: 0, defaultBranch: 'main' })
     })
   })
 

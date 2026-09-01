@@ -1,8 +1,9 @@
 /**
- * Surface a failed manual "Sync main" (#170). Both callers of the sync coordinator's `syncMain`
- * (the repo-group header chip and the session-card right-click) share this: `syncMain` deliberately
- * returns its result without touching the UI, so the caller reports the failure. A silent no-op after
- * a visible click reads as a broken control — the common cause is a diverged / wrong-branch `main/`.
+ * Surface a failed "Sync main" (#170). Called once inside `useMainSync`'s `syncMain`, so a single
+ * (coalesced) fast-forward reports one modal no matter how many callers awaited it — whether the sync
+ * was triggered manually (the session-card right-click) or automatically (`useMainAutoSync` on a PR
+ * merge). A silent failure would leave `main/` stale with no trace; the common cause is a diverged /
+ * dirty / wrong-branch `main/` clone.
  */
 import { useErrorStore } from '../../store/errors'
 

@@ -19,7 +19,6 @@ import type { GitFileStatus, GitStatusResult, ManagedRepo } from '../../preload/
 import type { ExplorerFilter, PrState } from '../store/sessions'
 import type { ReviewState } from '../features/git/reviewState'
 import type { NavigationTarget } from '../shared/utils/fileNavigation'
-import type { MainBehind } from '../features/git/hooks/useMainSync'
 
 /** Wrapper that subscribes each session terminal to its own visibility from the store. */
 const SessionTerminal = memo(function SessionTerminal({
@@ -105,9 +104,7 @@ export interface PanelsMapConfig {
   setToolbarPanels: (panels: string[]) => void
   closeCommandsEditor: (sessionId: string) => void
   repos: ManagedRepo[]
-  /** #170: per-repo `main/` behind-count for the sidebar sync chip / right-click. */
-  mainBehindByRepoId: ReadonlyMap<string, MainBehind>
-  syncingRepoIds: ReadonlySet<string>
+  /** #170: fast-forward a repo's `main/` clone (manual right-click "Sync main"). */
   syncMain: (repoId: string) => Promise<{ success: boolean; error?: string }>
 }
 
@@ -281,7 +278,7 @@ export function usePanelsMap(config: PanelsMapConfig) {
     getAgentConnectionMode, getAgentModel, getAgentEffort, getAgentSkipApproval,
     globalPanelVisibility, toggleGlobalPanel,
     repos,
-    mainBehindByRepoId, syncingRepoIds, syncMain,
+    syncMain,
   } = config
 
   // Derive a stable key from only the session fields the terminal cares about.
@@ -381,11 +378,9 @@ export function usePanelsMap(config: PanelsMapConfig) {
       onRefreshPrStatus={refreshPrStatus}
       onArchiveSession={archiveSession}
       onUnarchiveSession={unarchiveSession}
-      mainBehindByRepoId={mainBehindByRepoId}
-      syncingRepoIds={syncingRepoIds}
       onSyncMain={syncMain}
     />
-  ), [repos, handleSelectSession, handleNewSession, removeSession, refreshPrStatus, archiveSession, unarchiveSession, mainBehindByRepoId, syncingRepoIds, syncMain])
+  ), [repos, handleSelectSession, handleNewSession, removeSession, refreshPrStatus, archiveSession, unarchiveSession, syncMain])
 
   const panelsMap = useMemo(() => ({
     [PANEL_IDS.SIDEBAR]: sidebarPanel,

@@ -13,7 +13,7 @@ import { useSessionStore, type Session, type PrState } from '../../../store/sess
 import type { ManagedRepo } from '../../../../preload/apis/types'
 import { resolveRepoId } from '../../../panels/sidebar/repoGroups'
 
-export function useMainAutoSync(repos: ManagedRepo[], syncMain: (repoId: string) => Promise<unknown>): void {
+export function useMainAutoSync(repos: ManagedRepo[], syncMain: (repoId: string) => Promise<{ success: boolean; error?: string }>): void {
   const reposRef = useRef(repos)
   reposRef.current = repos
   const syncMainRef = useRef(syncMain)
@@ -28,7 +28,9 @@ export function useMainAutoSync(repos: ManagedRepo[], syncMain: (repoId: string)
     const repoId = resolveRepoId(s, currentRepos)
     if (repoId && currentRepos.some((r) => r.id === repoId)) {
       pending.current.delete(s.id)
-      void syncMainRef.current(repoId) // fire-and-forget; a failure is silent (the chip shows 'unavailable')
+      // Fire-and-forget: a failed fast-forward (dirty/diverged main/) is surfaced by `syncMain` itself
+      // (one modal per op), so this path no longer swallows the error silently.
+      void syncMainRef.current(repoId)
     } else {
       pending.current.add(s.id) // repos may not have loaded — retry when they do
     }

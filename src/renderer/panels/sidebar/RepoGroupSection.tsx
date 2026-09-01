@@ -26,8 +26,6 @@ export function RepoGroupSection({
   sessionDrag,
   groupDrag,
   dropTarget,
-  mainBehindByRepoId,
-  syncingRepoIds,
   onSyncMain,
 }: {
   group: RepoGroup
@@ -46,10 +44,9 @@ export function RepoGroupSection({
       ? (dropTarget.before ? 'before' : 'after')
       : null
 
-  // Every card in a group shares the group's (already-resolved) repo, so resolve the sync inputs once.
-  const repoId = group.repoId
-  const mainBehind = repoId ? mainBehindByRepoId.get(repoId) : undefined
-  const isSyncing = repoId ? syncingRepoIds.has(repoId) : false
+  // A deleted repo keeps its id on a `kind:'unknown'` group, so only expose "Sync main" for a live repo
+  // group — otherwise the item would always fail with "Unknown repository".
+  const repoId = group.kind === 'repo' ? group.repoId : undefined
 
   return (
     <div className="mb-1">
@@ -64,9 +61,6 @@ export function RepoGroupSection({
         onDrop={groupDrag.onDrop}
         onDragEnd={groupDrag.onDragEnd}
         dropEdge={edgeFor('group', group.key)}
-        mainBehind={mainBehind}
-        isSyncing={isSyncing}
-        onSyncMain={onSyncMain}
       />
       {!collapsed && (
         <div className="ml-3 pl-2" style={rail ? { borderLeft: `2px solid ${rail}` } : undefined}>
@@ -85,8 +79,6 @@ export function RepoGroupSection({
                 onDragEnd={sessionDrag.onDragEnd}
                 dropEdge={edgeFor('session', session.id)}
                 syncRepoId={repoId}
-                mainBehind={mainBehind}
-                isSyncing={isSyncing}
                 onSyncMain={onSyncMain}
               />
             </PanelErrorBoundary>

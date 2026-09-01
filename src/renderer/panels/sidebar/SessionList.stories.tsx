@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from '@storybook/react'
 import SessionList from './SessionList'
 import { makeSession, makeRepo } from '../../../../.storybook/mockData'
 import { withSessionStore } from '../../../../.storybook/decorators'
-import type { MainBehind } from '../../features/git/hooks/useMainSync'
 
 const defaultRepo = makeRepo({ id: 'repo-1', name: 'my-app' })
 
@@ -17,9 +16,6 @@ const meta: Meta<typeof SessionList> = {
     onRefreshPrStatus: () => Promise.resolve(),
     onArchiveSession: () => {},
     onUnarchiveSession: () => {},
-    mainBehindByRepoId: new Map<string, MainBehind>(),
-    syncingRepoIds: new Set<string>(),
-    onSyncMain: () => Promise.resolve({ success: true }),
   },
 }
 export default meta
@@ -59,33 +55,6 @@ export const WithSessions: Story = {
           prNumber: 45,
           branchStatus: 'open',
         }),
-      ],
-    }),
-  ],
-}
-
-/** The per-repo `main/` sync chip on the group header: behind (↓N), syncing, and unavailable (#170). */
-export const MainSyncChipStates: Story = {
-  args: {
-    repos: [
-      makeRepo({ id: 'repo-behind', name: 'behind-repo' }),
-      makeRepo({ id: 'repo-syncing', name: 'syncing-repo' }),
-      makeRepo({ id: 'repo-unavailable', name: 'unavailable-repo' }),
-    ],
-    mainBehindByRepoId: new Map<string, MainBehind>([
-      ['repo-behind', { status: 'available', behind: 5 }],
-      ['repo-syncing', { status: 'available', behind: 2 }],
-      ['repo-unavailable', { status: 'unavailable', error: 'could not reach origin' }],
-    ]),
-    syncingRepoIds: new Set<string>(['repo-syncing']),
-  },
-  decorators: [
-    withSessionStore({
-      activeSessionId: 'b-1',
-      sessions: [
-        makeSession({ id: 'b-1', repoId: 'repo-behind', branch: 'feature/behind', name: 'behind-repo', lastMessage: 'main is 5 behind' }),
-        makeSession({ id: 's-1', repoId: 'repo-syncing', branch: 'feature/syncing', name: 'syncing-repo', lastMessage: 'syncing main…' }),
-        makeSession({ id: 'u-1', repoId: 'repo-unavailable', branch: 'feature/unavailable', name: 'unavailable-repo', lastMessage: 'could not check main' }),
       ],
     }),
   ],

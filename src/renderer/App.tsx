@@ -303,8 +303,8 @@ function AppContent() {
   })
 
   // Panels map hook
-  // #170: keep each repo's main/ clone current — auto-fast-forward on merge + the manual chip/right-click.
-  const { mainBehindByRepoId, syncingRepoIds, syncMain } = useMainSync(repos, sessions)
+  // #170: keep each repo's main/ clone current — auto-fast-forward on merge + a manual right-click "Sync main".
+  const { syncMain } = useMainSync(repos)
   useMainAutoSync(repos, syncMain)
 
   const panelsMap = usePanelsMap({
@@ -321,7 +321,7 @@ function AppContent() {
     globalPanelVisibility, toggleGlobalPanel, selectFile, setExplorerFilter,
     updatePrState, updateFeedbackStatus, updateChecksStatus, updateReviewState,
     setPanelVisibility, setToolbarPanels, closeCommandsEditor, repos,
-    mainBehindByRepoId, syncingRepoIds, syncMain,
+    syncMain,
   })
 
   // Refresh PR status on startup and when agents finish work

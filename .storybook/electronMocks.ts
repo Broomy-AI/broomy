@@ -74,7 +74,7 @@ export function installElectronMocks() {
     isMergedInto: resolved(false),
     hasBranchCommits: resolved(false),
     pullOriginMain: successResolved,
-    isBehindMain: resolved({ success: true, behind: 0, defaultBranch: 'main' }),
+    isBehindMain: resolved({ behind: 0, defaultBranch: 'main' }),
     getConfig: resolved(null),
     setConfig: successResolved,
     setGlobalConfig: successResolved,

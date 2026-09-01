@@ -80,26 +80,27 @@ async function handlePullOriginMain(ctx: HandlerContext, repoPath: string) {
 }
 
 /**
- * How many commits `repoPath`'s HEAD is behind `origin/<default>` (#170). Discriminated result so a
- * caller can tell "0 behind" from "couldn't check" (missing clone, no network) — the latter must not
- * read as "up to date".
+ * How many commits `repoPath`'s HEAD is behind `origin/<default>`. Used by the source-control view's
+ * session-branch "behind main" indicator; a check that can't run reads as 0 behind.
  */
 async function handleIsBehindMain(ctx: HandlerContext, repoPath: string) {
   if (ctx.isE2ETest && !ctx.e2eRealRepos) {
-    // Deterministic mock; `E2E_MOCK_BEHIND_MAIN` lets a test/feature-doc surface the sync chip.
-    const behind = parseInt(process.env.E2E_MOCK_BEHIND_MAIN ?? '', 10) || 0
-    return { success: true as const, behind, defaultBranch: 'main' }
+    return { behind: 0, defaultBranch: 'main' }
   }
 
   try {
     const git = withNonInteractive(simpleGit(expandHomePath(repoPath)))
-    const defaultBranch = await getDefaultBranch(git, true)
+
+    const defaultBranch = await getDefaultBranch(git)
+
     await git.fetch('origin', defaultBranch)
+
     const output = await git.raw(['rev-list', '--count', `HEAD..origin/${defaultBranch}`])
     const behind = parseInt(output.trim(), 10) || 0
-    return { success: true as const, behind, defaultBranch }
-  } catch (error) {
-    return { success: false as const, error: String(error) }
+
+    return { behind, defaultBranch }
+  } catch {
+    return { behind: 0, defaultBranch: 'main' }
   }
 }
 

@@ -17,9 +17,8 @@ import { StatusIndicator } from './StatusIndicator'
 import { dropEdgeClasses } from './useSidebarDrag'
 import { fileManagerName } from '../../shared/utils/platform'
 import { useErrorStore } from '../../store/errors'
-import type { CardMainSync, MainBehind } from '../../features/git/hooks/useMainSync'
+import type { SyncMainResult } from '../../features/git/hooks/useMainSync'
 import type { MenuItemDef } from '../../../preload/apis/types'
-import { reportMainSyncFailure } from '../../features/git/mainSyncError'
 
 /**
  * Surface a failed "Open in <file manager>". The user asked for something visible to happen, so a
@@ -39,34 +38,26 @@ function reportOpenFailure(directory: string, error?: string): void {
 }
 
 /**
- * Build + run the card's right-click menu: always "Open in <file manager>", plus (for a managed repo
- * with a tracked `main/` behind-count, #170) a separator and a "Sync main" item enabled only when
- * there's something to fast-forward and no sync is already running. Extracted from the component so
- * its branching doesn't inflate the render function's length/complexity budget.
+ * Build + run the card's right-click menu: always "Open in <file manager>", plus (for a currently-managed
+ * repo, #170) a separator and a "Sync main" item. The item is always enabled — a fast-forward-only sync is
+ * a harmless no-op when `main/` is already current — so there's no behind-count to track. A failure is
+ * surfaced by `onSyncMain` (`syncMain`) itself. Extracted from the component so its branching doesn't
+ * inflate the render function's length/complexity budget.
  */
 async function runSessionContextMenu(params: {
   directory: string
   repoId: string | undefined
-  mainBehind: MainBehind | undefined
-  isSyncing: boolean
-  onSyncMain: (repoId: string) => Promise<{ success: boolean; error?: string }>
+  onSyncMain: (repoId: string) => Promise<SyncMainResult>
 }): Promise<void> {
-  const { directory, repoId, mainBehind, isSyncing, onSyncMain } = params
-  const behind = mainBehind?.status === 'available' ? mainBehind.behind : 0
+  const { directory, repoId, onSyncMain } = params
   const items: MenuItemDef[] = [{ id: 'open-in-file-manager', label: `Open in ${fileManagerName}` }]
-  if (repoId && mainBehind) {
+  if (repoId) {
     items.push({ id: 'sep-sync', label: '', type: 'separator' })
-    items.push({
-      id: 'sync-main',
-      label: behind > 0 ? `Sync main (${behind} behind)` : 'Sync main',
-      enabled: mainBehind.status === 'available' && behind > 0 && !isSyncing,
-    })
+    items.push({ id: 'sync-main', label: 'Sync main' })
   }
   const choice = await window.menu.popup(items)
   if (choice === 'sync-main') {
-    if (!repoId) return
-    const result = await onSyncMain(repoId)
-    if (!result.success) reportMainSyncFailure(result.error)
+    if (repoId) void onSyncMain(repoId) // syncMain surfaces any failure itself
     return
   }
   if (choice !== 'open-in-file-manager') return
@@ -110,8 +101,6 @@ export default memo(function SessionCard({
   onDragEnd,
   dropEdge,
   syncRepoId,
-  mainBehind,
-  isSyncing,
   onSyncMain,
 }: {
   sessionId: string
@@ -129,7 +118,10 @@ export default memo(function SessionCard({
   onDragEnd?: (e: React.DragEvent) => void
   /** 'before' | 'after' draws the drop indicator on that edge; null draws none. */
   dropEdge?: 'before' | 'after' | null
-} & CardMainSync) {
+  /** #170: resolved managed-repo id for this card (undefined = unmanaged/stale → no "Sync main" item). */
+  syncRepoId?: string
+  onSyncMain: (repoId: string) => Promise<SyncMainResult>
+}) {
   // Subscribe to only the fields this card renders, with shallow equality.
   // This prevents re-renders when unrelated session fields (or other sessions) change.
   const session = useSessionStore(
@@ -183,7 +175,7 @@ export default memo(function SessionCard({
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    void runSessionContextMenu({ directory, repoId: syncRepoId, mainBehind, isSyncing: !!isSyncing, onSyncMain })
+    void runSessionContextMenu({ directory, repoId: syncRepoId, onSyncMain })
       .catch((err: unknown) => reportOpenFailure(directory, String(err)))
   }
 

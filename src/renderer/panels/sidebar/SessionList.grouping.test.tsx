@@ -5,7 +5,6 @@ import '../../../test/react-setup'
 import SessionList from './SessionList'
 import { useSessionStore } from '../../store/sessions'
 import type { Session } from '../../store/sessions'
-import type { MainBehind } from '../../features/git/hooks/useMainSync'
 
 function makeSession(overrides: Partial<Session> = {}): Session {
   return {
@@ -31,8 +30,6 @@ function makeProps(overrides: Record<string, unknown> = {}) {
     onSelectSession: vi.fn(), onNewSession: vi.fn(), onDeleteSession: vi.fn(),
     onRefreshPrStatus: vi.fn().mockResolvedValue(undefined),
     onArchiveSession: vi.fn(), onUnarchiveSession: vi.fn(),
-    mainBehindByRepoId: new Map<string, MainBehind>(),
-    syncingRepoIds: new Set<string>(),
     onSyncMain: vi.fn().mockResolvedValue({ success: true }),
     ...overrides,
   }

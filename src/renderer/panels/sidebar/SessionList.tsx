@@ -22,7 +22,7 @@ import { useSessionGrouping } from './useSessionGrouping'
 import { sortArchived } from './archivedOrder'
 import { useSidebarDrag } from './useSidebarDrag'
 import { groupKeyForSession, resolveRepoId } from './repoGroups'
-import { resolveCardMainSync, type MainSyncProps } from '../../features/git/hooks/useMainSync'
+import type { MainSyncProps } from '../../features/git/hooks/useMainSync'
 
 interface SessionListProps extends MainSyncProps {
   repos: ManagedRepo[]
@@ -42,8 +42,6 @@ export default function SessionList({
   onRefreshPrStatus,
   onArchiveSession,
   onUnarchiveSession,
-  mainBehindByRepoId,
-  syncingRepoIds,
   onSyncMain,
 }: SessionListProps) {
   const sessions = useSessionStore((s) => s.sessions)
@@ -179,19 +177,24 @@ export default function SessionList({
       {/* Session list */}
       <div className="flex-1 overflow-y-auto p-2">
         {/* Search flattens to a filtered list with a neutral repo tag; no grouping. */}
-        {searching && orderedSessions.map((session) => (
-          <PanelErrorBoundary key={session.id} name={`Session ${session.branch}`}>
-            <SessionCard
-              sessionId={session.id}
-              onSelect={onSelectSession}
-              onDelete={handleDelete}
-              onArchive={handleArchive}
-              repoLabel={repoLabelFor(session)}
-              {...resolveCardMainSync(resolveRepoId(session, repos), mainBehindByRepoId, syncingRepoIds)}
-              onSyncMain={onSyncMain}
-            />
-          </PanelErrorBoundary>
-        ))}
+        {searching && orderedSessions.map((session) => {
+          // A deleted repo keeps its id on the session, so only offer "Sync main" for a live repo.
+          const rid = resolveRepoId(session, repos)
+          const syncRepoId = rid && repos.some((r) => r.id === rid) ? rid : undefined
+          return (
+            <PanelErrorBoundary key={session.id} name={`Session ${session.branch}`}>
+              <SessionCard
+                sessionId={session.id}
+                onSelect={onSelectSession}
+                onDelete={handleDelete}
+                onArchive={handleArchive}
+                repoLabel={repoLabelFor(session)}
+                syncRepoId={syncRepoId}
+                onSyncMain={onSyncMain}
+              />
+            </PanelErrorBoundary>
+          )
+        })}
 
         {/* Grouped view: a section per repo (header + cards behind the vivid rail). */}
         {!searching && groups.map((group) => {
@@ -209,8 +212,6 @@ export default function SessionList({
               sessionDrag={sessionDrag}
               groupDrag={groupDrag}
               dropTarget={dropTarget}
-              mainBehindByRepoId={mainBehindByRepoId}
-              syncingRepoIds={syncingRepoIds}
               onSyncMain={onSyncMain}
             />
           )
@@ -241,8 +242,6 @@ export default function SessionList({
           onSelect={handleSelectArchived}
           onDelete={handleDelete}
           onArchive={handleUnarchive}
-          mainBehindByRepoId={mainBehindByRepoId}
-          syncingRepoIds={syncingRepoIds}
           onSyncMain={onSyncMain}
         />
       </div>

@@ -78,7 +78,7 @@ const mockGit: Mocked<GitApi> = {
   isMergedInto: vi.fn().mockResolvedValue(false),
   hasBranchCommits: vi.fn().mockResolvedValue(false),
   pullOriginMain: vi.fn().mockResolvedValue({ success: true }),
-  isBehindMain: vi.fn().mockResolvedValue({ success: true, behind: 0, defaultBranch: 'main' }),
+  isBehindMain: vi.fn().mockResolvedValue({ behind: 0, defaultBranch: 'main' }),
   getConfig: vi.fn().mockResolvedValue(null),
   setConfig: vi.fn().mockResolvedValue({ success: true }),
   setGlobalConfig: vi.fn().mockResolvedValue({ success: true }),
