@@ -8,7 +8,9 @@ import SessionCard from './SessionCard'
 import { StatusIndicator } from './StatusIndicator'
 import { rollupToIndicator } from './RepoGroupHeader'
 import type { Session } from '../../store/sessions'
-import type { Rollup } from './repoGroups'
+import type { ManagedRepo } from '../../../preload/index'
+import { resolveRepoId, type Rollup } from './repoGroups'
+import type { MainSyncProps } from '../../features/git/hooks/useMainSync'
 
 export function ArchivedSection({
   sessions,
@@ -16,10 +18,12 @@ export function ArchivedSection({
   show,
   searching = false,
   repoLabel,
+  repos,
   onToggle,
   onSelect,
   onDelete,
   onArchive,
+  onSyncMain,
 }: {
   sessions: Session[]
   rollup: Rollup
@@ -27,11 +31,13 @@ export function ArchivedSection({
   /** While searching, the section is forced open and its cards carry a repo tag. */
   searching?: boolean
   repoLabel?: (s: Session) => string
+  /** Needed to resolve each archived session's repo (an archived list spans repos). */
+  repos: ManagedRepo[]
   onToggle: () => void
   onSelect: (id: string) => void
   onDelete: (e: MouseEvent | KeyboardEvent, id: string) => void
   onArchive: (e: MouseEvent, id: string) => void
-}) {
+} & MainSyncProps) {
   if (sessions.length === 0) return null
   const open = show || searching
   const ind = !open ? rollupToIndicator(rollup.status) : null
@@ -64,17 +70,24 @@ export function ArchivedSection({
       </button>
       {open && (
         <div className="mt-1">
-          {sessions.map((session) => (
-            <PanelErrorBoundary key={session.id} name={`Session ${session.branch}`}>
-              <SessionCard
-                sessionId={session.id}
-                onSelect={onSelect}
-                onDelete={onDelete}
-                onArchive={onArchive}
-                repoLabel={searching && repoLabel ? repoLabel(session) : undefined}
-              />
-            </PanelErrorBoundary>
-          ))}
+          {sessions.map((session) => {
+            // A deleted repo keeps its id on the session, so only offer "Sync main" for a live repo.
+            const rid = resolveRepoId(session, repos)
+            const syncRepoId = rid && repos.some((r) => r.id === rid) ? rid : undefined
+            return (
+              <PanelErrorBoundary key={session.id} name={`Session ${session.branch}`}>
+                <SessionCard
+                  sessionId={session.id}
+                  onSelect={onSelect}
+                  onDelete={onDelete}
+                  onArchive={onArchive}
+                  repoLabel={searching && repoLabel ? repoLabel(session) : undefined}
+                  syncRepoId={syncRepoId}
+                  onSyncMain={onSyncMain}
+                />
+              </PanelErrorBoundary>
+            )
+          })}
         </div>
       )}
     </div>

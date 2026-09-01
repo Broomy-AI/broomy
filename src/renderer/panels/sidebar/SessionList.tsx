@@ -22,9 +22,10 @@ import { useSessionGrouping } from './useSessionGrouping'
 import { useSessionListActions } from './useSessionListActions'
 import { sortArchived } from './archivedOrder'
 import { useSidebarDrag } from './useSidebarDrag'
-import { groupKeyForSession } from './repoGroups'
+import { groupKeyForSession, resolveRepoId } from './repoGroups'
+import type { MainSyncProps } from '../../features/git/hooks/useMainSync'
 
-interface SessionListProps {
+interface SessionListProps extends MainSyncProps {
   repos: ManagedRepo[]
   onSelectSession: (id: string) => void
   onNewSession: () => void
@@ -43,6 +44,7 @@ export default function SessionList({
   onRefreshPrStatus,
   onArchiveSession,
   onUnarchiveSession,
+  onSyncMain,
   onPauseSession,
 }: SessionListProps) {
   const sessions = useSessionStore((s) => s.sessions)
@@ -167,18 +169,25 @@ export default function SessionList({
       {/* Session list */}
       <div className="flex-1 overflow-y-auto p-2">
         {/* Search flattens to a filtered list with a neutral repo tag; no grouping. */}
-        {searching && orderedSessions.map((session) => (
-          <PanelErrorBoundary key={session.id} name={`Session ${session.branch}`}>
-            <SessionCard
-              sessionId={session.id}
-              onSelect={onSelectSession}
-              onDelete={handleDelete}
-              onArchive={handleArchive}
-              onPause={onPauseSession ? handlePause : undefined}
-              repoLabel={repoLabelFor(session)}
-            />
-          </PanelErrorBoundary>
-        ))}
+        {searching && orderedSessions.map((session) => {
+          // A deleted repo keeps its id on the session, so only offer "Sync main" for a live repo.
+          const rid = resolveRepoId(session, repos)
+          const syncRepoId = rid && repos.some((r) => r.id === rid) ? rid : undefined
+          return (
+            <PanelErrorBoundary key={session.id} name={`Session ${session.branch}`}>
+              <SessionCard
+                sessionId={session.id}
+                onSelect={onSelectSession}
+                onDelete={handleDelete}
+                onArchive={handleArchive}
+                onPause={onPauseSession ? handlePause : undefined}
+                repoLabel={repoLabelFor(session)}
+                syncRepoId={syncRepoId}
+                onSyncMain={onSyncMain}
+              />
+            </PanelErrorBoundary>
+          )
+        })}
 
         {/* Grouped view: a section per repo (header + cards behind the vivid rail). */}
         {!searching && groups.map((group) => {
@@ -197,6 +206,7 @@ export default function SessionList({
               sessionDrag={sessionDrag}
               groupDrag={groupDrag}
               dropTarget={dropTarget}
+              onSyncMain={onSyncMain}
             />
           )
         })}
@@ -221,10 +231,12 @@ export default function SessionList({
           show={showArchived}
           searching={searching}
           repoLabel={repoLabelFor}
+          repos={repos}
           onToggle={() => setShowArchived(!showArchived)}
           onSelect={handleSelectArchived}
           onDelete={handleDelete}
           onArchive={handleUnarchive}
+          onSyncMain={onSyncMain}
         />
       </div>
 

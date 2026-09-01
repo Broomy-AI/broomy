@@ -30,6 +30,8 @@ import { useAppearance } from './shared/hooks/useAppearance'
 import { useAgentChatStore } from './store/agentChat'
 import { useAppCallbacks } from './shared/hooks/useAppCallbacks'
 import { usePanelsMap } from './hooks/usePanelsMap'
+import { useMainSync } from './features/git/hooks/useMainSync'
+import { useMainAutoSync } from './features/git/hooks/useMainAutoSync'
 import { useHelpMenu } from './shared/hooks/useHelpMenu'
 import { useSessionKeyboardCallbacks } from './shared/hooks/useSessionKeyboardCallbacks'
 import { focusSearchInput } from './shared/utils/focusHelpers'
@@ -301,6 +303,10 @@ function AppContent() {
   })
 
   // Panels map hook
+  // #170: keep each repo's main/ clone current — auto-fast-forward on merge + a manual right-click "Sync main".
+  const { syncMain } = useMainSync(repos)
+  useMainAutoSync(repos, syncMain)
+
   const panelsMap = usePanelsMap({
     sessions, activeSessionId, activeSession,
     activeSessionGitStatus, activeSessionGitStatusResult, selectedFileStatus,
@@ -315,6 +321,7 @@ function AppContent() {
     globalPanelVisibility, toggleGlobalPanel, selectFile, setExplorerFilter,
     updatePrState, updateFeedbackStatus, updateChecksStatus, updateReviewState,
     setPanelVisibility, setToolbarPanels, closeCommandsEditor, repos,
+    syncMain,
   })
 
   // Refresh PR status on startup and when agents finish work

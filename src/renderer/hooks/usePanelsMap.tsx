@@ -105,6 +105,8 @@ export interface PanelsMapConfig {
   setToolbarPanels: (panels: string[]) => void
   closeCommandsEditor: (sessionId: string) => void
   repos: ManagedRepo[]
+  /** #170: fast-forward a repo's `main/` clone (manual right-click "Sync main"). */
+  syncMain: (repoId: string) => Promise<{ success: boolean; error?: string }>
 }
 
 function useExplorerPanel(config: PanelsMapConfig) {
@@ -277,6 +279,7 @@ export function usePanelsMap(config: PanelsMapConfig) {
     getAgentConnectionMode, getAgentModel, getAgentEffort, getAgentSkipApproval,
     globalPanelVisibility, toggleGlobalPanel,
     repos,
+    syncMain,
   } = config
 
   // Derive a stable key from only the session fields the terminal cares about.
@@ -399,9 +402,10 @@ export function usePanelsMap(config: PanelsMapConfig) {
       onRefreshPrStatus={refreshPrStatus}
       onArchiveSession={archiveSession}
       onUnarchiveSession={unarchiveSession}
+      onSyncMain={syncMain}
       onPauseSession={handlePauseSession}
     />
-  ), [repos, handleSelectSession, handleNewSession, removeSession, refreshPrStatus, archiveSession, unarchiveSession, handlePauseSession])
+  ), [repos, handleSelectSession, handleNewSession, removeSession, refreshPrStatus, archiveSession, unarchiveSession, syncMain, handlePauseSession])
 
   const panelsMap = useMemo(() => ({
     [PANEL_IDS.SIDEBAR]: sidebarPanel,

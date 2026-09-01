@@ -60,6 +60,7 @@ function makeProps(overrides: Record<string, unknown> = {}) {
     onRefreshPrStatus: vi.fn().mockResolvedValue(undefined),
     onArchiveSession: vi.fn(),
     onUnarchiveSession: vi.fn(),
+    onSyncMain: vi.fn().mockResolvedValue({ success: true }),
     onPauseSession: vi.fn() as ((id: string) => void) | undefined,
     ...overrides,
   }
@@ -552,6 +553,55 @@ describe('SessionList', () => {
 
       fireEvent.contextMenu(container.querySelector('[data-session-card]')!)
       expect(props.onSelectSession).not.toHaveBeenCalled()
+    })
+
+    it('offers an always-enabled "Sync main" for a managed repo, and syncs on selection', async () => {
+      const onSyncMain = vi.fn().mockResolvedValue({ success: true })
+      vi.mocked(window.menu.popup).mockResolvedValueOnce('sync-main')
+      setSessions([makeSession({ id: 's1', branch: 'b1', repoId: 'r1' })])
+      const repos = [{ id: 'r1', name: 'demo', remoteUrl: '', rootDir: '/repos/demo', defaultBranch: 'main' }]
+      const { container } = render(<SessionList {...makeProps({ repos, onSyncMain })} />)
+
+      fireEvent.contextMenu(container.querySelector('[data-session-card]')!)
+
+      // No behind-count: the item carries no `enabled` field (a fast-forward is a no-op when current),
+      // so the exact object below asserts it is never disabled.
+      expect(window.menu.popup).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'open-in-file-manager' }),
+        expect.objectContaining({ id: 'sep-sync', type: 'separator' }),
+        { id: 'sync-main', label: 'Sync main' },
+      ])
+      await waitFor(() => expect(onSyncMain).toHaveBeenCalledWith('r1'))
+    })
+
+    it('offers "Sync main" for a legacy session resolved to its repo by worktree path', async () => {
+      const onSyncMain = vi.fn().mockResolvedValue({ success: true })
+      vi.mocked(window.menu.popup).mockResolvedValueOnce('sync-main')
+      // No repoId — the session is resolved to r1 purely by its directory under the repo rootDir.
+      setSessions([makeSession({ id: 's1', branch: 'b1', repoId: undefined, directory: '/repos/demo/b1' })])
+      const repos = [{ id: 'r1', name: 'demo', remoteUrl: '', rootDir: '/repos/demo', defaultBranch: 'main' }]
+      const { container } = render(<SessionList {...makeProps({ repos, onSyncMain })} />)
+
+      fireEvent.contextMenu(container.querySelector('[data-session-card]')!)
+
+      expect(window.menu.popup).toHaveBeenCalledWith(
+        expect.arrayContaining([{ id: 'sync-main', label: 'Sync main' }]),
+      )
+      await waitFor(() => expect(onSyncMain).toHaveBeenCalledWith('r1'))
+    })
+
+    it('omits the sync section for a session whose repo is no longer tracked (deleted repo)', () => {
+      vi.mocked(window.menu.popup).mockResolvedValueOnce(null)
+      // repoId is set but absent from `repos` → a kind:'unknown' group, so no "Sync main" is offered
+      // (it would only ever fail with "Unknown repository").
+      setSessions([makeSession({ id: 's1', branch: 'b1', repoId: 'r1' })])
+      const { container } = render(<SessionList {...makeProps()} />)
+
+      fireEvent.contextMenu(container.querySelector('[data-session-card]')!)
+
+      expect(window.menu.popup).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'open-in-file-manager' }),
+      ])
     })
   })
 

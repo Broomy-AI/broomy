@@ -84,13 +84,31 @@ ipcMain.handle('git:status', async (_event, repoPath: string) => {
 | `git:fetchPrHead` | Fetch PR head ref |
 | `git:isMergedInto` | Check if current branch is merged into a ref |
 | `git:hasBranchCommits` | Check if branch has commits ahead of a ref |
-| `git:pullOriginMain` | Pull and merge default branch |
+| `git:pullOriginMain` | **Fast-forward-only** (`merge --ff-only`) update of the `main/` clone to `origin/<default>`; verifies the clone is on the default branch first and serializes per clone. Returns `{ success, error? }` (a diverged/detached/wrong-branch clone fails with a clear `error`, never a merge commit). |
 | `git:isBehindMain` | Check how many commits behind default branch |
 | `git:branchChanges` | Files changed on branch vs base |
 | `git:branchCommits` | Commits on branch since diverging from base |
 | `git:commitFiles` | Files changed in a specific commit |
 | `git:getConfig` | Read a git config value |
 | `git:setConfig` | Set a git config value |
+
+### Keeping the primary `main/` clone current (#170)
+
+Each repo has a primary `<rootDir>/main` clone. After a PR merges it can drift behind `origin/<default>`.
+Because new sessions branch off a freshly-fetched `origin/<default>` (not the local clone) and diffs
+compare against `origin/<base>`, a stale clone is harmless for session creation and diffing — it only
+matters if you "Open main" to work in that folder directly. So Broomy keeps it current opportunistically
+rather than surfacing a status:
+
+- **Auto fast-forward on merge** (`useMainAutoSync`): when a session's PR transitions to `MERGED`, its
+  repo's `main/` clone is fast-forwarded via `git:pullOriginMain`.
+- **Manual "Sync main"**: a session card's right-click menu offers a "Sync main" item (always enabled — a
+  fast-forward is a no-op when already current).
+
+Every sync is **fast-forward-only** (`git:pullOriginMain` uses `merge --ff-only`, on the default branch
+only, serialized per clone), so it can never rewrite history or leave a merge commit. A sync that can't
+fast-forward (a diverged, dirty, or wrong-branch clone) fails loudly with an error surfaced to the user —
+whether it was triggered manually or automatically — instead of silently leaving `main/` stale.
 
 ## Git Status: Fetch, Parse, Display
 

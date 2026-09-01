@@ -17,6 +17,8 @@ import { StatusIndicator } from './StatusIndicator'
 import { dropEdgeClasses } from './useSidebarDrag'
 import { fileManagerName } from '../../shared/utils/platform'
 import { useErrorStore } from '../../store/errors'
+import type { SyncMainResult } from '../../features/git/hooks/useMainSync'
+import type { MenuItemDef } from '../../../preload/apis/types'
 
 /**
  * Surface a failed "Open in <file manager>". The user asked for something visible to happen, so a
@@ -36,24 +38,35 @@ function reportOpenFailure(directory: string, error?: string): void {
 }
 
 /**
- * Right-click → native context menu → open the session's worktree folder in
- * the OS file manager. Module-level so the card component stays readable.
+ * Build + run the card's right-click menu: always "Open in <file manager>", plus (for a currently-managed
+ * repo, #170) a separator and a "Sync main" item. The item is always enabled — a fast-forward-only sync is
+ * a harmless no-op when `main/` is already current — so there's no behind-count to track. A failure is
+ * surfaced by `onSyncMain` (`syncMain`) itself. Extracted from the component so its branching doesn't
+ * inflate the render function's length/complexity budget.
  */
-async function openWorktreeInFileManager(directory: string): Promise<void> {
-  try {
-    const choice = await window.menu.popup([
-      { id: 'open-in-file-manager', label: `Open in ${fileManagerName}` },
-    ])
-    if (choice !== 'open-in-file-manager') return
-    const result = await window.shell.openInFileManager(directory)
-    // 'opened'/'revealed' are both successes. Report the rest: 'failed' is an OS error, and
-    // 'none' means the folder is gone (common on an archived session whose worktree was
-    // deleted). Staying silent would make the menu item look dead.
-    if (result.action !== 'opened' && result.action !== 'revealed') {
-      reportOpenFailure(directory, result.error)
-    }
-  } catch (err: unknown) {
-    reportOpenFailure(directory, String(err))
+async function runSessionContextMenu(params: {
+  directory: string
+  repoId: string | undefined
+  onSyncMain: (repoId: string) => Promise<SyncMainResult>
+}): Promise<void> {
+  const { directory, repoId, onSyncMain } = params
+  const items: MenuItemDef[] = [{ id: 'open-in-file-manager', label: `Open in ${fileManagerName}` }]
+  if (repoId) {
+    items.push({ id: 'sep-sync', label: '', type: 'separator' })
+    items.push({ id: 'sync-main', label: 'Sync main' })
+  }
+  const choice = await window.menu.popup(items)
+  if (choice === 'sync-main') {
+    if (repoId) void onSyncMain(repoId) // syncMain surfaces any failure itself
+    return
+  }
+  if (choice !== 'open-in-file-manager') return
+  const result = await window.shell.openInFileManager(directory)
+  // 'opened'/'revealed' are both successes. Report the rest: 'failed' is an OS error, and 'none'
+  // means the folder is gone (common on an archived session whose worktree was deleted). Staying
+  // silent would make the menu item look dead.
+  if (result.action !== 'opened' && result.action !== 'revealed') {
+    reportOpenFailure(directory, result.error)
   }
 }
 
@@ -103,6 +116,25 @@ function PauseButton({ isPaused, onPause, sessionId }: {
   )
 }
 
+function DeleteButton({ onDelete, sessionId }: {
+  onDelete: (e: React.MouseEvent, sessionId: string) => void
+  sessionId: string
+}) {
+  return (
+    <button
+      onClick={(e) => onDelete(e, sessionId)}
+      className="text-text-secondary hover:text-status-error p-1"
+      title="Delete session"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 6L6 18" />
+        <path d="M6 6l12 12" />
+      </svg>
+    </button>
+  )
+}
+
 export default memo(function SessionCard({
   sessionId,
   onSelect,
@@ -117,6 +149,8 @@ export default memo(function SessionCard({
   onDrop,
   onDragEnd,
   dropEdge,
+  syncRepoId,
+  onSyncMain,
 }: {
   sessionId: string
   onSelect: (sessionId: string) => void
@@ -134,6 +168,9 @@ export default memo(function SessionCard({
   onDragEnd?: (e: React.DragEvent) => void
   /** 'before' | 'after' draws the drop indicator on that edge; null draws none. */
   dropEdge?: 'before' | 'after' | null
+  /** #170: resolved managed-repo id for this card (undefined = unmanaged/stale → no "Sync main" item). */
+  syncRepoId?: string
+  onSyncMain: (repoId: string) => Promise<SyncMainResult>
 }) {
   // Subscribe to only the fields this card renders, with shallow equality.
   // This prevents re-renders when unrelated session fields (or other sessions) change.
@@ -183,11 +220,14 @@ export default memo(function SessionCard({
     : showWorking ? 'working' : (session.status === 'error' ? 'error' : 'idle')
   const isUnread = session.isUnread
 
+  // Right-click → native context menu: open the worktree folder, and (for managed repos) sync main/.
+  // The repo is resolved by the parent (so legacy path-only sessions still get the item).
   const directory = session.directory
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    void openWorktreeInFileManager(directory)
+    void runSessionContextMenu({ directory, repoId: syncRepoId, onSyncMain })
+      .catch((err: unknown) => reportOpenFailure(directory, String(err)))
   }
 
   return (
@@ -254,26 +294,7 @@ export default memo(function SessionCard({
               </svg>
             </button>
           )}
-          <button
-            onClick={(e) => onDelete(e, sessionId)}
-            className="text-text-secondary hover:text-status-error p-1"
-            title="Delete session"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M18 6L6 18" />
-              <path d="M6 6l12 12" />
-            </svg>
-          </button>
+          <DeleteButton onDelete={onDelete} sessionId={sessionId} />
         </div>
       </div>
       <div className="flex items-center gap-2 text-xs text-text-secondary">
