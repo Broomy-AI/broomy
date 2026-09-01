@@ -426,8 +426,13 @@ export function useTerminalSetup(
     // as a hook dependency. THIS EFFECT'S CLEANUP KILLS THE PTY — adding theme or
     // fontSize to its deps would destroy the running agent on every appearance
     // change. The separate effect below applies changes to the live terminal instead.
-    const links = createLinkWiring(containerRef.current)
+    // `file://` OSC 8 links (Claude Code chips) open host files, so they're allowed only for
+    // non-isolated terminals — the same reason the bare-path provider below is host-only.
+    const links = createLinkWiring(containerRef.current, effectCwd, !s.isolatedRef.current)
     const terminal = createConfiguredTerminal(links.linkHandler)
+    // The wiring is built first (the constructor takes `linkHandler`), so the buffer an OSC 8
+    // hover reads its row from is handed over here.
+    links.attachTerminal(terminal)
 
     const fitAddon = new FitAddon()
     terminal.loadAddon(fitAddon)

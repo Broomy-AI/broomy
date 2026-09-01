@@ -14,7 +14,7 @@ import { classifyShellKind } from '../../shared/shellQuote'
 import { HandlerContext } from './types'
 import { getScenarioData } from './scenarios'
 import { isDockerAvailable, dockerSetupMessage, ensureAgentInstalled, acquireSetupLock } from '../containerUtils'
-import { isDevcontainerCliAvailable, hasDevcontainerConfig, devcontainerUp, buildDevcontainerExecArgs, devcontainerSetupMessage } from '../devcontainer'
+import { isDevcontainerCliAvailable, hasDevcontainerConfig, devcontainerUp, buildDevcontainerExecArgs, devcontainerSetupMessage, stopContainer } from '../devcontainer'
 import { treeKill } from '../treeKill'
 import { recordPtyMarker, removePtyMarker } from '../ptyMarkers'
 
@@ -222,8 +222,19 @@ function createDevcontainerPty(
       releaseLock()
     }
 
-    // Check if session was killed during async setup
-    if (!pendingSetups.has(id)) return
+    // Check if session was killed (e.g. paused) during async setup. The
+    // container was just registered above and is now running with nothing
+    // that will ever exec into it — pty:kill only removed `id` from
+    // pendingSetups, it has no way to know a container came up. Stop it
+    // ourselves so a pause during bring-up doesn't orphan the container.
+    // Best-effort: if another session is mid-bring-up for the same
+    // workspaceFolder concurrently (rare — acquireSetupLock serializes
+    // starts), this can race with it; that's the same best-effort tradeoff
+    // the renderer's own pauseSession→stopContainer call already makes.
+    if (!pendingSetups.has(id)) {
+      void stopContainer(ctx, workspaceFolder)
+      return
+    }
 
     sendToTerminal('\x1b[2m── Dev container ready ──\x1b[22m\r\n\r\n')
 
@@ -381,10 +392,19 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     // its synchronized full-screen redraws are written to the main buffer.
     // See xtermjs/xterm.js#5784 and #5801. Per-session env (agentEnv) is
     // merged after this, so users can override with CLAUDE_CODE_NO_FLICKER=0.
+    //
+    // FORCE_HYPERLINK=1 makes Claude Code emit its `[file]`/`[image]` chips (and
+    // other file/URL references) as OSC 8 hyperlinks even though xterm's PTY name
+    // isn't a terminal `supports-hyperlinks` recognizes on its own (#164). Without
+    // it Claude falls back to plain text and a hard-wrapped chip can't be linked;
+    // with it the link rides on the cells and survives the wrap. The renderer honors
+    // the resulting `file://` OSC 8 links (terminalLinkHandler.ts). Override with
+    // FORCE_HYPERLINK=0 per session via agentEnv (merged after).
     const baseEnv = {
       ...process.env,
       PATH: enhancedPath(process.env.PATH),
       CLAUDE_CODE_NO_FLICKER: '1',
+      FORCE_HYPERLINK: '1',
     } as Record<string, string>
     delete baseEnv.CLAUDE_CONFIG_DIR
 

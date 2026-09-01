@@ -103,6 +103,7 @@ function SearchTreeResults({ node, depth, collapsedGroups, onToggleGroup, onFile
               </div>
               {result.contentMatches.map((match, i) => (
                 <div
+                  // eslint-disable-next-line react/no-array-index-key -- the index disambiguates repeated hits on one line; without it they would share a key
                   key={`${result.path}-${match.line}-${i}`}
                   className="py-0.5 hover:bg-bg-tertiary cursor-pointer text-xs text-text-secondary truncate"
                   style={{ paddingLeft: `${(isRoot ? depth : depth + 1) * 16 + 28}px` }}

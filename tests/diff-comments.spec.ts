@@ -10,6 +10,7 @@ import { test, expect, _electron as electron, ElectronApplication, Page } from '
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { dockerArgs } from './electron-launch-args'
+import { resumeActiveSession } from './features/_shared/resume-helpers'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -44,6 +45,10 @@ test.describe('Comments Dock', () => {
     const broomySession = page.locator('.cursor-pointer:has-text("broomy")')
     await expect(broomySession).toBeVisible()
     await broomySession.click()
+
+    // The session starts paused (no agent, no terminal). Resume it so the
+    // later "submit comment to agent" assertion has an agent to submit to.
+    await resumeActiveSession(page)
 
     // Open the Explorer panel.
     const explorerBtn = page.locator('button[title*="Explorer"]')

@@ -14,6 +14,7 @@ import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { screenshotElement } from '../_shared/screenshot-helpers'
 import { generateFeaturePage, generateIndex, FeatureStep } from '../_shared/template'
+import { resumeActiveSession } from '../_shared/resume-helpers'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -135,7 +136,8 @@ test.describe.serial('Feature: Session Status Stability on Switch', () => {
     const spinnerCount = await spinners.count()
     expect(spinnerCount).toBe(0)
 
-    // Terminal is still visible and functional
+    // Sessions restore paused — resume it so there's a terminal to check.
+    await resumeActiveSession(page)
     const terminalArea = page.locator('.xterm').first()
     await expect(terminalArea).toBeVisible()
 
@@ -146,8 +148,9 @@ test.describe.serial('Feature: Session Status Stability on Switch', () => {
       screenshotPath: 'screenshots/04-switch-back-stable.png',
       caption: 'Switching back is equally stable',
       description:
-        'Switching back to "broomy" again shows no spinner flashes. The terminal remains visible ' +
-        'and functional. Each switch only updates the two affected session cards.',
+        'Switching back to "broomy" again shows no spinner flashes. After resuming it (sessions ' +
+        'restore paused, so this step brings its terminal up), the terminal is visible and ' +
+        'functional. Each switch only updates the two affected session cards.',
     })
   })
 })

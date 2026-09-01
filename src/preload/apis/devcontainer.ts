@@ -10,6 +10,7 @@ export type DevcontainerApi = {
   generateDefaultConfig: (workspaceFolder: string) => Promise<void>
   containerInfo: (repoDir: string) => Promise<ContainerInfo | null>
   resetContainer: (repoDir: string) => Promise<void>
+  stopContainer: (repoDir: string) => Promise<void>
 }
 
 export const devcontainerApi: DevcontainerApi = {
@@ -18,4 +19,5 @@ export const devcontainerApi: DevcontainerApi = {
   generateDefaultConfig: (workspaceFolder) => ipcRenderer.invoke('devcontainer:generateDefaultConfig', workspaceFolder),
   containerInfo: (repoDir) => ipcRenderer.invoke('devcontainer:containerInfo', repoDir),
   resetContainer: (repoDir) => ipcRenderer.invoke('devcontainer:resetContainer', repoDir),
+  stopContainer: (repoDir) => ipcRenderer.invoke('devcontainer:stopContainer', repoDir),
 }

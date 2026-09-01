@@ -36,6 +36,7 @@ describe('detectPathCandidates', () => {
   })
 })
 
+
 // --- Faithful fake xterm buffer: fixed-width rows, right-trim, wide + width-0 cells ---
 
 interface CellSpec { chars: string; width: number }
@@ -216,7 +217,9 @@ describe('FilePathLinkProvider — plain lines', () => {
 
     const ev = { clientX: 5, clientY: 6 } as MouseEvent
     link.hover!(ev, link.text)
-    expect(hint.show).toHaveBeenCalledWith(ev, '/tmp/a.html')
+    // No target spelled out: the link's text IS the path, right under the pointer (#164 keeps that
+    // detail for OSC 8 links, whose label can disagree with their URI).
+    expect(hint.show).toHaveBeenCalledWith(ev)
     link.leave!(ev, link.text)
     expect(hint.hide).toHaveBeenCalledTimes(1)
 
@@ -224,6 +227,28 @@ describe('FilePathLinkProvider — plain lines', () => {
     // link the pointer never left, so the hint would otherwise stay on screen.
     link.activate({ button: 0, metaKey: true, ctrlKey: false } as MouseEvent, link.text)
     expect(hint.hide).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('FilePathLinkProvider — generic detection around chip-like text', () => {
+  // Claude's `[file]`/`[image]` chips are OSC 8 links now (#164, handled in terminalLinkHandler.ts),
+  // not detected here. The generic detector still links real bare paths that happen to sit near a
+  // `[file]` label or under a margin-filled non-anchor row.
+  it('links an indented generic path under a margin-filled non-anchor row', async () => {
+    const term = fakeTerminal([
+      { cells: asciiCells('abcdefghijklmnopqrst') }, // 20 chars fill the margin, but no ● tool anchor
+      { cells: asciiCells('  /gen/path.md') },
+    ], 20)
+    const links = await provide(new FilePathLinkProvider(term, deps({ pathExists: existsOnly('/gen/path.md') })), 2)
+    expect(links).toHaveLength(1)
+    expect(links![0].text).toBe('/gen/path.md')
+  })
+
+  it('links a real path printed after a [file] label (space-leading)', async () => {
+    const term = fakeTerminal([{ cells: asciiCells('[file] See /tmp/a.md (2KB)') }])
+    const links = await provide(new FilePathLinkProvider(term, deps({ pathExists: existsOnly('/tmp/a.md') })), 1)
+    expect(links).toHaveLength(1)
+    expect(links![0].text).toBe('/tmp/a.md')
   })
 })
 

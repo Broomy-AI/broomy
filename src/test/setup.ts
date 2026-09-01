@@ -248,6 +248,7 @@ const mockDevcontainer: Mocked<DevcontainerApi> = {
   generateDefaultConfig: vi.fn().mockResolvedValue(undefined),
   containerInfo: vi.fn().mockResolvedValue(null),
   resetContainer: vi.fn().mockResolvedValue(undefined),
+  stopContainer: vi.fn().mockResolvedValue(undefined),
 }
 
 const mockSettings: Mocked<SettingsApi> = {

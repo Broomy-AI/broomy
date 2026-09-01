@@ -65,6 +65,7 @@ describe('sessionBranchActions', () => {
       isArchived: false,
       stage: 'planning',
       isRestored: false,
+      isPaused: false,
     }
   }
 
@@ -286,6 +287,96 @@ describe('sessionBranchActions', () => {
       addTestSession('test-session', { branchStatus: 'open', hasFeedback: false })
       useSessionStore.getState().updateFeedbackStatus('missing', true)
       expect(useSessionStore.getState().sessions[0].hasFeedback).toBe(false)
+    })
+  })
+
+  describe('pauseSession / resumeSession', () => {
+    it('pauses a session without changing the active session', () => {
+      addTestSession('a')
+      const b = { ...useSessionStore.getState().sessions[0], id: 'b' }
+      useSessionStore.setState({
+        sessions: [...useSessionStore.getState().sessions, b],
+        activeSessionId: 'a',
+      })
+
+      useSessionStore.getState().pauseSession('a')
+
+      expect(useSessionStore.getState().sessions.find(s => s.id === 'a')!.isPaused).toBe(true)
+      expect(useSessionStore.getState().activeSessionId).toBe('a')
+    })
+
+    it('resumes a paused session', () => {
+      addTestSession('a', { isPaused: true })
+
+      useSessionStore.getState().resumeSession('a')
+
+      expect(useSessionStore.getState().sessions.find(s => s.id === 'a')!.isPaused).toBe(false)
+    })
+
+    it('leaves other sessions untouched', () => {
+      addTestSession('a')
+      const b = { ...useSessionStore.getState().sessions[0], id: 'b', isPaused: false }
+      useSessionStore.setState({
+        sessions: [...useSessionStore.getState().sessions, b],
+      })
+
+      useSessionStore.getState().pauseSession('a')
+
+      expect(useSessionStore.getState().sessions.find(s => s.id === 'b')!.isPaused).toBe(false)
+    })
+
+    it('clears agentPtyId so command/comment buttons cannot target a dead terminal', () => {
+      addTestSession('a', { agentPtyId: 'a-1234567890' })
+
+      useSessionStore.getState().pauseSession('a')
+
+      expect(useSessionStore.getState().sessions.find(s => s.id === 'a')!.agentPtyId).toBeUndefined()
+    })
+
+    it('leaves other sessions agentPtyId untouched', () => {
+      addTestSession('a')
+      const b = { ...useSessionStore.getState().sessions[0], id: 'b', isPaused: false, agentPtyId: 'b-1234567890' }
+      useSessionStore.setState({
+        sessions: [...useSessionStore.getState().sessions, b],
+      })
+
+      useSessionStore.getState().pauseSession('a')
+
+      expect(useSessionStore.getState().sessions.find(s => s.id === 'b')!.agentPtyId).toBe('b-1234567890')
+    })
+  })
+
+  describe('pauseSession container teardown', () => {
+    beforeEach(() => {
+      vi.mocked(window.devcontainer.stopContainer).mockResolvedValue(undefined)
+    })
+
+    it('stops the container for the paused session directory', () => {
+      addTestSession('a', { directory: '/work/a' })
+
+      useSessionStore.getState().pauseSession('a')
+
+      expect(window.devcontainer.stopContainer).toHaveBeenCalledWith('/work/a')
+    })
+
+    it('leaves a container alone while another running session shares the directory', () => {
+      addTestSession('a', { directory: '/work/shared' })
+      const b = { ...useSessionStore.getState().sessions[0], id: 'b', isPaused: false }
+      useSessionStore.setState({
+        sessions: [...useSessionStore.getState().sessions, b],
+      })
+
+      useSessionStore.getState().pauseSession('a')
+
+      expect(window.devcontainer.stopContainer).not.toHaveBeenCalled()
+    })
+
+    it('does not reject when stopping fails', () => {
+      vi.mocked(window.devcontainer.stopContainer).mockRejectedValue(new Error('docker down'))
+      addTestSession('a', { directory: '/work/a' })
+
+      expect(() => useSessionStore.getState().pauseSession('a')).not.toThrow()
+      expect(useSessionStore.getState().sessions[0].isPaused).toBe(true)
     })
   })
 

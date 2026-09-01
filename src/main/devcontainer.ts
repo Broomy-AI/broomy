@@ -265,5 +265,29 @@ export async function resetContainer(
   }
 }
 
+/**
+ * Stop a container, leaving it in place so it can be restarted quickly.
+ *
+ * Used when pausing a session: `docker stop` ends every process inside the
+ * container, while keeping the container and its installed dependencies so
+ * resume doesn't pay a full devcontainer rebuild. Contrast `resetContainer`,
+ * which force-removes.
+ *
+ * Best-effort — never throws. No-ops when no container is tracked for the
+ * directory, which is the case for every non-isolated session.
+ */
+export async function stopContainer(
+  ctx: HandlerContext,
+  repoDir: string,
+): Promise<void> {
+  const state = ctx.dockerContainers.get(repoDir)
+  if (!state) return
+  try {
+    await execFileAsync('docker', ['stop', state.containerId])
+  } catch {
+    // Already stopped or gone — ignore
+  }
+}
+
 /** Re-export ensureAgentInstalled for devcontainer use */
 export { ensureAgentInstalled } from './containerUtils'

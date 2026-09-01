@@ -11,6 +11,11 @@
  *    tool-call envelope, gated by the wrap margin, a consistent content-start indent, and existence,
  *    so an ordinary indented line can't be mis-joined (#154 follow-up).
  *
+ * Claude Code file "chips" (`[file]/abs/path (2.7KB)` / `[image]…` in the input line, #164) are NOT
+ * detected here: Claude emits them as `file://` OSC 8 hyperlinks, honored directly by xterm's
+ * `linkHandler` (`terminalLinkHandler.ts`), which is wrap-immune. This provider only covers bare
+ * path TEXT (compiler errors, tool-call arguments) with no hyperlink of its own.
+ *
  * Everything is reconstructed into one canonical string `T` with a span table mapping each UTF-16
  * code unit back to its `{row, cell}` origin, so detection runs once and every link gets an exact,
  * honest cell range (per-row segments for hard wraps, where the stripped indent must not be
@@ -313,20 +318,21 @@ export class FilePathLinkProvider implements ILinkProvider {
     // All buffer reads + range mapping happen synchronously here, before the async existence probe.
     const qUnit = softUnitBounds(buf, q)
     if (qUnit.overflow) { callback(undefined); return } // truncated giant wrap → fail closed
-    const block = collectBlock(this._terminal, qUnit)
-    const rows = block ? block.rows : plainRows(qUnit)
-    const { text, spans, boundaries } = buildBlockText(buf, rows)
-    const candidates = detectPathCandidates(text)
-    if (candidates.length === 0) {
-      callback(undefined)
-      return
-    }
 
     // A tool-call block only links the wrapped PAYLOAD path: it must start after the anchor's `(`
     // (`● Label(`), begin in the anchor unit, and cross the FIRST hard-wrap boundary — which uniquely
     // selects it (only one detected token can start in the anchor payload and cross that seam), so an
     // incidental token sitting in a continuation row is never linked.
-    const blockInfo = block ? { parenOff: text.indexOf('('), boundaries } : null
+    const block = collectBlock(this._terminal, qUnit)
+    const built = buildBlockText(buf, block ? block.rows : plainRows(qUnit))
+    const text = built.text
+    const spans = built.spans
+    const candidates = detectPathCandidates(text)
+    const blockInfo = block ? { parenOff: text.indexOf('('), boundaries: built.boundaries } : null
+    if (candidates.length === 0) {
+      callback(undefined)
+      return
+    }
 
     const mapped = candidates
       .map((c) => this._toLink(c, spans, text, q, blockInfo))
@@ -433,7 +439,9 @@ export class FilePathLinkProvider implements ILinkProvider {
       },
       // Same affordance as URL links: xterm underlines and shows a pointer cursor whether or not
       // the modifier is held, so without the hint a plain click is a dead end with no feedback.
-      hover: (event: MouseEvent) => this._deps.hint?.show(event, c.text),
+      // No target in the hint: a bare path link's text IS the path, right under the pointer, so
+      // spelling it out again would only repeat the terminal (an OSC 8 label can lie; this can't).
+      hover: (event: MouseEvent) => this._deps.hint?.show(event),
       leave: () => this._deps.hint?.hide(),
     }
   }

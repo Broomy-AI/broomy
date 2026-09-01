@@ -187,6 +187,7 @@ export function createInstantSetupActions(get: StoreGet, set: StoreSet) {
         reviewState: 'none',
         statusChip: 'in-progress',
         isArchived: false,
+        isPaused: false,
         stage: DEFAULT_STAGE,
         isRestored: false,
       }
@@ -292,6 +293,10 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
             lastKnownPrNumber: sessionData.lastKnownPrNumber,
             lastKnownPrUrl: sessionData.lastKnownPrUrl,
             isArchived: sessionData.isArchived ?? false,
+            // Every restored session starts paused — no agent or terminal runs
+            // until the user resumes it. Runtime-only, so nothing is read from
+            // sessionData here.
+            isPaused: true,
             archivedAt: sessionData.archivedAt,
             stage: sessionData.stage ?? DEFAULT_STAGE,
             sdkSessionId: sessionData.sdkSessionId,
@@ -390,6 +395,7 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
         reviewState: 'none',
         statusChip: extra?.lastKnownPrState === 'OPEN' ? 'open' : 'in-progress',
         isArchived: false,
+        isPaused: false,
         stage: DEFAULT_STAGE,
         isRestored: false,
       }

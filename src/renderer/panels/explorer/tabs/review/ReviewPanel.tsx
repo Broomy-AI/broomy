@@ -295,6 +295,7 @@ function MarkdownSection({ body, onSelectFile, sessionDirectory, prBaseBranch }:
       )}
       {subsections.map((sub, i) => (
         <SubSectionCard
+          // eslint-disable-next-line react/no-array-index-key -- the index disambiguates repeated titles; without it two same-named subsections would share a key
           key={`${sub.title}-${i}`}
           title={sub.title}
           body={sub.body}
@@ -327,6 +328,7 @@ function MarkdownReviewContent({ markdown, onSelectFile, sessionDirectory, prBas
     <div className="px-1.5 py-1">
       {sections.map((section, i) => (
         <CollapsibleSection
+          // eslint-disable-next-line react/no-array-index-key -- the index disambiguates repeated titles; without it two same-named sections would share a key
           key={`${section.title}-${i}`}
           title={section.title}
           defaultOpen={hasIncompleteCheckboxes(section.body) || i === 0}

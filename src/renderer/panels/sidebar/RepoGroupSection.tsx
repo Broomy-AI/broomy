@@ -23,6 +23,7 @@ export function RepoGroupSection({
   onSelect,
   onDelete,
   onArchive,
+  onPause,
   sessionDrag,
   groupDrag,
   dropTarget,
@@ -35,6 +36,7 @@ export function RepoGroupSection({
   onSelect: (id: string) => void
   onDelete: (e: MouseEvent | KeyboardEvent, id: string) => void
   onArchive: (e: MouseEvent, id: string) => void
+  onPause?: (e: MouseEvent, id: string) => void
   sessionDrag: DragHandlers
   groupDrag: DragHandlers
   dropTarget: DropTarget | null
@@ -71,6 +73,7 @@ export function RepoGroupSection({
                 onSelect={onSelect}
                 onDelete={onDelete}
                 onArchive={onArchive}
+                onPause={onPause}
                 draggable
                 onDragStart={sessionDrag.onDragStart}
                 onDragOver={sessionDrag.onDragOver}

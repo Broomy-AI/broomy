@@ -19,6 +19,7 @@ import { RepoGroupSection } from './RepoGroupSection'
 import { ArchivedSection } from './ArchivedSection'
 import { SessionListHeader } from './SessionListHeader'
 import { useSessionGrouping } from './useSessionGrouping'
+import { useSessionListActions } from './useSessionListActions'
 import { sortArchived } from './archivedOrder'
 import { useSidebarDrag } from './useSidebarDrag'
 import { groupKeyForSession, resolveRepoId } from './repoGroups'
@@ -32,6 +33,7 @@ interface SessionListProps extends MainSyncProps {
   onRefreshPrStatus?: () => Promise<void>
   onArchiveSession: (id: string) => void
   onUnarchiveSession: (id: string) => void
+  onPauseSession?: (id: string) => void
 }
 
 export default function SessionList({
@@ -43,6 +45,7 @@ export default function SessionList({
   onArchiveSession,
   onUnarchiveSession,
   onSyncMain,
+  onPauseSession,
 }: SessionListProps) {
   const sessions = useSessionStore((s) => s.sessions)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -94,20 +97,9 @@ export default function SessionList({
     setPendingDeleteId(sessionId)
   }, [])
 
-  const handleArchive = useCallback((e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation()
-    onArchiveSession(sessionId)
-  }, [onArchiveSession])
-
-  const handleUnarchive = useCallback((e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation()
-    onUnarchiveSession(sessionId)
-  }, [onUnarchiveSession])
-
-  const handleSelectArchived = useCallback((sessionId: string) => {
-    onUnarchiveSession(sessionId)
-    onSelectSession(sessionId)
-  }, [onUnarchiveSession, onSelectSession])
+  const { handleArchive, handleUnarchive, handlePause, handleSelectArchived } = useSessionListActions({
+    onArchiveSession, onUnarchiveSession, onPauseSession, onSelectSession,
+  })
 
   // Repo grouping + manual drag order + the visible-order view-model.
   const searching = searchQuery.trim().length > 0
@@ -188,6 +180,7 @@ export default function SessionList({
                 onSelect={onSelectSession}
                 onDelete={handleDelete}
                 onArchive={handleArchive}
+                onPause={onPauseSession ? handlePause : undefined}
                 repoLabel={repoLabelFor(session)}
                 syncRepoId={syncRepoId}
                 onSyncMain={onSyncMain}
@@ -209,6 +202,7 @@ export default function SessionList({
               onSelect={onSelectSession}
               onDelete={handleDelete}
               onArchive={handleArchive}
+              onPause={onPauseSession ? handlePause : undefined}
               sessionDrag={sessionDrag}
               groupDrag={groupDrag}
               dropTarget={dropTarget}

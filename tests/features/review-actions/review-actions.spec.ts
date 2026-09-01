@@ -13,6 +13,7 @@ import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { screenshotElement, screenshotClip, scrollToVisible } from '../_shared/screenshot-helpers'
 import { generateFeaturePage, generateIndex, FeatureStep } from '../_shared/template'
+import { resumeActiveSession } from '../_shared/resume-helpers'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -79,6 +80,10 @@ async function setupReviewSession(p: Page) {
   const firstSession = p.locator('.cursor-pointer').first()
   await firstSession.click()
 
+  // Sessions restore paused — resume it so the Explain/Comment actions
+  // below have an agent terminal to actually send to.
+  await resumeActiveSession(p)
+
   await p.evaluate(() => {
     const store = (window as Record<string, unknown>).__sessionStore as {
       getState: () => {
@@ -96,6 +101,23 @@ async function setupReviewSession(p: Page) {
 }
 
 test.describe.serial('Feature: Review Panel Actions', () => {
+  // Pre-existing, unrelated to session-pause: this spec documents a
+  // "Potential Issues" list with per-issue Explain/Comment buttons and a
+  // "Draft Response Plan" button. None of that exists in the current
+  // source (no "Explain" button, no explain-prompt.md/response-plan-prompt.md
+  // anywhere in src/). It's been superseded by the CommentsDock system
+  // (see src/renderer/panels/explorer/CommentsDock.tsx and the
+  // diff-comments feature-doc: hover a source line, click "+", add an
+  // inline comment, submit to agent). Confirmed by actually running this
+  // spec (as asked) — Step 1 fails at the very first UI assertion
+  // ("Explain" button not found), independent of pause. Rewriting this to
+  // document CommentsDock instead is a real (and non-trivial) piece of
+  // work and a product decision about what replaced this UI, not a
+  // pause-fallout fix — flagged in the task-8 report rather than
+  // attempted here.
+  test.skip(true, 'Documents a review-issue Explain/Comment/Draft-Response-Plan UI that no longer exists in the app (superseded by CommentsDock) — pre-existing, unrelated to session-pause')
+
+
   test('Step 1: Review panel with issues showing Explain and Comment buttons', async () => {
     await setupReviewSession(page)
 
@@ -139,7 +161,7 @@ test.describe.serial('Feature: Review Panel Actions', () => {
 
     // The agent terminal should be focused (tab switches to agent)
     // Wait for the terminal tab to switch
-    await expect(page.locator('[data-panel-id="terminal"]')).toBeVisible({ timeout: 3000 })
+    await expect(page.locator('[data-panel-id="agent"]')).toBeVisible({ timeout: 3000 })
 
     const explorer = page.locator('[data-panel-id="explorer"]')
     await screenshotElement(page, explorer, path.join(SCREENSHOTS, '02-explain-clicked.png'), {

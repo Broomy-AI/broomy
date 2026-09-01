@@ -7,12 +7,14 @@ const mockHasConfig = vi.fn()
 const mockWriteConfig = vi.fn()
 const mockGetContainerInfo = vi.fn()
 const mockResetContainer = vi.fn()
+const mockStopContainer = vi.fn()
 vi.mock('../devcontainer', () => ({
   isDevcontainerCliAvailable: (...args: unknown[]) => mockIsCliAvailable(...args),
   hasDevcontainerConfig: (...args: unknown[]) => mockHasConfig(...args),
   writeDefaultDevcontainerConfig: (...args: unknown[]) => mockWriteConfig(...args),
   getContainerInfo: (...args: unknown[]) => mockGetContainerInfo(...args),
   resetContainer: (...args: unknown[]) => mockResetContainer(...args),
+  stopContainer: (...args: unknown[]) => mockStopContainer(...args),
 }))
 
 function createCtx(overrides: Partial<HandlerContext> = {}): HandlerContext {
@@ -178,6 +180,27 @@ describe('devcontainer handlers', () => {
 
       await handlers['devcontainer:resetContainer'](mockEvent, '/workspace/myrepo')
       expect(mockResetContainer).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('devcontainer:stopContainer', () => {
+    it('delegates to stopContainer in normal mode', async () => {
+      const { register } = await import('./devcontainer')
+      const ctx = createCtx()
+      register(mockIpcMain as never, ctx)
+
+      mockStopContainer.mockResolvedValue(undefined)
+
+      await handlers['devcontainer:stopContainer'](mockEvent, '/workspace/myrepo')
+      expect(mockStopContainer).toHaveBeenCalledWith(ctx, '/workspace/myrepo')
+    })
+
+    it('does nothing in E2E mode', async () => {
+      const { register } = await import('./devcontainer')
+      register(mockIpcMain as never, createCtx({ isE2ETest: true }))
+
+      await handlers['devcontainer:stopContainer'](mockEvent, '/workspace/myrepo')
+      expect(mockStopContainer).not.toHaveBeenCalled()
     })
   })
 })

@@ -1,8 +1,8 @@
 /**
  * Feature Documentation: Agent Auto-Enter
  *
- * Demonstrates that UI buttons (e.g. "Commit with AI") now automatically
- * submit the command to the agent terminal — no manual Enter press needed.
+ * Demonstrates that UI buttons (e.g. "Commit") now automatically submit
+ * the command to the agent terminal — no manual Enter press needed.
  *
  * Run with: pnpm test:feature-docs agent-autoenter
  */
@@ -13,6 +13,7 @@ import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { screenshotElement } from '../_shared/screenshot-helpers'
 import { generateFeaturePage, generateIndex, FeatureStep } from '../_shared/template'
+import { resumeActiveSession } from '../_shared/resume-helpers'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -34,7 +35,7 @@ test.afterAll(async () => {
     {
       title: 'Agent Auto-Enter',
       description:
-        'When UI buttons send commands to the agent terminal (Commit with AI, Create PR, Push to Main, etc.), ' +
+        'When UI buttons send commands to the agent terminal (Commit, Create PR, Push to Main, etc.), ' +
         'the command is now automatically submitted. Previously the user had to press Enter manually after clicking ' +
         'a button — this removes that unnecessary friction.',
       steps,
@@ -45,7 +46,11 @@ test.afterAll(async () => {
 })
 
 test.describe.serial('Feature: Agent Auto-Enter', () => {
-  test('Step 1: Open the source control panel with Commit with AI button', async () => {
+  test('Step 1: Open the source control panel with the Commit button', async () => {
+    // The active session restores paused, with no agent terminal to send a
+    // command to. Resume it before "Commit" is exercised in step 2.
+    await resumeActiveSession(page)
+
     // Open the explorer panel via toolbar button
     const explorerButton = page.locator('button[title*="Explorer"]').first()
     await expect(explorerButton).toBeVisible({ timeout: 5000 })
@@ -63,7 +68,7 @@ test.describe.serial('Feature: Agent Auto-Enter', () => {
     await scTab.click()
 
     // Wait for the source control view to load
-    const commitButton = page.getByText('Commit with AI')
+    const commitButton = page.getByText('Commit', { exact: true })
     await expect(commitButton).toBeVisible({ timeout: 5000 })
 
     await screenshotElement(page, explorer, path.join(SCREENSHOTS, '01-source-control-panel.png'), {
@@ -71,20 +76,21 @@ test.describe.serial('Feature: Agent Auto-Enter', () => {
     })
     steps.push({
       screenshotPath: 'screenshots/01-source-control-panel.png',
-      caption: 'Source control panel with Commit with AI button',
+      caption: 'Source control panel with the Commit button',
       description:
-        'The explorer panel showing the source control view. The "Commit with AI" button sends ' +
-        'a commit command to the agent terminal.',
+        'The explorer panel showing the source control view (the session\'s agent terminal has ' +
+        'already been resumed so it is ready to receive a command). The "Commit" button sends a ' +
+        'commit prompt to the agent terminal.',
     })
   })
 
-  test('Step 2: Click Commit with AI — command is sent and submitted automatically', async () => {
-    // Click the Commit with AI button
-    const commitButton = page.getByText('Commit with AI')
+  test('Step 2: Click Commit — command is sent and submitted automatically', async () => {
+    // Click the Commit button
+    const commitButton = page.getByText('Commit', { exact: true })
     await commitButton.click()
 
     // The agent terminal tab should now be active (sendAgentPrompt switches to it)
-    const terminalArea = page.locator('[data-panel-id="terminal"]')
+    const terminalArea = page.locator('[data-panel-id="agent"]')
     await expect(terminalArea).toBeVisible({ timeout: 5000 })
 
     // Wait for the xterm content to render after the command is written
@@ -96,7 +102,7 @@ test.describe.serial('Feature: Agent Auto-Enter', () => {
       screenshotPath: 'screenshots/02-agent-terminal-command.png',
       caption: 'Agent terminal received and submitted the command automatically',
       description:
-        'After clicking "Commit with AI", the terminal tab switches to the agent terminal and the ' +
+        'After clicking "Commit", the terminal tab switches to the agent terminal and the ' +
         'command is written and submitted (Enter is sent automatically). No manual keypress needed.',
     })
   })

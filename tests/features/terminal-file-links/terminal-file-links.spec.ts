@@ -21,6 +21,7 @@ import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { screenshotElement } from '../_shared/screenshot-helpers'
 import { generateFeaturePage, generateIndex, FeatureStep } from '../_shared/template'
+import { resumeActiveSession, getActiveSessionTerminalBuffer } from '../_shared/resume-helpers'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -31,22 +32,6 @@ const FEATURES_ROOT = path.join(__dirname, '..')
 
 /** The file path the fake agent prints (scripts/fake-claude.sh). */
 const AGENT_PATH = '/tmp/broomy-preview.html'
-
-/** Read serialized terminal buffer content from the in-app registry. */
-async function getTerminalContent(p: Page): Promise<string> {
-  return p.evaluate(() => {
-    const registry = (window as unknown as {
-      __terminalBufferRegistry?: { getSessionIds: () => string[]; getBuffer: (id: string) => string | null }
-    }).__terminalBufferRegistry
-    if (!registry) return ''
-    for (const id of registry.getSessionIds()) {
-      if (id.endsWith('-user')) continue
-      const buf = registry.getBuffer(id)
-      if (buf && buf.length > 0) return buf
-    }
-    return ''
-  })
-}
 
 let page: Page
 const steps: FeatureStep[] = []
@@ -73,7 +58,10 @@ test.afterAll(async () => {
 
 test.describe.serial('Feature: Click a File Path in the Terminal', () => {
   test('A file path printed in the terminal is a ⌘/⌃-clickable link', async () => {
-    await expect.poll(() => getTerminalContent(page), { timeout: 15000 }).toContain(AGENT_PATH)
+    // Sessions restore paused — resume it so the mock agent actually prints
+    // the path this step checks for.
+    await resumeActiveSession(page)
+    await expect.poll(() => getActiveSessionTerminalBuffer(page), { timeout: 15000 }).toContain(AGENT_PATH)
 
     const agentPanel = page.locator('[data-panel-id="agent"]')
     await expect(agentPanel).toBeVisible()
@@ -85,12 +73,12 @@ test.describe.serial('Feature: Click a File Path in the Terminal', () => {
       screenshotPath: 'screenshots/01-path-in-terminal.png',
       caption: 'A file path printed in the terminal is clickable',
       description:
-        'Agents constantly print file paths — a generated HTML design doc, a report, a source ' +
-        'file. Existing paths (absolute, ~, or relative to the worktree) underline on hover. ' +
-        '⌘-click (⌃-click on Linux) opens a document/media file in the OS default app ' +
-        '(here the .html opens in the browser) and reveals anything else in the file manager; a ' +
-        'plain click still positions the cursor. Only EXISTING files are linkified, so unrelated ' +
-        'slash-separated text is left alone.',
+        'After resuming the session, agents constantly print file paths — a generated HTML design ' +
+        'doc, a report, a source file. Existing paths (absolute, ~, or relative to the worktree) ' +
+        'underline on hover. ⌘-click (⌃-click on Linux) opens a document/media file in the OS ' +
+        'default app (here the .html opens in the browser) and reveals anything else in the file ' +
+        'manager; a plain click still positions the cursor. Only EXISTING files are linkified, so ' +
+        'unrelated slash-separated text is left alone.',
     })
   })
 })

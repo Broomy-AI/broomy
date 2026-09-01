@@ -13,6 +13,7 @@ import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { screenshotElement } from '../_shared/screenshot-helpers'
 import { generateFeaturePage, generateIndex, FeatureStep } from '../_shared/template'
+import { resumeActiveSession } from '../_shared/resume-helpers'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -100,17 +101,22 @@ test.describe.serial('Feature: Button Skills', () => {
   })
 
   test('Step 3: Terminal showing agent interaction', async () => {
+    // Sessions restore paused — resume it so there's a live agent terminal
+    // for the action buttons above to actually send prompts to.
+    await resumeActiveSession(page)
+
     const terminalArea = page.locator('.xterm').first()
     await expect(terminalArea).toBeVisible()
 
     await screenshotElement(page, terminalArea, path.join(SCREENSHOTS, '03-agent-terminal.png'))
     steps.push({
       screenshotPath: 'screenshots/03-agent-terminal.png',
-      caption: 'Agent terminal receives skill-aware commands',
+      caption: 'Resuming brings up the agent terminal the buttons send to',
       description:
-        'When a UI button is clicked, the action system sends the inline prompt from ' +
-        '.broomy/commands.json to the agent terminal. If the action has a per-agent override ' +
-        'matching the active agent type, that override prompt is used instead.',
+        'The session has been resumed, so its agent terminal is running. When a UI button is ' +
+        'clicked, the action system sends the inline prompt from .broomy/commands.json to this ' +
+        'terminal. If the action has a per-agent override matching the active agent type, that ' +
+        'override prompt is used instead.',
     })
   })
 })

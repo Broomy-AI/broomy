@@ -5,6 +5,7 @@ import '../../../test/react-setup'
 import Terminal from './Terminal'
 import type { TerminalSetupResult } from './hooks/useTerminalSetup'
 import { FILE_PATH_MIME } from '../../../shared/dnd'
+import { useSessionStore } from '../../store/sessions'
 
 // Mock the useTerminalSetup hook to avoid xterm.js issues in jsdom
 vi.mock('./hooks/useTerminalSetup', () => ({
@@ -188,6 +189,17 @@ describe('Terminal', () => {
       await vi.waitFor(() => {
         // restart increments restartKey, which triggers useTerminalSetup again
         expect(vi.mocked(useTerminalSetup).mock.calls.length).toBeGreaterThanOrEqual(2)
+      })
+    })
+
+    it('pauses the session from the context menu', async () => {
+      const pauseSession = vi.spyOn(useSessionStore.getState(), 'pauseSession')
+      vi.mocked(window.menu.popup).mockResolvedValue('pause-session')
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" isAgentTerminal storeSessionId="sess-1" />)
+      const terminalDiv = document.querySelector('.h-full.w-full.flex.flex-col')!
+      fireEvent.contextMenu(terminalDiv)
+      await vi.waitFor(() => {
+        expect(pauseSession).toHaveBeenCalledWith('sess-1')
       })
     })
 

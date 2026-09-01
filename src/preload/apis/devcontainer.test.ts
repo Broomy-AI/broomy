@@ -45,4 +45,9 @@ describe('preload devcontainer API', () => {
     await devcontainerApi.resetContainer('/workspace')
     expect(mockInvoke).toHaveBeenCalledWith('devcontainer:resetContainer', '/workspace')
   })
+
+  it('stopContainer invokes devcontainer:stopContainer with repoDir', async () => {
+    await devcontainerApi.stopContainer('/workspace')
+    expect(mockInvoke).toHaveBeenCalledWith('devcontainer:stopContainer', '/workspace')
+  })
 })

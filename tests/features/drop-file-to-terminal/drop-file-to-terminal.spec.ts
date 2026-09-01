@@ -18,6 +18,7 @@ import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { screenshotElement } from '../_shared/screenshot-helpers'
 import { generateFeaturePage, generateIndex, FeatureStep } from '../_shared/template'
+import { resumeActiveSession } from '../_shared/resume-helpers'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -77,6 +78,10 @@ test.describe.serial('Feature: Drop a file onto the terminal', () => {
     await broomySession.click()
     await expect(broomySession).toHaveClass(/bg-accent\/15/)
 
+    // Sessions restore paused, so the terminal has to be resumed before it
+    // exists to drop a file onto.
+    await resumeActiveSession(page)
+
     const terminalArea = page.locator('.xterm').first()
     await expect(terminalArea).toBeVisible()
 
@@ -85,8 +90,9 @@ test.describe.serial('Feature: Drop a file onto the terminal', () => {
       screenshotPath: 'screenshots/01-terminal-drop-target.png',
       caption: 'The terminal accepts file drops',
       description:
-        'Any file dragged from Finder onto the terminal is written to the prompt as a shell-quoted ' +
-        'path. Nothing runs — the path is a literal argument you can edit or reference.',
+        'After resuming the session to bring up its agent terminal, any file dragged from Finder ' +
+        'onto it is written to the prompt as a shell-quoted path. Nothing runs — the path is a ' +
+        'literal argument you can edit or reference.',
     })
   })
 

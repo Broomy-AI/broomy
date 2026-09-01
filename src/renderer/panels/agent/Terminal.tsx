@@ -13,6 +13,7 @@ import { useRef, useState, useCallback, useEffect } from 'react'
 import { useTerminalSetup } from './hooks/useTerminalSetup'
 import type { TerminalConfig, ExitInfo } from './hooks/useTerminalSetup'
 import { useErrorStore } from '../../store/errors'
+import { useSessionStore } from '../../store/sessions'
 import { getAgentInstallUrl } from '../../shared/utils/agentInstallUrls'
 import { sendAgentPrompt } from '../../shared/utils/focusHelpers'
 import { FILE_PATH_MIME } from '../../../shared/dnd'
@@ -162,6 +163,7 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
       ...(isAgentTerminal ? [
         { id: 'sep', label: '', type: 'separator' as const },
         { id: 'restart-agent', label: 'Restart Agent' },
+        { id: 'pause-session', label: 'Pause Session' },
       ] : []),
     ]
     try {
@@ -178,11 +180,13 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
         }
       } else if (result === 'restart-agent') {
         handleRestart()
+      } else if (result === 'pause-session' && storeSessionId) {
+        useSessionStore.getState().pauseSession(storeSessionId)
       }
     } catch (err) {
       console.warn('[Terminal] Context menu failed:', err)
     }
-  }, [isAgentTerminal, terminalRef, ptyIdRef])
+  }, [isAgentTerminal, terminalRef, ptyIdRef, storeSessionId])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     if (!isFileDrag(e.dataTransfer)) return

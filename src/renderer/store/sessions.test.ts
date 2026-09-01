@@ -80,6 +80,7 @@ describe('useSessionStore', () => {
       reviewState: 'none' as const,
       statusChip: 'in-progress' as StatusChip,
       isArchived: false,
+      isPaused: false,
       stage: 'planning',
       isRestored: false,
     }

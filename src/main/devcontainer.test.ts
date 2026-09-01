@@ -2,8 +2,9 @@
  * Unit tests for devcontainer CLI wrapper functions.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { generateDefaultDevcontainerJson, buildDevcontainerExecArgs, devcontainerSetupMessage, isDevcontainerCliAvailable, hasDevcontainerConfig, writeDefaultDevcontainerConfig, normalizePostAttachCommand, devcontainerUp } from './devcontainer'
+import { generateDefaultDevcontainerJson, buildDevcontainerExecArgs, devcontainerSetupMessage, isDevcontainerCliAvailable, hasDevcontainerConfig, writeDefaultDevcontainerConfig, normalizePostAttachCommand, devcontainerUp, stopContainer } from './devcontainer'
 import { EventEmitter } from 'events'
+import type { HandlerContext } from './handlers/types'
 
 // We need to mock execFile as a callback-style function that promisify will wrap
 const mockExecFile = vi.fn()
@@ -337,6 +338,53 @@ describe('devcontainer', () => {
 
       const result = await promise
       expect(result.result?.postAttachCommand).toBeUndefined()
+    })
+  })
+
+  describe('stopContainer', () => {
+    function makeCtx(): HandlerContext {
+      return { dockerContainers: new Map() } as HandlerContext
+    }
+
+    beforeEach(() => {
+      mockExecFile.mockReset()
+      mockExecFile.mockImplementation((_cmd: string, _args: string[], callback: (err: null, result: { stdout: string }) => void) => {
+        callback(null, { stdout: '' })
+      })
+    })
+
+    it('stops the container without removing it', async () => {
+      const ctx = makeCtx()
+      ctx.dockerContainers.set('/work/a', { containerId: 'abc123', repoDir: '/work/a', image: 'devcontainer' })
+
+      await stopContainer(ctx, '/work/a')
+
+      expect(mockExecFile).toHaveBeenCalledWith('docker', ['stop', 'abc123'], expect.anything())
+      expect(mockExecFile).not.toHaveBeenCalledWith('docker', expect.arrayContaining(['rm']), expect.anything())
+    })
+
+    it('keeps the container tracked so resume can restart it', async () => {
+      const ctx = makeCtx()
+      ctx.dockerContainers.set('/work/a', { containerId: 'abc123', repoDir: '/work/a', image: 'devcontainer' })
+
+      await stopContainer(ctx, '/work/a')
+
+      expect(ctx.dockerContainers.has('/work/a')).toBe(true)
+    })
+
+    it('no-ops when no container is tracked for the directory', async () => {
+      await expect(stopContainer(makeCtx(), '/work/none')).resolves.toBeUndefined()
+      expect(mockExecFile).not.toHaveBeenCalled()
+    })
+
+    it('swallows docker errors', async () => {
+      const ctx = makeCtx()
+      ctx.dockerContainers.set('/work/a', { containerId: 'abc123', repoDir: '/work/a', image: 'devcontainer' })
+      mockExecFile.mockImplementation((_cmd: string, _args: string[], callback: (err: Error) => void) => {
+        callback(new Error('docker daemon not running'))
+      })
+
+      await expect(stopContainer(ctx, '/work/a')).resolves.toBeUndefined()
     })
   })
 })
