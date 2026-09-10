@@ -19,6 +19,7 @@ import type { FileStatus, ViewMode } from '../panels/fileViewer/FileViewer'
 import type { GitFileStatus, GitStatusResult, ManagedRepo } from '../../preload/index'
 import type { ExplorerFilter, PrState } from '../store/sessions'
 import type { ReviewState } from '../features/git/reviewState'
+import type { SyncMainResult } from '../features/git/hooks/useMainSync'
 import type { NavigationTarget } from '../shared/utils/fileNavigation'
 
 /** Wrapper that subscribes each session terminal to its own visibility from the store. */
@@ -105,6 +106,8 @@ export interface PanelsMapConfig {
   setToolbarPanels: (panels: string[]) => void
   closeCommandsEditor: (sessionId: string) => void
   repos: ManagedRepo[]
+  /** #170: fast-forward a repo's `main/` clone (manual right-click "Sync main"). */
+  syncMain: (repoId: string) => Promise<SyncMainResult>
 }
 
 function useExplorerPanel(config: PanelsMapConfig) {
@@ -277,6 +280,7 @@ export function usePanelsMap(config: PanelsMapConfig) {
     getAgentConnectionMode, getAgentModel, getAgentEffort, getAgentSkipApproval,
     globalPanelVisibility, toggleGlobalPanel,
     repos,
+    syncMain,
   } = config
 
   // Derive a stable key from only the session fields the terminal cares about.
@@ -399,9 +403,10 @@ export function usePanelsMap(config: PanelsMapConfig) {
       onRefreshPrStatus={refreshPrStatus}
       onArchiveSession={archiveSession}
       onUnarchiveSession={unarchiveSession}
+      onSyncMain={syncMain}
       onPauseSession={handlePauseSession}
     />
-  ), [repos, handleSelectSession, handleNewSession, removeSession, refreshPrStatus, archiveSession, unarchiveSession, handlePauseSession])
+  ), [repos, handleSelectSession, handleNewSession, removeSession, refreshPrStatus, archiveSession, unarchiveSession, syncMain, handlePauseSession])
 
   const panelsMap = useMemo(() => ({
     [PANEL_IDS.SIDEBAR]: sidebarPanel,

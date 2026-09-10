@@ -66,6 +66,7 @@ function renderCard({ session, onPause, onArchive }: RenderCardOptions) {
       onDelete={vi.fn()}
       onArchive={onArchive}
       onPause={onPause}
+      onSyncMain={vi.fn().mockResolvedValue({ success: true })}
     />
   )
 }

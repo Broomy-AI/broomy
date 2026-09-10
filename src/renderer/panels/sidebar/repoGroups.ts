@@ -80,6 +80,18 @@ export function resolveRepoId(
   return bestId
 }
 
+/**
+ * Like `resolveRepoId`, but only returns an id that is still in `repos` — so a session of a deleted repo
+ * (which keeps its old `repoId`) resolves to undefined rather than an id nothing can act on.
+ */
+export function resolveManagedRepoId(
+  session: Pick<Session, 'repoId' | 'directory'>,
+  repos: ManagedRepo[],
+): string | undefined {
+  const repoId = resolveRepoId(session, repos)
+  return repoId && repos.some((r) => r.id === repoId) ? repoId : undefined
+}
+
 /** Stable group key — depends only on whether a repo resolves, not on whether it still exists. */
 export function groupKeyForSession(
   session: Pick<Session, 'repoId' | 'directory'>,

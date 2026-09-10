@@ -29,7 +29,9 @@ function makeProps(overrides: Record<string, unknown> = {}) {
     repos,
     onSelectSession: vi.fn(), onNewSession: vi.fn(), onDeleteSession: vi.fn(),
     onRefreshPrStatus: vi.fn().mockResolvedValue(undefined),
-    onArchiveSession: vi.fn(), onUnarchiveSession: vi.fn(), ...overrides,
+    onArchiveSession: vi.fn(), onUnarchiveSession: vi.fn(),
+    onSyncMain: vi.fn().mockResolvedValue({ success: true }),
+    ...overrides,
   }
 }
 

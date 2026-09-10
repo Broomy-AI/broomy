@@ -14,6 +14,12 @@ function withNonInteractive(git: ReturnType<typeof simpleGit>) {
   return git.env({ ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' })
 }
 
+/**
+ * Fast-forward the primary `main/` clone to `origin/<default>` (#170). `--ff-only` so it can never
+ * create a merge commit or leave conflicts — a diverged clone fails loudly. Guarded so it never
+ * advances the WRONG branch: the clone must be checked out on the default branch. Not locked: two
+ * racing fast-forwards collide on git's own index.lock, and the loser fails without touching the clone.
+ */
 async function handlePullOriginMain(ctx: HandlerContext, repoPath: string) {
   if (ctx.isE2ETest && !ctx.e2eRealRepos) {
     return { success: true }
@@ -21,24 +27,30 @@ async function handlePullOriginMain(ctx: HandlerContext, repoPath: string) {
 
   try {
     const git = withNonInteractive(simpleGit(expandHomePath(repoPath)))
+    const defaultBranch = await getDefaultBranch(git, true)
 
-    const defaultBranch = await getDefaultBranch(git)
+    // Never fast-forward a non-default branch: the primary clone must be ON the default branch.
+    const head = (await git.raw(['symbolic-ref', '--short', 'HEAD']).catch(() => '')).trim()
+    if (head !== defaultBranch) {
+      return { success: false, error: `The main clone is on "${head || 'a detached HEAD'}", not "${defaultBranch}", so it can't be fast-forwarded automatically.` }
+    }
 
     await git.fetch('origin', defaultBranch)
-
     try {
-      await git.merge([`origin/${defaultBranch}`])
+      await git.merge(['--ff-only', `origin/${defaultBranch}`])
       return { success: true }
     } catch (mergeError) {
-      const errorStr = String(mergeError)
-      const hasConflicts = errorStr.includes('CONFLICTS') || errorStr.includes('Merge conflict') || errorStr.includes('fix conflicts')
-      return { success: false, hasConflicts, error: errorStr }
+      return { success: false, error: String(mergeError) }
     }
   } catch (error) {
-    return { success: false, hasConflicts: false, error: String(error) }
+    return { success: false, error: String(error) }
   }
 }
 
+/**
+ * How many commits `repoPath`'s HEAD is behind `origin/<default>`. Used by the source-control view's
+ * session-branch "behind main" indicator; a check that can't run reads as 0 behind.
+ */
 async function handleIsBehindMain(ctx: HandlerContext, repoPath: string) {
   if (ctx.isE2ETest && !ctx.e2eRealRepos) {
     return { behind: 0, defaultBranch: 'main' }

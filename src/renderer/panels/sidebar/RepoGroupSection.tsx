@@ -13,6 +13,7 @@ import SessionCard from './SessionCard'
 import { RepoGroupHeader } from './RepoGroupHeader'
 import type { RepoGroup } from './repoGroups'
 import type { DragHandlers, DropKind, DropTarget } from './useSidebarDrag'
+import type { MainSyncProps } from '../../features/git/hooks/useMainSync'
 
 export function RepoGroupSection({
   group,
@@ -26,6 +27,7 @@ export function RepoGroupSection({
   sessionDrag,
   groupDrag,
   dropTarget,
+  onSyncMain,
 }: {
   group: RepoGroup
   collapsed: boolean
@@ -38,11 +40,15 @@ export function RepoGroupSection({
   sessionDrag: DragHandlers
   groupDrag: DragHandlers
   dropTarget: DropTarget | null
-}) {
+} & MainSyncProps) {
   const edgeFor = (kind: DropKind, id: string): 'before' | 'after' | null =>
     dropTarget?.kind === kind && dropTarget.id === id
       ? (dropTarget.before ? 'before' : 'after')
       : null
+
+  // A deleted repo keeps its id on a `kind:'unknown'` group, so only expose "Sync main" for a live repo
+  // group — otherwise the item would always fail with "Unknown repository".
+  const repoId = group.kind === 'repo' ? group.repoId : undefined
 
   return (
     <div className="mb-1">
@@ -75,6 +81,8 @@ export function RepoGroupSection({
                 onDrop={sessionDrag.onDrop}
                 onDragEnd={sessionDrag.onDragEnd}
                 dropEdge={edgeFor('session', session.id)}
+                syncRepoId={repoId}
+                onSyncMain={onSyncMain}
               />
             </PanelErrorBoundary>
           ))}
