@@ -5,6 +5,7 @@ const KNOWN_AGENT_INSTALL_URLS: Record<string, string> = {
   copilot: 'https://github.com/github/gh-copilot',
   'gh copilot': 'https://github.com/github/gh-copilot',
   aider: 'https://aider.chat',
+  junie: 'https://www.jetbrains.com/help/junie/get-started-with-junie.html',
 }
 
 /**

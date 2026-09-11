@@ -8,6 +8,7 @@ describe('getAgentInstallUrl', () => {
     expect(getAgentInstallUrl('gemini')).toBe('https://github.com/google-gemini/gemini-cli')
     expect(getAgentInstallUrl('copilot')).toBe('https://github.com/github/gh-copilot')
     expect(getAgentInstallUrl('aider')).toBe('https://aider.chat')
+    expect(getAgentInstallUrl('junie')).toBe('https://www.jetbrains.com/help/junie/get-started-with-junie.html')
   })
 
   it('returns URL for multi-word commands like "gh copilot"', () => {

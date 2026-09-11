@@ -78,6 +78,7 @@ export const DEFAULT_AGENTS = [
   { id: 'codex', name: 'Codex', command: 'codex', color: '#10A37F', skipApprovalFlag: '--approval-mode full-auto' },
   { id: 'gemini', name: 'Gemini CLI', command: 'gemini', color: '#4285F4' },
   { id: 'copilot', name: 'GitHub Copilot', command: 'copilot', color: '#6E40C9' },
+  { id: 'junie', name: 'Junie', command: 'junie', color: '#3DEA62', skipApprovalFlag: '--brave' },
 ]
 
 // Default profiles
