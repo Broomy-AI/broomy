@@ -72,6 +72,8 @@ This creates `release-notes.md` with categorized changes (new features, improvem
 - A paid [Apple Developer Program](https://developer.apple.com/programs/) membership
 - [GitHub CLI](https://cli.github.com/) (`gh`) installed and authenticated
 - [Docker](https://www.docker.com/) installed (for Linux native module prebuilds)
+- GNU binutils (`brew install binutils`) — required for valid `.deb` packages; see
+  [.deb build needs GNU ar](#deb-build-needs-gnu-ar-macos)
 
 ## Platform Build Commands
 
@@ -281,7 +283,25 @@ The prebuild script requires Docker. Install [Docker Desktop](https://www.docker
 
 #### .deb build fails with 'ar' not found (macOS)
 
-On macOS, the `.deb` build requires Xcode's `ar` tool:
+The `.deb` build shells out to `ar`, which won't run until the Xcode license is accepted:
 ```bash
 sudo xcodebuild -license
 ```
+
+#### .deb build needs GNU ar (macOS)
+
+Building `.deb` packages on macOS requires GNU `ar`:
+
+```bash
+brew install binutils
+```
+
+`fpm` assembles the `.deb` with whichever `ar` comes first on `PATH`. electron-builder's
+bundled `linux-tools` provides only `gtar` and `lzip`, so without binutils that resolves to
+Apple's BSD `ar` — which cannot write the Debian archive format. It produces a 96-byte stub
+containing nothing but a symbol table **and exits successfully**, so the build appears to
+pass. Releases up to and including v1.1.0 shipped `.deb` files built this way.
+
+`scripts/dist-linux.sh` now detects GNU `ar` (preferring the keg-only binutils install),
+fails with instructions if it is missing, and verifies every `.deb` really is a Debian
+archive before the build is considered done.
