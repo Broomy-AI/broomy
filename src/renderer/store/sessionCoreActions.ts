@@ -1,6 +1,8 @@
 /**
  * Core session store actions for creating, selecting, removing, and updating sessions.
  */
+import { profileRuntime } from './profileRuntime'
+import { setLoadedCounts } from './configPersistence'
 import { basename } from 'path-browserify'
 import { PANEL_IDS, DEFAULT_TOOLBAR_PANELS } from '../panels/system/types'
 import type { Session, PanelVisibility, TerminalTabsState, PrState } from './sessions'
@@ -101,6 +103,7 @@ function normalizeGroupKeys(value: unknown): string[] {
 }
 
 type StoreGet = () => {
+  runtimeProfileId?: string
   sessions: Session[]
   activeSessionId: string | null
   globalPanelVisibility: PanelVisibility
@@ -110,6 +113,7 @@ type StoreGet = () => {
   repoGroupOrder: string[]
 }
 type StoreSet = (partial: Partial<{
+  runtimeProfileId?: string
   sessions: Session[]
   activeSessionId: string | null
   isLoading: boolean
@@ -159,6 +163,7 @@ export function createInstantSetupActions(get: StoreGet, set: StoreSet) {
 
       const newSession: Session = {
         id,
+        profileId: get().runtimeProfileId,
         name,
         directory,
         branch,
@@ -225,12 +230,20 @@ export function createInstantSetupActions(get: StoreGet, set: StoreSet) {
   }
 }
 
+function restoreProfile(pid: string | undefined, set: StoreSet): boolean {
+  const cached = pid ? profileRuntime.get(pid) : undefined
+  setCurrentProfileId(pid)
+  if (!cached) return false
+  setLoadedCounts(cached.counts)
+  set({ ...cached.ui, runtimeProfileId: pid, isLoading: false })
+  return true
+}
+
 export function createCoreActions(get: StoreGet, set: StoreSet) {
   return {
     loadSessions: async (profileId?: string) => {
-      if (profileId !== undefined) {
-        setCurrentProfileId(profileId)
-      }
+      const pid = profileId ?? getCurrentProfileId()
+      if (restoreProfile(pid, set)) return
       try {
         const config = await window.config.load(getCurrentProfileId())
         const sessions: Session[] = []
@@ -250,6 +263,7 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
 
           const session: Session = {
             id: sessionData.id,
+            profileId: pid,
             name: sessionData.name,
             directory: sessionData.directory,
             branch,
@@ -313,7 +327,9 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
         setLoadedSessionCount(sessions.length)
 
         set({
-          sessions,
+          sessions: [...get().sessions.filter(s => s.profileId !== pid), ...sessions],
+          runtimeProfileId: pid,
+          configLoadError: null,
           activeSessionId: (sessions.find((s) => !s.isArchived) ?? (sessions[0] as Session | undefined))?.id ?? null,
           isLoading: false,
           showSidebar: config.showSidebar ?? true,
@@ -326,7 +342,7 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
       } catch (err) {
         console.warn('[sessions] Failed to load sessions config:', err)
         // Reset collapse prefs too, so a failed profile load can't leak the previous profile's state.
-        set({ sessions: [], activeSessionId: null, isLoading: false, configLoadError: 'Failed to load session config', collapsedRepoGroups: [], repoGroupOrder: [] })
+        set({ sessions: get().sessions.filter(s => s.profileId !== pid), runtimeProfileId: pid, activeSessionId: null, isLoading: false, configLoadError: 'Failed to load session config', collapsedRepoGroups: [], repoGroupOrder: [] })
       }
     },
 
@@ -339,7 +355,7 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
       const branch = await window.git.getBranch(directory)
 
       // Check for duplicate sessions (active or archived) for the same branch in the same repo
-      const existingSessions = get().sessions
+      const existingSessions = get().sessions.filter(s => s.profileId === get().runtimeProfileId)
       const duplicate = existingSessions.find((s) =>
         s.branch === branch &&
         (s.directory === directory || (extra?.repoId && s.repoId === extra.repoId))
@@ -366,6 +382,7 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
       const panelVisibility = isReview ? { ...REVIEW_PANEL_VISIBILITY } : { ...DEFAULT_PANEL_VISIBILITY }
       const newSession: Session = {
         id,
+        profileId: get().runtimeProfileId,
         name,
         directory,
         branch,
@@ -413,20 +430,22 @@ export function createCoreActions(get: StoreGet, set: StoreSet) {
 
     removeSession: (id: string) => {
       const { sessions, activeSessionId } = get()
-      const removedIndex = sessions.findIndex((s) => s.id === id)
+      const currentSessions = sessions.filter(s => s.profileId === get().runtimeProfileId)
+      const removedIndex = currentSessions.findIndex((s) => s.id === id)
       const updatedSessions = sessions.filter((s) => s.id !== id)
 
+      const remainingCurrent = updatedSessions.filter(s => s.profileId === get().runtimeProfileId)
       let newActiveId = activeSessionId
-      if (activeSessionId === id && updatedSessions.length > 0) {
+      if (activeSessionId === id && remainingCurrent.length > 0) {
         // Prefer the next non-archived session, then previous, then any
-        const nextIndex = Math.min(removedIndex, updatedSessions.length - 1)
+        const nextIndex = Math.min(removedIndex, remainingCurrent.length - 1)
         const candidates = [
-          ...updatedSessions.slice(nextIndex),
-          ...updatedSessions.slice(0, nextIndex),
+          ...remainingCurrent.slice(nextIndex),
+          ...remainingCurrent.slice(0, nextIndex),
         ]
         const nonArchived = candidates.find((s) => !s.isArchived)
         newActiveId = nonArchived?.id ?? candidates[0].id
-      } else if (updatedSessions.length === 0) {
+      } else if (remainingCurrent.length === 0) {
         newActiveId = null
       }
 

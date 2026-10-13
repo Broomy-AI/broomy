@@ -7,6 +7,7 @@
  * debounces and assembles the complete config from all Zustand stores before
  * sending one atomic config.save() IPC call.
  */
+import { profileRuntime } from './profileRuntime'
 import { PANEL_IDS } from '../panels/system/types'
 
 // These imports form a circular chain (sessions → sessionPersistence → configPersistence → sessions)
@@ -52,12 +53,15 @@ export function getLoadedSessionCount(): number {
  * Assemble the complete config from all Zustand stores and save it.
  * This is the single save path — no store should call config.save() directly.
  */
-async function doSave(): Promise<void> {
-  const sessionState = useSessionStore.getState()
-  const agentState = useAgentStore.getState()
-  const repoState = useRepoStore.getState()
+async function doSave(profileId = currentProfileId): Promise<void> {
+  const live = useSessionStore.getState()
+  const cached = profileId !== currentProfileId && profileId ? profileRuntime.get(profileId) : undefined
+  const sessionState = cached ? { ...live, ...cached.ui } : live
+  const agentState = cached?.agents ?? useAgentStore.getState()
+  const repoState = cached?.repos ?? useRepoStore.getState()
+  const counts = cached?.counts ?? loadedCounts
 
-  const sessions = sessionState.sessions
+  const sessions = live.sessions.filter(s => s.profileId === profileId)
   const agents = agentState.agents
   const repos = repoState.repos
 
@@ -65,30 +69,30 @@ async function doSave(): Promise<void> {
   // This prevents bugs (e.g. a failed load or store reset) from wiping disk data.
   // Threshold > 1 so that deleting the last item is allowed — only block when
   // a suspiciously large number of items vanish at once (indicating a bug, not user action).
-  if (sessions.length === 0 && loadedCounts.sessions > 1) {
+  if (sessions.length === 0 && counts.sessions > 1) {
     console.warn(
       `[configPersistence] Save guard: refusing to save — sessions empty ` +
-      `(${loadedCounts.sessions} were loaded from disk)`
+      `(${counts.sessions} were loaded from disk)`
     )
     return
   }
-  if (agents.length === 0 && loadedCounts.agents > 1) {
+  if (agents.length === 0 && counts.agents > 1) {
     console.warn(
       `[configPersistence] Save guard: refusing to save — agents empty ` +
-      `(${loadedCounts.agents} were loaded from disk)`
+      `(${counts.agents} were loaded from disk)`
     )
     return
   }
-  if (repos.length === 0 && loadedCounts.repos > 1) {
+  if (repos.length === 0 && counts.repos > 1) {
     console.warn(
       `[configPersistence] Save guard: refusing to save — repos empty ` +
-      `(${loadedCounts.repos} were loaded from disk)`
+      `(${counts.repos} were loaded from disk)`
     )
     return
   }
 
-  await window.config.save({
-    profileId: currentProfileId,
+  const result = await window.config.save({
+    profileId,
     agents,
     sessions: sessions.filter(s => s.status !== 'initializing').map((s) => ({
       id: s.id,
@@ -141,14 +145,40 @@ async function doSave(): Promise<void> {
     collapsedRepoGroups: sessionState.collapsedRepoGroups,
     repoGroupOrder: sessionState.repoGroupOrder,
   })
+  if (!result.success) throw new Error(result.error ?? 'Failed to save profile config')
 }
 
 // Debounced save — collapses rapid mutations into a single write
+let savingSuspended = false
+let saveQueue = Promise.resolve()
+
+export function suspendProfileSaving(suspended: boolean): void {
+  savingSuspended = suspended
+  if (!suspended) scheduleSave()
+}
+
 let saveTimeout: ReturnType<typeof setTimeout> | null = null
 
 export function scheduleSave(): void {
+  if (savingSuspended) return
   if (saveTimeout) clearTimeout(saveTimeout)
   saveTimeout = setTimeout(() => {
-    void doSave()
+    void enqueueSave().catch((err: unknown) => console.error('[configPersistence] Failed to save:', err))
   }, 500)
+}
+
+async function saveAllProfiles(): Promise<void> {
+  const ids = new Set([currentProfileId, ...profileRuntime.keys()])
+  for (const id of ids) await doSave(id)
+}
+
+function enqueueSave(): Promise<void> {
+  saveQueue = saveQueue.catch(() => {}).then(saveAllProfiles)
+  return saveQueue
+}
+
+export async function saveNow(): Promise<void> {
+  if (saveTimeout) clearTimeout(saveTimeout)
+  saveTimeout = null
+  await enqueueSave()
 }

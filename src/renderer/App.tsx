@@ -201,7 +201,9 @@ function usePrAutoRefresh({ isLoading, sessions, repos, refreshPrStatus, updateP
 }
 
 function AppContent() {
-  const sessions = useSessionStore(s => s.sessions)
+  const allSessions = useSessionStore(s => s.sessions)
+  const runtimeProfileId = useSessionStore(s => s.runtimeProfileId)
+  const sessions = useMemo(() => allSessions.filter(s => s.profileId === runtimeProfileId), [allSessions, runtimeProfileId])
   const sidebarVisibleOrder = useSessionStore(s => s.sidebarVisibleOrder)
   const sidebarFullOrder = useSessionStore(s => s.sidebarFullOrder)
   const setRepoGroupCollapsed = useSessionStore(s => s.setRepoGroupCollapsed)
@@ -313,7 +315,7 @@ function AppContent() {
 
   // Panels map hook
   const panelsMap = usePanelsMap({
-    sessions, activeSessionId, activeSession,
+    sessions, terminalSessions: allSessions, activeSessionId, activeSession,
     activeSessionGitStatus, activeSessionGitStatusResult, selectedFileStatus,
     navigateToFile, openFileInDiffMode, scrollToLine, searchHighlight,
     diffBaseRef, diffCurrentRef, diffLabel, navigationToken, setIsFileViewerDirty,

@@ -7,6 +7,7 @@
  * a unified debounced save via configPersistence (which assembles the complete
  * config from all stores before writing).
  */
+import { profileRuntime } from './profileRuntime'
 import { create } from 'zustand'
 import type { ManagedRepo } from '../../preload/index'
 import { scheduleSave, setLoadedCounts } from './configPersistence'
@@ -54,6 +55,11 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
   loadError: null,
 
   loadRepos: async (profileId?: string) => {
+    const cached = profileId ? profileRuntime.get(profileId) : undefined
+    if (cached) {
+      set({ repos: cached.repos.repos, defaultCloneDir: cached.repos.defaultCloneDir, defaultShell: cached.repos.defaultShell, loadError: cached.repos.loadError, profileId })
+      return
+    }
     if (profileId !== undefined) {
       set({ profileId })
     }

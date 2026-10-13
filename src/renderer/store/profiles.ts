@@ -1,3 +1,5 @@
+import { profileRuntime } from './profileRuntime'
+import { useSessionStore } from './sessions'
 /**
  * Multi-window profile store for managing named workspace profiles.
  *
@@ -97,6 +99,8 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
     const updatedProfiles = profiles.filter((p) => p.id !== profileId)
     set({ profiles: updatedProfiles })
     await window.profiles.save({ profiles: updatedProfiles, lastProfileId: currentProfileId })
+    profileRuntime.delete(profileId)
+    useSessionStore.setState(state => ({ sessions: state.sessions.filter(s => s.profileId !== profileId) }))
     loadedProfileCount = updatedProfiles.length
   },
 

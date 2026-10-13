@@ -1,7 +1,9 @@
 /**
  * Manages session lifecycle including initial data loading, profile switching, session read marking, and window focus behavior.
  */
-import { useEffect, useCallback, useState } from 'react'
+import { useEffect, useCallback, useState, useRef } from 'react'
+import { rememberProfile } from '../../../store/profileRuntime'
+import { saveNow, getCurrentProfileId, suspendProfileSaving } from '../../../store/configPersistence'
 import type { Session } from '../../../store/sessions'
 import type { ProfileData } from '../../../store/profiles'
 import { terminalBufferRegistry } from '../../../shared/utils/terminalBufferRegistry'
@@ -122,16 +124,29 @@ export function useSessionLifecycle({
     }).catch((err: unknown) => console.error('[startup] Failed to load profiles:', err))
   }, [])
 
+  const switchingProfile = useRef(false)
+
   // Handle profile switching: in tabs mode switch within window; in desktops mode open a new window
   const handleSwitchProfile = useCallback(async (profileId: string) => {
     if (profileMode === 'desktops') {
       await openProfileInNewWindow(profileId)
       return
     }
-    await switchProfile(profileId)
-    await loadSessions(profileId).catch((err: unknown) => console.error('[profile-switch] Failed to load sessions:', err))
-    await loadAgents(profileId).catch((err: unknown) => console.error('[profile-switch] Failed to load agents:', err))
-    await loadRepos(profileId).catch((err: unknown) => console.error('[profile-switch] Failed to load repos:', err))
+    if (switchingProfile.current || profileId === getCurrentProfileId()) return
+    switchingProfile.current = true
+    try {
+      await saveNow()
+      suspendProfileSaving(true)
+      const outgoingId = getCurrentProfileId()
+      if (outgoingId) rememberProfile(outgoingId)
+      await loadAgents(profileId)
+      await loadRepos(profileId)
+      await loadSessions(profileId)
+      await switchProfile(profileId)
+    } finally {
+      suspendProfileSaving(false)
+      switchingProfile.current = false
+    }
   }, [profileMode, openProfileInNewWindow, switchProfile, loadSessions, loadAgents, loadRepos])
 
   // Update window title to show active session name and profile

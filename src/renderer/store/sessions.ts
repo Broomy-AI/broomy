@@ -54,6 +54,8 @@ export type ExplorerFilter = 'files' | 'source-control' | 'search' | 'recent' | 
 export type PanelVisibility = Record<string, boolean>
 
 export interface Session {
+  /** Runtime owner; never persisted in the per-profile config. */
+  profileId?: string
   id: string
   name: string
   directory: string
@@ -142,6 +144,7 @@ const DEFAULT_GLOBAL_PANEL_VISIBILITY: PanelVisibility = {
 }
 
 interface SessionStore {
+  runtimeProfileId?: string
   sessions: Session[]
   activeSessionId: string | null
   isLoading: boolean

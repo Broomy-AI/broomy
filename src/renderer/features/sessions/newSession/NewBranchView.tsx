@@ -29,7 +29,7 @@ export function NewBranchView({
 }) {
   const agents = useAgentStore(s => s.agents)
   const ghAvailable = useRepoStore(s => s.ghAvailable)
-  const sessions = useSessionStore(s => s.sessions)
+  const sessions = useSessionStore(s => s.sessions.filter(session => session.profileId === s.runtimeProfileId))
   const setActiveSession = useSessionStore(s => s.setActiveSession)
 
   // Issue-derived sessions default under an `issue/<number>-` prefix so their worktree lands in

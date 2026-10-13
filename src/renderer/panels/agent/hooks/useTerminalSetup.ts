@@ -1,3 +1,4 @@
+import { profileRuntime } from '../../../store/profileRuntime'
 /**
  * Sets up and manages the xterm.js terminal instance including PTY creation,
  * resize handling, buffer restoration, and scroll tracking.
@@ -404,13 +405,21 @@ function createConfiguredTerminal(linkHandler: ILinkHandler): XTerm {
 }
 
 
+function useProfileShell(storeSessionId?: string): string {
+  const currentShell = useRepoStore((state) => state.defaultShell)
+  const owner = useSessionStore(s => s.sessions.find(session => session.id === storeSessionId)?.profileId)
+  const defaultShell = owner && owner !== useRepoStore.getState().profileId
+    ? profileRuntime.get(owner)?.repos.defaultShell ?? currentShell : currentShell
+  return defaultShell
+}
+
 export function useTerminalSetup(
   config: TerminalConfig,
   containerRef: React.RefObject<HTMLDivElement | null>,
 ): TerminalSetupResult {
   const { sessionId, isAgentTerminal, restartKey, storeSessionId, tabId } = config
   const s = useTerminalState(config)
-  const defaultShell = useRepoStore((state) => state.defaultShell)
+  const defaultShell = useProfileShell(storeSessionId)
 
   // Main terminal setup effect
   useEffect(() => {

@@ -1,3 +1,4 @@
+import { getSessionProfileConfig } from '../../store/profileRuntime'
 /**
  * Provides memoized callback functions for top-level app actions such as session management, panel toggling, and layout updates.
  */
@@ -141,20 +142,21 @@ export function useAppCallbacks({
   }, [sessions, repos, updatePrState, updateFeedbackStatus, updateChecksStatus, updateReviewStatus, updateReviewState])
 
   const getAgentCommand = useCallback((session: Session) => {
+    const [profileAgents, profileRepos] = [getSessionProfileConfig(session.profileId)?.agents.agents ?? agents, getSessionProfileConfig(session.profileId)?.repos.repos ?? repos]
     if (!session.agentId) return undefined
-    const agent = agents.find((a) => a.id === session.agentId)
+    const agent = profileAgents.find((a) => a.id === session.agentId)
     if (!agent?.command) return undefined
     // If the session is linked to a repo, wait until repo data is available
     // before returning a command. This prevents spawning the agent without
     // repo-level flags (e.g. skipApproval) that get appended to the command.
-    if (session.repoId && !repos.find((r) => r.id === session.repoId)) {
+    if (session.repoId && !profileRepos.find((r) => r.id === session.repoId)) {
       return undefined
     }
     // Find repo by ID, or fall back to directory matching for sessions
     // that predate the repo system (no repoId set).
     const repo = session.repoId
-      ? repos.find((r) => r.id === session.repoId)
-      : repos.find((r) => session.directory.startsWith(`${r.rootDir}/`) || session.directory === r.rootDir)
+      ? profileRepos.find((r) => r.id === session.repoId)
+      : profileRepos.find((r) => session.directory.startsWith(`${r.rootDir}/`) || session.directory === r.rootDir)
     const command = (repo?.skipApproval && agent.skipApprovalFlag && !agent.command.includes(agent.skipApprovalFlag))
       ? `${agent.command} ${agent.skipApprovalFlag}`
       : agent.command
@@ -162,16 +164,17 @@ export function useAppCallbacks({
   }, [agents, repos])
 
   const getAgentEnv = useCallback((session: Session): Record<string, string> => {
+    const [profileAgents, profileRepos] = [getSessionProfileConfig(session.profileId)?.agents.agents ?? agents, getSessionProfileConfig(session.profileId)?.repos.repos ?? repos]
     const varInput = {
       session,
-      repo: repos.find((r) => r.id === session.repoId),
+      repo: profileRepos.find((r) => r.id === session.repoId),
       directory: session.directory,
     }
     // BROOMY_* lets the agent command line reference session state without
     // splicing GitHub-controlled text into a shell. Configured env values use
     // {var} instead, because they are passed to spawn unexpanded.
     const broomyEnv = buildTemplateEnv(varInput, 'agent')
-    const agent = session.agentId ? agents.find((a) => a.id === session.agentId) : undefined
+    const agent = session.agentId ? profileAgents.find((a) => a.id === session.agentId) : undefined
     const vars = buildTemplateVars(varInput)
     const resolved: Record<string, string> = {}
     for (const [k, v] of Object.entries(agent?.env ?? {})) {
@@ -181,35 +184,40 @@ export function useAppCallbacks({
   }, [agents, repos])
 
   const getRepoIsolation = useCallback((session: Session) => {
+    const profileRepos = getSessionProfileConfig(session.profileId)?.repos.repos ?? repos
     if (!session.repoId) return undefined
-    const repo = repos.find((r) => r.id === session.repoId)
+    const repo = profileRepos.find((r) => r.id === session.repoId)
     if (!repo?.isolated) return undefined
     return { isolated: true, repoRootDir: repo.rootDir }
   }, [repos])
 
   const getAgentConnectionMode = useCallback((session: Session): 'terminal' | 'api' | undefined => {
+    const profileAgents = getSessionProfileConfig(session.profileId)?.agents.agents ?? agents
     if (!session.agentId) return undefined
-    const agent = agents.find((a) => a.id === session.agentId)
+    const agent = profileAgents.find((a) => a.id === session.agentId)
     return agent?.connectionMode
   }, [agents])
 
   const getAgentModel = useCallback((session: Session): string | undefined => {
+    const profileAgents = getSessionProfileConfig(session.profileId)?.agents.agents ?? agents
     if (!session.agentId) return undefined
-    const agent = agents.find((a) => a.id === session.agentId)
+    const agent = profileAgents.find((a) => a.id === session.agentId)
     return agent?.model
   }, [agents])
 
   const getAgentEffort = useCallback((session: Session): 'low' | 'medium' | 'high' | 'max' | undefined => {
+    const profileAgents = getSessionProfileConfig(session.profileId)?.agents.agents ?? agents
     if (!session.agentId) return undefined
-    const agent = agents.find((a) => a.id === session.agentId)
+    const agent = profileAgents.find((a) => a.id === session.agentId)
     return agent?.effort
   }, [agents])
 
   const getAgentSkipApproval = useCallback((session: Session): boolean => {
+    const profileRepos = getSessionProfileConfig(session.profileId)?.repos.repos ?? repos
     // Match repo by ID, or fall back to directory matching (same as getAgentCommand)
     const repo = session.repoId
-      ? repos.find((r) => r.id === session.repoId)
-      : repos.find((r) => session.directory.startsWith(`${r.rootDir}/`) || session.directory === r.rootDir)
+      ? profileRepos.find((r) => r.id === session.repoId)
+      : profileRepos.find((r) => session.directory.startsWith(`${r.rootDir}/`) || session.directory === r.rootDir)
     return repo?.skipApproval ?? false
   }, [repos])
 
