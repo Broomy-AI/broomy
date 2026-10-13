@@ -77,6 +77,12 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
   },
 
   switchProfile: async (profileId: string) => {
+    const result = await window.profiles.setWindowProfile(profileId)
+    if (!result.success) throw new Error(result.error ?? 'Failed to update window profile')
+    // Reloading this window must restore its current profile, not its creation profile.
+    const url = new URL(window.location.href)
+    url.searchParams.set('profile', profileId)
+    window.history.replaceState(null, '', url)
     const { profiles } = get()
     set({ currentProfileId: profileId })
     await window.profiles.save({ profiles, lastProfileId: profileId })

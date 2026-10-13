@@ -27,6 +27,7 @@ import { disposePtyListenersForWindow, disposeAllPtyListeners } from './handlers
 import { navigationAction } from './navigation'
 import { toHttpUrl } from './externalUrl'
 import { showWebviewContextMenu } from './webviewMenu'
+import { setWindowProfile, removeProfileWindow } from './profileWindows'
 import { treeKill } from './treeKill'
 import { sweepOrphanedPtys, clearOwnMarkers } from './ptyMarkers'
 
@@ -193,7 +194,7 @@ function createWindow(profileId?: string): BrowserWindow {
 
   // Track window by profileId
   if (profileId) {
-    profileWindows.set(profileId, window)
+    setWindowProfile(profileWindows, window, profileId)
   }
 
   // Load the renderer with profileId as query parameter
@@ -272,9 +273,7 @@ function createWindow(profileId?: string): BrowserWindow {
 
   // Cleanup when window is closing
   window.on('close', () => {
-    if (profileId) {
-      profileWindows.delete(profileId)
-    }
+    removeProfileWindow(profileWindows, window)
     disposePtyListenersForWindow(ptyOwnerWindows, window)
     void killPtysForWindow(window)
     closeWatchersForWindow(window)

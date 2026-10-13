@@ -111,6 +111,7 @@ const mockUpdate: Mocked<UpdateApi> = {
 const mockProfiles: Mocked<ProfilesApi> = {
   list: vi.fn().mockResolvedValue({ profiles: [], lastProfileId: 'default' }),
   save: vi.fn().mockResolvedValue({ success: true }),
+  setWindowProfile: vi.fn().mockResolvedValue({ success: true }),
   openWindow: vi.fn().mockResolvedValue({ success: true, alreadyOpen: false }),
   getOpenProfiles: vi.fn().mockResolvedValue([]),
 }

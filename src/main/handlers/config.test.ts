@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { BrowserWindow } from 'electron'
+import { removeProfileWindow } from '../profileWindows'
+vi.mock('electron', () => ({ BrowserWindow: { fromWebContents: vi.fn() } }))
 import { allowConsoleError, allowConsoleWarn } from '../../test/console-guard'
 
 vi.mock('fs', () => ({
@@ -257,6 +260,36 @@ describe('config handlers', () => {
       const result = handlers['profiles:openWindow'](null, 'new-profile')
       expect(result).toEqual({ success: true, alreadyOpen: false })
       expect(createWindow).toHaveBeenCalledWith('new-profile')
+    })
+  })
+
+  describe('profiles:setWindowProfile', () => {
+    it('rekeys A to B and allows desktops mode to create a separate A window', () => {
+      const window = { isDestroyed: () => false, focus: vi.fn() }
+      const ctx = createMockCtx()
+      ctx.profileWindows.set('a', window as never)
+      const createWindow = vi.fn()
+      Object.assign(ctx, { createWindow })
+      vi.mocked(BrowserWindow.fromWebContents).mockReturnValue(window as never)
+      const handlers = setupHandlers(ctx)
+      expect(handlers['profiles:setWindowProfile']({ sender: {} }, 'b')).toEqual({ success: true })
+      expect(ctx.profileWindows.has('a')).toBe(false)
+      expect(ctx.profileWindows.get('b')).toBe(window)
+      handlers['profiles:openWindow'](null, 'a')
+      expect(createWindow).toHaveBeenCalledWith('a')
+      handlers['profiles:openWindow'](null, 'b')
+      expect(window.focus).toHaveBeenCalledOnce()
+      removeProfileWindow(ctx.profileWindows, window as never)
+      expect(ctx.profileWindows.has('b')).toBe(false)
+    })
+
+    it('rejects invalid IDs and unavailable sender windows without changing ownership', () => {
+      const ctx = createMockCtx()
+      const handlers = setupHandlers(ctx)
+      expect(() => handlers['profiles:setWindowProfile']({ sender: {} }, '../a')).toThrow('Invalid profile ID')
+      vi.mocked(BrowserWindow.fromWebContents).mockReturnValue(null)
+      expect(handlers['profiles:setWindowProfile']({ sender: {} }, 'b').success).toBe(false)
+      expect(ctx.profileWindows.size).toBe(0)
     })
   })
 

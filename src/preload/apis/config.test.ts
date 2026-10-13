@@ -50,6 +50,11 @@ describe('preload config API', () => {
       expect(mockInvoke).toHaveBeenCalledWith('profiles:openWindow', 'profile-1')
     })
 
+    it('setWindowProfile invokes profiles:setWindowProfile', async () => {
+      await profilesApi.setWindowProfile('profile-2')
+      expect(mockInvoke).toHaveBeenCalledWith('profiles:setWindowProfile', 'profile-2')
+    })
+
     it('getOpenProfiles invokes profiles:getOpenProfiles', async () => {
       await profilesApi.getOpenProfiles()
       expect(mockInvoke).toHaveBeenCalledWith('profiles:getOpenProfiles')
