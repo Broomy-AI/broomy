@@ -68,3 +68,6 @@ storybook-static/
 # Broomy review data
 .broomy/
 *.tsbuildinfo
+
+# Claude Code local worktrees
+.claude/worktrees/
