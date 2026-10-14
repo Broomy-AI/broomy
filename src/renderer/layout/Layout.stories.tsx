@@ -144,13 +144,6 @@ export const WithTopBanner: Story = {
   },
 }
 
-export const CustomTitle: Story = {
-  args: {
-    ...Default.args,
-    title: 'My Workspace',
-  },
-}
-
 export const LinuxPlatform: Story = {
   args: {
     ...Default.args,

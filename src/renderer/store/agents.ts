@@ -6,6 +6,7 @@
  * triggers a unified debounced save via configPersistence (which assembles the
  * complete config from all stores before writing).
  */
+import { profileRuntime } from './profileRuntime'
 import { create } from 'zustand'
 import type { AgentData } from '../../preload/index'
 import { scheduleSave, setLoadedCounts } from './configPersistence'
@@ -30,6 +31,11 @@ export const useAgentStore = create<AgentStore>((set, get) => ({
   isLoading: true,
 
   loadAgents: async (profileId?: string) => {
+    const cached = profileId ? profileRuntime.get(profileId) : undefined
+    if (cached) {
+      set({ agents: cached.agents.agents, isLoading: false, profileId })
+      return
+    }
     if (profileId !== undefined) {
       set({ profileId })
     }

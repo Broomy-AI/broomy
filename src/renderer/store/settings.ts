@@ -19,6 +19,8 @@ interface SettingsState {
   systemIsDark: boolean
   resolvedTheme: ThemeName
   set: (patch: Partial<Appearance>) => void
+  /** Cancel any pending debounced save and write to disk immediately. */
+  saveNow: () => Promise<void>
   /** Apply a snapshot pushed from main WITHOUT scheduling a save back. */
   applyRemote: (snapshot: AppearanceSnapshot) => void
   reset: () => void
@@ -82,6 +84,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       resolvedTheme: resolveTheme(appearance.theme, get().systemIsDark),
     })
     scheduleSave(appearance)
+  },
+
+  saveNow: async () => {
+    cancelPendingSave()
+    await window.settings.save(get().appearance)
   },
 
   applyRemote: (snapshot) => {

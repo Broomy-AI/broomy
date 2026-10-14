@@ -206,7 +206,7 @@ export function ReviewPrsView({
   onComplete: (directory: string, agentId: string | null, extra?: { repoId?: string; name?: string; sessionType?: 'default' | 'review'; prNumber?: number; prTitle?: string; prUrl?: string; prBaseBranch?: string; lastKnownPrState?: 'OPEN' | 'MERGED' | 'CLOSED' | null }) => void
 }) {
   const { agents } = useAgentStore()
-  const sessions = useSessionStore((s) => s.sessions)
+  const sessions = useSessionStore((s) => s.sessions.filter(session => session.profileId === s.runtimeProfileId))
   const updateRepo = useRepoStore((s) => s.updateRepo)
 
   // PR numbers that already have an active (non-archived) review session for this repo

@@ -49,6 +49,8 @@ export interface Appearance {
    * cue); when off, the rail is a neutral grey so the sidebar reads calmer.
    */
   sidebarRailColored: boolean
+  /** How profiles are navigated: 'tabs' switches within the window, 'desktops' opens a new window per profile. */
+  profileMode: 'tabs' | 'desktops'
 }
 
 export const DEFAULT_APPEARANCE: Appearance = {
@@ -63,6 +65,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   terminalContrast: 'auto',
   accent: '#4a9eff',
   sidebarRailColored: true,
+  profileMode: 'desktops',
 }
 
 export const APP_TEXT_SCALES = [1, 1.1, 1.25, 1.4] as const
@@ -204,6 +207,10 @@ export function normalizeAppearance(raw: unknown): Appearance {
       typeof r.sidebarRailColored === 'boolean'
         ? r.sidebarRailColored
         : DEFAULT_APPEARANCE.sidebarRailColored,
+    profileMode:
+      r.profileMode === 'tabs' || r.profileMode === 'desktops'
+        ? r.profileMode
+        : DEFAULT_APPEARANCE.profileMode,
   }
 }
 

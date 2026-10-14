@@ -67,7 +67,6 @@ const mockToolbarPanels = [
 
 export const Default: Story = {
   args: {
-    title: 'Broomy',
     isDev: false,
     platform: 'darwin',
     toolbarPanelInfo: mockToolbarPanels,
@@ -118,9 +117,3 @@ export const AllPanelsHidden: Story = {
   },
 }
 
-export const CustomTitle: Story = {
-  args: {
-    ...Default.args,
-    title: 'My Workspace',
-  },
-}

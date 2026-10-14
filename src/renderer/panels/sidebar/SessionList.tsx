@@ -47,7 +47,7 @@ export default function SessionList({
   onSyncMain,
   onPauseSession,
 }: SessionListProps) {
-  const sessions = useSessionStore((s) => s.sessions)
+  const sessions = useSessionStore((s) => s.sessions.filter(session => session.profileId === s.runtimeProfileId))
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')

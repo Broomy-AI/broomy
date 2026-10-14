@@ -99,6 +99,8 @@ function makeHookParams(overrides: Partial<Parameters<typeof useSessionLifecycle
     checkGhAvailability: vi.fn().mockResolvedValue(undefined),
     checkGitAvailability: vi.fn().mockResolvedValue(undefined),
     switchProfile: vi.fn().mockResolvedValue(undefined),
+    openProfileInNewWindow: vi.fn().mockResolvedValue(undefined),
+    profileMode: 'tabs' as const,
     markSessionRead: vi.fn(),
     updateReviewStatus: vi.fn(),
     ...overrides,
@@ -302,7 +304,7 @@ describe('useSessionLifecycle', () => {
   })
 
   describe('handleSwitchProfile', () => {
-    it('calls switchProfile with the given profileId', async () => {
+    it('calls switchProfile and reloads data for the new profile', async () => {
       const params = makeHookParams()
       const { result } = renderLifecycleHook(params)
 
@@ -311,6 +313,9 @@ describe('useSessionLifecycle', () => {
       })
 
       expect(params.switchProfile).toHaveBeenCalledWith('profile-2')
+      expect(params.loadSessions).toHaveBeenCalledWith('profile-2')
+      expect(params.loadAgents).toHaveBeenCalledWith('profile-2')
+      expect(params.loadRepos).toHaveBeenCalledWith('profile-2')
     })
   })
 

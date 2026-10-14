@@ -13,6 +13,7 @@ export type ProfilesApi = {
   list: () => Promise<ProfilesData>
   save: (data: ProfilesData) => Promise<{ success: boolean; error?: string }>
   openWindow: (profileId: string) => Promise<{ success: boolean; alreadyOpen: boolean }>
+  setWindowProfile: (profileId: string) => Promise<{ success: boolean; error?: string }>
   getOpenProfiles: () => Promise<string[]>
 }
 
@@ -34,6 +35,7 @@ export const profilesApi: ProfilesApi = {
   list: () => ipcRenderer.invoke('profiles:list'),
   save: (data) => ipcRenderer.invoke('profiles:save', data),
   openWindow: (profileId) => ipcRenderer.invoke('profiles:openWindow', profileId),
+  setWindowProfile: (profileId) => ipcRenderer.invoke('profiles:setWindowProfile', profileId),
   getOpenProfiles: () => ipcRenderer.invoke('profiles:getOpenProfiles'),
 }
 

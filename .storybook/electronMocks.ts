@@ -103,6 +103,7 @@ export function installElectronMocks() {
   w.profiles = {
     list: resolved({ profiles: [], lastProfileId: 'default' }),
     save: successResolved,
+    setWindowProfile: resolved({ success: true }),
     openWindow: resolved({ success: true, alreadyOpen: false }),
     getOpenProfiles: resolved([]),
   }

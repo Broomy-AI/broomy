@@ -12,7 +12,7 @@ Built with Electron, React, and xterm.js.
 - **File explorer** -- Browse files, view diffs, and edit code with Monaco Editor integration
 - **Git integration** -- Branch tracking, staging, committing, pushing, PR creation, and worktree support
 - **GitHub integration** -- View issues assigned to you, check PR status, and manage code review comments
-- **Profiles** -- Separate workspaces with independent sessions, agents, and repos (each opens in its own window)
+- **Profiles** -- Separate workspaces with independent sessions, agents, and repos. Configurable as **Desktops** (default — each profile gets its own OS window) or **Tabs** (all profiles switch within the same window via an inline tab bar)
 - **Customizable panels** -- Toggle and reorder panels (Explorer, File Viewer, Agent Terminal, User Terminal, Settings)
 - **Keyboard shortcuts** -- `Cmd+1-6` to toggle panels, `Cmd+Shift+C` to copy terminal content
 
@@ -59,6 +59,19 @@ pnpm start         # Run the packaged app
   - **Error** (red) -- Something went wrong
 - Sessions with new activity show an unread indicator (blue dot)
 
+### Profiles
+
+Profiles are separate workspaces with their own sessions, agents, and repos. Open **Settings → Profiles** to choose how switching works:
+
+| Mode | Default | Behavior |
+|------|---------|----------|
+| **Desktops** | ✓ | Each profile opens in its own OS window. The toolbar shows a dropdown chip for the current profile only. Switching to a profile focuses its window (or opens one if it isn't open yet). |
+| **Tabs** | | All profiles are shown as an inline tab bar in the toolbar. Clicking a tab switches profiles within the same window — no new windows are opened. Double-click a tab to rename it; hover to reveal the delete button; click "+" to create a new profile. |
+
+**Switching modes:**
+- **Tabs → Desktops** — the tab bar is replaced by the dropdown chip, and a new OS window opens for every other profile automatically.
+- **Desktops → Tabs** — all profiles appear as tabs in the current window; no new windows are opened.
+
 ### Panels
 
 Each session has independently togglable panels:
@@ -93,7 +106,7 @@ Git operations (simple-git)──►  window.git                ──►  Explo
 Filesystem I/O             ──►  window.fs                 ──►  FileViewer, Explorer
 Config persistence         ──►  window.config             ──►  Zustand stores
 GitHub CLI (gh)            ──►  window.gh                 ──►  Explorer (PR/Issues)
-Profile management         ──►  window.profiles           ──►  ProfileChip
+Profile management         ──►  window.profiles           ──►  ProfileTabs / ProfileChip
 ```
 
 State is managed by six Zustand stores in the renderer: `sessions`, `agents`, `repos`, `profiles`, `errors`, and `tutorial`. The panel system uses a registry pattern for extensibility.
@@ -184,6 +197,7 @@ Config files are stored at `~/.broomy/`:
 ```
 ~/.broomy/
 ├── profiles.json                # Profile definitions + last active profile
+├── settings.json                # Global appearance settings (theme, font size, profile mode, etc.)
 ├── profiles/
 │   ├── default/
 │   │   ├── config.json          # Sessions, agents, repos (production)

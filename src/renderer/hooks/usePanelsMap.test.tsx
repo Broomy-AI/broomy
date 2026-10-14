@@ -549,6 +549,20 @@ describe('usePanelsMap', () => {
         ;(window as unknown as { ResizeObserver: unknown }).ResizeObserver = originalResizeObserver
       })
 
+      it('keeps the real PTYs mounted across profile switches, including an empty profile', async () => {
+        const outgoing = makeSession({ id: 'a', profileId: 'one', isPaused: false })
+        const incoming = makeSession({ id: 'b', profileId: 'two', isPaused: true })
+        const { rerender } = renderAgentPanel([outgoing], { activeSessionId: 'a', terminalSessions: [outgoing] })
+        await waitFor(() => expect(window.pty.create).toHaveBeenCalled())
+        const created = vi.mocked(window.pty.create).mock.calls.length
+        vi.mocked(window.pty.kill).mockClear()
+        rerender([incoming], { activeSessionId: 'b', terminalSessions: [outgoing, incoming] })
+        rerender([], { activeSessionId: null, terminalSessions: [outgoing, incoming] })
+        rerender([outgoing], { activeSessionId: 'a', terminalSessions: [outgoing, incoming] })
+        expect(window.pty.kill).not.toHaveBeenCalled()
+        expect(window.pty.create).toHaveBeenCalledTimes(created)
+      })
+
       it('kills the session PTYs when it becomes paused', async () => {
         const { rerender } = renderAgentPanel([makeSession({ id: 'a', isPaused: false })], { activeSessionId: 'a' })
         await waitFor(() => expect(window.pty.create).toHaveBeenCalled())

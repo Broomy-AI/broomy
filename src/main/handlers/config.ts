@@ -4,7 +4,8 @@
  * Handles reading/writing per-profile config files, migrating legacy configs
  * to the profiles system, and managing agent init scripts.
  */
-import { IpcMain } from 'electron'
+import { setWindowProfile } from '../profileWindows'
+import { BrowserWindow, IpcMain } from 'electron'
 import { existsSync, mkdirSync, writeFileSync, copyFileSync, readdirSync } from 'fs'
 import { readFile, writeFile, rename, copyFile, mkdir, access, readdir } from 'fs/promises'
 import { join } from 'path'
@@ -260,6 +261,14 @@ export function register(ipcMain: IpcMain, ctx: HandlerContext): void {
     } catch (error) {
       return { success: false, error: String(error) }
     }
+  })
+
+  ipcMain.handle('profiles:setWindowProfile', (event, profileId: string) => {
+    validateProfileId(profileId)
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window || window.isDestroyed()) return { success: false, error: 'Profile window is unavailable' }
+    setWindowProfile(ctx.profileWindows, window, profileId)
+    return { success: true }
   })
 
   ipcMain.handle('profiles:openWindow', (_event, profileId: string) => {

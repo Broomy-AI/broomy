@@ -141,7 +141,8 @@ export function createBranchActions(get: StoreGet, set: StoreSet) {
       )
       let newActiveId = activeSessionId
       if (activeSessionId === sessionId) {
-        const nextActive = updatedSessions.find((s) => !s.isArchived)
+        const owner = sessions.find(s => s.id === sessionId)?.profileId
+        const nextActive = updatedSessions.find((s) => !s.isArchived && s.profileId === owner)
         newActiveId = nextActive?.id ?? null
       }
       set({ sessions: updatedSessions, activeSessionId: newActiveId })

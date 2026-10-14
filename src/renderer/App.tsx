@@ -11,11 +11,13 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import Layout from './layout/Layout'
 import NewSessionDialog from './features/sessions/NewSessionDialog'
 import PanelPicker from './shared/components/PanelPicker'
+import ProfileTabs from './features/profiles/ProfileTabs'
 import ProfileChip from './features/profiles/ProfileChip'
 import HelpModal from './shared/components/HelpModal'
 import ShortcutsModal from './shared/components/ShortcutsModal'
 import { useSessionStore, type Session, type SessionStatus, type LayoutSizes } from './store/sessions'
 import { useUpdateStore } from './shared/hooks/useUpdateState'
+import { useSettingsStore } from './store/settings'
 import { useAgentStore } from './store/agents'
 import { useRepoStore } from './store/repos'
 import { useProfileStore } from './store/profiles'
@@ -199,7 +201,9 @@ function usePrAutoRefresh({ isLoading, sessions, repos, refreshPrStatus, updateP
 }
 
 function AppContent() {
-  const sessions = useSessionStore(s => s.sessions)
+  const allSessions = useSessionStore(s => s.sessions)
+  const runtimeProfileId = useSessionStore(s => s.runtimeProfileId)
+  const sessions = useMemo(() => allSessions.filter(s => s.profileId === runtimeProfileId), [allSessions, runtimeProfileId])
   const sidebarVisibleOrder = useSessionStore(s => s.sidebarVisibleOrder)
   const sidebarFullOrder = useSessionStore(s => s.sidebarFullOrder)
   const setRepoGroupCollapsed = useSessionStore(s => s.setRepoGroupCollapsed)
@@ -219,7 +223,7 @@ function AppContent() {
   } = useMemo(() => useSessionStore.getState(), [])
   const { agents, loadAgents } = useAgentStore()
   const { repos, loadRepos, loadError: repoLoadError, checkGhAvailability, checkGitAvailability } = useRepoStore()
-  const { currentProfileId, profiles, loadProfiles, switchProfile } = useProfileStore()
+  const { currentProfileId, profiles, loadProfiles, switchProfile, openProfileInNewWindow } = useProfileStore()
   const { showHelpModal, setShowHelpModal, showShortcutsModal, setShowShortcutsModal } = useHelpMenu(currentProfileId)
   const currentProfile = profiles.find((p) => p.id === currentProfileId)
   const activeSession = sessions.find((s) => s.id === activeSessionId)
@@ -227,6 +231,7 @@ function AppContent() {
   const [showPanelPicker, setShowPanelPicker] = useState(false)
   const [duplicateSessionInfo, setDuplicateSessionInfo] = useState<{ name: string; wasArchived: boolean } | null>(null)
   const [appError, setAppError] = useState<string | null>(null)
+  const profileMode = useSettingsStore(s => s.appearance.profileMode)
   useAppearance()
 
   const { activeSessionGitStatus, activeSessionGitStatusResult, selectedFileStatus, fetchGitStatus } =
@@ -260,6 +265,8 @@ function AppContent() {
     loadRepos,
     checkGhAvailability, checkGitAvailability,
     switchProfile,
+    openProfileInNewWindow,
+    profileMode,
     markSessionRead,
     updateReviewStatus,
   })
@@ -308,7 +315,7 @@ function AppContent() {
 
   // Panels map hook
   const panelsMap = usePanelsMap({
-    sessions, activeSessionId, activeSession,
+    sessions, terminalSessions: allSessions, activeSessionId, activeSession,
     activeSessionGitStatus, activeSessionGitStatusResult, selectedFileStatus,
     navigateToFile, openFileInDiffMode, scrollToLine, searchHighlight,
     diffBaseRef, diffCurrentRef, diffLabel, navigationToken, setIsFileViewerDirty,
@@ -348,8 +355,9 @@ function AppContent() {
         onSidebarWidthChange={setSidebarWidth}
         onLayoutSizeChange={handleLayoutSizeChange}
         errorMessage={sessionErrorMessage(activeSession, activeDirectoryExists)}
-        title={activeSession ? activeSession.name : undefined}
-        profileChip={<ProfileChip onSwitchProfile={handleSwitchProfile} />}
+        profileChip={profileMode === 'desktops'
+          ? <ProfileChip onSwitchProfile={handleSwitchProfile} />
+          : <ProfileTabs onSwitchProfile={handleSwitchProfile} />}
         activeSessionId={activeSessionId}
         onTogglePanel={handleTogglePanel}
         onToggleGlobalPanel={toggleGlobalPanel}

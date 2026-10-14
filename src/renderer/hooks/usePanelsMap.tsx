@@ -1,3 +1,5 @@
+import { profileRuntime } from '../store/profileRuntime'
+import { useRepoStore } from '../store/repos'
 /**
  * Builds the map of panel ID to rendered React element for the layout system, wiring up each panel to active session state.
  */
@@ -62,6 +64,7 @@ const SessionTerminal = memo(function SessionTerminal({
 
 export interface PanelsMapConfig {
   sessions: Session[]
+  terminalSessions?: Session[]
   activeSessionId: string | null
   activeSession: Session | undefined
   activeSessionGitStatus: GitFileStatus[]
@@ -283,21 +286,23 @@ export function usePanelsMap(config: PanelsMapConfig) {
     syncMain,
   } = config
 
+  const terminalSessions = config.terminalSessions ?? sessions
+
   // Derive a stable key from only the session fields the terminal cares about.
   // Runtime fields (status, lastMessage, isUnread) are excluded — they change
   // constantly during agent activity and don't affect terminal rendering.
   // Only the initializing/error states matter (they render a spinner/error
   // instead of SessionTerminal).
   const terminalSessionKey = useMemo(() =>
-    sessions.filter(s => !s.isArchived)
+    terminalSessions.filter(s => !s.isArchived)
       .map(s => `${s.id}|${s.directory}|${s.isRestored}|${s.agentId}|${s.repoId}|${s.status === 'initializing'}|${s.initError ?? ''}|${s.isPaused}`)
       .join(','),
-    [sessions]
+    [terminalSessions]
   )
 
   const terminalPanel = useMemo(() => (
     <div className="h-full w-full relative">
-      {sessions.filter(s => !s.isArchived).map((session) => {
+      {terminalSessions.filter(s => !s.isArchived).map((session) => {
         // Ordering matters here: a durable failure (initError) must not be
         // hidden behind isPaused, a state the user chose — so initError is
         // checked first and wins even for a paused session. isPaused in turn
@@ -356,25 +361,17 @@ export function usePanelsMap(config: PanelsMapConfig) {
             </div>
           )
         }
-        const repo = session.repoId ? repos.find(r => r.id === session.repoId) : undefined
-        return (
-          <SessionTerminal
-            key={session.id}
-            sessionId={session.id}
-            cwd={session.directory}
-            branch={session.branch}
-            agentCommand={agentCommand}
-            agentEnv={getAgentEnv(session)}
-            isRestored={session.isRestored}
-            isolated={repo?.isolated ?? false}
-            repoRootDir={repo?.rootDir}
-            connectionMode={getAgentConnectionMode(session)}
-            skipApproval={getAgentSkipApproval(session)}
-            sdkSessionId={session.sdkSessionId}
-            agentModel={getAgentModel(session)}
-            agentEffort={getAgentEffort(session)}
-          />
-        )
+        const cached = session.profileId && session.profileId !== useRepoStore.getState().profileId ? profileRuntime.get(session.profileId) : undefined
+        const profileRepos = cached?.repos.repos ?? repos
+        const repo = session.repoId ? profileRepos.find(r => r.id === session.repoId) : undefined
+        const props = {
+          sessionId: session.id, cwd: session.directory, branch: session.branch,
+          agentCommand, agentEnv: getAgentEnv(session), isRestored: session.isRestored,
+          isolated: repo?.isolated ?? false, repoRootDir: repo?.rootDir,
+          connectionMode: getAgentConnectionMode(session), skipApproval: getAgentSkipApproval(session),
+          sdkSessionId: session.sdkSessionId, agentModel: getAgentModel(session), agentEffort: getAgentEffort(session),
+        }
+        return <SessionTerminal key={session.id} {...props} />
       })}
       {sessions.length === 0 && (
         <WelcomeScreen onNewSession={handleNewSession} />

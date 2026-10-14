@@ -1,3 +1,5 @@
+import { profileRuntime } from './profileRuntime'
+import { useSessionStore } from './sessions'
 /**
  * Multi-window profile store for managing named workspace profiles.
  *
@@ -75,10 +77,14 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
   },
 
   switchProfile: async (profileId: string) => {
-    // Open the profile in a new window (or focus existing)
-    await window.profiles.openWindow(profileId)
-    // Update lastProfileId
+    const result = await window.profiles.setWindowProfile(profileId)
+    if (!result.success) throw new Error(result.error ?? 'Failed to update window profile')
+    // Reloading this window must restore its current profile, not its creation profile.
+    const url = new URL(window.location.href)
+    url.searchParams.set('profile', profileId)
+    window.history.replaceState(null, '', url)
     const { profiles } = get()
+    set({ currentProfileId: profileId })
     await window.profiles.save({ profiles, lastProfileId: profileId })
   },
 
@@ -99,6 +105,8 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
     const updatedProfiles = profiles.filter((p) => p.id !== profileId)
     set({ profiles: updatedProfiles })
     await window.profiles.save({ profiles: updatedProfiles, lastProfileId: currentProfileId })
+    profileRuntime.delete(profileId)
+    useSessionStore.setState(state => ({ sessions: state.sessions.filter(s => s.profileId !== profileId) }))
     loadedProfileCount = updatedProfiles.length
   },
 

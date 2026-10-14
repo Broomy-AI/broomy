@@ -52,7 +52,6 @@ function makeToolbarPanelInfo(overrides: Partial<{ isVisible: boolean }> = {}) {
 
 function renderToolbar(overrides: Record<string, unknown> = {}) {
   const defaultProps = {
-    title: 'Test Session',
     isDev: false,
     platform: 'darwin',
     profileChip: undefined as React.ReactNode,
@@ -67,16 +66,6 @@ function renderToolbar(overrides: Record<string, unknown> = {}) {
 }
 
 describe('LayoutToolbar', () => {
-  it('renders title text', () => {
-    renderToolbar({ title: 'My Project' })
-    expect(screen.getByText('My Project')).toBeTruthy()
-  })
-
-  it('renders default title "Broomy" when no title provided', () => {
-    renderToolbar({ title: undefined })
-    expect(screen.getByText('Broomy')).toBeTruthy()
-  })
-
   it('shows DEV badge with commit hash when isDev is true', () => {
     renderToolbar({ isDev: true })
     expect(screen.getByText(/^DEV /)).toBeTruthy()

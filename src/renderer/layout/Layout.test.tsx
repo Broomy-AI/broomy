@@ -92,11 +92,6 @@ describe('Layout', () => {
     expect(screen.queryByTestId('sidebar-content')).toBeNull()
   })
 
-  it('shows title in toolbar', () => {
-    renderLayout({ title: 'My Project' })
-    expect(screen.getByText('My Project')).toBeTruthy()
-  })
-
   it('shows error message when provided', () => {
     renderLayout({ errorMessage: 'Folder not found: /missing/path' })
     expect(screen.getByText('Folder not found: /missing/path')).toBeTruthy()

@@ -37,7 +37,6 @@ interface LayoutProps {
   layoutSizes: LayoutSizes
   errorMessage?: string | null
   topBanner?: ReactNode
-  title?: string
   profileChip?: ReactNode
   // Callbacks
   onSidebarWidthChange: (width: number) => void
@@ -71,7 +70,6 @@ export default function Layout({
   layoutSizes,
   errorMessage,
   topBanner,
-  title,
   profileChip,
   onSidebarWidthChange,
   onLayoutSizeChange,
@@ -169,7 +167,6 @@ export default function Layout({
     <div className="h-screen flex flex-col bg-bg-primary">
       {/* Title bar / toolbar */}
       <LayoutToolbar
-        title={title}
         isDev={isDev}
         platform={platform}
         profileChip={profileChip}

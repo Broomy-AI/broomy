@@ -17,9 +17,11 @@ describe('useProfileStore', () => {
     vi.mocked(window.profiles.openWindow).mockResolvedValue({ success: true, alreadyOpen: false })
     // Reset window.location.search for getProfileIdFromUrl
     Object.defineProperty(window, 'location', {
-      value: { search: '' } as Location,
+      value: { search: '', href: 'http://localhost/?profile=default' } as Location,
       writable: true,
     })
+    Object.defineProperty(window, 'history', { value: { replaceState: vi.fn() }, configurable: true })
+    vi.mocked(window.profiles.setWindowProfile).mockResolvedValue({ success: true })
     vi.clearAllMocks()
   })
 
@@ -136,7 +138,15 @@ describe('useProfileStore', () => {
   })
 
   describe('switchProfile', () => {
-    it('opens window and saves lastProfileId', async () => {
+    it('keeps the renderer profile when main rejects the ownership update', async () => {
+      vi.mocked(window.profiles.setWindowProfile).mockResolvedValue({ success: false, error: 'window unavailable' })
+      await expect(useProfileStore.getState().switchProfile('p1')).rejects.toThrow('window unavailable')
+      expect(useProfileStore.getState().currentProfileId).toBe('default')
+      expect(window.profiles.save).not.toHaveBeenCalled()
+      expect(window.history.replaceState).not.toHaveBeenCalled()
+    })
+
+    it('updates currentProfileId and saves lastProfileId', async () => {
       useProfileStore.setState({
         profiles: [{ id: 'p1', name: 'P1', color: '#000' }],
         currentProfileId: 'default',
@@ -144,8 +154,12 @@ describe('useProfileStore', () => {
       })
 
       await useProfileStore.getState().switchProfile('p1')
-      expect(window.profiles.openWindow).toHaveBeenCalledWith('p1')
-      expect(window.profiles.save).toHaveBeenCalled()
+      expect(window.profiles.setWindowProfile).toHaveBeenCalledWith('p1')
+      expect(window.history.replaceState).toHaveBeenCalledWith(null, '', new URL('http://localhost/?profile=p1'))
+      expect(useProfileStore.getState().currentProfileId).toBe('p1')
+      expect(window.profiles.save).toHaveBeenCalledWith(
+        expect.objectContaining({ lastProfileId: 'p1' })
+      )
     })
   })
 
