@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
 import '../../../../test/react-setup'
 import { useRepoStore } from '../../../store/repos'
 import { HomeView } from './HomeView'
@@ -332,6 +332,91 @@ describe('HomeView', () => {
       // First repo should have the focus ring
       const repoRows = container.querySelectorAll('.ring-1')
       expect(repoRows.length).toBe(1)
+    })
+  })
+
+  describe('long repo lists', () => {
+    const makeRepos = (count: number) => Array.from({ length: count }, (_, i) => (
+      { id: `repo-${i + 1}`, name: `Project ${i + 1}`, remoteUrl: '', rootDir: `/repos/p${i + 1}`, defaultBranch: 'main' }
+    ))
+
+    afterEach(() => {
+      // jsdom has no scrollIntoView; drop the stub so other tests see the real (missing) API
+      delete (Element.prototype as Partial<Element>).scrollIntoView
+    })
+
+    it('scrolls the highlighted repo into view', () => {
+      useRepoStore.setState({ repos: makeRepos(5), ghAvailable: true })
+      const spy = vi.fn(function (this: Element) {})
+      Element.prototype.scrollIntoView = spy
+      const { container } = render(<HomeView {...makeProps()} />)
+      const rows = container.querySelectorAll('[data-repo-row]')
+      // Opening the dialog doesn't scroll: it starts at its top
+      expect(spy).not.toHaveBeenCalled()
+
+      fireEvent.keyDown(window, { key: 'ArrowDown' })
+      fireEvent.keyDown(window, { key: 'ArrowDown' })
+      fireEvent.keyDown(window, { key: 'ArrowDown' })
+      expect(spy.mock.contexts.at(-1)).toBe(rows[3])
+      expect(spy.mock.lastCall).toEqual([{ block: 'nearest' }])
+
+      fireEvent.keyDown(window, { key: 'ArrowUp' })
+      expect(spy.mock.contexts.at(-1)).toBe(rows[2])
+    })
+
+    it('keeps arrow-key navigation working without scrollIntoView', () => {
+      const repos = makeRepos(5)
+      useRepoStore.setState({ repos, ghAvailable: true })
+      const props = makeProps()
+      render(<HomeView {...props} />)
+
+      fireEvent.keyDown(window, { key: 'ArrowDown' })
+      fireEvent.keyDown(window, { key: 'ArrowDown' })
+      fireEvent.keyDown(window, { key: 'n' })
+      expect(props.onNewBranch).toHaveBeenCalledWith(repos[2])
+    })
+
+    it('scrolls the body between the pinned header and the Cancel footer', () => {
+      useRepoStore.setState({ repos: makeRepos(3), ghAvailable: true })
+      const { container } = render(<HomeView {...makeProps()} />)
+      const body = container.querySelector('[data-repo-row]')?.closest('.overflow-y-auto')
+      const cloneBtn = [...container.querySelectorAll('button')].find(b => b.textContent?.includes('lone'))!
+
+      expect(body?.className).toContain('min-h-0')
+      expect(body?.contains(cloneBtn)).toBe(true)
+      expect(body?.contains(screen.getByText('New Session'))).toBe(false)
+      expect(body?.contains(screen.getByText('Cancel'))).toBe(false)
+    })
+
+    it('moves DOM focus along a button column with the arrow keys', () => {
+      useRepoStore.setState({ repos: makeRepos(5), ghAvailable: true })
+      const { container } = render(<HomeView {...makeProps()} />)
+      const newButtons = container.querySelectorAll<HTMLButtonElement>('[title="Create a new branch worktree"]')
+
+      act(() => { newButtons[0].focus() })
+      fireEvent.keyDown(newButtons[0], { key: 'ArrowDown' })
+      fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' })
+
+      expect(document.activeElement).toBe(newButtons[2])
+      expect(container.querySelector('.ring-1')?.contains(newButtons[2])).toBe(true)
+    })
+
+    it('highlights the repo whose button receives focus, without scrolling', () => {
+      const repos = makeRepos(5)
+      useRepoStore.setState({ repos, ghAvailable: true })
+      const spy = vi.fn(function (this: Element) {})
+      Element.prototype.scrollIntoView = spy
+      const props = makeProps()
+      const { container } = render(<HomeView {...props} />)
+      const openButtons = container.querySelectorAll<HTMLButtonElement>('[title="Open main branch"]')
+
+      act(() => { openButtons[3].focus() })
+
+      expect(container.querySelector('.ring-1')?.contains(openButtons[3])).toBe(true)
+      // A click focuses on mousedown: scrolling then would move the row away before mouseup
+      expect(spy).not.toHaveBeenCalled()
+      fireEvent.keyDown(openButtons[3], { key: 'e' })
+      expect(props.onExistingBranch).toHaveBeenCalledWith(repos[3])
     })
   })
 })

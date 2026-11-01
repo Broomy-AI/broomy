@@ -4,6 +4,7 @@
  */
 import { useSessionStore } from '../../store/sessions'
 import { PANEL_IDS } from '../../panels'
+import { isModalDialogOpen } from './modalDialog'
 
 const AGENT_TAB_ID = '__agent__'
 
@@ -69,6 +70,7 @@ export function focusAgentTerminal(): void {
   // from the agent tab) before we try to focus the textarea inside it.
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
+      if (isModalDialogOpen()) return
       const container = document.querySelector(`[data-panel-id="${PANEL_IDS.AGENT}"]`)
       if (!container) return
       const textarea = container.querySelector<HTMLElement>('.xterm-helper-textarea')
@@ -99,6 +101,7 @@ export async function sendAgentPrompt(agentPtyId: string, prompt: string): Promi
 export function focusActiveTerminal(): void {
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
+      if (isModalDialogOpen()) return
       focusPanel(PANEL_IDS.AGENT)
     })
   })
@@ -107,11 +110,14 @@ export function focusActiveTerminal(): void {
 /**
  * Restore focus to the last focused panel for a session.
  * Uses requestAnimationFrame to ensure the DOM has updated after session switch.
+ * Skipped if a modal dialog opened in the meantime (e.g. New Session right after launch):
+ * pulling focus behind it would send its keys to the panel instead.
  */
 export function restoreSessionFocus(sessionId: string): void {
   const panelId = getLastFocusedPanel(sessionId)
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
+      if (isModalDialogOpen()) return
       focusPanel(panelId)
     })
   })

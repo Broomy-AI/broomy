@@ -20,6 +20,7 @@ import { useSessionStore } from '../../../store/sessions'
 import { useRepoStore } from '../../../store/repos'
 import { terminalBufferRegistry } from '../../../shared/utils/terminalBufferRegistry'
 import { ptyCaptureRegistry } from '../../../shared/utils/ptyCaptureRegistry'
+import { isModalDialogOpen } from '../../../shared/utils/modalDialog'
 import { useTerminalKeyboard } from './useTerminalKeyboard'
 import { createLinkWiring } from './terminalLinks'
 import { registerFilePathLinks } from './terminalPathLinkProvider'
@@ -665,7 +666,7 @@ export function useTerminalSetup(
           if (s.ptyIdRef.current && term && term.cols > 0 && term.rows > 0) {
             void window.pty.resize(s.ptyIdRef.current, term.cols, term.rows)
           }
-          term?.focus()
+          if (!isModalDialogOpen()) term?.focus()
         })
       }
     })

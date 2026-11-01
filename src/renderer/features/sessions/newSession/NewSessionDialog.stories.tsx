@@ -36,3 +36,23 @@ export const Default: Story = {
     onCancel: () => console.log('Cancel'),
   },
 }
+
+// Runs inside the meta-level withStores, so its repos win
+const withManyRepos: Decorator = (Story) => {
+  useRepoStore.setState({
+    repos: Array.from({ length: 30 }, (_, i) => makeRepo({
+      id: `repo-${i + 1}`,
+      name: `repo-${String(i + 1).padStart(2, '0')}`,
+      rootDir: `/Users/test/repos/repo-${i + 1}`,
+      defaultBranch: 'main',
+    })),
+    ghAvailable: true,
+  })
+  return <Story />
+}
+
+/** More repos than fit the window: the dialog stays inside it and the body scrolls. */
+export const ManyRepos: Story = {
+  decorators: [withManyRepos],
+  args: Default.args,
+}

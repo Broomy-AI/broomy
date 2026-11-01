@@ -1,7 +1,7 @@
 /**
  * Home view of the new session dialog showing managed repos and action buttons for creating sessions.
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRepoStore } from '../../../store/repos'
 import type { ManagedRepo } from '../../../../preload/index'
 
@@ -9,6 +9,7 @@ function RepoRow({
   repo,
   isFocused,
   ghAvailable,
+  onFocus,
   onNewBranch,
   onExistingBranch,
   onIssues,
@@ -20,6 +21,7 @@ function RepoRow({
   repo: ManagedRepo
   isFocused: boolean
   ghAvailable: boolean | null
+  onFocus: () => void
   onNewBranch: (repo: ManagedRepo) => void
   onExistingBranch: (repo: ManagedRepo) => void
   onIssues: (repo: ManagedRepo) => void
@@ -29,7 +31,9 @@ function RepoRow({
 }) {
   return (
     <div
-      className={`flex items-center gap-2 p-2 rounded border bg-bg-primary ${
+      data-repo-row
+      onFocus={onFocus}
+      className={`flex items-center gap-2 p-2 rounded border bg-bg-primary scroll-my-1 ${
         isFocused ? 'border-accent ring-1 ring-accent/50' : 'border-border'
       }`}
     >
@@ -80,6 +84,7 @@ export function HomeView({
 }) {
   const { repos, ghAvailable } = useRepoStore()
   const [focusedRepoIndex, setFocusedRepoIndex] = useState(0)
+  const repoListRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (focusedRepoIndex >= repos.length && repos.length > 0) setFocusedRepoIndex(repos.length - 1)
@@ -90,14 +95,33 @@ export function HomeView({
       ['c', onClone], ['a', onAddExistingRepo], ['f', onOpenFolder],
     ])
 
+    // Arrow keys move the highlight, keep it visible, and carry DOM focus along if a row button had it
+    // (otherwise Enter would activate the button of a repo that's no longer highlighted). Only here, not
+    // whenever the highlight changes: a click focuses on mousedown, and scrolling then would move the row
+    // out from under the pointer before mouseup.
+    const moveHighlight = (delta: number) => {
+      const next = Math.min(Math.max(focusedRepoIndex + delta, 0), repos.length - 1)
+      setFocusedRepoIndex(next)
+      const row = repoListRef.current?.querySelectorAll<HTMLElement>('[data-repo-row]')[next]
+      if (!row) return
+      if ('scrollIntoView' in row) row.scrollIntoView({ block: 'nearest' })
+      const active = document.activeElement
+      const activeRow = active?.closest('[data-repo-row]')
+      if (activeRow && activeRow !== row) {
+        const column = Array.from(activeRow.querySelectorAll('button')).indexOf(active as HTMLButtonElement)
+        const buttons = row.querySelectorAll('button')
+        if (column >= 0 && column < buttons.length) buttons[column].focus()
+      }
+    }
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       if (e.metaKey || e.ctrlKey || e.altKey) return
 
       const key = e.key.toLowerCase()
       if (key === 'escape') { e.preventDefault(); e.stopImmediatePropagation(); onCancel(); return }
-      if (e.key === 'ArrowDown' && repos.length > 0) { e.preventDefault(); e.stopImmediatePropagation(); setFocusedRepoIndex((i) => Math.min(i + 1, repos.length - 1)); return }
-      if (e.key === 'ArrowUp' && repos.length > 0) { e.preventDefault(); e.stopImmediatePropagation(); setFocusedRepoIndex((i) => Math.max(i - 1, 0)); return }
+      if (e.key === 'ArrowDown' && repos.length > 0) { e.preventDefault(); e.stopImmediatePropagation(); moveHighlight(1); return }
+      if (e.key === 'ArrowUp' && repos.length > 0) { e.preventDefault(); e.stopImmediatePropagation(); moveHighlight(-1); return }
 
       const globalAction = globalKeys.get(key)
       if (globalAction) { e.preventDefault(); e.stopImmediatePropagation(); globalAction(); return }
@@ -121,7 +145,8 @@ export function HomeView({
       <div className="px-4 py-3 border-b border-border">
         <h2 className="text-lg font-medium text-text-primary">New Session</h2>
       </div>
-      <div className="p-4 space-y-4">
+      {/* Only the body scrolls: the title and Cancel stay put however many repos there are */}
+      <div className="p-4 space-y-4 min-h-0 overflow-y-auto">
         <div className="flex gap-2">
           <button onClick={onClone} className="flex-1 flex items-center justify-center gap-1.5 p-3 rounded border border-border bg-bg-primary hover:bg-bg-tertiary hover:border-accent transition-colors text-sm font-medium text-text-primary">
             <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
@@ -139,9 +164,9 @@ export function HomeView({
         {repos.length > 0 && (
           <div>
             <h3 className="text-xs font-medium text-text-secondary uppercase tracking-wider mb-2">Your Repositories</h3>
-            <div className="space-y-1">
+            <div ref={repoListRef} className="space-y-1">
               {repos.map((repo, index) => (
-                <RepoRow key={repo.id} repo={repo} isFocused={index === focusedRepoIndex} ghAvailable={ghAvailable} onNewBranch={onNewBranch} onExistingBranch={onExistingBranch} onIssues={onIssues} onReviewPrs={onReviewPrs} onOpenMain={onOpenMain} onRepoSettings={onRepoSettings} />
+                <RepoRow key={repo.id} repo={repo} isFocused={index === focusedRepoIndex} ghAvailable={ghAvailable} onFocus={() => setFocusedRepoIndex(index)} onNewBranch={onNewBranch} onExistingBranch={onExistingBranch} onIssues={onIssues} onReviewPrs={onReviewPrs} onOpenMain={onOpenMain} onRepoSettings={onRepoSettings} />
               ))}
             </div>
           </div>

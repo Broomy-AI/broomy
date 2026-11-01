@@ -318,6 +318,31 @@ describe('Terminal', () => {
       vi.restoreAllMocks()
     })
 
+    it('leaves focus in a modal dialog opened before the resume focus ran', async () => {
+      const mockFocus = vi.fn()
+      await setSetup({
+        terminalRef: { current: { focus: mockFocus } as unknown as import('@xterm/xterm').Terminal },
+        isActiveRef: { current: true },
+      })
+
+      const rAFs: FrameRequestCallback[] = []
+      vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => { rAFs.push(cb); return rAFs.length })
+
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" isAgentTerminal isRestored />)
+      fireEvent.click(screen.getByText(/Run \/resume/))
+      const dialog = document.createElement('div')
+      dialog.setAttribute('role', 'dialog')
+      dialog.setAttribute('aria-modal', 'true')
+      document.body.appendChild(dialog)
+      try {
+        while (rAFs.length) rAFs.shift()!(0)
+        expect(mockFocus).not.toHaveBeenCalled()
+      } finally {
+        dialog.remove()
+        vi.restoreAllMocks()
+      }
+    })
+
     it('dismisses resume banner when close button is clicked', async () => {
       await setSetup()
       render(<Terminal sessionId="session-1" cwd="/tmp/test" isAgentTerminal isRestored />)

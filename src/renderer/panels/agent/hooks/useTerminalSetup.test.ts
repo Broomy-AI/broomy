@@ -584,6 +584,36 @@ describe('useTerminalSetup', () => {
       // fit() is no longer called on activation — invisible preserves layout dimensions
       expect(mockTerminalFocus).toHaveBeenCalled()
     })
+
+    it('leaves focus in an open modal dialog when becoming active', () => {
+      useSessionStore.setState({
+        activeSessionId: 'other-session',
+        sessions: [{
+          id: 'session-1', name: 'test', directory: '/test', branch: 'main',
+          status: 'idle', agentId: null, panelVisibility: {}, showExplorer: false,
+          showFileViewer: false, showDiff: false, selectedFilePath: null,
+          planFilePath: null, fileViewerPosition: 'top' as const,
+          layoutSizes: { explorerWidth: 256, fileViewerSize: 300, userTerminalHeight: 192, diffPanelWidth: 320, tutorialPanelWidth: 320 },
+          explorerFilter: 'files' as const, lastMessage: null, lastMessageTime: null,
+          isUnread: false, workingStartTime: null, recentFiles: [], searchHistory: [],
+          terminalTabs: { tabs: [], activeTabId: '__agent__' },
+          branchStatus: 'in-progress' as const, hasFeedback: false, checksStatus: 'none' as const, reviewState: 'none' as const, statusChip: 'in-progress' as StatusChip, isArchived: false, isPaused: false, stage: 'planning', isRestored: false,
+        }],
+      })
+      renderHook(() => useTerminalSetup(makeConfig(), makeContainerRef()))
+      mockTerminalFocus.mockClear()
+
+      const dialog = document.createElement('div')
+      dialog.setAttribute('role', 'dialog')
+      dialog.setAttribute('aria-modal', 'true')
+      document.body.appendChild(dialog)
+      try {
+        act(() => { useSessionStore.setState({ activeSessionId: 'session-1' }) })
+        expect(mockTerminalFocus).not.toHaveBeenCalled()
+      } finally {
+        dialog.remove()
+      }
+    })
   })
 
   describe('window focus/blur tracking', () => {
