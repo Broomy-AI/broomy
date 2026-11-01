@@ -63,7 +63,10 @@ export interface TerminalSetupResult {
   isActiveRef: React.MutableRefObject<boolean>
   showScrollButton: boolean
   handleScrollToBottom: () => void
+  /** Why the PTY exited, while its banner should show. Cleared when a new PTY starts or by `dismissExit`. */
   exitInfo: ExitInfo | null
+  /** Hide the exit banner (sets `exitInfo` to null). Stable across renders. */
+  dismissExit: () => void
 }
 
 // ── Xterm theme ──────────────────────────────────────────────────────
@@ -298,6 +301,7 @@ function useTerminalState(config: TerminalConfig) {
 
   const isActiveRef = useRef(true)
   const [exitInfo, setExitInfo] = useState<ExitInfo | null>(null)
+  const dismissExit = useCallback(() => setExitInfo(null), [])
 
   const commandRef = useRef(command)
   commandRef.current = command
@@ -366,7 +370,7 @@ function useTerminalState(config: TerminalConfig) {
     lastUserInputRef, lastInteractionRef, ptyIdRef, shellKindRef,
     isActiveRef,
     showScrollButton, setShowScrollButton,
-    exitInfo, setExitInfo,
+    exitInfo, setExitInfo, dismissExit,
     commandRef, envRef, isAgentTerminalRef, cwdRef, isolatedRef, repoRootDirRef,
     updateAgentMonitorRef, markSessionReadRef,
     sessionIdRef, setAgentPtyId,
@@ -415,6 +419,10 @@ export function useTerminalSetup(
   // Main terminal setup effect
   useEffect(() => {
     if (!containerRef.current || !sessionId) return
+
+    // A new PTY hasn't exited: drop the previous one's exit banner (session or command change;
+    // Terminal's restart handler also clears it in the same render as the restart)
+    s.setExitInfo(null)
 
     const isAgent = s.isAgentTerminalRef.current
     const cmd = s.commandRef.current
@@ -515,7 +523,9 @@ export function useTerminalSetup(
     s.terminalRef.current = terminal
     s.fitAddonRef.current = fitAddon
 
-    const id = `${sessionId}-${Date.now()}`
+    // Unique per PTY, not just per millisecond: a reused id (same-millisecond setup, or a frozen clock in
+    // the feature-doc fixture) would let the old PTY's late exit reach this one's listener
+    const id = `${sessionId}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`
     s.ptyIdRef.current = id
     // Reset before create resolves so a stale kind from a prior PTY can never
     // pair with this new id and mis-quote a drop during a restart.
@@ -682,5 +692,5 @@ export function useTerminalSetup(
     }
   }, [])
 
-  return { terminalRef: s.terminalRef, ptyIdRef: s.ptyIdRef, shellKindRef: s.shellKindRef, isActiveRef: s.isActiveRef, showScrollButton: s.showScrollButton, handleScrollToBottom: s.handleScrollToBottom, exitInfo: s.exitInfo }
+  return { terminalRef: s.terminalRef, ptyIdRef: s.ptyIdRef, shellKindRef: s.shellKindRef, isActiveRef: s.isActiveRef, showScrollButton: s.showScrollButton, handleScrollToBottom: s.handleScrollToBottom, exitInfo: s.exitInfo, dismissExit: s.dismissExit }
 }

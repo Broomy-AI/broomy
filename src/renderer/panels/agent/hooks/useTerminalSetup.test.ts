@@ -1001,4 +1001,152 @@ describe('useTerminalSetup', () => {
       removeEventSpy.mockRestore()
     })
   })
+
+  describe('exit banner lifecycle (#190)', () => {
+    type ExitCallback = (code: number) => void
+
+    /** Route exits like the preload does: only callbacks still subscribed to an id receive its exit. */
+    function subscribeExits() {
+      const subscribers = new Map<string, Set<ExitCallback>>()
+      vi.mocked(window.pty.onExit).mockImplementation((id, cb) => {
+        const set = subscribers.get(id) ?? new Set<ExitCallback>()
+        set.add(cb as ExitCallback)
+        subscribers.set(id, set)
+        return () => { set.delete(cb as ExitCallback) }
+      })
+      return (id: string, code: number) => act(() => {
+        for (const cb of [...(subscribers.get(id) ?? [])]) cb(code)
+      })
+    }
+
+    const ptyIds = () => vi.mocked(window.pty.create).mock.calls.map(([options]) => options.id)
+    const flush = () => act(async () => { await new Promise(r => setTimeout(r, 0)) })
+
+    function renderTerminal(config: TerminalConfig) {
+      const containerRef = makeContainerRef()
+      return renderHook(({ c }) => useTerminalSetup(c, containerRef), { initialProps: { c: config } })
+    }
+
+    const agentConfig = makeConfig({ isAgentTerminal: true, command: 'claude' })
+
+    it('clears an agent exit on dismiss, keeps it clear through a restart, and shows the next exit', async () => {
+      const emitExit = subscribeExits()
+      const { result, rerender } = renderTerminal(agentConfig)
+      await flush()
+
+      emitExit(ptyIds()[0], 0)
+      expect(result.current.exitInfo?.message).toBe('Agent process has exited.')
+      act(() => result.current.dismissExit())
+      expect(result.current.exitInfo).toBeNull()
+
+      rerender({ c: { ...agentConfig, restartKey: 1 } })
+      await flush()
+      expect(result.current.exitInfo).toBeNull()
+
+      emitExit(ptyIds()[1], 1)
+      expect(result.current.exitInfo?.message).toBe('Agent process exited with code 1.')
+    })
+
+    it('does the same for a Docker out-of-memory exit with detail', async () => {
+      const emitExit = subscribeExits()
+      const config = { ...agentConfig, isolated: true }
+      const { result, rerender } = renderTerminal(config)
+      await flush()
+
+      emitExit(ptyIds()[0], 137)
+      expect(result.current.exitInfo?.detail).toContain('Docker Desktop')
+      act(() => result.current.dismissExit())
+      rerender({ c: { ...config, restartKey: 1 } })
+      await flush()
+      expect(result.current.exitInfo).toBeNull()
+
+      emitExit(ptyIds()[1], 137)
+      expect(result.current.exitInfo?.detail).toContain('Docker Desktop')
+    })
+
+    it('clears the exit when the agent restarts, and the old PTY can no longer bring it back', async () => {
+      const emitExit = subscribeExits()
+      const { result, rerender } = renderTerminal(agentConfig)
+      await flush()
+      const [oldId] = ptyIds()
+
+      emitExit(oldId, 0)
+      expect(result.current.exitInfo).not.toBeNull()
+      rerender({ c: { ...agentConfig, restartKey: 1 } })
+      await flush()
+      expect(result.current.exitInfo).toBeNull()
+
+      emitExit(oldId, 0)
+      expect(result.current.exitInfo).toBeNull()
+    })
+
+    it('gives every PTY its own id, even when the clock stands still', async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(1_738_411_200_000)
+      const emitExit = subscribeExits()
+      const { result, rerender } = renderTerminal(agentConfig)
+      await flush()
+      rerender({ c: { ...agentConfig, restartKey: 1 } })
+      await flush()
+
+      const [oldId, newId] = ptyIds()
+      expect(newId).not.toBe(oldId)
+      emitExit(oldId, 0)
+      expect(result.current.exitInfo).toBeNull()
+    })
+
+    it('clears the exit when the session or command changes, and keeps it otherwise', async () => {
+      const emitExit = subscribeExits()
+      const { result, rerender } = renderTerminal(agentConfig)
+      await flush()
+
+      emitExit(ptyIds()[0], 0)
+      rerender({ c: { ...agentConfig } })
+      await flush()
+      expect(result.current.exitInfo).not.toBeNull()
+      expect(ptyIds()).toHaveLength(1)
+
+      const newCommand = { ...agentConfig, command: 'claude --dangerously-skip-permissions' }
+      rerender({ c: newCommand })
+      await flush()
+      expect(result.current.exitInfo).toBeNull()
+
+      emitExit(ptyIds()[1], 0)
+      expect(result.current.exitInfo).not.toBeNull()
+      rerender({ c: { ...newCommand, sessionId: 'session-2' } })
+      await flush()
+      expect(result.current.exitInfo).toBeNull()
+    })
+
+    it('keeps an exit that arrives before create resolves', async () => {
+      const emitExit = subscribeExits()
+      let resolveCreate!: (value: { id: string; shellKind: 'posix' }) => void
+      vi.mocked(window.pty.create).mockImplementationOnce(() => new Promise(r => { resolveCreate = r }))
+      const { result } = renderTerminal(agentConfig)
+
+      emitExit(ptyIds()[0], 0)
+      await act(async () => { resolveCreate({ id: ptyIds()[0], shellKind: 'posix' }); await Promise.resolve() })
+      expect(result.current.exitInfo?.message).toBe('Agent process has exited.')
+    })
+
+    it('ignores a create that resolves after its PTY was replaced', async () => {
+      subscribeExits()
+      let resolveOldCreate!: (value: { id: string; shellKind: 'fish' }) => void
+      vi.mocked(window.pty.create).mockImplementationOnce(() => new Promise(r => { resolveOldCreate = r }))
+      const { result, rerender } = renderTerminal(agentConfig)
+      rerender({ c: { ...agentConfig, restartKey: 1 } })
+      await flush()
+      expect(result.current.shellKindRef.current).toBe('posix')
+
+      await act(async () => { resolveOldCreate({ id: ptyIds()[0], shellKind: 'fish' }); await Promise.resolve() })
+      expect(result.current.shellKindRef.current).toBe('posix')
+      expect(result.current.ptyIdRef.current).toBe(ptyIds()[1])
+    })
+
+    it('keeps dismissExit stable across renders', async () => {
+      const { result, rerender } = renderTerminal(agentConfig)
+      const first = result.current.dismissExit
+      rerender({ c: { ...agentConfig } })
+      expect(result.current.dismissExit).toBe(first)
+    })
+  })
 })

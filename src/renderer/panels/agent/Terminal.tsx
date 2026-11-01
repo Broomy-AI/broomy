@@ -11,8 +11,8 @@
  */
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { useTerminalSetup } from './hooks/useTerminalSetup'
-import type { TerminalConfig, ExitInfo } from './hooks/useTerminalSetup'
-import { useErrorStore } from '../../store/errors'
+import type { TerminalConfig } from './hooks/useTerminalSetup'
+import { AgentExitBanner, ExitErrorBanner } from './TerminalExitBanners'
 import { useSessionStore } from '../../store/sessions'
 import { getAgentInstallUrl } from '../../shared/utils/agentInstallUrls'
 import { sendAgentPrompt } from '../../shared/utils/focusHelpers'
@@ -41,53 +41,6 @@ interface TerminalProps {
 /** True when a drag carries OS files or an explorer file-path (not a tab reorder, which is text/plain). */
 function isFileDrag(dt: DataTransfer): boolean {
   return dt.types.includes('Files') || dt.types.includes(FILE_PATH_MIME)
-}
-
-function ExitErrorBanner({ exitInfo, onDismiss }: { exitInfo: ExitInfo; onDismiss: () => void }) {
-  const { showErrorDetail } = useErrorStore()
-
-  const handleClick = () => {
-    if (exitInfo.detail) {
-      showErrorDetail({
-        id: 'exit-error',
-        message: exitInfo.message,
-        displayMessage: exitInfo.message,
-        detail: exitInfo.detail,
-        scope: 'app',
-        dismissed: false,
-        timestamp: Date.now(),
-      })
-    }
-  }
-
-  return (
-    <div className="mx-2 mt-2 px-3 py-2 rounded bg-danger-base/10 border border-danger-base/30 text-xs text-danger-fg shrink-0 flex items-center justify-between">
-      <button
-        onClick={handleClick}
-        className={`flex-1 text-left ${exitInfo.detail ? 'cursor-pointer hover:text-danger-soft' : 'cursor-default'}`}
-        title={exitInfo.detail ? 'Click for details' : undefined}
-      >
-        {exitInfo.message}
-      </button>
-      <button className="ml-2 hover:text-danger-soft" onClick={onDismiss} aria-label="Dismiss">
-        &times;
-      </button>
-    </div>
-  )
-}
-
-function AgentExitBanner({ exitInfo, onRestart }: { exitInfo: ExitInfo; onRestart: () => void }) {
-  return (
-    <div className="mx-2 mt-2 px-3 py-2 rounded bg-warning-base/10 border border-warning-base/30 text-xs text-warning-soft shrink-0 flex items-center justify-between">
-      <span>{exitInfo.message}</span>
-      <button
-        className="ml-3 px-2 py-0.5 rounded bg-warning-base/20 hover:bg-warning-base/30 font-medium transition-colors"
-        onClick={onRestart}
-      >
-        Restart Agent
-      </button>
-    </div>
-  )
 }
 
 export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal = false, isServicesTerminal = false, agentNotInstalled = false, isRestored, isolated, repoRootDir, storeSessionId, tabId }: TerminalProps) {
@@ -125,13 +78,13 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
     tabId,
   }
 
-  const { terminalRef, ptyIdRef, shellKindRef, isActiveRef, showScrollButton, handleScrollToBottom, exitInfo } = useTerminalSetup(config, containerRef)
-  const [exitDismissed, setExitDismissed] = useState(false)
+  const { terminalRef, ptyIdRef, shellKindRef, isActiveRef, showScrollButton, handleScrollToBottom, exitInfo, dismissExit } = useTerminalSetup(config, containerRef)
 
+  // Clearing the exit in the same render as the restart: the old banner never paints over the new agent
   const handleRestart = useCallback(() => {
+    dismissExit()
     setRestartKey((k) => k + 1)
-    setExitDismissed(false)
-  }, [])
+  }, [dismissExit])
 
   // Listen for Agent > Restart Agent menu action
   useEffect(() => {
@@ -252,11 +205,11 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
           </button>
         </div>
       )}
-      {exitInfo && !exitDismissed && exitInfo.detail && (
-        <ExitErrorBanner exitInfo={exitInfo} onDismiss={() => setExitDismissed(true)} />
+      {exitInfo?.detail && (
+        <ExitErrorBanner exitInfo={exitInfo} onDismiss={dismissExit} />
       )}
       {exitInfo && isAgentTerminal && !exitInfo.detail && (
-        <AgentExitBanner exitInfo={exitInfo} onRestart={handleRestart} />
+        <AgentExitBanner exitInfo={exitInfo} onRestart={handleRestart} onDismiss={dismissExit} />
       )}
       <div className="flex-1 min-h-0 p-2 relative">
         <div ref={containerRef} className="h-full w-full" />

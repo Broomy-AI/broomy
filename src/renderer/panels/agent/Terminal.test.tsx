@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, within, act } from '@testing-library/react'
 import '../../../test/react-setup'
 import Terminal from './Terminal'
 import type { TerminalSetupResult } from './hooks/useTerminalSetup'
@@ -33,6 +33,7 @@ function makeSetup(overrides: Partial<TerminalSetupResult> = {}): TerminalSetupR
     showScrollButton: false,
     handleScrollToBottom: vi.fn(),
     exitInfo: null,
+    dismissExit: vi.fn(),
     ...overrides,
   }
 }
@@ -339,12 +340,14 @@ describe('Terminal', () => {
       expect(screen.queryByText(/out-of-memory/)).toBeNull()
     })
 
-    it('dismisses exit error banner when close button is clicked', async () => {
-      await setSetup({ exitInfo: { code: 137, message: 'Process killed (SIGKILL)', detail: 'Some detail' } })
+    it('dismisses the exit through the hook when the close button is clicked', async () => {
+      const dismissExit = vi.fn()
+      await setSetup({ exitInfo: { code: 137, message: 'Process killed (SIGKILL)', detail: 'Some detail' }, dismissExit })
       render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
-      expect(screen.getByText(/SIGKILL/)).toBeTruthy()
-      fireEvent.click(screen.getByLabelText('Dismiss'))
-      expect(screen.queryByText(/SIGKILL/)).toBeNull()
+      const banner = document.querySelector<HTMLElement>('[data-exit-error-banner]')!
+      expect(within(banner).getByText(/SIGKILL/)).toBeTruthy()
+      fireEvent.click(within(banner).getByLabelText('Dismiss'))
+      expect(dismissExit).toHaveBeenCalledTimes(1)
     })
 
     it('does not open error detail modal when exitInfo has no detail', async () => {
@@ -366,6 +369,69 @@ describe('Terminal', () => {
       const state = useErrorStore.getState()
       expect(state.detailError).not.toBeNull()
       expect(state.detailError?.detail).toBe('Docker Desktop runs all containers...')
+    })
+  })
+
+  describe('agent exit banner (#190)', () => {
+    const exited = { code: 0, message: 'Agent process has exited.' }
+    const exitBanner = () => document.querySelector<HTMLElement>('[data-agent-exit-banner]')
+    const lastRestartKey = async () => {
+      const { useTerminalSetup } = await import('./hooks/useTerminalSetup')
+      return vi.mocked(useTerminalSetup).mock.calls.at(-1)![0].restartKey
+    }
+
+    it('shows the message with Restart Agent and a Dismiss button', async () => {
+      const dismissExit = vi.fn()
+      await setSetup({ exitInfo: exited, dismissExit })
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" isAgentTerminal />)
+      const banner = exitBanner()!
+      expect(within(banner).getByText('Agent process has exited.')).toBeTruthy()
+      expect(within(banner).getByRole('button', { name: 'Restart Agent' })).toBeTruthy()
+
+      fireEvent.click(within(banner).getByRole('button', { name: 'Dismiss' }))
+      expect(dismissExit).toHaveBeenCalledTimes(1)
+      expect(await lastRestartKey()).toBe(0)
+    })
+
+    it('is not shown for a user terminal', async () => {
+      await setSetup({ exitInfo: exited })
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" />)
+      expect(exitBanner()).toBeNull()
+    })
+
+    it('Restart Agent clears the exit and restarts', async () => {
+      const dismissExit = vi.fn()
+      await setSetup({ exitInfo: exited, dismissExit })
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" isAgentTerminal />)
+      fireEvent.click(within(exitBanner()!).getByRole('button', { name: 'Restart Agent' }))
+      expect(dismissExit).toHaveBeenCalledTimes(1)
+      expect(await lastRestartKey()).toBe(1)
+    })
+
+    it('the context menu restart clears the exit and restarts', async () => {
+      const dismissExit = vi.fn()
+      await setSetup({ exitInfo: exited, dismissExit })
+      vi.mocked(window.menu.popup).mockResolvedValue('restart-agent')
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" isAgentTerminal />)
+      fireEvent.contextMenu(document.querySelector('.h-full.w-full.flex.flex-col')!)
+      await vi.waitFor(async () => { expect(await lastRestartKey()).toBe(1) })
+      expect(dismissExit).toHaveBeenCalledTimes(1)
+    })
+
+    it('Agent > Restart Agent restarts the active terminal only', async () => {
+      const dismissExit = vi.fn()
+      const isActiveRef = { current: false }
+      await setSetup({ exitInfo: exited, dismissExit, isActiveRef })
+      render(<Terminal sessionId="session-1" cwd="/tmp/test" isAgentTerminal />)
+
+      act(() => { window.dispatchEvent(new Event('agent:restart')) })
+      expect(dismissExit).not.toHaveBeenCalled()
+      expect(await lastRestartKey()).toBe(0)
+
+      isActiveRef.current = true
+      act(() => { window.dispatchEvent(new Event('agent:restart')) })
+      expect(dismissExit).toHaveBeenCalledTimes(1)
+      expect(await lastRestartKey()).toBe(1)
     })
   })
 })

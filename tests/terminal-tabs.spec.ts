@@ -115,4 +115,71 @@ test.describe('Terminal Tabs', () => {
     // Should fall back to Agent tab (which becomes active)
     await expect.poll(() => isTabActive('Agent'), { timeout: 10000 }).toBe(true)
   })
+
+  // ── #190: the agent exit banner must go away on Restart Agent, and × must dismiss it ──
+
+  /** The active session's agent PTY id (set once its create resolves). */
+  async function activeAgentPtyId(): Promise<string | undefined> {
+    return page.evaluate(() => {
+      const store = (window as unknown as {
+        __sessionStore: { getState: () => { activeSessionId: string | null; sessions: { id: string; agentPtyId?: string }[] } }
+      }).__sessionStore
+      const state = store.getState()
+      return state.sessions.find((s) => s.id === state.activeSessionId)?.agentPtyId
+    })
+  }
+
+  /** Wait for a restarted agent: a new PTY id, and the fake agent's ready marker in its fresh buffer. */
+  async function expectRestartedAgent(previousId: string): Promise<string> {
+    await expect.poll(async () => {
+      const id = await activeAgentPtyId()
+      return !!id && id !== previousId
+    }, { timeout: 10000 }).toBe(true)
+    await expect.poll(() => getTerminalContent(page, 'agent'), { timeout: 10000 }).toContain('FAKE_CLAUDE_READY')
+    return (await activeAgentPtyId())!
+  }
+
+  /** Deliver an exit for `ptyId` through the real preload listener, as the main process does when a PTY ends. */
+  async function simulateAgentExit(ptyId: string) {
+    await electronApp.evaluate(({ BrowserWindow }, id) => {
+      BrowserWindow.getAllWindows()[0].webContents.send(`pty:exit:${id}`, 0)
+    }, ptyId)
+  }
+
+  test('the agent exit banner goes away on Restart Agent and can be dismissed (#190)', async () => {
+    const exitBanner = page.locator('[data-agent-exit-banner]:visible')
+    await expect.poll(async () => !!(await activeAgentPtyId())).toBe(true)
+    const firstId = (await activeAgentPtyId())!
+
+    await simulateAgentExit(firstId)
+    await expect(exitBanner).toContainText('Agent process has exited.')
+    await exitBanner.getByRole('button', { name: 'Restart Agent' }).click()
+    await expect(exitBanner).toHaveCount(0)
+    const secondId = await expectRestartedAgent(firstId)
+    await expect(exitBanner).toHaveCount(0)
+
+    await simulateAgentExit(secondId)
+    await expect(exitBanner).toBeVisible()
+    await exitBanner.getByRole('button', { name: 'Dismiss' }).click()
+    await expect(exitBanner).toHaveCount(0)
+
+    // Still gone after later renders: open a temporary tab, come back to Agent, close that tab
+    const userTabs = page.locator('[role="tablist"][aria-label="Terminal tabs"]').locator('[role="tab"]').filter({ hasNotText: 'Agent' })
+    const userTabCount = await userTabs.count()
+    await page.locator('button[title="New terminal tab"]:visible').click()
+    await expect(userTabs).toHaveCount(userTabCount + 1)
+    await expect.poll(() => isTabActive('Agent')).toBe(false)
+    await page.locator('div.cursor-pointer:has-text("Agent"):visible').first().click()
+    await expect.poll(() => isTabActive('Agent')).toBe(true)
+    await expect(exitBanner).toHaveCount(0)
+    const tempTab = userTabs.last()
+    await tempTab.hover()
+    await tempTab.getByRole('button', { name: 'Close tab' }).click()
+    await expect(userTabs).toHaveCount(userTabCount)
+    await expect(exitBanner).toHaveCount(0)
+
+    // Leave a live agent behind (Agent > Restart Agent, as the menu sends it)
+    await page.evaluate(() => { window.dispatchEvent(new Event('agent:restart')) })
+    await expectRestartedAgent(secondId)
+  })
 })

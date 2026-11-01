@@ -22,6 +22,7 @@ still only toggles CSS visibility.
 
 - `TabbedTerminal.tsx` -- Tab bar + terminal switching for agent/user tabs
 - `Terminal.tsx` -- xterm.js wrapper with activity detection
+- `TerminalExitBanners.tsx` -- Banners shown after the terminal's process exits (Restart Agent, dismiss, error detail)
 - `TerminalTabBar.tsx` -- Tab bar UI for terminal tabs
 - `WelcomeScreen.tsx` -- Shown when no sessions exist
 
