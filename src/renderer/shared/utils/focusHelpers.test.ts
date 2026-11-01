@@ -74,6 +74,34 @@ describe('focusAgentTerminal', () => {
     document.body.removeChild(panel)
   })
 
+  it('leaves focus in a modal dialog that opened before the focus ran', () => {
+    useSessionStore.setState({ activeSessionId: 'session-1', setActiveTerminalTab: vi.fn() })
+    const panel = document.createElement('div')
+    panel.setAttribute('data-panel-id', 'agent')
+    const textarea = document.createElement('textarea')
+    textarea.className = 'xterm-helper-textarea'
+    panel.appendChild(textarea)
+    document.body.appendChild(panel)
+    const focusSpy = vi.spyOn(textarea, 'focus')
+
+    const rAFs: FrameRequestCallback[] = []
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      rAFs.push(cb)
+      return rAFs.length
+    })
+
+    focusAgentTerminal()
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    dialog.setAttribute('aria-modal', 'true')
+    document.body.appendChild(dialog)
+    rAFs[0](0)
+    rAFs[1](0)
+
+    expect(focusSpy).not.toHaveBeenCalled()
+    document.body.innerHTML = ''
+  })
+
   it('does not set tab when no active session', () => {
     const mockSetActiveTerminalTab = vi.fn()
     useSessionStore.setState({
@@ -112,6 +140,36 @@ describe('focusActiveTerminal', () => {
 
     // Trigger second rAF — no terminal panel in JSDOM, but no error
     rAFs[1](0)
+  })
+
+  it('focuses the agent panel, unless a modal dialog opened before the focus ran', () => {
+    const panel = document.createElement('div')
+    panel.setAttribute('data-panel-id', 'agent')
+    const button = document.createElement('button')
+    panel.appendChild(button)
+    document.body.appendChild(panel)
+
+    const rAFs: FrameRequestCallback[] = []
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      rAFs.push(cb)
+      return rAFs.length
+    })
+
+    focusActiveTerminal()
+    rAFs[0](0)
+    rAFs[1](0)
+    expect(document.activeElement).toBe(button)
+
+    button.blur()
+    focusActiveTerminal()
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    dialog.setAttribute('aria-modal', 'true')
+    document.body.appendChild(dialog)
+    rAFs[2](0)
+    rAFs[3](0)
+    expect(document.activeElement).not.toBe(button)
+    document.body.innerHTML = ''
   })
 })
 
@@ -229,6 +287,32 @@ describe('restoreSessionFocus', () => {
     rAFs[1](0)
 
     expect(document.activeElement).toBe(button)
+  })
+
+  it('leaves focus in a modal dialog that opened before the restore ran', () => {
+    setLastFocusedPanel('s1', 'explorer')
+    const panel = document.createElement('div')
+    panel.setAttribute('data-panel-id', 'explorer')
+    panel.appendChild(document.createElement('button'))
+    document.body.appendChild(panel)
+
+    const rAFs: FrameRequestCallback[] = []
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      rAFs.push(cb)
+      return rAFs.length
+    })
+
+    restoreSessionFocus('s1')
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    dialog.setAttribute('aria-modal', 'true')
+    dialog.tabIndex = -1
+    document.body.appendChild(dialog)
+    dialog.focus()
+    rAFs[0](0)
+    rAFs[1](0)
+
+    expect(document.activeElement).toBe(dialog)
   })
 
   it('defaults to terminal when no panel was tracked', () => {

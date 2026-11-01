@@ -36,6 +36,16 @@ const withGhUnavailable: Decorator = (Story) => {
   return <Story />
 }
 
+// Enough repos for the filter box to appear in the header
+const withManyRepos: Decorator = (Story) => {
+  useRepoStore.setState({
+    repos: ['my-app', 'backend', 'website', 'mobile-ios', 'mobile-android', 'infra', 'design-system', 'docs'].map((name, i) =>
+      makeRepo({ id: `repo-${i + 1}`, name, rootDir: `/Users/test/repos/${name}`, defaultBranch: 'main' })),
+    ghAvailable: true,
+  })
+  return <Story />
+}
+
 const meta: Meta<typeof HomeView> = {
   title: 'NewSession/HomeView',
   component: HomeView,
@@ -65,4 +75,9 @@ export const Empty: Story = {
 
 export const GhUnavailable: Story = {
   decorators: [withGhUnavailable],
+}
+
+/** Six or more repos: the filter box appears in the header, with its "/" hint. */
+export const ManyRepos: Story = {
+  decorators: [withManyRepos],
 }

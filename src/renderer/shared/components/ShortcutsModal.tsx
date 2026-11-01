@@ -85,7 +85,8 @@ const shortcutGroups: ShortcutGroup[] = [
       { label: 'Review PRs', keys: 'R' },
       { label: 'Open Main', keys: 'O' },
       { label: 'Navigate Repos', keys: 'Arrow Up/Down' },
-      { label: 'Close / Back', keys: 'Escape' },
+      { label: 'Filter Repos (6+ repos)', keys: '/' },
+      { label: 'Clear Filter / Close / Back', keys: 'Escape' },
     ],
   },
   {

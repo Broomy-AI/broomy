@@ -22,6 +22,11 @@ export function NewSessionDialog({ onComplete, onCancel, onStartBranch, onStartE
     dialogRef.current?.focus()
   }, [])
 
+  // The shell scrolls when a view doesn't fit; each new view starts at its top
+  useEffect(() => {
+    if (dialogRef.current) dialogRef.current.scrollTop = 0
+  }, [view])
+
   // Escape key: go back to home from sub-views (home view handles its own Escape)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -69,14 +74,16 @@ export function NewSessionDialog({ onComplete, onCancel, onStartBranch, onStartE
   }, [])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/50">
+    // no-drag: the toolbar's window-drag strip would otherwise swallow clicks on the top of a tall dialog
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/50" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+      {/* Capped to the window: a view either scrolls its own body or the whole dialog scrolls */}
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         tabIndex={-1}
         onKeyDown={handleDialogKeyDown}
-        className="bg-bg-secondary rounded-lg shadow-xl border border-border w-full max-w-lg mx-4 outline-none"
+        className="bg-bg-secondary rounded-lg shadow-xl border border-border w-full max-w-lg mx-4 outline-none flex flex-col max-h-[calc(100vh-2rem)] overflow-y-auto"
       >
         {view.type === 'home' && (
           <HomeView

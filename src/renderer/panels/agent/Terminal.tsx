@@ -16,6 +16,7 @@ import { useErrorStore } from '../../store/errors'
 import { useSessionStore } from '../../store/sessions'
 import { getAgentInstallUrl } from '../../shared/utils/agentInstallUrls'
 import { sendAgentPrompt } from '../../shared/utils/focusHelpers'
+import { isModalDialogOpen } from '../../shared/utils/modalDialog'
 import { FILE_PATH_MIME } from '../../../shared/dnd'
 import { extractDroppedPaths, formatPathsForShell } from './utils/droppedFilePaths'
 import '@xterm/xterm/css/xterm.css'
@@ -103,9 +104,11 @@ export default function Terminal({ sessionId, cwd, command, env, isAgentTerminal
     }
     setResumeDismissed(true)
     // Focus the xterm instance after React removes the banner so keyboard
-    // input reaches the terminal immediately (e.g. to pick a chat to resume).
+    // input reaches the terminal immediately (e.g. to pick a chat to resume),
+    // unless a modal dialog opened in the meantime.
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
+        if (isModalDialogOpen()) return
         terminalRef.current?.focus()
       })
     })

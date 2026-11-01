@@ -42,7 +42,7 @@ const shortcutSections = [
   { title: 'New Session Dialog', items: [
     ['Clone', 'C'], ['Add Repo', 'A'], ['Open Folder', 'F'], ['New Branch', 'N'],
     ['Existing Branch', 'E'], ['Issues', 'I'], ['Review PRs', 'R'], ['Open Main', 'O'],
-    ['Navigate Repos', 'Arrow Up/Down'], ['Close / Back', 'Escape'],
+    ['Navigate Repos', 'Arrow Up/Down'], ['Filter Repos (6+ repos)', '/'], ['Clear Filter / Close / Back', 'Escape'],
   ]},
   { title: 'Debug', items: [['Copy Terminal + Info', `${modKey}+Shift+C`]] },
 ]
